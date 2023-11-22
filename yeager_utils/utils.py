@@ -234,6 +234,15 @@ def einsum_norm(a, indices='ij,ji->i'):
     return np.sqrt(np.einsum(indices, a, a))
 
 
+def normSq(arr):
+    return np.einsum("...i,...i", arr, arr)
+
+
+# Faster to not dispatch back to normSq
+def norm(arr):
+    return np.sqrt(np.einsum("...i,...i", arr, arr))
+
+
 def kde(data_):
     kde = stats.gaussian_kde(data_)
     return kde

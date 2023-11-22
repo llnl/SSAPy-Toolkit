@@ -1,12 +1,14 @@
 ######################################################################
 # COLLECTION OF ALL PLOTTING AND MEDIA
 ######################################################################
-from .compute import calculate_orbital_elements
+from .orbital_mechanics import calculate_orbital_elements
 import numpy as np
 from ssapy.body import get_body
 from ssapy.compute import groundTrack
-from ssapy.constants import RGEO, EARTH_RADIUS
-from ssapy.utils import Time, norm, find_file, gcrf_to_ecef, gcrf_to_lunar, gcrf_to_stationary_lunar
+from ssapy.utils import find_file
+from .constants import RGEO, EARTH_RADIUS
+from .coordinates import gcrf_to_itrf, gcrf_to_lunar, gcrf_to_stationary_lunar
+from .utils import Time, norm
 import os
 import re
 
@@ -494,7 +496,7 @@ def _make_scatter(x, y, z, xm=False, ym=False, zm=False, limits=False, title='',
     # Central dot color, central dot size, dashed line radius
     plot_settings = {
         "gcrf": ("blue", 50, 1),
-        "ecef": ("blue", 50, 1),
+        "itrf": ("blue", 50, 1),
         "lunar": ("blue", 50, 1),
         "stationary_lunar": ("grey", 25, 1.3)
     }
@@ -503,7 +505,7 @@ def _make_scatter(x, y, z, xm=False, ym=False, zm=False, limits=False, title='',
     if plot_type in plot_settings:
         stn = plot_settings[plot_type]
     else:
-        raise ValueError("Unknown plot type provided. Accepted: gcrf, ecef, lunar, stationary_lunar")
+        raise ValueError("Unknown plot type provided. Accepted: gcrf, itrf, lunar, stationary_lunar")
 
     # Creating plot
     plt.rcParams.update({'font.size': 9, 'figure.facecolor': 'w'})
@@ -611,7 +613,7 @@ def gcrf_plot(r, times=[], limits=False, title='', save_path=False, figsize=(7, 
     return fig
 
 
-def ecef_plot(r, times, limits=False, title='', save_path=False, figsize=(7, 7)):
+def itrf_plot(r, times, limits=False, title='', save_path=False, figsize=(7, 7)):
     """
     Parameters
     ----------
@@ -623,12 +625,12 @@ def ecef_plot(r, times, limits=False, title='', save_path=False, figsize=(7, 7))
     """
 
     input_type = check_numpy_array(r)
-    r = gcrf_to_ecef(r, times)
+    r = gcrf_to_itrf(r, times)
     if input_type == "numpy array":
         x = r[:, 0] / RGEO
         y = r[:, 1] / RGEO
         z = r[:, 2] / RGEO
-        fig = _make_scatter(x=x, y=y, z=z, limits=limits, title=title, save_path=save_path, plot_type="ecef")
+        fig = _make_scatter(x=x, y=y, z=z, limits=limits, title=title, save_path=save_path, plot_type="itrf")
     if input_type == "list of numpy array":
         limits_plot = 0
         for i, row in enumerate(r):
@@ -639,7 +641,7 @@ def ecef_plot(r, times, limits=False, title='', save_path=False, figsize=(7, 7))
             x = row[:, 0] / RGEO
             y = row[:, 1] / RGEO
             z = row[:, 2] / RGEO
-            fig = _make_scatter(x=x, y=y, z=z, limits_plot=limits_plot, title=title, orbit_index=i, save_path=save_path, plot_type="ecef")
+            fig = _make_scatter(x=x, y=y, z=z, limits_plot=limits_plot, title=title, orbit_index=i, save_path=save_path, plot_type="itrf")
     return fig
 
 
@@ -747,7 +749,7 @@ def tracking_plot(r, times, ground_stations=None, limits=False, title='', figsiz
         Scaling factor for the Earth's image. Default is 5.
 
     frame : str, optional
-        Coordinate frame for the satellite positions, "gcrf" or "ecef". Default is "gcrf".
+        Coordinate frame for the satellite positions, "gcrf" or "itrf". Default is "gcrf".
 
     Returns
     -------
@@ -759,7 +761,7 @@ def tracking_plot(r, times, ground_stations=None, limits=False, title='', figsiz
     - The function supports plotting the positions of one or multiple satellites over time.
     - Ground station locations can be optionally displayed on the plot.
     - The limits parameter can be set to specify the plot's axis limits or automatically determined if set to False.
-    - The frame parameter determines the coordinate frame for the satellite positions, "gcrf" (default) or "ecef".
+    - The frame parameter determines the coordinate frame for the satellite positions, "gcrf" (default) or "itrf".
 
     Example Usage
     -------------
@@ -782,8 +784,8 @@ def tracking_plot(r, times, ground_stations=None, limits=False, title='', figsiz
         lon, lat, height = groundTrack(r, times)
         if frame == "gcrf":
             pass
-        elif frame == "ecef":
-            r = gcrf_to_ecef(r, times)
+        elif frame == "itrf":
+            r = gcrf_to_itrf(r, times)
         x = r[:, 0] / RGEO
         y = r[:, 1] / RGEO
         z = r[:, 2] / RGEO

@@ -1,7 +1,12 @@
 from .constants import EARTH_RADIUS, WGS84_EARTH_OMEGA
 from .time import hms_to_dd, dd_to_hms, dd_to_dms
+from ssapy.accel import AccelKepler
 from ssapy.body import get_body, MoonPosition
-from ssapy.utils import normed, einsum_norm
+from ssapy.compute import groundTrack, rv
+from ssapy.constants import RGEO
+from ssapy.orbit import Orbit
+from ssapy.propagator import RK78Propagator
+from .utils import normed, einsum_norm
 import numpy as np
 from astropy.time import Time
 
@@ -511,23 +516,6 @@ def gcrf_to_stationary_lunar(r, times):
     return gcrf_to_lunar(r, times) - gcrf_to_lunar(get_body('moon').position(times).T, times)
 
 
-def gcrf_to_ecef(r_gcrf, t):
-    if isinstance(t, Time):
-        t = t.gps
-    rotation_angles = WGS84_EARTH_OMEGA * (t - t[0])
-    cos_thetas = np.cos(rotation_angles)
-    sin_thetas = np.sin(rotation_angles)
-
-    # Create an array of 3x3 rotation matrices
-    Rz = np.array([[cos_thetas, -sin_thetas, np.zeros_like(cos_thetas)],
-                  [sin_thetas, cos_thetas, np.zeros_like(cos_thetas)],
-                  [np.zeros_like(cos_thetas), np.zeros_like(cos_thetas), np.ones_like(cos_thetas)]]).T
-
-    # Apply the rotation matrices to all rows of r_gcrf simultaneously
-    r_ecef = np.einsum('ijk,ik->ij', Rz, r_gcrf)
-    return r_ecef
-
-
 def gcrf_to_radec(gcrf_coords):
     x, y, z = gcrf_coords
     # Calculate right ascension in radians
@@ -541,3 +529,62 @@ def gcrf_to_radec(gcrf_coords):
     # Convert declination to degrees
     dec_deg = np.degrees(dec_rad)
     return (ra_deg, dec_deg)
+
+
+def gcrf_to_ecef_bad(r_gcrf, t):
+    if isinstance(t, Time):
+        t = t.gps
+    r_gcrf = np.atleast_2d(r_gcrf)
+    rotation_angles = WGS84_EARTH_OMEGA * (t - Time("1980-3-20T11:06:00", format='isot').gps)
+    cos_thetas = np.cos(rotation_angles)
+    sin_thetas = np.sin(rotation_angles)
+
+    # Create an array of 3x3 rotation matrices
+    Rz = np.array([[cos_thetas, -sin_thetas, np.zeros_like(cos_thetas)],
+                  [sin_thetas, cos_thetas, np.zeros_like(cos_thetas)],
+                  [np.zeros_like(cos_thetas), np.zeros_like(cos_thetas), np.ones_like(cos_thetas)]]).T
+
+    # Apply the rotation matrices to all rows of r_gcrf simultaneously
+    r_ecef = np.einsum('ijk,ik->ij', Rz, r_gcrf)
+    return r_ecef
+
+
+def gcrf_to_itrf(r_gcrf, t):
+    x, y, z = groundTrack(r_gcrf, t, format='cartesian')
+    return np.array([x, y, z]).T
+
+
+def gcrf_to_sim_geo(r_gcrf, times, h=10):
+    if np.min(np.diff(times.gps)) < h:
+        h = np.min(np.diff(times.gps))
+    r_gcrf = np.atleast_2d(r_gcrf)
+    r_geo, v_geo = rv(Orbit.fromKeplerianElements(*[RGEO, 0, 0, 0, 0, 0], t=times[0]), times, propagator=RK78Propagator(AccelKepler(), h=h))
+    angle_geo_to_x = np.arctan2(r_geo[:, 1], r_geo[:, 0])
+    c = np.cos(angle_geo_to_x)
+    s = np.sin(angle_geo_to_x)
+    rotation = np.array([[c, -s, np.zeros_like(c)], [s, c, np.zeros_like(c)], [np.zeros_like(c), np.zeros_like(c), np.ones_like(c)]]).T
+    return np.einsum('ijk,ik->ij', rotation, r_gcrf)
+
+
+# Function still in development, not 100% accurate.
+def gcrf_to_itrf_astropy(state_vectors, times):
+    import astropy.units as u
+    from astropy.coordinates import GCRS, ITRS, SkyCoord, get_body_barycentric, solar_system_ephemeris, ICRS
+
+    sc = SkyCoord(x=state_vectors[:, 0] * u.m, y=state_vectors[:, 1] * u.m, z=state_vectors[:, 2] * u.m, representation_type='cartesian', frame=GCRS(obstime=times))
+    sc_itrs = sc.transform_to(ITRS(obstime=times))
+    with solar_system_ephemeris.set('de430'):  # other options: builtin, de432s
+        earth = get_body_barycentric('earth', times)
+    earth_center_itrs = SkyCoord(earth.x, earth.y, earth.z, representation_type='cartesian', frame=ICRS()).transform_to(ITRS(obstime=times))
+    itrs_coords = SkyCoord(
+        sc_itrs.x.value - earth_center_itrs.x.to_value(u.m),
+        sc_itrs.y.value - earth_center_itrs.y.to_value(u.m),
+        sc_itrs.z.value - earth_center_itrs.z.to_value(u.m),
+        representation_type='cartesian',
+        frame=ITRS(obstime=times)
+    )
+    # Extract Cartesian coordinates and convert to meters
+    itrs_coords_meters = np.array([itrs_coords.x,
+                                  itrs_coords.y,
+                                  itrs_coords.z]).T
+    return itrs_coords_meters

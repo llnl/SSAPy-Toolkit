@@ -1,6 +1,7 @@
 import numpy as np
 from .constants import EARTH_RADIUS, MOON_RADIUS
-from .utils import divby0, getAngle
+from .utils import divby0
+from ssapy.body import get_body
 
 
 def caclulate_errors(data, CI=.05):
@@ -59,11 +60,21 @@ def proper_motion(x, y, z, vx, vy, vz, xe=0, ye=0, ze=0, vxe=0, vye=0, vze=0, in
         return
 
 
+def _getAngle(a, b, c):  # a,b,c where b is the vertex
+    a = np.atleast_2d(a)
+    b = np.atleast_2d(b)
+    c = np.atleast_2d(c)
+    ba = np.subtract(a, b)
+    bc = np.subtract(c, b)
+    cosine_angle = np.sum(ba * bc, axis=-1) / (np.linalg.norm(ba, axis=-1) * np.linalg.norm(bc, axis=-1))
+    return np.arccos(cosine_angle)
+
+
 def moon_shine(r_moon, r_sat, r_earth, r_sun, radius, albedo, albedo_moon, albedo_back, albedo_front, area_panels):  # In SI units, takes single values or arrays returns a fractional flux
     # https://amostech.com/TechnicalPapers/2013/POSTER/COGNION.pdf
-    moon_phase_angle = getAngle(r_sun, r_moon, r_sat)  # Phase of the moon as viewed from the sat.
-    sun_angle = getAngle(r_sun, r_sat, r_moon)  # angle from Sun to object to Earth
-    moon_to_earth_angle = getAngle(r_moon, r_sat, r_earth)
+    moon_phase_angle = _getAngle(r_sun, r_moon, r_sat)  # Phase of the moon as viewed from the sat.
+    sun_angle = _getAngle(r_sun, r_sat, r_moon)  # angle from Sun to object to Earth
+    moon_to_earth_angle = _getAngle(r_moon, r_sat, r_earth)
     r_moon_sat = np.linalg.norm(r_sat - r_moon, axis=-1)
     r_earth_sat = np.linalg.norm(r_sat - r_earth, axis=-1)  # Earth is the observer.
     flux_moon_to_sat = 2 / 3 * albedo_moon * MOON_RADIUS ** 2 / (np.pi * (r_moon_sat)**2) * (np.sin(moon_phase_angle) + (np.pi - moon_phase_angle) * np.cos(moon_phase_angle))  # Fraction of sunlight reflected from the Moon to satellite
@@ -79,7 +90,7 @@ def moon_shine(r_moon, r_sat, r_earth, r_sun, radius, albedo, albedo_moon, albed
 
 def earth_shine(r_sat, r_earth, r_sun, radius, albedo, albedo_earth, albedo_back, area_panels):  # In SI units, takes single values or arrays returns a flux
     # https://amostech.com/TechnicalPapers/2013/POSTER/COGNION.pdf
-    phase_angle = getAngle(r_sun, r_sat, r_earth)  # angle from Sun to object to Earth
+    phase_angle = _getAngle(r_sun, r_sat, r_earth)  # angle from Sun to object to Earth
     earth_angle = np.pi - phase_angle  # Sun to Earth to oject.
     r_earth_sat = np.linalg.norm(r_sat - r_earth, axis=-1)  # Earth is the observer.
     flux_earth_to_sat = 2 / 3 * albedo_earth * EARTH_RADIUS**2 / (np.pi * (r_earth_sat)**2) * (np.sin(earth_angle) + (np.pi - earth_angle) * np.cos(earth_angle))  # Fraction of sunlight reflected from the Earth to satellite
@@ -92,7 +103,7 @@ def earth_shine(r_sat, r_earth, r_sun, radius, albedo, albedo_earth, albedo_back
 
 def sun_shine(r_sat, r_earth, r_sun, radius, albedo, albedo_front, area_panels):  # In SI units, takes single values or arrays returns a fractional flux
     # https://amostech.com/TechnicalPapers/2013/POSTER/COGNION.pdf
-    phase_angle = getAngle(r_sun, r_sat, r_earth)  # angle from Sun to object to Earth
+    phase_angle = _getAngle(r_sun, r_sat, r_earth)  # angle from Sun to object to Earth
     r_earth_sat = np.linalg.norm(r_sat - r_earth, axis=-1)  # Earth is the observer.
     flux_front = np.zeros_like(phase_angle)
     flux_front[phase_angle < np.pi / 2] = albedo_front * area_panels / (np.pi * r_earth_sat[phase_angle < np.pi / 2]**2) * np.cos(phase_angle[phase_angle < np.pi / 2])  # Fraction of Sun light scattered off front of the solar panels - which are assumed to be always facing the Sun. Angle: Sun - Sat - Observer
@@ -116,6 +127,20 @@ def M_v(r_sat, r_earth, r_sun, r_moon=False, radius=0.4, albedo=0.20, sun_Mag=4.
         return Mag_v, merged_dict
     else:
         return Mag_v
+
+
+def M_v_lambertian(r, times, radius=1, albedo=0.2):
+    r_sun = get_body('Sun').position(times).T
+    r_earth = np.zeros_like(r_sun)
+    r_moon = get_body('Moon').position(times).T
+    sun_phase = _getAngle(r_sun, r, r_earth)
+    earth_phase = _getAngle(r_sun, r, r_earth)
+    moon_phase = _getAngle(r_sun, r, r_earth)
+    r_earth_sat = np.linalg.norm(r - r_earth, axis=-1)  # Earth is the observer.
+    flux_sun = 2 / 3 * albedo * radius**2 / (np.pi * (r_earth_sat)**2) * (np.sin(sun_phase) + (np.pi - sun_phase) * np.cos(sun_phase))
+    flux_earth = 2 / 3 * albedo * radius**2 / (np.pi * (r_earth_sat)**2) * (np.sin(earth_phase) + (np.pi - earth_phase) * np.cos(earth_phase))
+    flux_moon = 2 / 3 * albedo * radius**2 / (np.pi * (r_earth_sat)**2) * (np.sin(moon_phase) + (np.pi - moon_phase) * np.cos(moon_phase))
+    return
 
 
 def megno(r):

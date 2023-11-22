@@ -79,10 +79,6 @@ def mpi_scatter_exclude_rank_0(scatter_array):
 
     return scatter_array_local, rank
 
-# =============================================================================
-# File Handling Functions
-# =============================================================================
-
 
 def exists(pathname):
     if os.path.isdir(pathname):
@@ -177,38 +173,13 @@ def merge_dicts(file_names, save_path):
     print('Beginning final save.')
     psave(save_path, master_dict)
     return
-######################################################################
-# Sliceable Numpys save and load
-######################################################################
-
-
-def npsave(filename_, data_):
-    try:
-        with open(filename_, 'wb') as f:
-            np.save(filename_, data_, allow_pickle=True)
-        f.close()
-    except (EOFError, FileNotFoundError, OSError) as err:
-        print(f'{err} - saving')
-        return
-
-
-def npload(filename_):
-    try:
-        with open(filename_, 'rb') as f:
-            data = np.load(filename_, allow_pickle=True)
-        f.close()
-    except (EOFError, FileNotFoundError, OSError) as err:
-        print(f'{err} - loading')
-        return []
-    return data
-
 
 ######################################################################
 # HDF5 py files h5py
 ######################################################################
 
 
-def h5append(filename, pathname, append_data):
+def append_h5(filename, pathname, append_data):
     """
     Append data to key in HDF5 file.
 
@@ -234,7 +205,7 @@ def h5append(filename, pathname, append_data):
         print(f"Error: {err}")
 
 
-def h5overwrite(filename, pathname, new_data):
+def overwrite_h5(filename, pathname, new_data):
     """
     Overwrite key in HDF5 file.
 
@@ -265,7 +236,7 @@ def h5overwrite(filename, pathname, new_data):
             print(f'File: {filename}{pathname}, Error: {err}')
 
 
-def h5save(filename, pathname, data):
+def save_h5(filename, pathname, data):
     """
     Save data to HDF5 file.
 
@@ -284,7 +255,7 @@ def h5save(filename, pathname, data):
             print(f"Did not save, key: {pathname} exists in file: {filename}. {err}")
 
 
-def h5load(filename, pathname):
+def read_h5(filename, pathname):
     """
     Load data from HDF5 file.
 
@@ -301,7 +272,7 @@ def h5load(filename, pathname):
     return data
 
 
-def h5loadall(filename_):
+def read_h5_all(filename_):
     """
     Load all data from HDF5 file.
 
@@ -319,7 +290,7 @@ def h5loadall(filename_):
     return return_data, keys
 
 
-def h5keys(filename):
+def h5_keys(filename):
     """
     List all groups in HDF5 file.
 

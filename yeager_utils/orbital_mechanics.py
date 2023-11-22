@@ -221,7 +221,7 @@ def j2000_orbitals(planet='earth', Teph=2451545.0):  # date input is in jd
     return {'a': a, 'e': e, 'i': deg90to90(i), 'mean_longitude': deg0to360(mean_longitude), 'longitude_of_perihelion': deg0to360(longitude_of_perihelion), 'longitude_of_the_ascending_node': deg0to360(longitude_of_the_ascending_node)}
 
 
-def kepler_to_state(a, e, i, raan, w, nu, mu=3.986004418e14):
+def kepler_to_state(a=1, e=0, i=0, raan=0, w=0, nu=0, mu=EARTH_MU):
     """
     Converts keplerian orbital elements to a state vector.
 
@@ -264,7 +264,7 @@ def kepler_to_state(a, e, i, raan, w, nu, mu=3.986004418e14):
     return r, v
 
 
-def state_to_kepler(r, v, mu=3.986004418e14):
+def state_to_kepler(r, v, mu=EARTH_MU):
     """
     Converts a state vector to keplerian orbital elements.
 
@@ -351,7 +351,7 @@ def kepler_to_parametric(a, e, i, omega, w, theta):
     return x_final, y_final, z_final
 
 
-def calculate_orbital_elements(r_, v_, mu_barycenter=3.986004418e14):
+def calculate_orbital_elements(r_, v_, mu_barycenter=EARTH_MU, frame='gcrf'):
     # mu_barycenter - all bodies interior to Earth
     # 1.0013415732186798 #All bodies of solar system
     mu_ = mu_barycenter

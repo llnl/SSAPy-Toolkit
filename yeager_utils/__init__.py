@@ -9,3 +9,4 @@ from .plotting import *
 from .ssapy_wrapper import *
 from .time import *
 from .utils import *
+from astropy.time import Time
