@@ -1,5 +1,5 @@
 import numpy as np
-from .constants import EARTH_RADIUS, MOON_RADIUS
+from .constants import EARTH_RADIUS, MOON_RADIUS, RGEO
 from .utils import divby0
 from ssapy.body import get_body
 
@@ -168,6 +168,7 @@ def sun_shine(r_sat, r_earth, r_sun, radius, albedo, albedo_front, area_panels):
     flux_bus = 2 / 3 * albedo * radius**2 / (np.pi * (r_earth_sat)**2) * (np.sin(phase_angle) + (np.pi - phase_angle) * np.cos(phase_angle))  # Fraction of light reflected off satellite from Sun
     return {'sun_bus': flux_bus, 'sun_panels': flux_front}
 
+
 def M_v_lambertian(r_sat, times, radius=1.0, albedo=0.20, sun_Mag=4.80, albedo_earth=0.30, albedo_moon=0.12, plot=False):
     pc_to_m = 3.085677581491367e+16
     r_sun = get_body('Sun').position(times).T
@@ -177,7 +178,7 @@ def M_v_lambertian(r_sat, times, radius=1.0, albedo=0.20, sun_Mag=4.80, albedo_e
     r_sun_sat = np.linalg.norm(r_sat - r_sun, axis=-1)
     r_earth_sat = np.linalg.norm(r_sat, axis=-1)
     r_moon_sat = np.linalg.norm(r_sat - r_moon, axis=-1)
-    
+
     sun_angle = getAngle(r_sun, r_sat, r_earth)
     earth_angle = np.pi - sun_angle
     moon_phase_angle = getAngle(r_sun, r_moon, r_sat)  # Phase of the moon as viewed from the sat.
@@ -191,44 +192,41 @@ def M_v_lambertian(r_sat, times, radius=1.0, albedo=0.20, sun_Mag=4.80, albedo_e
     frac_flux_moon = 2 / 3 * albedo * radius**2 / (np.pi * r_earth_sat**2) * flux_moon_to_sat
     Mag_v = (2.5 * np.log10((r_sun_sat / (10 * pc_to_m))**2) + sun_Mag) - 2.5 * np.log10(frac_flux_sun + frac_flux_earth + frac_flux_moon)
     if plot:
-        import matplotlib.pyplot
+        import matplotlib.pyplot as plt
         sun_scale = 149597870700.0 * (RGEO / np.max(r_earth_sat) ) * 0.75
         color_map ='inferno_r'
         fig = plt.figure(figsize=(18, 4))
         ax = fig.add_subplot(1, 4, 1)
-        ax.scatter(earth[0], earth[1])
-        scatter = ax.scatter(r[:, 0] / RGEO, r[:, 1] / RGEO, c=sun_angle, cmap=color_map)
+        ax.scatter(r_earth[:, 0], r_earth[:, 1], c='Blue', s=10)
+        scatter = ax.scatter(r_sat[:, 0] / RGEO, r_sat[:, 1] / RGEO, c=sun_angle, cmap=color_map)
         colorbar = plt.colorbar(scatter)
-        ax.scatter(r_sun[:, 0] / sun_scale, r_sun[:, 1] / sun_scale, c=plt.cm.Oranges(np.linspace(0.25, 0.75, len(r[:, 0]))), s=10)
+        ax.scatter(r_sun[:, 0] / sun_scale, r_sun[:, 1] / sun_scale, c=plt.cm.Oranges(np.linspace(0.25, 0.75, len(r_sat[:, 0]))), s=10)
         ax.set_title('Solar Phase')
         ax.set_xlabel('X [GEO]')
         ax.set_ylabel('Y [GEO]')
         ax.axis('equal')
 
         ax = fig.add_subplot(1, 4, 2)
-        ax.scatter(earth[0], earth[1])
-        scatter = ax.scatter(r[:, 0] / RGEO, r[:, 1] / RGEO, c=(2.5 * np.log10((r_sun_sat / (10 * pc_to_m))**2) + sun_Mag) - 2.5 * np.log10(frac_flux_sun), cmap=color_map)
+        ax.scatter(r_earth[0], r_earth[1], c='Blue', s=10)
+        scatter = ax.scatter(r_sat[:, 0] / RGEO, r_sat[:, 1] / RGEO, c=(2.5 * np.log10((r_sun_sat / (10 * pc_to_m))**2) + sun_Mag) - 2.5 * np.log10(frac_flux_sun), cmap=color_map)
         colorbar = plt.colorbar(scatter)
-        ax.scatter(0, 0, c='Blue', s=10)
-        ax.scatter(r_sun[:, 0] / sun_scale, r_sun[:, 1] / sun_scale, c=plt.cm.Oranges(np.linspace(0.25, 0.75, len(r[:, 0]))), s=10)
+        ax.scatter(r_sun[:, 0] / sun_scale, r_sun[:, 1] / sun_scale, c=plt.cm.Oranges(np.linspace(0.25, 0.75, len(r_sat[:, 0]))), s=10)
         ax.set_title('Solar M_v')
         ax.axis('equal')
 
         ax = fig.add_subplot(1, 4, 3)
-        ax.scatter(earth[0], earth[1])
-        scatter = ax.scatter(r[:, 0] / RGEO, r[:, 1] / RGEO, c=(2.5 * np.log10((r_sun_sat / (10 * pc_to_m))**2) + sun_Mag) - 2.5 * np.log10(frac_flux_earth), cmap=color_map)
+        ax.scatter(r_earth[:, 0], r_earth[:, 1], c='Blue', s=10)
+        scatter = ax.scatter(r_sat[:, 0] / RGEO, r_sat[:, 1] / RGEO, c=(2.5 * np.log10((r_sun_sat / (10 * pc_to_m))**2) + sun_Mag) - 2.5 * np.log10(frac_flux_earth), cmap=color_map)
         colorbar = plt.colorbar(scatter)
-        ax.scatter(r_sun[:, 0] / sun_scale, r_sun[:, 1] / sun_scale, c=plt.cm.Oranges(np.linspace(0.25, 0.75, len(r[:, 0]))), s=10)
-        ax.scatter(0, 0, c='Blue', label="Earth")
+        ax.scatter(r_sun[:, 0] / sun_scale, r_sun[:, 1] / sun_scale, c=plt.cm.Oranges(np.linspace(0.25, 0.75, len(r_sat[:, 0]))), s=10)
 
         ax.set_title('Earth M_v')
         ax.axis('equal')
 
         ax = fig.add_subplot(1, 4, 4)
-        ax.scatter(earth[0], earth[1])
-        scatter = ax.scatter(r[:, 0] / RGEO, r[:, 1] / RGEO, c=(2.5 * np.log10((r_sun_sat / (10 * pc_to_m))**2) + sun_Mag) - 2.5 * np.log10(frac_flux_moon), cmap=color_map)
-        ax.scatter(0, 0, c='Blue', s=10)
-        ax.scatter(r_moon[:, 0] / RGEO, r_moon[:, 1] / RGEO, c=plt.cm.Greys(np.linspace(0.5, 1, len(r[:, 0]))), s=5)
+        ax.scatter(r_earth[:, 0], r_earth[:, 1], c='Blue', s=10)
+        scatter = ax.scatter(r_sat[:, 0] / RGEO, r_sat[:, 1] / RGEO, c=(2.5 * np.log10((r_sun_sat / (10 * pc_to_m))**2) + sun_Mag) - 2.5 * np.log10(frac_flux_moon), cmap=color_map)
+        ax.scatter(r_moon[:, 0] / RGEO, r_moon[:, 1] / RGEO, c=plt.cm.Greys(np.linspace(0.5, 1, len(r_sat[:, 0]))), s=5)
         
         colorbar = plt.colorbar(scatter)
         ax.set_title('Lunar M_v')

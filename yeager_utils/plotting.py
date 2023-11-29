@@ -782,6 +782,8 @@ def tracking_plot(r, times, ground_stations=None, limits=False, title='', figsiz
     """
     def _make_plot(r, times, ground_stations, limits, title, figsize, save_path, elev, azim, scale, frame, orbit_index=''):
         lon, lat, height = groundTrack(r, times)
+        lon[np.where(np.abs(np.diff(lon)) >= np.pi)] = np.nan
+        lat[np.where(np.abs(np.diff(lat)) >= np.pi)] = np.nan
         if frame == "gcrf":
             pass
         elif frame == "itrf":

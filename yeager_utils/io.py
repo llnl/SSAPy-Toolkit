@@ -4,7 +4,7 @@ import pandas as pd
 import csv
 from six.moves import cPickle as pickle  # for performance
 import os
-import glob
+from glob import glob
 import shutil
 import psutil
 from mpi4py import MPI
@@ -272,23 +272,23 @@ def read_h5(filename, pathname):
     return data
 
 
-def read_h5_all(filename_):
-    """
-    Load all data from HDF5 file.
+def read_h5_all(file_path):
+    data_dict = {}
 
-    Args:
-        filename_ (str): The filename of the HDF5 file.
+    with h5py.File(file_path, 'r') as file:
+        # Recursive function to traverse the HDF5 file and populate the dictionary
+        def traverse(group, path=''):
+            for key, item in group.items():
+                new_path = f"{path}/{key}" if path else key
 
-    Returns:
-        A dictionary of data loaded from the HDF5 file.
-    """
-    with h5py.File(filename_, "r") as f:
-        # List all groups
-        keys = list(f.keys())
-        return_data = {key: np.array(f.get(key)) for key in keys}
+                if isinstance(item, h5py.Group):
+                    traverse(item, path=new_path)
+                else:
+                    data_dict[new_path] = item[()]
 
-    return return_data, keys
+        traverse(file)
 
+    return data_dict
 
 def h5_keys(filename):
     """

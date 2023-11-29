@@ -43,6 +43,29 @@ def ssapy_best_prop(integration_timestep=60):
     return prop
 
 
+def ssapy_prop(integration_timestep=60):
+    # Accelerations - pass a body object or string of body name.
+    moon = get_body("moon")
+    sun = get_body("Sun")
+    Mercury = get_body("Mercury")
+    Venus = get_body("Venus")
+    Earth = get_body("Earth", model="EGM2008")
+    Mars = get_body("Mars")
+    Jupiter = get_body("Jupiter")
+    Saturn = get_body("Saturn")
+    Uranus = get_body("Uranus")
+    Neptune = get_body("Neptune")
+    aEarth = AccelKepler() + AccelHarmonic(Earth, 180, 180)
+    aSun = AccelThirdBody(sun)
+    aMoon = AccelThirdBody(moon) + AccelHarmonic(moon)
+    aSolRad = AccelSolRad()
+    aEarthRad = AccelEarthRad()
+    accel = aEarth + aMoon + aSun + aSolRad + aEarthRad
+    # Build propagator
+    prop = RK78Propagator(accel, h=integration_timestep)
+    return prop
+
+
 def ssapy_kwargs(mass=250, area=0.022, CD=2.3, CR=1.3):
     # Asteroid parameters
     kwargs = dict(
@@ -55,51 +78,31 @@ def ssapy_kwargs(mass=250, area=0.022, CD=2.3, CR=1.3):
 
 
 # Uses the current best propagator and acceleration models in ssapy
-def ssapy_rv_from_koe(a=RGEO, e=0, inc=0, pa=0, raan=0, trueAnomaly=0, duration=(30, 'day'), freq=(1, 'hr'), start_date="2025-01-01", times=None, integration_timestep=10, mass=250, area=0.022, CD=2.3, CR=1.3):
+def ssapy_orbit(a=None, e=0, i=0, pa=0, raan=0, ta=0, r=None, v=None, duration=(30, 'day'), freq=(1, 'hr'), start_date="2025-01-01", times=None, integration_timestep=10, mass=250, area=0.022, CD=2.3, CR=1.3):
     # Everything is in SI units, except time.
     # density #kg/m^3 --> density
-    # Time span of integration #Only takes integer number of days. Unless providing your own time object.
     t = Time(start_date, scale='utc')
     if times is None:
         times = get_times(duration=duration, freq=freq, t=t)
 
     kwargs = ssapy_kwargs(mass, area, CD, CR)
-    kElements = [a, e, inc, pa, raan, trueAnomaly]  # (a, e, i, pa, raan, trueAnomaly, t, mu)
-    orbit = Orbit.fromKeplerianElements(*kElements, t, propkw=kwargs)
-    # print(f'Initial orbit: a: {a:.3e} m, e: {e:.2f}, i: {inc:.2f}, pa: {pa:.2f}, raan: {raan:.2f}, trueAnomaly: {trueAnomaly:.2f}, period: {orbit.period/units.day_to_second:.2f} days.')
 
-    prop = ssapy_best_prop(integration_timestep)
+    if a is not None:
+        kElements = [a, e, i, pa, raan, ta]
+        orbit = Orbit.fromKeplerianElements(*kElements, t, propkw=kwargs)
+    elif r is not None and v is not None:
+        orbit = Orbit(r, v, t, propkw=kwargs)
+    else:
+        raise ValueError("Either Keplerian elements (a, e, i, pa, raan, ta) or position and velocity vectors (r, v) must be provided.")
 
-    # Calculate entire satellite trajectory
+    prop = ssapy_prop(integration_timestep)
+
     try:
         r, v = rv(orbit, times, prop)
         return r, v
     except (RuntimeError, ValueError) as err:
         print(err)
         return np.nan, np.nan
-
-
-def ssapy_rv_from_rv(r=RGEO, v=False, duration=(30, 'day'), freq=(1, 'hr'), start_date="2025-01-01", times=None, integration_timestep=10, mass=250, area=0.022, CD=2.3, CR=1.3):
-    # Everything is in SI units, except time.
-    # density #kg/m^3 --> density
-
-    # Time span of integration #Only takes integer number of days. Unless providing your own time object.
-    t = Time(start_date, scale='utc')
-    if times is None:
-        times = get_times(duration=duration, freq=freq, t=t)
-
-    kwargs = ssapy_kwargs(mass, area, CD, CR)
-    orbit = Orbit(r, v, t, propkw=kwargs)
-
-    prop = ssapy_best_prop(integration_timestep)
-    # Calculate entire satellite trajectory
-    try:
-        r, v = rv(orbit, times, prop)
-        return r, v
-    except (RuntimeError, ValueError) as err:
-        print(err)
-        r, v = np.nan, np.nan
-    return r, v
 
 
 # Generate orbits near stable orbit.
