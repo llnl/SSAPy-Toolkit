@@ -1,3 +1,5 @@
+# flake8: noqa: E501
+
 import numpy as np
 from .constants import EARTH_RADIUS, MOON_RADIUS, RGEO
 from .utils import divby0
@@ -128,46 +130,6 @@ def M_v(r_sat, r_earth, r_sun, r_moon=False, radius=0.4, albedo=0.20, sun_Mag=4.
     else:
         return Mag_v
 
-def moon_shine(r_moon, r_sat, r_earth, r_sun, radius, albedo, albedo_moon, albedo_back, albedo_front, area_panels):  # In SI units, takes single values or arrays returns a fractional flux
-    # https://amostech.com/TechnicalPapers/2013/POSTER/COGNION.pdf
-    moon_phase_angle = getAngle(r_sun, r_moon, r_sat)  # Phase of the moon as viewed from the sat.
-    sun_angle = getAngle(r_sun, r_sat, r_moon)  # angle from Sun to object to Earth
-    moon_to_earth_angle = getAngle(r_moon, r_sat, r_earth)
-    r_moon_sat = np.linalg.norm(r_sat - r_moon, axis=-1)
-    r_earth_sat = np.linalg.norm(r_sat - r_earth, axis=-1)  # Earth is the observer.
-    flux_moon_to_sat = 2 / 3 * albedo_moon * MOON_RADIUS**2 / (np.pi * (r_moon_sat)**2) * (np.sin(moon_phase_angle) + (np.pi - moon_phase_angle) * np.cos(moon_phase_angle))  # Fraction of sunlight reflected from the Moon to satellite
-    # Fraction of light from back of solar panel
-    flux_back = np.zeros_like(sun_angle)
-    flux_back[sun_angle > np.pi / 2] = np.abs(albedo_back * area_panels / (np.pi * r_earth_sat[sun_angle > np.pi / 2]**2) * np.cos(np.pi - moon_to_earth_angle[sun_angle > np.pi / 2]) * flux_moon_to_sat[sun_angle > np.pi / 2])  # Fraction of Moon light reflected off back of solar panels - which are assumed to be always facing the Sun. Angle: Sun - Observer - Sat
-    flux_front = np.zeros_like(sun_angle)
-    flux_front[sun_angle < np.pi / 2] = np.abs(albedo_front * area_panels / (np.pi * r_earth_sat[sun_angle < np.pi / 2]**2) * np.cos(moon_to_earth_angle[sun_angle < np.pi / 2]) * flux_moon_to_sat[sun_angle < np.pi / 2])  # Fraction of Sun light scattered off front of the solar panels - which are assumed to be always facing the Sun. Angle: Sun - Sat - Observer
-    flux_panels = flux_back + flux_front
-    flux_bus = 2 / 3 * albedo * radius**2 / (np.pi * r_earth_sat**2) * flux_moon_to_sat
-    return {'moon_bus': flux_bus, 'moon_panels': flux_panels}
-
-
-def earth_shine(r_sat, r_earth, r_sun, radius, albedo, albedo_earth, albedo_back, area_panels):  # In SI units, takes single values or arrays returns a flux
-    # https://amostech.com/TechnicalPapers/2013/POSTER/COGNION.pdf
-    phase_angle = getAngle(r_sun, r_sat, r_earth)  # angle from Sun to object to Earth
-    earth_angle = np.pi - phase_angle  # Sun to Earth to oject.
-    r_earth_sat = np.linalg.norm(r_sat - r_earth, axis=-1)  # Earth is the observer.
-    flux_earth_to_sat = 2 / 3 * albedo_earth * EARTH_RADIUS**2 / (np.pi * (r_earth_sat)**2) * (np.sin(earth_angle) + (np.pi - earth_angle) * np.cos(earth_angle))  # Fraction of sunlight reflected from the Earth to satellite
-    # Fraction of light from back of solar panel
-    flux_back = np.zeros_like(phase_angle)
-    flux_back[phase_angle > np.pi / 2] = albedo_back * area_panels / (np.pi * r_earth_sat[phase_angle > np.pi / 2]**2) * np.cos(np.pi - phase_angle[phase_angle > np.pi / 2]) * flux_earth_to_sat[phase_angle > np.pi / 2]  # Fraction of Earth light reflected off back of solar panels - which are assumed to be always facing the Sun. Angle: Sun - Observer - Sat
-    flux_bus = 2 / 3 * albedo * radius**2 / (np.pi * r_earth_sat**2) * flux_earth_to_sat
-    return {'earth_bus': flux_bus, 'earth_panels': flux_back}
-
-
-def sun_shine(r_sat, r_earth, r_sun, radius, albedo, albedo_front, area_panels):  # In SI units, takes single values or arrays returns a fractional flux
-    # https://amostech.com/TechnicalPapers/2013/POSTER/COGNION.pdf
-    phase_angle = getAngle(r_sun, r_sat, r_earth)  # angle from Sun to object to Earth
-    r_earth_sat = np.linalg.norm(r_sat - r_earth, axis=-1)  # Earth is the observer.
-    flux_front = np.zeros_like(phase_angle)
-    flux_front[phase_angle < np.pi / 2] = albedo_front * area_panels / (np.pi * r_earth_sat[phase_angle < np.pi / 2]**2) * np.cos(phase_angle[phase_angle < np.pi / 2])  # Fraction of Sun light scattered off front of the solar panels - which are assumed to be always facing the Sun. Angle: Sun - Sat - Observer
-    flux_bus = 2 / 3 * albedo * radius**2 / (np.pi * (r_earth_sat)**2) * (np.sin(phase_angle) + (np.pi - phase_angle) * np.cos(phase_angle))  # Fraction of light reflected off satellite from Sun
-    return {'sun_bus': flux_bus, 'sun_panels': flux_front}
-
 
 def M_v_lambertian(r_sat, times, radius=1.0, albedo=0.20, sun_Mag=4.80, albedo_earth=0.30, albedo_moon=0.12, plot=False):
     pc_to_m = 3.085677581491367e+16
@@ -227,7 +189,7 @@ def M_v_lambertian(r_sat, times, radius=1.0, albedo=0.20, sun_Mag=4.80, albedo_e
         ax.scatter(r_earth[:, 0], r_earth[:, 1], c='Blue', s=10)
         scatter = ax.scatter(r_sat[:, 0] / RGEO, r_sat[:, 1] / RGEO, c=(2.5 * np.log10((r_sun_sat / (10 * pc_to_m))**2) + sun_Mag) - 2.5 * np.log10(frac_flux_moon), cmap=color_map)
         ax.scatter(r_moon[:, 0] / RGEO, r_moon[:, 1] / RGEO, c=plt.cm.Greys(np.linspace(0.5, 1, len(r_sat[:, 0]))), s=5)
-        
+
         colorbar = plt.colorbar(scatter)
         ax.set_title('Lunar M_v')
         ax.axis('equal')

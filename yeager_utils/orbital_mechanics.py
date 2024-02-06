@@ -1,3 +1,4 @@
+# flake8: noqa: E501
 from .constants import EARTH_MU, au_to_m
 from .coordinates import deg90to90, deg0to360
 from .utils import nby3shape

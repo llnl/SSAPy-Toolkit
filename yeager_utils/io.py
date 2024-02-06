@@ -1,3 +1,4 @@
+# flake8: noqa: E501
 import numpy as np
 import h5py
 import pandas as pd
@@ -7,77 +8,77 @@ import os
 from glob import glob
 import shutil
 import psutil
-from mpi4py import MPI
 import threading
+from .utils import sortbynum
 
 
-def mpi_scatter(scatter_array):
-    comm = MPI.COMM_WORLD  # Defines the default communicator
-    num_procs = comm.Get_size()  # Stores the number of processes in size.
-    rank = comm.Get_rank()  # Stores the rank (pid) of the current process
-    # stat = MPI.Status()
-    print(f'Number of procs: {num_procs}, rank: {rank}')
-    remainder = np.size(scatter_array) % num_procs
-    base_load = np.size(scatter_array) // num_procs
-    if rank == 0:
-        print('All processors will process at least {0} simulations.'.format(
-            base_load))
-        print('{0} processors will process an additional simulations'.format(
-            remainder))
-    load_list = np.concatenate((np.ones(remainder) * (base_load + 1),
-                                np.ones(num_procs - remainder) * base_load))
-    if rank == 0:
-        print('load_list={0}'.format(load_list))
-    if rank < remainder:
-        scatter_array_local = np.zeros(base_load + 1, dtype=np.int64)
-    else:
-        scatter_array_local = np.zeros(base_load, dtype=np.int64)
-    disp = np.zeros(num_procs)
-    for i in range(np.size(load_list)):
-        if i == 0:
-            disp[i] = 0
-        else:
-            disp[i] = disp[i - 1] + load_list[i - 1]
-    comm.Scatterv([scatter_array, load_list, disp, MPI.DOUBLE], scatter_array_local)
-    print(f"Process {rank} received the scattered arrays: {scatter_array_local}")
-    return scatter_array_local, rank
+# def mpi_scatter(scatter_array):
+#     comm = MPI.COMM_WORLD  # Defines the default communicator
+#     num_procs = comm.Get_size()  # Stores the number of processes in size.
+#     rank = comm.Get_rank()  # Stores the rank (pid) of the current process
+#     # stat = MPI.Status()
+#     print(f'Number of procs: {num_procs}, rank: {rank}')
+#     remainder = np.size(scatter_array) % num_procs
+#     base_load = np.size(scatter_array) // num_procs
+#     if rank == 0:
+#         print('All processors will process at least {0} simulations.'.format(
+#             base_load))
+#         print('{0} processors will process an additional simulations'.format(
+#             remainder))
+#     load_list = np.concatenate((np.ones(remainder) * (base_load + 1),
+#                                 np.ones(num_procs - remainder) * base_load))
+#     if rank == 0:
+#         print('load_list={0}'.format(load_list))
+#     if rank < remainder:
+#         scatter_array_local = np.zeros(base_load + 1, dtype=np.int64)
+#     else:
+#         scatter_array_local = np.zeros(base_load, dtype=np.int64)
+#     disp = np.zeros(num_procs)
+#     for i in range(np.size(load_list)):
+#         if i == 0:
+#             disp[i] = 0
+#         else:
+#             disp[i] = disp[i - 1] + load_list[i - 1]
+#     comm.Scatterv([scatter_array, load_list, disp, MPI.DOUBLE], scatter_array_local)
+#     print(f"Process {rank} received the scattered arrays: {scatter_array_local}")
+#     return scatter_array_local, rank
 
 
-def mpi_scatter_exclude_rank_0(scatter_array):
-    # Function is for rank 0 to be used as a saving processor - all other processors will complete tasks.
-    comm = MPI.COMM_WORLD
-    num_procs = comm.Get_size()
-    rank = comm.Get_rank()
-    print(f'Number of procs: {num_procs}, rank: {rank}')
+# def mpi_scatter_exclude_rank_0(scatter_array):
+#     # Function is for rank 0 to be used as a saving processor - all other processors will complete tasks.
+#     comm = MPI.COMM_WORLD
+#     num_procs = comm.Get_size()
+#     rank = comm.Get_rank()
+#     print(f'Number of procs: {num_procs}, rank: {rank}')
 
-    num_workers = num_procs - 1
-    remainder = np.size(scatter_array) % num_workers
-    base_load = np.size(scatter_array) // num_workers
+#     num_workers = num_procs - 1
+#     remainder = np.size(scatter_array) % num_workers
+#     base_load = np.size(scatter_array) // num_workers
 
-    if rank == 0:
-        print(f'All processors will process at least {base_load} simulations.')
-        print(f'{remainder} processors will process an additional simulation.')
+#     if rank == 0:
+#         print(f'All processors will process at least {base_load} simulations.')
+#         print(f'{remainder} processors will process an additional simulation.')
 
-    load_list = np.concatenate((np.zeros(1), np.ones(remainder) * (base_load + 1),
-                                np.ones(num_workers - remainder) * base_load))
+#     load_list = np.concatenate((np.zeros(1), np.ones(remainder) * (base_load + 1),
+#                                 np.ones(num_workers - remainder) * base_load))
 
-    if rank == 0:
-        print(f'load_list={load_list}')
+#     if rank == 0:
+#         print(f'load_list={load_list}')
 
-    scatter_array_local = np.zeros(int(load_list[rank]), dtype=np.int64)
+#     scatter_array_local = np.zeros(int(load_list[rank]), dtype=np.int64)
 
-    disp = np.zeros(num_procs)
-    for i in range(1, num_procs):
-        disp[i] = disp[i - 1] + load_list[i - 1]
+#     disp = np.zeros(num_procs)
+#     for i in range(1, num_procs):
+#         disp[i] = disp[i - 1] + load_list[i - 1]
 
-    if rank == 0:
-        dummy_recvbuf = np.zeros(1, dtype=np.int64)
-        comm.Scatterv([scatter_array, load_list, disp, MPI.INT64_T], dummy_recvbuf)
-    else:
-        comm.Scatterv([scatter_array, load_list, disp, MPI.INT64_T], scatter_array_local)
-        print(f"Process {rank} received the {len(scatter_array_local)} element scattered array: {scatter_array_local}")
+#     if rank == 0:
+#         dummy_recvbuf = np.zeros(1, dtype=np.int64)
+#         comm.Scatterv([scatter_array, load_list, disp, MPI.INT64_T], dummy_recvbuf)
+#     else:
+#         comm.Scatterv([scatter_array, load_list, disp, MPI.INT64_T], scatter_array_local)
+#         print(f"Process {rank} received the {len(scatter_array_local)} element scattered array: {scatter_array_local}")
 
-    return scatter_array_local, rank
+#     return scatter_array_local, rank
 
 
 def exists(pathname):
@@ -119,7 +120,7 @@ def rmfile(pathname):
     return
 
 
-def listdir(dir_path='*', files_only=False, exclude=None):
+def listdir(dir_path='*', files_only=False, exclude=None, sorted=False):
     expanded_paths = glob(dir_path)
 
     if files_only:
@@ -132,7 +133,10 @@ def listdir(dir_path='*', files_only=False, exclude=None):
     if exclude:
         new_files = [file for file in files if exclude not in os.path.basename(file)]
         files = new_files
-    return sorted(files)
+    if sorted:
+        return sortbynum(files)
+    else:
+        return files
 
 
 def get_memory_usage():
@@ -287,23 +291,62 @@ def read_h5_all(file_path):
                     data_dict[new_path] = item[()]
 
         traverse(file)
-
     return data_dict
 
-def h5_keys(filename):
+
+def combine_h5(filename, files, verbose=False, overwrite=False):
+    if verbose:
+        from tqdm import tqdm
+        iterable = enumerate(tqdm(files))
+    else:
+        iterable = enumerate(files)
+    if overwrite:
+        rmfile(filename)
+    for idx, file in iterable:
+        if verbose:
+            iterable2 = tqdm(h5_keys(file))
+        else:
+            iterable2 = files
+        for key in iterable2:
+            try:
+                if h5_key_exists(filename, key):
+                    continue
+                save_h5(filename, key, read_h5(file, key))
+            except TypeError as err:
+                print(read_h5(file, key))
+                print(f'{err}, key: {key}, file: {file}')
+    print('Completed HDF5 merge.')
+
+
+def h5_keys(file_path):
     """
     List all groups in HDF5 file.
 
     Args:
-        filename_ (str): The filename of the HDF5 file.
+        file_path (str): The file_path of the HDF5 file.
 
     Returns:
         A list of group keys in the HDF5 file.
     """
-    with h5py.File(filename, "r") as f:
-        # List all groups
-        group_keys = list(f.keys())
-    return group_keys
+    keys_list = []
+    with h5py.File(file_path, 'r') as file:
+        # Recursive function to traverse the HDF5 file and collect keys
+        def traverse(group, path=''):
+            for key, item in group.items():
+                new_path = f"{path}/{key}" if path else key
+                if isinstance(item, h5py.Group):
+                    traverse(item, path=new_path)
+                else:
+                    keys_list.append(new_path)
+        traverse(file)
+    return keys_list
+
+
+def h5_root_keys(file_path):
+    with h5py.File(file_path, 'r') as file:
+        keys_in_root = list(file.keys())
+        # print("Keys in the root group:", keys_in_root)
+        return keys_in_root
 
 
 def h5_key_exists(filename, key):

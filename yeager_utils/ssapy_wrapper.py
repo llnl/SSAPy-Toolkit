@@ -1,3 +1,5 @@
+# flake8: noqa: E501
+
 from .constants import RGEO
 from .coordinates import points_on_circle
 from .time import get_times
@@ -9,6 +11,17 @@ from ssapy.gravity import AccelHarmonic, AccelThirdBody
 from ssapy.propagator import RK78Propagator
 
 import numpy as np
+
+
+kepler = RK78Propagator(AccelKepler(), h=10.0)
+threebody = RK78Propagator(AccelKepler() + AccelThirdBody(get_body("moon")), h=10.0)
+high_fidelity = RK78Propagator(AccelKepler() + AccelHarmonic(get_body("Earth", model="EGM2008"), 140, 140) +
+    AccelThirdBody(get_body("moon")) + AccelHarmonic(get_body("moon")) +
+    AccelThirdBody(get_body("Sun")) +
+    AccelSolRad() + AccelEarthRad() + AccelDrag(),
+    h=10.0
+)
+props = {'kepler': kepler, 'threebody': threebody, 'high_fidelity': high_fidelity}
 
 
 def ssapy_best_prop(integration_timestep=60):
@@ -23,7 +36,7 @@ def ssapy_best_prop(integration_timestep=60):
     Saturn = get_body("Saturn")
     Uranus = get_body("Uranus")
     Neptune = get_body("Neptune")
-    aEarth = AccelKepler() + AccelHarmonic(Earth, 180, 180)
+    aEarth = AccelKepler() + AccelHarmonic(Earth, 140, 140)
     aMoon = AccelThirdBody(moon) + AccelHarmonic(moon)
     aSun = AccelThirdBody(sun)
     aMercury = AccelThirdBody(Mercury)
@@ -55,7 +68,7 @@ def ssapy_prop(integration_timestep=60):
     Saturn = get_body("Saturn")
     Uranus = get_body("Uranus")
     Neptune = get_body("Neptune")
-    aEarth = AccelKepler() + AccelHarmonic(Earth, 180, 180)
+    aEarth = AccelKepler() + AccelHarmonic(Earth, 140, 140)
     aSun = AccelThirdBody(sun)
     aMoon = AccelThirdBody(moon) + AccelHarmonic(moon)
     aSolRad = AccelSolRad()

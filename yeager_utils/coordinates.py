@@ -1,3 +1,5 @@
+# flake8: noqa: E501
+
 from .constants import EARTH_RADIUS, WGS84_EARTH_OMEGA
 from .time import hms_to_dd, dd_to_hms, dd_to_dms
 from ssapy.accel import AccelKepler
@@ -9,6 +11,25 @@ from ssapy.propagator import RK78Propagator
 from .utils import normed, einsum_norm
 import numpy as np
 from astropy.time import Time
+import matplotlib.pyplot as plt
+
+
+def dms_to_rad(coords):
+    from astropy.coordinates import Angle
+    if isinstance(coords, (list, tuple)):
+        return [Angle(coord).radian for coord in coords]
+    else:
+        return Angle(coords).radian
+    return
+
+
+def dms_to_deg(coords):
+    from astropy.coordinates import Angle
+    if isinstance(coords, (list, tuple)):
+        return [Angle(coord).deg for coord in coords]
+    else:
+        return Angle(coords).deg
+    return
 
 
 def rad0to2pi(angles):
@@ -318,85 +339,73 @@ def proper_motion_ra_dec(r=None, v=None, x=None, y=None, z=None, vx=None, vy=Non
         return
 
 
-# Counter-clockwise direction
-def rotate_axis(vector, axis, theta):
-    """
-    Return the rotation matrix associated with counterclockwise rotation about
-    the given axis by theta radians.
-    """
-    axis = np.asarray(axis)
-    axis = axis / np.sqrt(np.dot(axis, axis))
-    a = np.cos(theta / 2.0)
-    b, c, d = -axis * np.sin(theta / 2.0)
-    aa, bb, cc, dd = a * a, b * b, c * c, d * d
-    bc, ad, ac, ab, bd, cd = b * c, a * d, a * c, a * b, b * d, c * d
-    rotation_matrix = np.array([[aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac)],
-                                [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
-                                [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
-    return np.dot(rotation_matrix, vector)
+def rotate_vector(v_unit, theta, phi, plot=False, save_idx=False):
+    v_unit = v_unit / np.linalg.norm(v_unit, axis=-1)
+    if np.all(np.abs(v_unit) != np.max(np.abs(v_unit))):
+        perp_vector = np.cross(v_unit, np.array([1, 0, 0]))
+    else:
+        perp_vector = np.cross(v_unit, np.array([0, 1, 0]))
+    perp_vector /= np.linalg.norm(perp_vector)
 
+    theta = np.radians(theta)
+    phi = np.radians(phi)
+    cos_theta = np.cos(theta)
+    sin_theta = np.sin(theta)
+    cos_phi = np.cos(phi)
+    sin_phi = np.sin(phi)
 
-def rotate_via_numpy(x, y, radians):
-    """Use numpy to build a rotation matrix and take the dot product."""
-    c, s = np.cos(radians), np.sin(radians)
-    j = np.matrix([[c, s], [-s, c]])
-    m = np.dot(j, [x, y])
-    return float(m.T[0]), float(m.T[1])
+    R1 = np.array([
+        [cos_theta + (1 - cos_theta) * perp_vector[0]**2, 
+         (1 - cos_theta) * perp_vector[0] * perp_vector[1] - sin_theta * perp_vector[2], 
+         (1 - cos_theta) * perp_vector[0] * perp_vector[2] + sin_theta * perp_vector[1]],
+        [(1 - cos_theta) * perp_vector[1] * perp_vector[0] + sin_theta * perp_vector[2], 
+         cos_theta + (1 - cos_theta) * perp_vector[1]**2, 
+         (1 - cos_theta) * perp_vector[1] * perp_vector[2] - sin_theta * perp_vector[0]],
+        [(1 - cos_theta) * perp_vector[2] * perp_vector[0] - sin_theta * perp_vector[1], 
+         (1 - cos_theta) * perp_vector[2] * perp_vector[1] + sin_theta * perp_vector[0], 
+         cos_theta + (1 - cos_theta) * perp_vector[2]**2]
+    ])
 
+    # Apply the rotation matrix to v_unit to get the rotated unit vector
+    v1 = np.dot(R1, v_unit)
 
-def rotate_origin_only(x, y, radians):
-    """Only rotate a point around the origin (0, 0)."""
-    xx = x * np.cos(radians) + y * np.sin(radians)
-    yy = -x * np.sin(radians) + y * np.cos(radians)
-    return xx, yy
+    # Rotation matrix for rotation about v_unit
+    R2 = np.array([[cos_phi + (1 - cos_phi) * v_unit[0]**2,
+                    (1 - cos_phi) * v_unit[0] * v_unit[1] - sin_phi * v_unit[2],
+                    (1 - cos_phi) * v_unit[0] * v_unit[2] + sin_phi * v_unit[1]],
+                   [(1 - cos_phi) * v_unit[1] * v_unit[0] + sin_phi * v_unit[2],
+                    cos_phi + (1 - cos_phi) * v_unit[1]**2,
+                    (1 - cos_phi) * v_unit[1] * v_unit[2] - sin_phi * v_unit[0]],
+                   [(1 - cos_phi) * v_unit[2] * v_unit[0] - sin_phi * v_unit[1],
+                    (1 - cos_phi) * v_unit[2] * v_unit[1] + sin_phi * v_unit[0],
+                    cos_phi + (1 - cos_phi) * v_unit[2]**2]])
 
+    v2 = np.dot(R2, v1)
 
-def Rx(theta):
-    return np.matrix([[1, 0, 0],
-                      [0, np.cos(theta), -np.sin(theta)],
-                      [0, np.sin(theta), np.cos(theta)]])
-
-
-def Ry(theta):
-    return np.matrix([[np.cos(theta), 0, np.sin(theta)],
-                      [0, 1, 0],
-                      [-np.sin(theta), 0, np.cos(theta)]])
-
-
-def Rz(theta):
-    return np.matrix([[np.cos(theta), -np.sin(theta), 0],
-                      [np.sin(theta), np.cos(theta), 0],
-                      [0, 0, 1]])
-
-
-# Rotate 2d - theta is a counterclockwise rotation
-def rotate_2d(x, y, theta_to_rotate, x_origin=0, y_origin=0):
-    theta = np.arctan2(y - x_origin, x - y_origin)
-    distance = np.sqrt(np.power((x - x_origin), 2) + np.power((y - y_origin), 2))
-    xrot = distance * np.cos(np.pi + (theta - theta_to_rotate))
-    yrot = distance * np.sin(np.pi + (theta - theta_to_rotate))
-    return xrot, yrot
-
-
-# Using clockwise direction
-def rotate_3d(vector, xtheta, ytheta, ztheta):
-    vector = np.array(vector).flatten()
-    return np.dot(vector, np.dot(Rz(ztheta), np.dot(Ry(ytheta), Rx(xtheta))))
-
-
-def rotation_matrix_from_vectors(vec1, vec2=np.array([1, 0, 0])):
-    """ Find the rotation matrix that aligns vec1 to vec2
-    :param vec1: A 3d "source" vector
-    :param vec2: A 3d "destination" vector
-    :return mat: A transform matrix (3x3) which when applied to vec1, aligns it with vec2.
-    """
-    a, b = (vec1 / np.linalg.norm(vec1)).reshape(3), (vec2 / np.linalg.norm(vec2)).reshape(3)
-    v = np.cross(a, b)
-    c = np.dot(a, b)
-    s = np.linalg.norm(v)
-    kmat = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
-    rotation_matrix = np.eye(3) + kmat + kmat.dot(kmat) * ((1 - c) / (s ** 2))
-    return rotation_matrix
+    if plot:
+        plt.rcParams.update({'font.size': 9, 'figure.facecolor': 'black'})
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        ax.quiver(0, 0, 0, v_unit[0], v_unit[1], v_unit[2], color='b')
+        ax.quiver(0, 0, 0, v1[0], v1[1], v1[2], color='g')
+        ax.quiver(0, 0, 0, v2[0], v2[1], v2[2], color='r')
+        ax.set_xlabel('X', color='white')
+        ax.set_ylabel('Y', color='white')
+        ax.set_zlabel('Z', color='white')
+        ax.set_facecolor('black')  # Set plot background color to black
+        ax.tick_params(axis='x', colors='white')  # Set x-axis tick color to white
+        ax.tick_params(axis='y', colors='white')  # Set y-axis tick color to white
+        ax.tick_params(axis='z', colors='white')  # Set z-axis tick color to white
+        ax.set_title('Vector Plot', color='white')
+        ax.set_xlim(-1, 1)
+        ax.set_ylim(-1, 1)
+        ax.set_zlim(-1, 1)
+        plt.grid(True)
+        if save_idx is not False:
+            from .plotting import save_plot_to_png
+            ax.set_title(f'Vector Plot\ntheta: {np.degrees(theta):.0f}, phi: {np.degrees(phi):.0f}', color='white')
+            save_plot_to_png(fig, f'/p/lustre1/yeager7/plots_gif/rotate_vector_frames/{save_idx}.png')
+    return v2 / np.linalg.norm(v2, axis=-1)
 
 
 def rotate_points_3d(points, axis=np.array([0, 0, 1]), theta=-np.pi / 2):
@@ -511,8 +520,7 @@ def gcrf_to_lunar(r, times):
     return rotator(r, times)
 
 
-def gcrf_to_stationary_lunar(r, times):
-    from .body import get_body
+def gcrf_to_lunar_fixed(r, times):
     return gcrf_to_lunar(r, times) - gcrf_to_lunar(get_body('moon').position(times).T, times)
 
 
@@ -547,6 +555,11 @@ def gcrf_to_ecef_bad(r_gcrf, t):
     # Apply the rotation matrices to all rows of r_gcrf simultaneously
     r_ecef = np.einsum('ijk,ik->ij', Rz, r_gcrf)
     return r_ecef
+
+
+def gcrf_to_lat_lon(r, times):
+    lon, lat, height = groundTrack(r, times)
+    return lon, lat, height
 
 
 def gcrf_to_itrf(r_gcrf, t):

@@ -1,9 +1,9 @@
 # -*- conf -*-
-# flake8 settings for SSAPy.
+# flake8 settings for yeager_utils.
 #
 [flake8]
-#ignore = E129,,W503
-#extend-ignore = E731,E203
+ignore = E129,W503,E501
+extend-ignore = E731,E203,E501
 max-line-length = 120
 
 # F4: Import

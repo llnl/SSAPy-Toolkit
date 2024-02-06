@@ -1,3 +1,5 @@
+# flake8: noqa: E501
+
 #########################################################################################################################################
 #########################################################################################################################################
 # ALL MY HELPFUL FRIENDS
@@ -289,3 +291,14 @@ def getAngle(a, b, c):  # a,b,c where b is the vertex
 
 def normed(arr):
     return arr / np.sqrt(np.einsum("...i,...i", arr, arr))[..., None]
+
+
+def find_local_extrema(arr):
+    if len(np.shape(arr)) > 1:
+        print(f"array shape: {np.shape(arr)}, reducing along last axis.")
+        arr = np.linalg.norm(arr, axis=-1)
+        find_local_extrema(arr)
+    len_data = len(arr)
+    minima_indices = [i for i in range(1, len_data - 1) if arr[i] < arr[i - 1] and arr[i] < arr[i + 1]]
+    maxima_indices = [i for i in range(1, len_data - 1) if arr[i] > arr[i - 1] and arr[i] > arr[i + 1]]
+    return minima_indices, maxima_indices
