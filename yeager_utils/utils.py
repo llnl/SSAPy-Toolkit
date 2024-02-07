@@ -302,3 +302,70 @@ def find_local_extrema(arr):
     minima_indices = [i for i in range(1, len_data - 1) if arr[i] < arr[i - 1] and arr[i] < arr[i + 1]]
     maxima_indices = [i for i in range(1, len_data - 1) if arr[i] > arr[i - 1] and arr[i] > arr[i + 1]]
     return minima_indices, maxima_indices
+
+
+def graham_scan(points):
+    def orientation(p, q, r):
+        val = (q[1] - p[1]) * (r[0] - q[0]) - (q[0] - p[0]) * (r[1] - q[1])
+        if val == 0:
+            return 0
+        return 1 if val > 0 else 2
+
+    # Select the anchor point with minimum x and minimum y values
+    anchor_point_index = np.lexsort((points[:, 1], points[:, 0]))[0]
+    anchor_point = points[anchor_point_index]
+
+    # Sort the points based on polar angle and distance from anchor point
+    sorted_points = sorted(points, key=lambda p: (np.arctan2(p[1] - anchor_point[1], p[0] - anchor_point[0]), np.linalg.norm(p - anchor_point)))
+
+    convex_hull = [anchor_point, sorted_points[0], sorted_points[1]]
+
+    for i in range(2, len(sorted_points)):
+        while len(convex_hull) > 1 and orientation(convex_hull[-2], convex_hull[-1], sorted_points[i]) != 2:
+            convex_hull.pop()
+        convex_hull.append(sorted_points[i])
+    return np.array(convex_hull)
+
+
+def contours_2d(points, plot=False):
+    hull_vertices = graham_scan(points)
+    if plot:
+        import matplotlib.pyplot as plt
+        plt.scatter(points[:, 0], points[:, 1], label='Points')
+        plt.plot(np.append(hull_vertices[:, 0], hull_vertices[0, 0]),
+                np.append(hull_vertices[:, 1], hull_vertices[0, 1]), 'r--', lw=2)
+
+        plt.fill(hull_vertices[:, 0], hull_vertices[:, 1], alpha=0.2, color='blue', label='Convex Hull Area')
+        plt.legend(loc='upper left')
+        plt.xlim((0, 20))
+        plt.ylim((0, 20))
+        plt.xlabel('X-axis')
+        plt.ylabel('Y-axis')
+        plt.title("Bounding Contour using Graham's scan")
+        plt.show()
+    return hull_vertices
+
+
+def contours_3d(points_3d, plot=False):
+    from scipy.spatial import ConvexHull
+    # Compute Convex Hull using scipy's ConvexHull
+    hull = ConvexHull(points_3d)
+    if plot:
+        import matplotlib.pyplot as plt
+        # Plotting for visualization in 3D
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        ax.scatter(points_3d[:, 0], points_3d[:, 1], points_3d[:, 2], label='Points')
+
+        # Plotting the convex hull
+        for simplex in hull.simplices:
+            simplex = np.append(simplex, simplex[0])  # Close the loop
+            ax.plot(points_3d[simplex, 0], points_3d[simplex, 1], points_3d[simplex, 2], 'r--', lw=2)
+
+        ax.set_xlabel('X-axis')
+        ax.set_ylabel('Y-axis')
+        ax.set_zlabel('Z-axis')
+        ax.set_title("Convex Hull using scipy's ConvexHull in 3D")
+        plt.legend()
+        plt.show()
+    return hull
