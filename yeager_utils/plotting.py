@@ -496,7 +496,7 @@ def check_numpy_array(variable):
         return "not numpy"
 
 
-def _make_scatter(fig, ax1, ax2, ax3, ax4, r, times, limits, title='', figsize=(7, 7), orbit_index='', frame=False):
+def _make_scatter(fig, ax1, ax2, ax3, ax4, r, times, limits, title='', orbit_index='', num_orbits=1, frame=False):
     if np.size(times) < 1:
         if frame in ["itrf", "lunar", "lunar_fixed"]:
             raise("Need to provide times for itrf, lunar or lunar fixed frames")
@@ -526,28 +526,32 @@ def _make_scatter(fig, ax1, ax2, ax3, ax4, r, times, limits, title='', figsize=(
     xm = r_moon[:, 0] / RGEO
     ym = r_moon[:, 1] / RGEO
     zm = r_moon[:, 2] / RGEO
-    dotcolors = cm.rainbow(np.linspace(0, 1, len(x)))
+        
     if np.size(xm) > 1:
-        gradient_colors = cm.Greys(np.linspace(0.5, 1, len(xm)))
+        gradient_colors = cm.Greys(np.linspace(0, .8, len(xm)))[::-1]
+        blues = cm.Blues(np.linspace(.4, .9, len(xm)))[::-1]
     else:
         gradient_colors = "grey"
+        blues = 'Blue'
     plot_settings = {
         "gcrf": ("blue", 50, 1, xm, ym, zm, gradient_colors),
         "itrf": ("blue", 50, 1, xm, ym, zm, gradient_colors),
         "lunar": ("blue", 50, 1, xm, ym, zm, gradient_colors),
-        "lunar fixed": ("grey", 25, 1.3, -xm, -ym, -zm, cm.Blues(np.linspace(0.5, 1, len(xm))))
+        "lunar fixed": ("grey", 25, 1.3, -xm, -ym, -zm, blues)
     }
     try:
         stn = plot_settings[frame.lower()]
     except KeyError:
-        raise ValueError("Unknown plot type provided. Accepted: gcrf, itrf, lunar, lunar fixed")
+        raise ValueError("Unknown plot type provided. Accepted: 'gcrf', 'itrf', 'lunar', 'lunar fixed'")
     if limits is False:
         limits = np.nanmax(np.abs(np.array(r))) * 1.2 / RGEO
 
     if orbit_index == '':
-        angle = 0 
+        angle = 0
+        dotcolors = cm.rainbow(np.linspace(0, 1, len(x)))
     else:
         angle = orbit_index * 10
+        dotcolors = cm.rainbow(np.linspace(0, 1, num_orbits))[orbit_index]
     ax1.add_patch(plt.Circle((0, 0), stn[2], color='white', linestyle='dashed', fill=False))
     ax1.scatter(x, y, color=dotcolors, s=1)
     ax1.scatter(0, 0, color=stn[0], s=stn[1])
@@ -603,14 +607,15 @@ def _make_scatter(fig, ax1, ax2, ax3, ax4, r, times, limits, title='', figsize=(
     return fig, ax1, ax2, ax3, ax4
 
 
-def single_plot_wrapper(fig, ax1, ax2, ax3, ax4, r, times, limits, title, figsize, frame):
-    fig, ax1, ax2, ax3, ax4 = _make_scatter(fig, ax1, ax2, ax3, ax4, r=r, times=times, limits=limits, title=title, figsize=figsize, frame=frame)
+def single_plot_wrapper(fig, ax1, ax2, ax3, ax4, r, times, limits, title, frame):
+    fig, ax1, ax2, ax3, ax4 = _make_scatter(fig, ax1, ax2, ax3, ax4, r=r, times=times, limits=limits, title=title, frame=frame)
     return fig, ax1, ax2, ax3, ax4
 
 
-def multi_plot_wrapper(fig, ax1, ax2, ax3, ax4, r, times, limits, title, figsize, frame):
+def multi_plot_wrapper(fig, ax1, ax2, ax3, ax4, r, times, limits, title, frame):
+    num_orbits = np.shape(r)[0]
     for i, row in enumerate(r):
-        fig, ax1, ax2, ax3, ax4 = _make_scatter(fig, ax1, ax2, ax3, ax4, r=row, times=times, limits=limits, title=title, orbit_index=i, figsize=figsize, frame=frame)
+        fig, ax1, ax2, ax3, ax4 = _make_scatter(fig, ax1, ax2, ax3, ax4, r=row, times=times, limits=limits, title=title, orbit_index=i, num_orbits=num_orbits, frame=frame)
     return fig, ax1, ax2, ax3, ax4
 
 
@@ -635,9 +640,9 @@ def orbit_plot(r, times=[], limits=False, title='', figsize=(7, 7), save_path=Fa
     ax4 = fig.add_subplot(2, 2, 4, projection='3d')
     
     if input_type == "numpy array":
-        fig, ax1, ax2, ax3, ax4 = single_plot_wrapper(fig, ax1, ax2, ax3, ax4, r=r, times=times, limits=limits, title=title, figsize=figsize, frame=frame)
+        fig, ax1, ax2, ax3, ax4 = single_plot_wrapper(fig, ax1, ax2, ax3, ax4, r=r, times=times, limits=limits, title=title, frame=frame)
     if input_type == "list of numpy array":
-        fig, ax1, ax2, ax3, ax4 = multi_plot_wrapper(fig, ax1, ax2, ax3, ax4, r=r, times=times, limits=limits, title=title, figsize=figsize, frame=frame)
+        fig, ax1, ax2, ax3, ax4 = multi_plot_wrapper(fig, ax1, ax2, ax3, ax4, r=r, times=times, limits=limits, title=title, frame=frame)
 
     # Set axis color to white
     for i, ax in enumerate([ax1, ax2, ax3, ax4]):
@@ -706,6 +711,11 @@ def globe_plot(r, times, limits=False, title='', figsize=(7, 8), save_path=False
     ax.tick_params(axis='y', colors='white')  # Set y-axis tick color to white
     ax.tick_params(axis='z', colors='white')  # Set z-axis tick color to white
     ax.set_aspect('equal')
+    if save_path:
+        if save_path.lower().endswith('.png'):
+            save_plot_to_png(fig, save_path)
+        else:
+            save_plot_to_pdf(fig, save_path)
     return fig, ax
 
 

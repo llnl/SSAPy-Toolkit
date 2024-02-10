@@ -69,7 +69,7 @@ def dd_to_hms(degree_decimal):
     return f'{int(_h)}:{int(_m)}:{_s}'
 
 
-def get_times(duration=(30, 'day'), freq=(1, 'hr'), t=Time("2025-01-01", scale='utc')):
+def get_times(duration, freq, t):
     """
     Calculate a list of times spaced equally apart over a specified duration.
 
@@ -81,7 +81,8 @@ def get_times(duration=(30, 'day'), freq=(1, 'hr'), t=Time("2025-01-01", scale='
         frequency of time outputs in units provided
     t: ssapy.utils.Time, optional
         The starting time. Default is "2025-01-01".
-
+    example input:
+    duration=(30, 'day'), freq=(1, 'hr'), t=Time("2025-01-01", scale='utc')
     Returns
     -------
     times: array-like
