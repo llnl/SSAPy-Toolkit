@@ -2,6 +2,7 @@
 from .constants import EARTH_MU, au_to_m
 from .coordinates import deg90to90, deg0to360
 from .utils import nby3shape
+from .vectors import angle_between_vectors
 import rebound
 from rebound import hash as h
 from astropy.time import Time
@@ -441,3 +442,17 @@ def peri_apo_apsis_from_rv(r, v):
 
 def vcirc(r=au_to_m, mu_=1.32712440018e20 + 2.2032e13 + 3.24859e14):
     return np.sqrt(mu_ / r)
+
+
+def gamma_angle(r, v):
+    if r.ndim == 1 and v.ndim == 1:
+        return np.degrees(angle_between_vectors(r, v)) - 90
+    elif r.ndim == 2 and v.ndim == 2:
+        return np.degrees(np.apply_along_axis(lambda x: angle_between_vectors(x[:3], x[3:]), 1, np.concatenate((r, v), axis=1))) - 90
+    else:
+        raise ValueError("Invalid dimensions for input arrays.")
+
+
+##################################################################################
+# ORBIT CHANGES
+##################################################################################

@@ -9,7 +9,8 @@ from ssapy.compute import groundTrack
 from ssapy.utils import find_file
 from .constants import RGEO, EARTH_RADIUS
 from .coordinates import gcrf_to_itrf, gcrf_to_lunar, gcrf_to_lunar_fixed
-from .utils import Time, norm
+from .utils import Time
+from .vectors import norm
 import os
 import re
 
@@ -32,12 +33,41 @@ plt.rcParams.update({'font.size': 7, 'figure.facecolor': 'w'})
 lunar_semi_major = 384399000  # m
 
 
+def make_white(fig, *axes):
+    fig.patch.set_facecolor('white')
+
+    for ax in axes:
+        ax.set_facecolor('white')
+        ax_items = [ax.title, ax.xaxis.label, ax.yaxis.label]
+        if hasattr(ax, 'zaxis'):
+            ax_items.append(ax.zaxis.label)
+        ax_items += ax.get_xticklabels() + ax.get_yticklabels()
+        if hasattr(ax, 'get_zticklabels'):
+            ax_items += ax.get_zticklabels()
+        ax_items += ax.get_xticklines() + ax.get_yticklines()
+        if hasattr(ax, 'get_zticklines'):
+            ax_items += ax.get_zticklines()
+        for item in ax_items:
+            item.set_color('black')
+
+    return fig, *axes
+
+
 def make_black(fig, *axes):
     fig.patch.set_facecolor('black')
 
     for ax in axes:
         ax.set_facecolor('black')
-        for item in [ax.title, ax.xaxis.label, ax.yaxis.label, ax.zaxis.label] + ax.get_xticklabels() + ax.get_yticklabels() + ax.get_zticklabels() + ax.get_xticklines() + ax.get_yticklines() + ax.get_zticklines():
+        ax_items = [ax.title, ax.xaxis.label, ax.yaxis.label]
+        if hasattr(ax, 'zaxis'):
+            ax_items.append(ax.zaxis.label)
+        ax_items += ax.get_xticklabels() + ax.get_yticklabels()
+        if hasattr(ax, 'get_zticklabels'):
+            ax_items += ax.get_zticklabels()
+        ax_items += ax.get_xticklines() + ax.get_yticklines()
+        if hasattr(ax, 'get_zticklines'):
+            ax_items += ax.get_zticklines()
+        for item in ax_items:
             item.set_color('white')
 
     return fig, *axes
@@ -496,129 +526,6 @@ def check_numpy_array(variable):
         return "not numpy"
 
 
-def _make_scatter(fig, ax1, ax2, ax3, ax4, r, times, limits, title='', orbit_index='', num_orbits=1, frame=False):
-    if np.size(times) < 1:
-        if frame in ["itrf", "lunar", "lunar_fixed"]:
-            raise("Need to provide times for itrf, lunar or lunar fixed frames")
-        r_moon = np.atleast_2d(get_body("moon").position(Time("2000-1-1")))
-    else:
-        r_moon = get_body("moon").position(times).T
-
-    # Check if the frame is in the dictionary, and set central_dot accordingly
-    if frame.lower() == "GCRF".lower():
-        title2 = "GCRF"
-    elif frame.lower() == "ITRF".lower():
-        title2 = "ITRF"
-        r = gcrf_to_itrf(r, times)
-    elif frame.lower() == "Lunar".lower():
-        title2 = "Lunar - Earth Centered"
-        r = gcrf_to_lunar(r, times)
-    elif frame.lower() == "Lunar Fixed".lower():
-        title2 = "Lunar Centered"
-        r = gcrf_to_lunar_fixed(r, times)
-        r_moon = gcrf_to_lunar(r_moon, times)
-    else:
-        raise ValueError("Unknown plot type provided. Accepted: gcrf, itrf, lunar, lunar fixed")
-
-    x = r[:, 0] / RGEO
-    y = r[:, 1] / RGEO
-    z = r[:, 2] / RGEO
-    xm = r_moon[:, 0] / RGEO
-    ym = r_moon[:, 1] / RGEO
-    zm = r_moon[:, 2] / RGEO
-        
-    if np.size(xm) > 1:
-        gradient_colors = cm.Greys(np.linspace(0, .8, len(xm)))[::-1]
-        blues = cm.Blues(np.linspace(.4, .9, len(xm)))[::-1]
-    else:
-        gradient_colors = "grey"
-        blues = 'Blue'
-    plot_settings = {
-        "gcrf": ("blue", 50, 1, xm, ym, zm, gradient_colors),
-        "itrf": ("blue", 50, 1, xm, ym, zm, gradient_colors),
-        "lunar": ("blue", 50, 1, xm, ym, zm, gradient_colors),
-        "lunar fixed": ("grey", 25, 1.3, -xm, -ym, -zm, blues)
-    }
-    try:
-        stn = plot_settings[frame.lower()]
-    except KeyError:
-        raise ValueError("Unknown plot type provided. Accepted: 'gcrf', 'itrf', 'lunar', 'lunar fixed'")
-    if limits is False:
-        limits = np.nanmax(np.abs(np.array(r))) * 1.2 / RGEO
-
-    if orbit_index == '':
-        angle = 0
-        dotcolors = cm.rainbow(np.linspace(0, 1, len(x)))
-    else:
-        angle = orbit_index * 10
-        dotcolors = cm.rainbow(np.linspace(0, 1, num_orbits))[orbit_index]
-    ax1.add_patch(plt.Circle((0, 0), stn[2], color='white', linestyle='dashed', fill=False))
-    ax1.scatter(x, y, color=dotcolors, s=1)
-    ax1.scatter(0, 0, color=stn[0], s=stn[1])
-    if xm is not False:
-        ax1.scatter(stn[3], stn[4], color=stn[6], s=5)
-    ax1.set_aspect('equal')
-    ax1.set_xlabel('x [GEO]')
-    ax1.set_ylabel('y [GEO]')
-    ax1.set_xlim((-limits, limits))
-    ax1.set_ylim((-limits, limits))
-    ax1.text(x[0], y[0], f'← start {orbit_index}', color='white', rotation=angle)
-    ax1.text(x[-1], y[-1], f'← end {orbit_index}', color='white', rotation=angle)
-    ax1.set_title(f'Frame: {title2}', color='white')
-
-    ax2.add_patch(plt.Circle((0, 0), stn[2], color='white', linestyle='dashed', fill=False))
-    ax2.scatter(x, z, color=dotcolors, s=1)
-    ax2.scatter(0, 0, color=stn[0], s=stn[1])
-    if xm is not False:
-        ax2.scatter(stn[3], stn[4], color=stn[6], s=5)
-    ax2.set_aspect('equal')
-    ax2.set_xlabel('x [GEO]')
-    ax2.set_ylabel('z [GEO]')
-    ax2.set_xlim((-limits, limits))
-    ax2.set_ylim((-limits, limits))
-    ax2.text(x[0], z[0], f'← start {orbit_index}', color='white', rotation=angle)
-    ax2.text(x[-1], z[-1], f'← end {orbit_index}', color='white', rotation=angle)
-    ax2.set_title(f'{title}', color='white')
-
-    ax3.add_patch(plt.Circle((0, 0), stn[2], color='white', linestyle='dashed', fill=False))
-    ax3.scatter(y, z, color=dotcolors, s=1)
-    ax3.scatter(0, 0, color=stn[0], s=stn[1])
-    if xm is not False:
-        ax3.scatter(stn[3], stn[4], color=stn[6], s=5)
-    ax3.set_aspect('equal')
-    ax3.set_xlabel('y [GEO]')
-    ax3.set_ylabel('z [GEO]')
-    ax3.set_xlim((-limits, limits))
-    ax3.set_ylim((-limits, limits))
-    ax3.text(y[0], z[0], f'← start {orbit_index}', color='white', rotation=angle)
-    ax3.text(y[-1], z[-1], f'← end {orbit_index}', color='white', rotation=angle)
-
-    ax4.scatter3D(x, y, z, color=dotcolors, s=1)
-    ax4.scatter3D(0, 0, 0, color=stn[0], s=stn[1])
-    if xm is not False:
-        ax4.scatter3D(stn[3], stn[4], stn[5], color=stn[6], s=5)
-    ax4.set_xlim([-limits, limits])
-    ax4.set_ylim([-limits, limits])
-    ax4.set_zlim([-limits, limits])
-    ax4.set_aspect('equal')  # aspect ratio is 1:1:1 in data space
-    ax4.set_xlabel('x [GEO]')
-    ax4.set_ylabel('y [GEO]')
-    ax4.set_zlabel('z [GEO]')
-    return fig, ax1, ax2, ax3, ax4
-
-
-def single_plot_wrapper(fig, ax1, ax2, ax3, ax4, r, times, limits, title, frame):
-    fig, ax1, ax2, ax3, ax4 = _make_scatter(fig, ax1, ax2, ax3, ax4, r=r, times=times, limits=limits, title=title, frame=frame)
-    return fig, ax1, ax2, ax3, ax4
-
-
-def multi_plot_wrapper(fig, ax1, ax2, ax3, ax4, r, times, limits, title, frame):
-    num_orbits = np.shape(r)[0]
-    for i, row in enumerate(r):
-        fig, ax1, ax2, ax3, ax4 = _make_scatter(fig, ax1, ax2, ax3, ax4, r=row, times=times, limits=limits, title=title, orbit_index=i, num_orbits=num_orbits, frame=frame)
-    return fig, ax1, ax2, ax3, ax4
-
-
 def orbit_plot(r, times=[], limits=False, title='', figsize=(7, 7), save_path=False, frame="gcrf"):
     """
     Parameters
@@ -630,6 +537,115 @@ def orbit_plot(r, times=[], limits=False, title='', figsize=(7, 7), save_path=Fa
     title: optional - title of the plot
     """
 
+    def _make_scatter(fig, ax1, ax2, ax3, ax4, r, times, limits, title='', orbit_index='', num_orbits=1, frame=False):
+        if np.size(times) < 1:
+            if frame in ["itrf", "lunar", "lunar_fixed"]:
+                raise("Need to provide times for itrf, lunar or lunar fixed frames")
+            r_moon = np.atleast_2d(get_body("moon").position(Time("2000-1-1")))
+        else:
+            r_moon = get_body("moon").position(times).T
+
+        # Check if the frame is in the dictionary, and set central_dot accordingly
+        if frame.lower() == "GCRF".lower():
+            title2 = "GCRF"
+        elif frame.lower() == "ITRF".lower():
+            title2 = "ITRF"
+            r = gcrf_to_itrf(r, times)
+        elif frame.lower() == "Lunar".lower():
+            title2 = "Lunar - Earth Centered"
+            r = gcrf_to_lunar(r, times)
+        elif frame.lower() == "Lunar Fixed".lower():
+            title2 = "Lunar Centered"
+            r = gcrf_to_lunar_fixed(r, times)
+            r_moon = gcrf_to_lunar(r_moon, times)
+        else:
+            raise ValueError("Unknown plot type provided. Accepted: gcrf, itrf, lunar, lunar fixed")
+
+        x = r[:, 0] / RGEO
+        y = r[:, 1] / RGEO
+        z = r[:, 2] / RGEO
+        xm = r_moon[:, 0] / RGEO
+        ym = r_moon[:, 1] / RGEO
+        zm = r_moon[:, 2] / RGEO
+            
+        if np.size(xm) > 1:
+            gradient_colors = cm.Greys(np.linspace(0, .8, len(xm)))[::-1]
+            blues = cm.Blues(np.linspace(.4, .9, len(xm)))[::-1]
+        else:
+            gradient_colors = "grey"
+            blues = 'Blue'
+        plot_settings = {
+            "gcrf": ("blue", 50, 1, xm, ym, zm, gradient_colors),
+            "itrf": ("blue", 50, 1, xm, ym, zm, gradient_colors),
+            "lunar": ("blue", 50, 1, xm, ym, zm, gradient_colors),
+            "lunar fixed": ("grey", 25, 1.3, -xm, -ym, -zm, blues)
+        }
+        try:
+            stn = plot_settings[frame.lower()]
+        except KeyError:
+            raise ValueError("Unknown plot type provided. Accepted: 'gcrf', 'itrf', 'lunar', 'lunar fixed'")
+        if limits is False:
+            limits = np.nanmax(np.abs(np.array(r))) * 1.2 / RGEO
+
+        if orbit_index == '':
+            angle = 0
+            dotcolors = cm.rainbow(np.linspace(0, 1, len(x)))
+        else:
+            angle = orbit_index * 10
+            dotcolors = cm.rainbow(np.linspace(0, 1, num_orbits))[orbit_index]
+        ax1.add_patch(plt.Circle((0, 0), stn[2], color='white', linestyle='dashed', fill=False))
+        ax1.scatter(x, y, color=dotcolors, s=1)
+        ax1.scatter(0, 0, color=stn[0], s=stn[1])
+        if xm is not False:
+            ax1.scatter(stn[3], stn[4], color=stn[6], s=5)
+        ax1.set_aspect('equal')
+        ax1.set_xlabel('x [GEO]')
+        ax1.set_ylabel('y [GEO]')
+        ax1.set_xlim((-limits, limits))
+        ax1.set_ylim((-limits, limits))
+        ax1.text(x[0], y[0], f'← start {orbit_index}', color='white', rotation=angle)
+        ax1.text(x[-1], y[-1], f'← end {orbit_index}', color='white', rotation=angle)
+        ax1.set_title(f'Frame: {title2}', color='white')
+
+        ax2.add_patch(plt.Circle((0, 0), stn[2], color='white', linestyle='dashed', fill=False))
+        ax2.scatter(x, z, color=dotcolors, s=1)
+        ax2.scatter(0, 0, color=stn[0], s=stn[1])
+        if xm is not False:
+            ax2.scatter(stn[3], stn[4], color=stn[6], s=5)
+        ax2.set_aspect('equal')
+        ax2.set_xlabel('x [GEO]')
+        ax2.set_ylabel('z [GEO]')
+        ax2.set_xlim((-limits, limits))
+        ax2.set_ylim((-limits, limits))
+        ax2.text(x[0], z[0], f'← start {orbit_index}', color='white', rotation=angle)
+        ax2.text(x[-1], z[-1], f'← end {orbit_index}', color='white', rotation=angle)
+        ax2.set_title(f'{title}', color='white')
+
+        ax3.add_patch(plt.Circle((0, 0), stn[2], color='white', linestyle='dashed', fill=False))
+        ax3.scatter(y, z, color=dotcolors, s=1)
+        ax3.scatter(0, 0, color=stn[0], s=stn[1])
+        if xm is not False:
+            ax3.scatter(stn[3], stn[4], color=stn[6], s=5)
+        ax3.set_aspect('equal')
+        ax3.set_xlabel('y [GEO]')
+        ax3.set_ylabel('z [GEO]')
+        ax3.set_xlim((-limits, limits))
+        ax3.set_ylim((-limits, limits))
+        ax3.text(y[0], z[0], f'← start {orbit_index}', color='white', rotation=angle)
+        ax3.text(y[-1], z[-1], f'← end {orbit_index}', color='white', rotation=angle)
+
+        ax4.scatter3D(x, y, z, color=dotcolors, s=1)
+        ax4.scatter3D(0, 0, 0, color=stn[0], s=stn[1])
+        if xm is not False:
+            ax4.scatter3D(stn[3], stn[4], stn[5], color=stn[6], s=5)
+        ax4.set_xlim([-limits, limits])
+        ax4.set_ylim([-limits, limits])
+        ax4.set_zlim([-limits, limits])
+        ax4.set_aspect('equal')  # aspect ratio is 1:1:1 in data space
+        ax4.set_xlabel('x [GEO]')
+        ax4.set_ylabel('y [GEO]')
+        ax4.set_zlabel('z [GEO]')
+        return fig, ax1, ax2, ax3, ax4
     input_type = check_numpy_array(r)
 
     plt.rcParams.update({'font.size': 9, 'figure.facecolor': 'k'})
@@ -640,12 +656,129 @@ def orbit_plot(r, times=[], limits=False, title='', figsize=(7, 7), save_path=Fa
     ax4 = fig.add_subplot(2, 2, 4, projection='3d')
     
     if input_type == "numpy array":
-        fig, ax1, ax2, ax3, ax4 = single_plot_wrapper(fig, ax1, ax2, ax3, ax4, r=r, times=times, limits=limits, title=title, frame=frame)
+        fig, ax1, ax2, ax3, ax4 = _make_scatter(fig, ax1, ax2, ax3, ax4, r=r, times=times, limits=limits, title=title, frame=frame)
     if input_type == "list of numpy array":
-        fig, ax1, ax2, ax3, ax4 = multi_plot_wrapper(fig, ax1, ax2, ax3, ax4, r=r, times=times, limits=limits, title=title, frame=frame)
+        num_orbits = np.shape(r)[0]
+        for i, row in enumerate(r):
+            fig, ax1, ax2, ax3, ax4 = _make_scatter(fig, ax1, ax2, ax3, ax4, r=row, times=times, limits=limits, title=title, orbit_index=i, num_orbits=num_orbits, frame=frame)
 
     # Set axis color to white
     for i, ax in enumerate([ax1, ax2, ax3, ax4]):
+        ax.set_facecolor('black')
+        ax.spines['bottom'].set_color('white')
+        ax.spines['top'].set_color('white')
+        ax.spines['left'].set_color('white')
+        ax.spines['right'].set_color('white')
+        ax.xaxis.label.set_color('white')
+        ax.yaxis.label.set_color('white')
+        ax.tick_params(axis='x', colors='white')
+        ax.tick_params(axis='y', colors='white')
+        if i == 3:
+            ax.tick_params(axis='z', colors='white')
+
+    # Set text color to white
+    for ax in [ax1, ax2, ax3, ax4]:
+        for text in ax.get_xticklabels() + ax.get_yticklabels() + [ax.xaxis.label, ax.yaxis.label]:
+            text.set_color('white')
+    
+    #Save the plot
+    fig.patch.set_facecolor('black')
+
+    if save_path:
+        if save_path.lower().endswith('.png'):
+            save_plot_to_png(fig, save_path)
+        else:
+            save_plot_to_pdf(fig, save_path)
+    return [fig, ax1, ax2, ax3, ax4]
+
+
+def cislunar_orbit_plot(r, times=[], title='', figsize=(7, 7), save_path=False):
+    """
+    Parameters
+    ----------
+    r : (n,3) or array of [(n,3), ..., (n,3)] array_like
+        Position of orbiting object(s) in meters.
+    times: optional - times when r was calculated.
+    limits: optional - x and y limits of the plot
+    title: optional - title of the plot
+    """
+    def _make_scatter(fig, ax1, ax2, r_gcrf, times, title='', orbit_index='', num_orbits=1):
+        if np.size(times) < 1:
+            r_moon = np.atleast_2d(get_body("moon").position(Time("2000-1-1")))
+        else:
+            r_moon = get_body("moon").position(times).T
+
+        # Check if the frame is in the dictionary, and set central_dot accordingly
+        title2 = "GCRF"
+        r_lunar = gcrf_to_lunar_fixed(r_gcrf, times)
+        r_moon = gcrf_to_lunar(r_moon, times)
+
+        x_gcrf = r_gcrf[:, 0] / RGEO
+        y_gcrf = r_gcrf[:, 1] / RGEO
+        z_gcrf = r_gcrf[:, 2] / RGEO
+        x_lunar = r_lunar[:, 0] / RGEO
+        y_lunar = r_lunar[:, 1] / RGEO
+        z_lunar = r_lunar[:, 2] / RGEO
+        xm = r_moon[:, 0] / RGEO
+        ym = r_moon[:, 1] / RGEO
+        zm = r_moon[:, 2] / RGEO
+            
+        if np.size(xm) > 1:
+            gradient_colors = cm.Greys(np.linspace(0, .8, len(xm)))[::-1]
+            blues = cm.Blues(np.linspace(.4, .9, len(xm)))[::-1]
+        else:
+            gradient_colors = "grey"
+            blues = 'Blue'
+        plot_settings = {
+            "gcrf": ("blue", 50, 1, xm, ym, zm, gradient_colors),
+            "itrf": ("blue", 50, 1, xm, ym, zm, gradient_colors),
+            "lunar": ("blue", 50, 1, xm, ym, zm, gradient_colors),
+            "lunar fixed": ("grey", 25, 1.3, -xm, -ym, -zm, blues)
+        }
+
+        if orbit_index == '':
+            angle = 0
+            dotcolors = cm.rainbow(np.linspace(0, 1, len(x)))
+        else:
+            angle = orbit_index * 10
+            dotcolors = cm.rainbow(np.linspace(0, 1, num_orbits))[orbit_index]
+        ax_gcrf.scatter3D(x_gcrf, y_gcrf, z_gcrf, color=dotcolors, s=1)
+        ax_gcrf.scatter3D(0, 0, 0, color=stn[0], s=stn[1])
+        ax_gcrf.scatter3D(stn[3], stn[4], stn[5], color=stn[6], s=5)
+        ax_gcrf.set_xlim([-limits, limits])
+        ax_gcrf.set_ylim([-limits, limits])
+        ax_gcrf.set_zlim([-limits, limits])
+        ax_gcrf.set_aspect('equal')  # aspect ratio is 1:1:1 in data space
+        ax_gcrf.set_xlabel('x [GEO]')
+        ax_gcrf.set_ylabel('y [GEO]')
+        ax_gcrf.set_zlabel('z [GEO]')
+
+        ax_lunar.scatter3D(x_lunar, y_lunar, z_lunar, color=dotcolors, s=1)
+        ax_lunar.scatter3D(0, 0, 0, color=stn[0], s=stn[1])
+        ax_lunar.scatter3D(stn[3], stn[4], stn[5], color=stn[6], s=5)
+        ax_lunar.set_xlim([-limits, limits])
+        ax_lunar.set_ylim([-limits, limits])
+        ax_lunar.set_zlim([-limits, limits])
+        ax_lunar.set_aspect('equal')  # aspect ratio is 1:1:1 in data space
+        ax_lunar.set_xlabel('x [GEO]')
+        ax_lunar.set_ylabel('y [GEO]')
+        ax_lunar.set_zlabel('z [GEO]')
+        return fig, ax1, ax2
+    input_type = check_numpy_array(r)
+
+    plt.rcParams.update({'font.size': 9, 'figure.facecolor': 'k'})
+    fig = plt.figure(dpi=100, figsize=figsize, facecolor='black')
+    ax1 = fig.add_subplot(2, 2, 1, projection='3d')
+    ax2 = fig.add_subplot(2, 2, 2, projection='3d')
+    if input_type == "numpy array":
+        fig, ax1, ax2, ax3, ax4 = _make_scatter(fig, ax1, ax2, ax3, ax4, r=r, times=times, title=title)
+    if input_type == "list of numpy array":
+        num_orbits = np.shape(r)[0]
+        for i, row in enumerate(r):
+            fig, ax1, ax2, ax3, ax4 = _make_scatter(fig, ax1, ax2, ax3, ax4, r=row, times=times, title=title, orbit_index=i, num_orbits=num_orbits)
+
+    # Set axis color to white
+    for i, ax in enumerate([ax1, ax2]):
         ax.set_facecolor('black')
         ax.spines['bottom'].set_color('white')
         ax.spines['top'].set_color('white')

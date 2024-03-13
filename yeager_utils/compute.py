@@ -113,7 +113,7 @@ def sun_shine(r_sat, r_earth, r_sun, radius, albedo, albedo_front, area_panels):
     return {'sun_bus': flux_bus, 'sun_panels': flux_front}
 
 
-def M_v(r_sat, r_earth, r_sun, r_moon=False, radius=0.4, albedo=0.20, sun_Mag=4.80, albedo_earth=0.30, albedo_moon=0.12, albedo_back=0.50, albedo_front=0.05, area_panels=100, return_components=False):
+def calc_M_v(r_sat, r_earth, r_sun, r_moon=False, radius=0.4, albedo=0.20, sun_Mag=4.80, albedo_earth=0.30, albedo_moon=0.12, albedo_back=0.50, albedo_front=0.05, area_panels=100, return_components=False):
     r_sun_sat = np.linalg.norm(r_sat - r_sun, axis=-1)
     frac_flux_sun = {'sun_bus': 0, 'sun_panels': 0}
     frac_flux_earth = {'earth_bus': 0, 'earth_panels': 0}

@@ -1,7 +1,6 @@
 # flake8: noqa: E501
 
-from .constants import RGEO
-from .coordinates import points_on_circle
+from .vectors import points_on_circle
 from .time import get_times
 from astropy.time import Time
 from ssapy import Orbit, rv
@@ -56,7 +55,18 @@ def ssapy_best_prop(integration_timestep=60):
     return prop
 
 
-def ssapy_prop(integration_timestep=60):
+def ssapy_kwargs(mass=250, area=0.022, CD=2.3, CR=1.3):
+    # Asteroid parameters
+    kwargs = dict(
+        mass=mass,  # [kg]
+        area=area,  # [m^2]
+        CD=CD,  # Drag coefficient
+        CR=CR,  # Radiation pressure coefficient
+    )
+    return kwargs
+
+
+def ssapy_prop(integration_timestep=60, propkw=ssapy_kwargs()):
     # Accelerations - pass a body object or string of body name.
     moon = get_body("moon")
     sun = get_body("Sun")
@@ -71,51 +81,44 @@ def ssapy_prop(integration_timestep=60):
     aEarth = AccelKepler() + AccelHarmonic(Earth, 140, 140)
     aSun = AccelThirdBody(sun)
     aMoon = AccelThirdBody(moon) + AccelHarmonic(moon)
-    aSolRad = AccelSolRad()
-    aEarthRad = AccelEarthRad()
+    aSolRad = AccelSolRad(**propkw)
+    aEarthRad = AccelEarthRad(**propkw)
     accel = aEarth + aMoon + aSun + aSolRad + aEarthRad
     # Build propagator
     prop = RK78Propagator(accel, h=integration_timestep)
     return prop
 
 
-def ssapy_kwargs(mass=250, area=0.022, CD=2.3, CR=1.3):
-    # Asteroid parameters
-    kwargs = dict(
-        mass=mass,  # [kg]
-        area=area,  # [m^2]
-        CD=CD,  # Drag coefficient
-        CR=CR,  # Radiation pressure coefficient
-    )
-    return kwargs
-
-
 # Uses the current best propagator and acceleration models in ssapy
-def ssapy_orbit(a=None, e=0, i=0, pa=0, raan=0, ta=0, r=None, v=None, duration=(30, 'day'), freq=(1, 'hr'), start_date="2025-01-01", times=None, integration_timestep=10, mass=250, area=0.022, CD=2.3, CR=1.3):
+def ssapy_orbit(orbit=None, a=None, e=0, i=0, pa=0, raan=0, ta=0, r=None, v=None, duration=(30, 'day'), freq=(1, 'hr'), start_date="2025-01-01", times=None, integration_timestep=10, mass=250, area=0.022, CD=2.3, CR=1.3, accel=None):
     # Everything is in SI units, except time.
     # density #kg/m^3 --> density
     t = Time(start_date, scale='utc')
     if times is None:
         times = get_times(duration=duration, freq=freq, t=t)
 
-    kwargs = ssapy_kwargs(mass, area, CD, CR)
-
-    if a is not None:
+    propkw = ssapy_kwargs(mass, area, CD, CR)
+    if orbit is not None:
+        pass
+    elif a is not None:
         kElements = [a, e, i, pa, raan, ta]
-        orbit = Orbit.fromKeplerianElements(*kElements, t, propkw=kwargs)
+        orbit = Orbit.fromKeplerianElements(*kElements, t)
     elif r is not None and v is not None:
-        orbit = Orbit(r, v, t, propkw=kwargs)
+        orbit = Orbit(r, v, t)
     else:
         raise ValueError("Either Keplerian elements (a, e, i, pa, raan, ta) or position and velocity vectors (r, v) must be provided.")
 
-    prop = ssapy_prop(integration_timestep)
+    if accel is None:
+        prop = ssapy_prop(integration_timestep, propkw)
+    else:
+        prop = RK78Propagator(accel, h=integration_timestep)
 
     try:
         r, v = rv(orbit, times, prop)
-        return r, v
+        return r, v, times
     except (RuntimeError, ValueError) as err:
         print(err)
-        return np.nan, np.nan
+        return np.nan, np.nan, np.nan
 
 
 # Generate orbits near stable orbit.
@@ -125,7 +128,7 @@ def get_similar_orbits(r0, v0, rad=1e5, num_orbits=4, duration=(90, 'days'), fre
     print(r0, v0)
     for idx, point in enumerate(points_on_circle(r0, v0, rad=rad, num_points=num_orbits)):
         # Calculate entire satellite trajectory
-        r, v = ssapy_rv_from_rv(r=point, v=v0, duration=duration, freq=freq, start_date=start_date, integration_timestep=10, mass=mass, area=mass / 19000 + 0.01, CD=2.3, CR=1.3)
+        r, v = ssapy_orbit(r=point, v=v0, duration=duration, freq=freq, start_date=start_date, integration_timestep=10, mass=mass, area=mass / 19000 + 0.01, CD=2.3, CR=1.3)
         if idx == 0:
             trajectories = np.concatenate((r0, v0), axis=1)[:len(r)]
         rv = np.concatenate((r, v), axis=1)

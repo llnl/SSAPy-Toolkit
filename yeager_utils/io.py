@@ -10,6 +10,7 @@ import shutil
 import psutil
 import threading
 from .utils import sortbynum
+import time
 
 
 # def mpi_scatter(scatter_array):
@@ -196,15 +197,16 @@ def append_h5(filename, pathname, append_data):
         None
     """
     try:
-        with h5py.File(filename, "r+") as f:
+        with h5py.File(filename, "a") as f:
             if pathname in f:
                 path_data_old = np.array(f.get(pathname))
-                new_data = np.append(path_data_old, np.array(append_data))
-                f[pathname] = new_data
-            else:
-                f.create_dataset(pathname, data=np.array(append_data), maxshape=None)
+                append_data = np.append(path_data_old, np.array(append_data))
+                del f[pathname]
+            f.create_dataset(pathname, data=np.array(append_data), maxshape=None)
     except FileNotFoundError:
-        print(f"File not found: {filename}")
+        print(f"File not found: {filename}\nCreating new dataset: {filename}")
+        save_h5(filename, pathname, append_data)
+
     except (ValueError, KeyError) as err:
         print(f"Error: {err}")
 
@@ -221,42 +223,56 @@ def overwrite_h5(filename, pathname, new_data):
     Returns:
         None
     """
+
     try:
-        with h5py.File(filename, "a") as f:
-            f.create_dataset(pathname, data=new_data, maxshape=None)
-        f.close()
-    except (FileNotFoundError, ValueError, KeyError):
-        try:
-            with h5py.File(filename, 'r+') as f:
-                del f[pathname]
-            f.close()
-        except (FileNotFoundError, ValueError, KeyError) as err:
-            print(f'Error: {err}')
         try:
             with h5py.File(filename, "a") as f:
                 f.create_dataset(pathname, data=new_data, maxshape=None)
             f.close()
-        except (FileNotFoundError, ValueError, KeyError) as err:
-            print(f'File: {filename}{pathname}, Error: {err}')
-
+        except (FileNotFoundError, ValueError, KeyError):
+            try:
+                with h5py.File(filename, 'r+') as f:
+                    del f[pathname]
+                f.close()
+            except (FileNotFoundError, ValueError, KeyError) as err:
+                print(f'Error: {err}')
+            try:
+                with h5py.File(filename, "a") as f:
+                    f.create_dataset(pathname, data=new_data, maxshape=None)
+                f.close()
+            except (FileNotFoundError, ValueError, KeyError) as err:
+                print(f'File: {filename}{pathname}, Error: {err}')
+    except (BlockingIOError, OSError) as err:
+        print(err)
+        return
+            
 
 def save_h5(filename, pathname, data):
     """
-    Save data to HDF5 file.
+    Save data to HDF5 file with recursive attempt in case of write errors.
 
     Args:
         filename (str): The filename of the HDF5 file.
         pathname (str): The path to the data in the HDF5 file.
         data (any): The data to be saved.
+        max_retries (int): Maximum number of recursive retries in case of write errors.
+        retry_delay (tuple): A tuple representing the range of delay (in seconds) between retries.
 
     Returns:
         None
     """
-    with h5py.File(filename, "a") as f:
+    try:
         try:
-            f.create_dataset(pathname, data=data, maxshape=None)
+            with h5py.File(filename, "a") as f:
+                f.create_dataset(pathname, data=data, maxshape=None)
+                f.flush()
+            return
         except ValueError as err:
             print(f"Did not save, key: {pathname} exists in file: {filename}. {err}")
+            return  # If the key already exists, no need to retry
+    except (BlockingIOError, OSError) as err:
+        print(err)
+        return
 
 
 def read_h5(filename, pathname):
@@ -264,16 +280,19 @@ def read_h5(filename, pathname):
     Load data from HDF5 file.
 
     Args:
-        filename_ (str): The filename of the HDF5 file.
-        pathname_ (str): The path to the data in the HDF5 file.
+        filename (str): The filename of the HDF5 file.
+        pathname (str): The path to the data in the HDF5 file.
 
     Returns:
         The data loaded from the HDF5 file.
     """
-    with h5py.File(filename, 'r') as f:
-        data = np.array(f.get(pathname))
-    f.close()
-    return data
+    try:
+        with h5py.File(filename, 'r') as f:
+            data = np.array(f.get(pathname))
+        return data
+    except (BlockingIOError, OSError) as err:
+        print(f"\n{err}\nPath: {pathname}\n")
+    return None
 
 
 def read_h5_all(file_path):

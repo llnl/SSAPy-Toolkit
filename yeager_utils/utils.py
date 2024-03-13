@@ -232,19 +232,6 @@ def divby0(n, d, Δ=np.nan):
     return n / d if d else Δ
 
 
-def einsum_norm(a, indices='ij,ji->i'):
-    return np.sqrt(np.einsum(indices, a, a))
-
-
-def normSq(arr):
-    return np.einsum("...i,...i", arr, arr)
-
-
-# Faster to not dispatch back to normSq
-def norm(arr):
-    return np.sqrt(np.einsum("...i,...i", arr, arr))
-
-
 def kde(data_):
     kde = stats.gaussian_kde(data_)
     return kde
@@ -269,28 +256,9 @@ def close_to_any(a, floats, **kwargs):
     return np.any(np.isclose(a, floats, **kwargs))
 
 
-def unit_vector(vector):
-    """ Returns the unit vector of the vector."""
-    return vector / np.linalg.norm(vector)
-
-
 def distance3d(x, y, z, xe, ye, ze):
     distance = ((x - xe) ** 2 + (y - ye) ** 2 + (z - ze) ** 2) ** (1 / 2)
     return distance
-
-
-def getAngle(a, b, c):  # a,b,c where b is the vertex
-    a = np.atleast_2d(a)
-    b = np.atleast_2d(b)
-    c = np.atleast_2d(c)
-    ba = np.subtract(a, b)
-    bc = np.subtract(c, b)
-    cosine_angle = np.sum(ba * bc, axis=-1) / (np.linalg.norm(ba, axis=-1) * np.linalg.norm(bc, axis=-1))
-    return np.arccos(cosine_angle)
-
-
-def normed(arr):
-    return arr / np.sqrt(np.einsum("...i,...i", arr, arr))[..., None]
 
 
 def find_local_extrema(arr):
