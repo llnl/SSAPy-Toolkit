@@ -1,23 +1,65 @@
-# flake8: noqa: E501
-
 import numpy as np
 from random import shuffle
+from typing import Tuple, List, Dict
 
 
-def radius_from_H_albedo(H, albedo=.1):
-    ######################################################################
-    # ast radius from albedo and H mag
-    ######################################################################
+def radius_from_H_albedo(H: np.ndarray, albedo: float = 0.1) -> np.ndarray:
+    """
+    Calculate asteroid radius from H magnitude and albedo.
+
+    Parameters
+    ----------
+    H : np.ndarray
+        H magnitude values of the asteroid.
+    albedo : float, optional
+        Albedo value of the asteroid (default is 0.1).
+
+    Returns
+    -------
+    np.ndarray
+        Calculated radius for the asteroid.
+    """
     radius = 1329e3 / (2 * np.sqrt(albedo)) * 10 ** (-0.2 * H)  # http://www.physics.sfasu.edu/astro/asteroids/sizemagnitude.html
     return radius
 
 
-def H_mag(radius, albedo):
+def H_mag(radius: np.ndarray, albedo: float) -> np.ndarray:
+    """
+    Calculate the H magnitude from the asteroid radius and albedo.
+
+    Parameters
+    ----------
+    radius : np.ndarray
+        Radius values of the asteroid.
+    albedo : float
+        Albedo value of the asteroid.
+
+    Returns
+    -------
+    np.ndarray
+        H magnitude values of the asteroid.
+    """
     return 5 * np.log(664500 / (radius * np.sqrt(albedo))) / np.log(10)
 
 
-# Color correction, Johnson V to LSST Filters
-def johnsonV_to_lsst_array(M_app, filters, ast_types):
+def johnsonV_to_lsst_array(M_app: np.ndarray, filters: List[str], ast_types: np.ndarray) -> np.ndarray:
+    """
+    Convert apparent magnitude in Johnson V to LSST filters.
+
+    Parameters
+    ----------
+    M_app : np.ndarray
+        Apparent magnitude values.
+    filters : List[str]
+        List of filter names ('u', 'g', 'r', 'i', 'z', 'y').
+    ast_types : np.ndarray
+        Array of asteroid types (0 or 1).
+
+    Returns
+    -------
+    np.ndarray
+        Corrected apparent magnitudes.
+    """
     corrections = np.zeros(np.shape(M_app))
     corrections[np.where((np.array(filters) == 'u') & (np.array(ast_types) == 0))] = -1.614
     corrections[np.where((np.array(filters) == 'u') & (np.array(ast_types) == 1))] = -1.927
@@ -34,7 +76,24 @@ def johnsonV_to_lsst_array(M_app, filters, ast_types):
     return M_app - corrections
 
 
-def johnsonV_to_ztf_array(M_app, filters, ast_types):
+def johnsonV_to_ztf_array(M_app: np.ndarray, filters: List[int], ast_types: np.ndarray) -> np.ndarray:
+    """
+    Convert apparent magnitude in Johnson V to ZTF filters.
+
+    Parameters
+    ----------
+    M_app : np.ndarray
+        Apparent magnitude values.
+    filters : List[int]
+        List of filter indices (1: 'g', 2: 'r', 3: 'i').
+    ast_types : np.ndarray
+        Array of asteroid types (0 or 1).
+
+    Returns
+    -------
+    np.ndarray
+        Corrected apparent magnitudes.
+    """
     corrections = np.zeros(np.shape(M_app))
     corrections[np.where((np.array(filters) == 1) & (np.array(ast_types) == 0))] = -0.302
     corrections[np.where((np.array(filters) == 1) & (np.array(ast_types) == 1))] = -0.395
@@ -45,10 +104,20 @@ def johnsonV_to_ztf_array(M_app, filters, ast_types):
     return M_app - corrections
 
 
-######################################################################
-# get ETA albedo -- > P2R = fd * (pv*np.exp(-pv**2/(2*d**2))/d**2) + (1-fd)*(pv*np.exp(-pv**2/(2*b**2))/b**2)
-######################################################################
-def get_albedo_array(num=1):
+def get_albedo_array(num: int = 1) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Generate a random array of albedo values and asteroid types.
+
+    Parameters
+    ----------
+    num : int, optional
+        Number of samples to generate (default is 1).
+
+    Returns
+    -------
+    Tuple[np.ndarray, np.ndarray]
+        Array of albedo values and asteroid types (0 or 1).
+    """
     num = int(num)
     albedo_out = []
     ast_type_out = []
@@ -57,7 +126,6 @@ def get_albedo_array(num=1):
         d = 0.030
         b = 0.168
         albedo = np.random.uniform(0, 1, size=num)
-        # Albedos from NEO population - https://iopscience.iop.org/article/10.3847/0004-6256/152/4/79
         sample_ys = np.random.uniform(0, 6, size=num)
         c_type = fd * (albedo * np.exp(-albedo**2 / (2 * d**2)) / d**2)
         s_type = (1 - fd) * (albedo * np.exp(-albedo**2 / (2 * b**2)) / b**2)
@@ -74,28 +142,68 @@ def get_albedo_array(num=1):
         albedo_out = np.hstack((albedo_out, albedo))
         ast_type_out = np.hstack((ast_type_out, ast_type))
         if np.size(albedo_out) > num:
-            # Shuffle the last arrays so there's no biasing towards c_type
             temp = list(zip(albedo, ast_type))
             np.random.shuffle(temp)
             albedo, ast_type = zip(*temp)
             albedo_out = albedo_out[:num]
             ast_type_out = ast_type_out[:num]
-    return (albedo_out, ast_type_out)
+    return albedo_out, ast_type_out
 
 
-def granvik_low_slope(x):
+def granvik_low_slope(x: np.ndarray) -> np.ndarray:
+    """
+    Low-slope function for Granvik distribution.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        Input values (e.g., H magnitudes).
+
+    Returns
+    -------
+    np.ndarray
+        Output values after applying the low-slope function.
+    """
     return 0.3034 * x - 3.491
 
 
-def granvik_high_slope(x):
+def granvik_high_slope(x: np.ndarray) -> np.ndarray:
+    """
+    High-slope function for Granvik distribution.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        Input values (e.g., H magnitudes).
+
+    Returns
+    -------
+    np.ndarray
+        Output values after applying the high-slope function.
+    """
     return 0.7235 * x - 13.12
 
 
-def get_neo_H_mag_array(num=1, upper_mag=28, min_mag=10):
+def get_neo_H_mag_array(num: int = 1, upper_mag: float = 28, min_mag: float = 10) -> np.ndarray:
+    """
+    Generate a random array of H magnitudes for Near-Earth Objects (NEOs).
+
+    Parameters
+    ----------
+    num : int, optional
+        Number of samples to generate (default is 1).
+    upper_mag : float, optional
+        Upper limit for the magnitude (default is 28).
+    min_mag : float, optional
+        Lower limit for the magnitude (default is 10).
+
+    Returns
+    -------
+    np.ndarray
+        Array of H magnitudes.
+    """
     num = int(num)
     H_mag_out = []
-    # Extending granvik H mags
-    # break_point = 23
     while np.size(H_mag_out) != num:
         xs = np.random.uniform(min_mag, upper_mag, size=num)
         ys = np.random.uniform(1, 10**granvik_high_slope(upper_mag), size=num)
@@ -116,10 +224,24 @@ def get_neo_H_mag_array(num=1, upper_mag=28, min_mag=10):
     return H_mag_out
 
 
-######################################################################
-# get ETA diameter
-######################################################################
-def get_eta_radius_albedo_H_array(num=1, upper_mag=28, min_mag=10):
+def get_eta_radius_albedo_H_array(num: int = 1, upper_mag: float = 28, min_mag: float = 10) -> Dict[str, np.ndarray]:
+    """
+    Generate radius, albedo, asteroid type, and H magnitude arrays for ETA dataset.
+
+    Parameters
+    ----------
+    num : int, optional
+        Number of samples to generate (default is 1).
+    upper_mag : float, optional
+        Upper limit for the magnitude (default is 28).
+    min_mag : float, optional
+        Lower limit for the magnitude (default is 10).
+
+    Returns
+    -------
+    Dict[str, np.ndarray]
+        Dictionary with radius, albedo, asteroid type, and H magnitude arrays.
+    """
     albedo, ast_type = get_albedo_array(num=num)
     H = get_neo_H_mag_array(num=num, upper_mag=upper_mag, min_mag=min_mag)
     radius = 1329e3 / (2 * np.sqrt(albedo)) * 10**(-0.2 * H)

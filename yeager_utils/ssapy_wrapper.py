@@ -12,47 +12,44 @@ from ssapy.propagator import RK78Propagator
 import numpy as np
 
 
-kepler = RK78Propagator(AccelKepler(), h=10.0)
-threebody = RK78Propagator(AccelKepler() + AccelThirdBody(get_body("moon")), h=10.0)
-high_fidelity = RK78Propagator(AccelKepler() + AccelHarmonic(get_body("Earth", model="EGM2008"), 140, 140) +
-    AccelThirdBody(get_body("moon")) + AccelHarmonic(get_body("moon")) +
-    AccelThirdBody(get_body("Sun")) +
-    AccelSolRad() + AccelEarthRad() + AccelDrag(),
-    h=10.0
-)
-props = {'kepler': kepler, 'threebody': threebody, 'high_fidelity': high_fidelity}
+def keplerian_prop(integration_timestep=10):
+    return RK78Propagator(AccelKepler(), h=integration_timestep)
 
 
-def ssapy_best_prop(integration_timestep=60):
-    # Accelerations - pass a body object or string of body name.
-    moon = get_body("moon")
-    sun = get_body("Sun")
-    Mercury = get_body("Mercury")
-    Venus = get_body("Venus")
-    Earth = get_body("Earth", model="EGM2008")
-    Mars = get_body("Mars")
-    Jupiter = get_body("Jupiter")
-    Saturn = get_body("Saturn")
-    Uranus = get_body("Uranus")
-    Neptune = get_body("Neptune")
-    aEarth = AccelKepler() + AccelHarmonic(Earth, 140, 140)
-    aMoon = AccelThirdBody(moon) + AccelHarmonic(moon)
-    aSun = AccelThirdBody(sun)
-    aMercury = AccelThirdBody(Mercury)
-    aVenus = AccelThirdBody(Venus)
-    aMars = AccelThirdBody(Mars)
-    aJupiter = AccelThirdBody(Jupiter)
-    aSaturn = AccelThirdBody(Saturn)
-    aUranus = AccelThirdBody(Uranus)
-    aNeptune = AccelThirdBody(Neptune)
-    aSolRad = AccelSolRad()
-    aEarthRad = AccelEarthRad()
-    aDrag = AccelDrag()
-    planets = aMercury + aVenus + aMars + aJupiter + aSaturn + aUranus + aNeptune
-    accel = aEarth + aMoon + aSun + aSolRad + aEarthRad + aDrag + planets
-    # Build propagator
-    prop = RK78Propagator(accel, h=integration_timestep)
-    return prop
+accel_3_cache = None
+def threebody_prop(integration_timestep=10):
+    global accel_3_cache
+    if accel_3_cache is None:
+        accel_3_cache = AccelKepler() + AccelThirdBody(get_body("moon"))
+    return RK78Propagator(accel_3_cache, h=integration_timestep)
+
+
+accel_4_cache = None
+def fourbody_prop(integration_timestep=10):
+    global accel_4_cache
+    if accel_4_cache is None:
+        accel_4_cache = AccelKepler() + AccelThirdBody(get_body("moon")) + AccelThirdBody(get_body("Sun"))
+    return RK78Propagator(accel_4_cache, h=integration_timestep)
+
+
+accel_best_cache = None
+def best_prop(integration_timestep=10, kwargs=dict(mass=250, area=.022, CD=2.3, CR=1.3)):
+    global accel_best_cache
+    if accel_best_cache is None:
+        aEarth = AccelKepler() + AccelHarmonic(get_body("Earth", model="EGM2008"), 140, 140)
+        aMoon = AccelThirdBody(get_body("moon")) + AccelHarmonic(get_body("moon"), 20, 20)
+        aSun = AccelThirdBody(get_body("Sun"))
+        aMercury = AccelThirdBody(get_body("Mercury"))
+        aVenus = AccelThirdBody(get_body("Venus"))
+        aMars = AccelThirdBody(get_body("Mars"))
+        aJupiter = AccelThirdBody(get_body("Jupiter"))
+        aSaturn = AccelThirdBody(get_body("Saturn"))
+        aUranus = AccelThirdBody(get_body("Uranus"))
+        aNeptune = AccelThirdBody(get_body("Neptune"))
+        nonConservative = AccelSolRad(**kwargs) + AccelEarthRad(**kwargs) + AccelDrag(**kwargs)
+        planets = aMercury + aVenus + aMars + aJupiter + aSaturn + aUranus + aNeptune
+        accel_best_cache = aEarth + aMoon + aSun + planets + nonConservative
+    return RK78Propagator(accel_best_cache, h=integration_timestep)
 
 
 def ssapy_kwargs(mass=250, area=0.022, CD=2.3, CR=1.3):
@@ -80,7 +77,7 @@ def ssapy_prop(integration_timestep=60, propkw=ssapy_kwargs()):
     Neptune = get_body("Neptune")
     aEarth = AccelKepler() + AccelHarmonic(Earth, 140, 140)
     aSun = AccelThirdBody(sun)
-    aMoon = AccelThirdBody(moon) + AccelHarmonic(moon)
+    aMoon = AccelThirdBody(moon) + AccelHarmonic(moon, 20, 20)
     aSolRad = AccelSolRad(**propkw)
     aEarthRad = AccelEarthRad(**propkw)
     accel = aEarth + aMoon + aSun + aSolRad + aEarthRad
@@ -90,32 +87,32 @@ def ssapy_prop(integration_timestep=60, propkw=ssapy_kwargs()):
 
 
 # Uses the current best propagator and acceleration models in ssapy
-def ssapy_orbit(orbit=None, a=None, e=0, i=0, pa=0, raan=0, ta=0, r=None, v=None, duration=(30, 'day'), freq=(1, 'hr'), start_date="2025-01-01", times=None, integration_timestep=10, mass=250, area=0.022, CD=2.3, CR=1.3, accel=None):
+def ssapy_orbit(orbit=None, a=None, e=0, i=0, pa=0, raan=0, ta=0, r=None, v=None, duration=(30, 'day'), freq=(1, 'hr'), start_date="2025-01-01", t=None, integration_timestep=10, mass=250, area=0.022, CD=2.3, CR=1.3, prop=ssapy_prop()):
     # Everything is in SI units, except time.
     # density #kg/m^3 --> density
-    t = Time(start_date, scale='utc')
-    if times is None:
-        times = get_times(duration=duration, freq=freq, t=t)
+    t0 = Time(start_date, scale='utc')
+    if t is None:
+        time_is_None = True
+        t = get_times(duration=duration, freq=freq, t=t)
+    else:
+        time_is_None = False
 
-    propkw = ssapy_kwargs(mass, area, CD, CR)
     if orbit is not None:
         pass
     elif a is not None:
         kElements = [a, e, i, pa, raan, ta]
-        orbit = Orbit.fromKeplerianElements(*kElements, t)
+        orbit = Orbit.fromKeplerianElements(*kElements, t0)
     elif r is not None and v is not None:
-        orbit = Orbit(r, v, t)
+        orbit = Orbit(r, v, t0)
     else:
         raise ValueError("Either Keplerian elements (a, e, i, pa, raan, ta) or position and velocity vectors (r, v) must be provided.")
 
-    if accel is None:
-        prop = ssapy_prop(integration_timestep, propkw)
-    else:
-        prop = RK78Propagator(accel, h=integration_timestep)
-
     try:
-        r, v = rv(orbit, times, prop)
-        return r, v, times
+        r, v = rv(orbit, t, prop)
+        if time_is_None:
+            return r, v, t
+        else:
+            return r, v
     except (RuntimeError, ValueError) as err:
         print(err)
         return np.nan, np.nan, np.nan

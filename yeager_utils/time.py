@@ -1,32 +1,81 @@
 import numpy as np
 from astropy.time import Time
 from astropy import units as u
+from datetime import datetime
+from typing import Union, List, Tuple
 
 
-def _gpsToTT(t):
-    # Assume t is GPS seconds.  Convert to TT seconds by adding 51.184.
-    # Divide by 86400 to get TT days.
-    # Then add the TT time of the GPS epoch, expressed as an MJD, which
-    # is 44244.0
+def now() -> str:
+    """
+    Returns the current time in the format 'YYYY-MM-DD HH:MM'.
+
+    Returns
+    -------
+    str
+        The current date and time as a formatted string.
+    """
+    return datetime.now().strftime('%Y-%m-%d %H:%M')
+
+
+def _gpsToTT(t: float) -> float:
+    """
+    Convert GPS time in seconds to Terrestrial Time (TT) in days.
+
+    Parameters
+    ----------
+    t : float
+        GPS time in seconds.
+
+    Returns
+    -------
+    float
+        The corresponding TT time in days.
+    """
     return 44244.0 + (t + 51.184) / 86400
 
 
-def dms_to_dd(dms):  # Degree minute second to Degree decimal
-    dms, out = [[dms] if type(dms) is str else dms][0], []
+def dms_to_dd(dms: Union[str, List[str]]) -> Union[float, List[float]]:
+    """
+    Convert Degree-Minute-Second (DMS) to Decimal Degrees (DD).
+
+    Parameters
+    ----------
+    dms : str or list of str
+        A string or a list of strings representing degrees, minutes, and seconds.
+
+    Returns
+    -------
+    float or list of float
+        The decimal degree equivalent(s) of the input DMS.
+    """
+    dms, out = [[dms] if isinstance(dms, str) else dms][0], []
     for i in dms:
         deg, minute, sec = [float(j) for j in i.split(':')]
         if deg < 0:
-            minute, sec = float(f'-{minute}'), float(f'-{sec}')
+            minute, sec = -minute, -sec
         out.append(deg + minute / 60 + sec / 3600)
-    return [out[0] if type(dms) is str or len(dms) == 1 else out][0]
+    return out[0] if isinstance(dms, str) or len(dms) == 1 else out
 
 
-def dd_to_dms(degree_decimal):
+def dd_to_dms(degree_decimal: float) -> str:
+    """
+    Convert Decimal Degrees (DD) to Degree-Minute-Second (DMS).
+
+    Parameters
+    ----------
+    degree_decimal : float
+        The decimal degree value.
+
+    Returns
+    -------
+    str
+        The corresponding DMS string in the format 'deg:min:sec'.
+    """
     _d, __d = np.trunc(degree_decimal), degree_decimal - np.trunc(degree_decimal)
-    __d = [-__d if degree_decimal < 0 else __d][0]
+    __d = -__d if degree_decimal < 0 else __d
     _m, __m = np.trunc(__d * 60), __d * 60 - np.trunc(__d * 60)
     _s = round(__m * 60, 4)
-    _s = [int(_s) if int(_s) == _s else _s][0]
+    _s = int(_s) if int(_s) == _s else _s
     if _s == 60:
         _m, _s = _m + 1, '00'
     elif _s > 60:
@@ -35,7 +84,20 @@ def dd_to_dms(degree_decimal):
     return f'{int(_d)}:{int(_m)}:{_s}'
 
 
-def hms_to_dd(hms):
+def hms_to_dd(hms: Union[str, List[str]]) -> Union[float, List[float]]:
+    """
+    Convert Hour-Minute-Second (HMS) to Decimal Degrees (DD).
+
+    Parameters
+    ----------
+    hms : str or list of str
+        A string or a list of strings representing hours, minutes, and seconds.
+
+    Returns
+    -------
+    float or list of float
+        The decimal degree equivalent(s) of the input HMS.
+    """
     _type = type(hms)
     hms, out = [[hms] if _type == str else hms][0], []
     for i in hms:
@@ -46,11 +108,24 @@ def hms_to_dd(hms):
         else:
             print('hms cannot be negative.')
 
-    return [out[0] if _type == str or len(hms) == 1 else out][0]
+    return out[0] if _type == str or len(hms) == 1 else out
 
 
-def dd_to_hms(degree_decimal):
-    if type(degree_decimal) is str:
+def dd_to_hms(degree_decimal: float) -> str:
+    """
+    Convert Decimal Degrees (DD) to Hour-Minute-Second (HMS).
+
+    Parameters
+    ----------
+    degree_decimal : float
+        The decimal degree value.
+
+    Returns
+    -------
+    str
+        The corresponding HMS string in the format 'hour:minute:second'.
+    """
+    if isinstance(degree_decimal, str):
         degree_decimal = dms_to_dd(degree_decimal)
     if degree_decimal < 0:
         print('dd for HMS conversion cannot be negative, assuming positive.')
@@ -60,7 +135,7 @@ def dd_to_hms(degree_decimal):
     _h, __h = np.trunc(_dd), _dd - np.trunc(_dd)
     _m, __m = np.trunc(__h * 60), __h * 60 - np.trunc(__h * 60)
     _s = round(__m * 60, 4)
-    _s = [int(_s) if int(_s) == _s else _s][0]
+    _s = int(_s) if int(_s) == _s else _s
     if _s == 60:
         _m, _s = _m + 1, '00'
     elif _s > 60:
@@ -69,23 +144,22 @@ def dd_to_hms(degree_decimal):
     return f'{int(_h)}:{int(_m)}:{_s}'
 
 
-def get_times(duration, freq, t):
+def get_times(duration: Tuple[int, str], freq: Tuple[int, str], t: Union[str, Time] = "2025-01-01") -> np.ndarray:
     """
     Calculate a list of times spaced equally apart over a specified duration.
 
     Parameters
     ----------
-    duration: int
-        The length of time to calculate times for.
-    freq: int, unit: str
-        frequency of time outputs in units provided
-    t: ssapy.utils.Time, optional
+    duration : tuple
+        A tuple containing the length of time and the unit (e.g., (30, 'day')).
+    freq : tuple
+        A tuple containing the frequency value and its unit (e.g., (1, 'hr')).
+    t : str or Time, optional
         The starting time. Default is "2025-01-01".
-    example input:
-    duration=(30, 'day'), freq=(1, 'hr'), t=Time("2025-01-01", scale='utc')
+
     Returns
     -------
-    times: array-like
+    np.ndarray
         A list of times spaced equally apart over the specified duration.
     """
     if isinstance(t, str):
