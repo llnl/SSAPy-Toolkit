@@ -63,7 +63,7 @@ def ssapy_kwargs(mass=250, area=0.022, CD=2.3, CR=1.3):
     return kwargs
 
 
-def ssapy_prop(integration_timestep=60, propkw=ssapy_kwargs()):
+def ssapy_prop(integration_timestep=10, propkw=ssapy_kwargs()):
     # Accelerations - pass a body object or string of body name.
     moon = get_body("moon")
     sun = get_body("Sun")
@@ -87,13 +87,13 @@ def ssapy_prop(integration_timestep=60, propkw=ssapy_kwargs()):
 
 
 # Uses the current best propagator and acceleration models in ssapy
-def ssapy_orbit(orbit=None, a=None, e=0, i=0, pa=0, raan=0, ta=0, r=None, v=None, duration=(30, 'day'), freq=(1, 'hr'), start_date="2025-01-01", t=None, integration_timestep=10, mass=250, area=0.022, CD=2.3, CR=1.3, prop=ssapy_prop()):
+def ssapy_orbit(orbit=None, a=None, e=0, i=0, pa=0, raan=0, ta=0, r=None, v=None, duration=(30, 'day'), freq=(1, 'hr'), t0="2025-01-01", t=None, prop=ssapy_prop()):
     # Everything is in SI units, except time.
     # density #kg/m^3 --> density
-    t0 = Time(start_date, scale='utc')
+    t0 = Time(t0, scale='utc')
     if t is None:
         time_is_None = True
-        t = get_times(duration=duration, freq=freq, t=t)
+        t = get_times(duration=duration, freq=freq, t0=t0)
     else:
         time_is_None = False
 
@@ -119,13 +119,13 @@ def ssapy_orbit(orbit=None, a=None, e=0, i=0, pa=0, raan=0, ta=0, r=None, v=None
 
 
 # Generate orbits near stable orbit.
-def get_similar_orbits(r0, v0, rad=1e5, num_orbits=4, duration=(90, 'days'), freq=(1, 'hour'), start_date="2025-1-1", mass=250):
+def get_similar_orbits(r0, v0, rad=1e5, num_orbits=4, duration=(90, 'days'), freq=(1, 'hour'), t0="2025-1-1", mass=250):
     r0 = np.reshape(r0, (1, 3))
     v0 = np.reshape(v0, (1, 3))
     print(r0, v0)
     for idx, point in enumerate(points_on_circle(r0, v0, rad=rad, num_points=num_orbits)):
         # Calculate entire satellite trajectory
-        r, v = ssapy_orbit(r=point, v=v0, duration=duration, freq=freq, start_date=start_date, integration_timestep=10, mass=mass, area=mass / 19000 + 0.01, CD=2.3, CR=1.3)
+        r, v = ssapy_orbit(r=point, v=v0, duration=duration, freq=freq, t0=t0, integration_timestep=10, mass=mass, area=mass / 19000 + 0.01, CD=2.3, CR=1.3)
         if idx == 0:
             trajectories = np.concatenate((r0, v0), axis=1)[:len(r)]
         rv = np.concatenate((r, v), axis=1)
@@ -133,7 +133,7 @@ def get_similar_orbits(r0, v0, rad=1e5, num_orbits=4, duration=(90, 'days'), fre
     return trajectories
 
 
-def lyapunov_exponent(r, v, duration, freq, start_date, perturbation, time_between_data=1, lyapunov_type='perturbation'):
+def lyapunov_exponent(r, v, duration, freq, t0, perturbation, time_between_data=1, lyapunov_type='perturbation'):
     """
     Calculate the Lyapunov exponent for a cislunar orbit.
 
@@ -142,7 +142,7 @@ def lyapunov_exponent(r, v, duration, freq, start_date, perturbation, time_betwe
     - v: An (n,3) array of velocities [vx, vy, vz].
     - duration: tuple(time, unit) time with given unit to integrate the perturbed orbit.
     - freq: tuple(time, unit) time with given unit to output statevector.
-    - start_date: str: sets the position of the Solar System for integration.
+    - t0: str: sets the position of the Solar System for integration.
     - perturbation: float: Small perturbation applied to the initial position and velocity.
     - time_between_data: float: the amount of time with given unit between statevectors, default is 1 in units of duration.
 
@@ -150,7 +150,7 @@ def lyapunov_exponent(r, v, duration, freq, start_date, perturbation, time_betwe
     - The Lyapunov exponent for the cislunar orbit.
     """
     num_states = len(r)
-    pr, pv = ssapy_rv_from_rv(r[0] + np.random.randn(3) * perturbation, v[0] + np.random.randn(3) * perturbation, duration=duration, freq=freq, start_date=start_date, integration_timestep=10, mass=250, area=0.022, CD=2.3, CR=1.3)
+    pr, pv = ssapy_rv_from_rv(r[0] + np.random.randn(3) * perturbation, v[0] + np.random.randn(3) * perturbation, duration=duration, freq=freq, t0=t0, integration_timestep=10, mass=250, area=0.022, CD=2.3, CR=1.3)
     if lyapunov_type == 'perturbation':
         delta_states = np.linalg.norm(pr - r, axis=1)
         time_series_le = np.log(delta_states / perturbation) * 1 / time_between_data

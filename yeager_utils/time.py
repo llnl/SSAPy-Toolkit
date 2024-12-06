@@ -144,7 +144,7 @@ def dd_to_hms(degree_decimal: float) -> str:
     return f'{int(_h)}:{int(_m)}:{_s}'
 
 
-def get_times(duration: Tuple[int, str], freq: Tuple[int, str], t: Union[str, Time] = "2025-01-01") -> np.ndarray:
+def get_times(duration: Tuple[int, str], freq: Tuple[int, str], t0: Union[str, Time] = "2025-01-01") -> np.ndarray:
     """
     Calculate a list of times spaced equally apart over a specified duration.
 
@@ -154,7 +154,7 @@ def get_times(duration: Tuple[int, str], freq: Tuple[int, str], t: Union[str, Ti
         A tuple containing the length of time and the unit (e.g., (30, 'day')).
     freq : tuple
         A tuple containing the frequency value and its unit (e.g., (1, 'hr')).
-    t : str or Time, optional
+    t0 : str or Time, optional
         The starting time. Default is "2025-01-01".
 
     Returns
@@ -162,8 +162,8 @@ def get_times(duration: Tuple[int, str], freq: Tuple[int, str], t: Union[str, Ti
     np.ndarray
         A list of times spaced equally apart over the specified duration.
     """
-    if isinstance(t, str):
-        t = Time(t, scale='utc')
+    if isinstance(t0, str):
+        t0 = Time(t0, scale='utc')
     unit_dict = {'second': 1, 'sec': 1, 's': 1, 'minute': 60, 'min': 60, 'hour': 3600, 'hr': 3600, 'h': 3600, 'day': 86400, 'd': 86400, 'week': 604800, 'month': 2630016, 'mo': 2630016, 'year': 31557600, 'yr': 31557600}
     dur_val, dur_unit = duration
     freq_val, freq_unit = freq
@@ -179,5 +179,5 @@ def get_times(duration: Tuple[int, str], freq: Tuple[int, str], t: Union[str, Ti
     freq_seconds = freq_val * unit_dict[freq_unit.lower()]
     timesteps = int(dur_seconds / freq_seconds) + 1
 
-    times = t + np.linspace(0, dur_seconds, timesteps) / unit_dict['day'] * u.day
+    times = t0 + np.linspace(0, dur_seconds, timesteps) / unit_dict['day'] * u.day
     return times

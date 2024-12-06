@@ -3,23 +3,24 @@ import numpy as np
 from .constants import MOON_RADIUS
 from .io import read_h5
 from .time import Time, get_times
-from typing import List, Dict
+from typing import List
 
 
 main_dataset = "/p/lustre2/cislunar/data_six_year_1.0GEO_to_18.2GEO/"
 copy_dataset = "/p/lustre2/cislunar/data_six_year_1.0GEO_to_18.2GEO_copy/"
 
-cislunar_h5_keys = ['ejection', 'lifetime', 'period', 'perigee', 'apogee', 
-    'r', 'v', 'ra', 'dec', 'range', 'pm_ra', 'pm_dec', 'pm_r', 'M_v', 
-    'semi_major_axis', 'eccentricity', 'inclination', 
-    'true_longitude', 'argument_of_periapsis', 'longitude_of_ascending_node', 'true_anomaly', 
-    'r_initial', 'v_initial', 'r_earth_min', 'r_earth_max', 'vmin', 'vmax', 'r_vmin', 'r_vmax', 'r_moon_min',
-    'threebody_r', 'threebody_v', 
-    'nearby_orbits_r', 'nearby_orbits_v', 'threebody_nearby_orbits_r', 'threebody_nearby_orbits_v',
-    'covariances', 'threebody_covariances', 
-    'std_divergence', 'median_divergence', 'mean_divergence', 'max_divergence',
-    'threebody_std_divergence', 'threebody_median_divergence', 'threebody_mean_divergence', 'threebody_max_divergence'
-]
+csv_data = "/p/lustre2/cislunar/data_six_year_1.0GEO_to_18.2GEO_descriptive_data.csv"
+cislunar_h5_keys = ['ejection', 'lifetime', 'period', 'perigee', 'apogee',
+                    'r', 'v', 'ra', 'dec', 'range', 'pm_ra', 'pm_dec', 'pm_r', 'M_v',
+                    'semi_major_axis', 'eccentricity', 'inclination', 
+                    'true_longitude', 'argument_of_periapsis', 'longitude_of_ascending_node', 'true_anomaly',
+                    'r_initial', 'v_initial', 'r_earth_min', 'r_earth_max', 'vmin', 'vmax', 'r_vmin', 'r_vmax', 'r_moon_min',
+                    'threebody_r', 'threebody_v',
+                    'nearby_orbits_r', 'nearby_orbits_v', 'threebody_nearby_orbits_r', 'threebody_nearby_orbits_v',
+                    'covariances', 'threebody_covariances',
+                    'std_divergence', 'median_divergence', 'mean_divergence', 'max_divergence',
+                    'threebody_std_divergence', 'threebody_median_divergence', 'threebody_mean_divergence', 'threebody_max_divergence'
+                    ]
 
 
 def get_chance_radius(v: np.ndarray) -> float:
@@ -172,12 +173,12 @@ def get_ctimes() -> np.ndarray:
 if __name__ == "__main__":
     dataset = main_dataset
     numpy_name = f"/p/lustre2/cislunar/bad_orbits_{dataset}.npy"
-    
+
     bad_orbits: List[int] = []
     print("Variable keys:", cislunar_keys())
     for orb_id in range(1_000_000):
         if get_cdata(orb_id, 'lifetime', dataset) is None:
             bad_orbits.append(orb_id)
-    
-    print(f"Bad orbits")
+
+    print("Bad orbits")
     np.save(numpy_name, bad_orbits)

@@ -1,12 +1,4 @@
 # flake8: noqa: E501
-
-#########################################################################################################################################
-#########################################################################################################################################
-# ALL MY HELPFUL FRIENDS
-#########################################################################################################################################
-path_to_cislunar = '/p/lustre2/cislunar/cislunar_data/'
-au_to_m = 149597870700
-
 from pandas import DataFrame
 from ssapy.body import get_body
 import scipy
@@ -44,6 +36,21 @@ def suppress_stdout() -> None:
 
 warnings.filterwarnings("ignore")
 
+
+def get_script_dir() -> str:
+    """
+    Returns the absolute path to the directory where the script being executed is located.
+
+    The returned path includes a trailing slash for convenience.
+    
+    Returns:
+        str: The absolute path to the script's directory with a trailing slash.
+    """
+    # Get the path of the main script
+    script_path = os.path.abspath(sys.argv[0])
+    script_dir = os.path.dirname(script_path) + os.sep
+    print(f"Script directory: {script_dir}")
+    return script_dir
 
 def mem_usage() -> None:
     """

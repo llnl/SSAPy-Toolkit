@@ -1,15 +1,16 @@
+import os
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.animation as animation
 from PIL import Image  # Import Image from PIL (Pillow)
-from yeager_utils import find_file, EARTH_RADIUS, RGEO, ssapy_orbit, rv_gcrf_to_itrf, angle_between_vectors, calc_gamma
+from yeager_utils import find_file, EARTH_RADIUS, RGEO, ssapy_orbit, gcrf_to_itrf, calc_gamma, get_script_dir
+
 
 # Example usage:
-r, v, t = ssapy_orbit(a=RGEO, e=0.75, i=0, pa=0, raan=0, ta=np.pi * 2, 
-                      duration=(1, 'day'), freq=(1, 'min'), start_date="2025-01-01")
+inc = -90
+r, v, t = ssapy_orbit(a=RGEO, e=0.75, i=np.radians(inc), pa=0, raan=0, ta=np.pi * 2, duration=(1, 'day'), freq=(1, 'min'), t0="2025-01-01")
 
-r_itrf, v_itrf = rv_gcrf_to_itrf(r, t)
+r_itrf, v_itrf = gcrf_to_itrf(r, t, v)
 gamma = calc_gamma(r, t)
 
 # MAKE PLOT
@@ -61,6 +62,7 @@ ax3.set_title('Fixed to Stars')
 # ADD Earth Mesh
 ax3.plot_surface(mesh_x, mesh_y, mesh_z, rstride=4, cstride=4, facecolors=bm, shade=False)
 
+
 def update(num):
     # Update 2D plot
     idx = frame_indices[num]
@@ -69,7 +71,7 @@ def update(num):
     point1.set_data(x, y)
     point1.set_xdata(x)
     point1.set_ydata(y)
-    
+
     # Update 3D plots
     x2 = r_itrf[idx, 0] / RGEO
     y2 = r_itrf[idx, 1] / RGEO
@@ -79,7 +81,7 @@ def update(num):
     point2.set_xdata([x2])
     point2.set_ydata([y2])
     point2.set_3d_properties([z2])
-    
+
     x3 = r[idx, 0] / RGEO
     y3 = r[idx, 1] / RGEO
     z3 = r[idx, 2] / RGEO
@@ -91,13 +93,16 @@ def update(num):
 
     return point1, point2, point3
 
+
 # Generate 100 equally spaced frame indices
 frame_indices = np.linspace(0, len(t) - 1, 100).astype(int)
 
 ani = animation.FuncAnimation(fig, update, frames=range(100), blit=True, interval=50)
 
 # Save animation as a GIF
-ani.save('gamma_animation.gif', writer='pillow', fps=5)
+script_dir = get_script_dir
+print(f"Saving gif to {script_dir}")
+ani.save(f'{script_dir}gamma_animation_incl_{inc}.gif', writer='pillow', fps=5)
 
 plt.tight_layout()
 plt.show()

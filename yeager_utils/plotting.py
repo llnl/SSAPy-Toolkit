@@ -311,10 +311,6 @@ def koe_plot(r: np.ndarray, v: np.ndarray, t: Optional[Time] = None,
     if np.abs(np.max(a) - np.min(a)) < 2:
         ax2.set_ylim((np.min(a) - 0.5, np.max(a) + 0.5))
 
-    # Apply date format if time is provided
-    if t is not None:
-        date_format(t, ax1)
-
     # Optionally save the plot
     if save_path:
         fig.savefig(save_path)
@@ -379,6 +375,13 @@ def koe_2dhist(stable_data: 'StableData', title: str = "Initial orbital elements
     stable_data = StableData(a=np.array([...]), e=np.array([...]), i=np.array([...]), ta=np.array([...]))
     fig = koe_2dhist(stable_data, title="Orbital Elements", save_path="orbital_elements_plot.png")
     """
+
+    # Validate angle data ranges
+    if not (np.all((0 <= stable_data.i) & (stable_data.i <= 2 * np.pi))):
+        raise ValueError("Inclination (`i`) must be in the range [0, 2π] radians.")
+    if not (np.all((0 <= stable_data.ta) & (stable_data.ta <= 2 * np.pi))):
+        raise ValueError("True Anomaly (`ta`) must be in the range [0, 2π] radians.")
+
     if logscale or logscale == 'log':
         norm = matplotlib.colors.LogNorm(limits[0], limits[1])
     else:
@@ -709,27 +712,83 @@ def drawMoon(time: Union[np.ndarray, 'Time'], ngrid: int = 100, R: float = MOON_
     )
 
 
-def groundTrackPlot(r: np.ndarray, time: Union[np.ndarray, 'Time'], ground_stations: Optional[np.ndarray] = None, 
+def groundTrackPlot(r: Union[np.ndarray, List[np.ndarray]], 
+                    time: Union[np.ndarray, List[np.ndarray]], 
+                    ground_stations: Optional[np.ndarray] = None, 
                     save_path: Optional[str] = None) -> None:
     """
     Parameters
     ----------
-    r : (3,) array_like - Orbit positions in meters.
-    t: (n,) array_like - array of Astropy Time objects or time in gps seconds.
-
-    optional - ground_stations: (n,2) array of of ground station (lat,lon) in degrees
+    r : (3,) array_like or List of (3,) array_like - Orbit positions in meters or list of such arrays for multiple orbits.
+    time : (n,) array_like or List of (n,) array_like - array of Astropy Time objects or time in gps seconds.
+             If r is a list of orbits, time should be a list of time vectors (one for each orbit).
+    
+    optional - ground_stations: (n,2) array of ground stations (lat, lon) in degrees.
     """
-    lon, lat, height = groundTrack(r, time)
+    
+    # Check if r is a list of orbits
+    if isinstance(r, np.ndarray):
+        r = [r]
+    if isinstance(time, np.ndarray):
+        # If multiple orbits, create a corresponding time list
+        if isinstance(time, list):
+            time_list = time  # If time is already a list of time arrays
+        else:
+            time_list = []
+            for _ in r:
+                time_list.append(time) 
+    else:
+        # If only one orbit, time should be a single time array
+        time_list = [time]
 
+    # Initialize plot
     fig = plt.figure(figsize=(15, 12))
     plt.imshow(load_earth_file(), extent=[-180, 180, -90, 90])
-    plt.plot(np.rad2deg(lon), np.rad2deg(lat))
+
+    # Loop through each orbit and its corresponding time
+    standard_colors = ['C0', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9']
+    
+    for i, orbit in enumerate(r):
+        if len(r) <= len(standard_colors):  # Use standard colors
+            print(len(r), len(standard_colors))
+            color = standard_colors[i]
+        else:  # Use rainbow colors if there are more orbits than standard colors
+            color = plt.cm.rainbow(i / len(r))
+            
+        lon, lat, height = groundTrack(orbit, time_list[i])  # Assuming output in radians
+
+        # Convert longitude and latitude to degrees for plotting
+        lon_deg = np.degrees(lon)
+        lat_deg = np.degrees(lat)
+        
+        # Identify discontinuities in longitude (crossing the -180/180 boundary)
+        discont_indices = np.where(np.abs(np.diff(lon_deg)) > 179)[0]
+        
+        # Split the data into segments for clean plotting
+        segments = np.split(np.arange(len(lon_deg)), discont_indices + 1)
+        
+        # Plot the ground track for each orbit with different label and color
+        for j, segment in enumerate(segments):
+            plt.plot(lon_deg[segment], lat_deg[segment], color=color, label=f"Orbit {i+1}" if j == 0 else "")
+
+    # Plot ground stations if provided
     if ground_stations is not None:
         for ground_station in ground_stations:
-            plt.scatter(ground_station[1], ground_station[0], s=50, color='Red')
+            plt.scatter(ground_station[1], ground_station[0], s=50, color='Red', label="Ground Station")
+
+    # Set plot limits and labels
     plt.ylim(-90, 90)
     plt.xlim(-180, 180)
+    plt.xlabel("Longitude [deg]")
+    plt.ylabel("Latitude [deg]")
+
+    # Show legend
+    plt.legend()
+
+    # Show the plot
     plt.show()
+
+    # Save plot if save_path is provided
     if save_path:
         save_plot(fig, save_path)
 
@@ -961,10 +1020,8 @@ def orbit_plot(r: Union[np.ndarray, List[np.ndarray]],
             lower_bound, upper_bound = find_smallest_bounding_cube(r / RGEO)
             lower_bound = lower_bound * 1.2
             upper_bound = upper_bound * 1.2
-            print(global_lower_bound, global_upper_bound)
             global_lower_bound = np.minimum(global_lower_bound, lower_bound)
             global_upper_bound = np.maximum(global_upper_bound, upper_bound)
-            print(global_lower_bound, global_upper_bound)
 
         if orbit_index == '':
             angle = 0
@@ -1043,9 +1100,7 @@ def orbit_plot(r: Union[np.ndarray, List[np.ndarray]],
         _make_scatter(fig, ax1, ax2, ax3, ax4, data, t, limits, title, i, len(r), frame, labels[i])
 
     if legend:
-        ax1.legend()
         ax2.legend()
-        ax3.legend()
 
     if save_path:
         fig.savefig(save_path)
@@ -1062,47 +1117,34 @@ def globe_plot(r: np.ndarray, t: np.ndarray, limits: Optional[float] = False, ti
     """
     Generate a 3D globe plot showing the position of points in Earth-centered 
     coordinates. Optionally save the plot to a file.
-
-    Parameters:
-        r (np.ndarray): A 2D NumPy array containing satellite positions in Earth-centered 
-                         coordinates (x, y, z).
-        t (np.ndarray): A 1D NumPy array of time points corresponding to the satellite positions.
-        limits (float, optional): The limits for the x, y, z axes. If False, the limits are 
-                                   calculated based on the data. Defaults to False.
-        title (str, optional): The title of the plot. Defaults to an empty string.
-        figsize (Tuple[int, int], optional): The size of the figure in inches. Defaults to (7, 8).
-        save_path (str or bool, optional): Path to save the plot. If False, the plot is not saved.
-        el (int, optional): The elevation angle for the 3D plot view. Defaults to 30.
-        az (int, optional): The azimuthal angle for the 3D plot view. Defaults to 0.
-        scale (float, optional): Scaling factor for the image. Defaults to 1.
-
-    Returns:
-        Tuple[plt.Figure, plt.Axes]: The Matplotlib Figure and Axes objects for the plot.
     """
     # Scale the coordinates by RGEO
     x = r[:, 0] / RGEO
     y = r[:, 1] / RGEO
     z = r[:, 2] / RGEO
-    
+
     # Set limits if not provided
     if limits is False:
         limits = np.nanmax(np.abs([x, y, z])) * 1.2
-    
+
     # Load and scale Earth image
     earth_png = PILImage.open(find_file("earth", ext=".png"))
     earth_png = earth_png.resize((5400 // scale, 2700 // scale))
     bm = np.array(earth_png.resize([int(d) for d in earth_png.size])) / 256.
-    
+
     # Generate mesh for globe surface
     lons = np.linspace(-180, 180, bm.shape[1]) * np.pi / 180
     lats = np.linspace(-90, 90, bm.shape[0])[::-1] * np.pi / 180
     mesh_x = np.outer(np.cos(lons), np.cos(lats)).T * EARTH_RADIUS / RGEO
     mesh_y = np.outer(np.sin(lons), np.cos(lats)).T * EARTH_RADIUS / RGEO
     mesh_z = np.outer(np.ones(np.size(lons)), np.sin(lats)).T * EARTH_RADIUS / RGEO
-    
+
+    # Only plot visible points
+    # x, y, z = x[visible], y[visible], z[visible]
+
     # Set color for the scatter plot
     dotcolors = plt.cm.rainbow(np.linspace(0, 1, len(x)))
-    
+
     # Create the figure and 3D axis
     fig = plt.figure(dpi=100, figsize=figsize)
     ax = fig.add_subplot(111, projection='3d')
@@ -1110,35 +1152,39 @@ def globe_plot(r: np.ndarray, t: np.ndarray, limits: Optional[float] = False, ti
     ax.tick_params(axis='both', colors='white')
     ax.grid(True, color='grey', linestyle='--', linewidth=0.5)
     ax.set_facecolor('black')  # Set plot background color to black
-    
+
     # Plot the satellite positions and the Earth surface
     ax.scatter(x, y, z, color=dotcolors, s=1)
     ax.plot_surface(mesh_x, mesh_y, mesh_z, rstride=4, cstride=4, facecolors=bm, shade=False)
-    
+
     # Set the view angle and axis limits
     ax.view_init(elev=el, azim=az)
-    ax.set_xlim([-limits, limits])
-    ax.set_ylim([-limits, limits])
-    ax.set_zlim([-limits, limits])
-    
+    x_ticks = np.linspace(-limits, limits, 5)
+    y_ticks = np.linspace(-limits, limits, 5)
+    z_ticks = np.linspace(-limits, limits, 5)
+
+    ax.set_xticks(x_ticks)
+    ax.set_yticks(y_ticks)
+    ax.set_zticks(z_ticks)
+
     # Set axis labels with white color
     ax.set_xlabel('x [GEO]', color='white')
     ax.set_ylabel('y [GEO]', color='white')
     ax.set_zlabel('z [GEO]', color='white')
-    
+
     # Set tick label colors to white
     ax.tick_params(axis='x', colors='white')
     ax.tick_params(axis='y', colors='white')
     ax.tick_params(axis='z', colors='white')
     ax.set_aspect('equal')
-    
+
     # Apply black background function (assuming `make_black` function exists)
     fig, ax = make_black(fig, ax)
-    
+
     # Save the plot if save_path is provided
     if save_path:
         save_plot(fig, save_path)
-    
+
     return fig, ax
 
 
