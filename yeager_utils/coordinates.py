@@ -8,11 +8,10 @@ from ssapy.compute import groundTrack, rv
 from ssapy.constants import RGEO
 from ssapy.orbit import Orbit
 from ssapy.propagator import RK78Propagator
-from .vectors import normed, einsum_norm
+from .vectors import normed
 import numpy as np
 from astropy.time import Time
 from astropy.coordinates import Angle
-import matplotlib.pyplot as plt
 from typing import Union, List, Tuple, Optional
 
 
@@ -678,19 +677,22 @@ def gcrf_to_lunar(r: np.ndarray, t: np.ndarray, v: Optional[np.ndarray] = None) 
             self.mpm = MoonPosition()
 
         def __call__(self, r: np.ndarray, t: np.ndarray) -> np.ndarray:
+            if isinstance(t, Time):
+                t = t.gps
             rmoon = self.mpm(t)
             vmoon = (self.mpm(t + 5.0) - self.mpm(t - 5.0)) / 10.
-            xhat = np.linalg.norm(rmoon.T, axis=1).T
+            xhat = normed(rmoon.T).T
             vpar = np.einsum("ab,ab->b", xhat, vmoon) * xhat
             vperp = vmoon - vpar
-            yhat = np.linalg.norm(vperp.T, axis=1).T
+            yhat = normed(vperp.T).T
             zhat = np.cross(xhat, yhat, axisa=0, axisb=0).T
             R = np.empty((3, 3, len(t)))
             R[0] = xhat
             R[1] = yhat
             R[2] = zhat
             return np.einsum("abc,cb->ca", R, r)
-
+    
+    
     rotator = MoonRotator()
     if v is None:
         return rotator(r, t)
@@ -713,6 +715,11 @@ def gcrf_to_lunar_fixed(r: np.ndarray, t: np.ndarray, v: Optional[np.ndarray] = 
     - Position vector in Lunar coordinates relative to the fixed lunar origin, 
       or position and velocity if velocity is provided.
     """
+    # print(1, np.shape(r))
+    # print(2, np.shape(t))
+    # print(3, np.shape(gcrf_to_lunar(r, t)))
+    # print(4, np.shape(get_body('moon').position(t).T))
+    # print(5, np.shape(gcrf_to_lunar(get_body('moon').position(t).T, t)))
     r_lunar = gcrf_to_lunar(r, t) - gcrf_to_lunar(get_body('moon').position(t).T, t)
     if v is None:
         return r_lunar
@@ -868,9 +875,40 @@ def v_from_r(r: np.ndarray, t: np.ndarray) -> np.ndarray:
     - 3D velocity array (meters per second).
     """
     if isinstance(t[0], Time):
-        t = t.gps        
+        t = t.gps
     delta_r = np.diff(r, axis=0)
     delta_t = np.diff(t)
     v = delta_r / delta_t[:, np.newaxis]
     v = np.vstack((v, v[-1]))
     return v
+
+
+def get_lunar_rv(t):
+    """
+    Calculate the position and velocity of the Moon at a given time or times.
+
+    Parameters:
+    t (Time or array-like): A `Time` object or an array of time points for which to calculate the position and velocity. 
+                            If a single time is passed, the position and velocity are calculated at that time. 
+                            If multiple times are passed, the position and velocity are calculated for each time.
+
+    Returns:
+    tuple: A tuple containing two elements:
+        - r (ndarray): The position of the Moon(s) at the given time(s), in kilometers.
+        - v (ndarray): The velocity of the Moon(s) at the given time(s), in kilometers per second.
+
+    Author:
+    Travis Yeager (yeager7@llnl.gov)
+    """
+    if np.size(t) > 1:
+        if isinstance(t[0], Time):
+            t = t.gps
+    else:
+        if isinstance(t, Time):
+            t = t.gps
+    r = get_body("moon").position(t).T
+    if np.size(t) > 1:
+        v = v_from_r(r, t)
+    else:
+        v = (r - get_body("moon").position(t + 1).T) / 2
+    return np.atleast_2d(r), np.atleast_2d(v)

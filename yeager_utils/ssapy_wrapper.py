@@ -7,33 +7,33 @@ from ssapy import Orbit, rv
 from ssapy.accel import AccelKepler, AccelSolRad, AccelEarthRad, AccelDrag
 from ssapy.body import get_body
 from ssapy.gravity import AccelHarmonic, AccelThirdBody
-from ssapy.propagator import RK78Propagator
+from ssapy.propagator import SciPyPropagator
 
 import numpy as np
 
 
-def keplerian_prop(integration_timestep=10):
-    return RK78Propagator(AccelKepler(), h=integration_timestep)
+def keplerian_prop():
+    return SciPyPropagator(AccelKepler())
 
 
 accel_3_cache = None
-def threebody_prop(integration_timestep=10):
+def threebody_prop():
     global accel_3_cache
     if accel_3_cache is None:
         accel_3_cache = AccelKepler() + AccelThirdBody(get_body("moon"))
-    return RK78Propagator(accel_3_cache, h=integration_timestep)
+    return SciPyPropagator(accel_3_cache)
 
 
 accel_4_cache = None
-def fourbody_prop(integration_timestep=10):
+def fourbody_prop():
     global accel_4_cache
     if accel_4_cache is None:
         accel_4_cache = AccelKepler() + AccelThirdBody(get_body("moon")) + AccelThirdBody(get_body("Sun"))
-    return RK78Propagator(accel_4_cache, h=integration_timestep)
+    return SciPyPropagator(accel_4_cache)
 
 
 accel_best_cache = None
-def best_prop(integration_timestep=10, kwargs=dict(mass=250, area=.022, CD=2.3, CR=1.3)):
+def best_prop(kwargs=dict(mass=250, area=.022, CD=2.3, CR=1.3)):
     global accel_best_cache
     if accel_best_cache is None:
         aEarth = AccelKepler() + AccelHarmonic(get_body("Earth", model="EGM2008"), 140, 140)
@@ -49,7 +49,7 @@ def best_prop(integration_timestep=10, kwargs=dict(mass=250, area=.022, CD=2.3, 
         nonConservative = AccelSolRad(**kwargs) + AccelEarthRad(**kwargs) + AccelDrag(**kwargs)
         planets = aMercury + aVenus + aMars + aJupiter + aSaturn + aUranus + aNeptune
         accel_best_cache = aEarth + aMoon + aSun + planets + nonConservative
-    return RK78Propagator(accel_best_cache, h=integration_timestep)
+    return SciPyPropagator(accel_best_cache)
 
 
 def ssapy_kwargs(mass=250, area=0.022, CD=2.3, CR=1.3):
@@ -63,7 +63,7 @@ def ssapy_kwargs(mass=250, area=0.022, CD=2.3, CR=1.3):
     return kwargs
 
 
-def ssapy_prop(integration_timestep=10, propkw=ssapy_kwargs()):
+def ssapy_prop(propkw=ssapy_kwargs()):
     # Accelerations - pass a body object or string of body name.
     moon = get_body("moon")
     sun = get_body("Sun")
@@ -82,12 +82,12 @@ def ssapy_prop(integration_timestep=10, propkw=ssapy_kwargs()):
     aEarthRad = AccelEarthRad(**propkw)
     accel = aEarth + aMoon + aSun + aSolRad + aEarthRad
     # Build propagator
-    prop = RK78Propagator(accel, h=integration_timestep)
+    prop = SciPyPropagator(accel)
     return prop
 
 
 # Uses the current best propagator and acceleration models in ssapy
-def ssapy_orbit(orbit=None, a=None, e=0, i=0, pa=0, raan=0, ta=0, r=None, v=None, duration=(30, 'day'), freq=(1, 'hr'), t0="2025-01-01", t=None, prop=ssapy_prop()):
+def ssapy_orbit(orbit=None, a=None, e=0, i=0, pa=0, raan=0, ta=0, r=None, v=None, duration=(1, 'day'), freq=(1, 'min'), t0="2025-01-01", t=None, prop=ssapy_prop()):
     # Everything is in SI units, except time.
     # density #kg/m^3 --> density
     t0 = Time(t0, scale='utc')
@@ -95,6 +95,62 @@ def ssapy_orbit(orbit=None, a=None, e=0, i=0, pa=0, raan=0, ta=0, r=None, v=None
         time_is_None = True
         t = get_times(duration=duration, freq=freq, t0=t0)
     else:
+        t0 = t[0]
+        time_is_None = False
+
+    if orbit is not None:
+        print(f"ssapy_orbit: Initializing orbit with a pre-defined orbit object: {orbit}.\nIntegrating: {t[0]} to {t[-1]}")
+    elif a is not None:
+        print(f"ssapy_orbit: Initializing orbit with Keplerian elements: a={a}, e={e}, i={i}, pa={pa}, raan={raan}, ta={ta}\nIntegrating: {t[0]} to {t[-1]}")
+        kElements = [a, e, i, pa, raan, ta]
+        orbit = Orbit.fromKeplerianElements(*kElements, t=t0)
+    elif r is not None and v is not None:
+        print(f"ssapy_orbit: Initializing orbit with position (r) and velocity (v) vectors:\nr={r},\nv={v}\nIntegrating: {t[0]} to {t[-1]}")
+        orbit = Orbit(r=r, v=v, t=t0)
+    else:
+        raise ValueError("ssapy_orbit: Either Keplerian elements (a, e, i, pa, raan, ta) or position and velocity vectors (r, v) must be provided.")
+
+    try:
+        r, v = rv(orbit=orbit, time=t, propagator=prop)
+        if time_is_None:
+            return r, v, t
+        else:
+            return r, v
+    except (RuntimeError, ValueError) as err:
+        print(err)
+        return np.nan, np.nan, np.nan
+
+
+def ssapy_orbit_incremented(
+    orbit=None, a=None, e=0, i=0, pa=0, raan=0, ta=0, r=None, v=None,
+    duration=(30, 'day'), freq=(1, 'hr'), t0="2025-01-01", t=None,
+    prop=ssapy_prop(), propkw=ssapy_kwargs(), plot=False
+):
+    """
+    Computes position and velocity vectors for an orbit over specified time steps.
+    
+    Parameters:
+        orbit: Orbit object (optional). If provided, other orbital parameters are ignored.
+        a, e, i, pa, raan, ta: Keplerian orbital elements (optional).
+        r, v: Initial position and velocity vectors (optional).
+        duration: Tuple specifying duration and unit (e.g., (30, 'day')).
+        freq: Tuple specifying frequency and unit (e.g., (1, 'hr')).
+        t0: Start time as a string (default: "2025-01-01").
+        t: Array of time steps (optional).
+        prop: SSAPy propagation object, contains the accelerations and propagator. (default: ssapy_prop()).
+        propkw: Properties of the orbiting object stored in a dictionary. mass, area, CR, CD (default: ssapy_prop()).
+
+    Returns:
+        r: Array of position vectors.
+        v: Array of velocity vectors.
+        t: Array of time steps (if time steps were not provided initially).
+    """
+    t0 = Time(t0, scale='utc')
+    if t is None:
+        time_is_None = True
+        t = get_times(duration=duration, freq=freq, t0=t0)
+    else:
+        t0 = t[0]
         time_is_None = False
 
     if orbit is not None:
@@ -107,15 +163,28 @@ def ssapy_orbit(orbit=None, a=None, e=0, i=0, pa=0, raan=0, ta=0, r=None, v=None
     else:
         raise ValueError("Either Keplerian elements (a, e, i, pa, raan, ta) or position and velocity vectors (r, v) must be provided.")
 
+    num_steps = len(t)
+    r = np.full((num_steps, 3), np.nan)
+    v = np.full((num_steps, 3), np.nan)
+    r[0] = orbit.r
+    v[0] = orbit.v
     try:
-        r, v = rv(orbit, t, prop)
-        if time_is_None:
-            return r, v, t
-        else:
-            return r, v
+        for temp_i in range(1, num_steps):
+            orbit = Orbit(r=r[temp_i - 1], v=v[temp_i - 1], t=t[temp_i - 1], propkw=propkw)
+            r_next, v_next = rv(orbit, t[temp_i], propagator=prop)
+            r[temp_i] = r_next
+            v[temp_i] = v_next
     except (RuntimeError, ValueError) as err:
-        print(err)
-        return np.nan, np.nan, np.nan
+        print(f"Error at time step {temp_i}, {t[temp_i]}: {err}")
+        if time_is_None:
+            return r[:temp_i], v[:temp_i], t[:temp_i]
+        else:
+            return r[:temp_i], v[:temp_i]
+
+    if time_is_None:
+        return r, v, t
+    else:
+        return r, v
 
 
 # Generate orbits near stable orbit.

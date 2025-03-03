@@ -13,17 +13,16 @@ from contextlib import contextmanager
 import re
 from astropy.time import Time
 from astropy import units as u
-import psutil
-from psutil._common import bytes2human
-from typing import List, Tuple, Callable, Optional
+from typing import List, Tuple, Optional
 
 
 @contextmanager
-def suppress_stdout() -> None:
+def suppress_stdout():
     """
     Context manager to suppress stdout.
 
     Redirects output to devnull during the context.
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     with open(os.devnull, "w") as devnull:
         old_stdout = sys.stdout
@@ -37,45 +36,6 @@ def suppress_stdout() -> None:
 warnings.filterwarnings("ignore")
 
 
-def get_script_dir() -> str:
-    """
-    Returns the absolute path to the directory where the script being executed is located.
-
-    The returned path includes a trailing slash for convenience.
-    
-    Returns:
-        str: The absolute path to the script's directory with a trailing slash.
-    """
-    # Get the path of the main script
-    script_path = os.path.abspath(sys.argv[0])
-    script_dir = os.path.dirname(script_path) + os.sep
-    print(f"Script directory: {script_dir}")
-    return script_dir
-
-def mem_usage() -> None:
-    """
-    Prints current memory usage and total memory available.
-    """
-    mem_usage = psutil.virtual_memory()
-    print(mem_usage)
-    total_in_human_format = bytes2human(mem_usage[0])
-    print(f'Memory used: {total_in_human_format}')
-    return
-
-
-def timenow() -> str:
-    """
-    Returns the current time as a string formatted as HH:MM:SS dd/mm/yyyy.
-
-    Returns:
-        str: The current time in the specified format.
-    """
-    from datetime import datetime
-    current_time = datetime.now().strftime("%H:%M:%S %d/%m/%Y")
-    print(f'Current time: {current_time}')
-    return current_time
-
-
 def pd_flatten(data: list, factor: float = 1.0) -> list:
     """
     Flattens the data and converts each element to a float, dividing by a factor.
@@ -86,6 +46,7 @@ def pd_flatten(data: list, factor: float = 1.0) -> list:
 
     Returns:
         list: List of converted floats.
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     # Filter out empty strings or any non-convertible strings
     cleaned_data = [x for x in data if x.strip() != '']
@@ -104,6 +65,7 @@ def str_to_array(s: str) -> np.ndarray:
 
     Returns:
         np.ndarray: Array of floats converted from the input string.
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     s = s.replace('[', '').replace(']', '')  # Remove square brackets
     return np.array([float(x) for x in s.split(',')])
@@ -118,6 +80,7 @@ def pdstr_to_arrays(df: DataFrame) -> np.ndarray:
 
     Returns:
         np.ndarray: Numpy array of the converted arrays.
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     return df.apply(str_to_array).to_numpy()
 
@@ -134,6 +97,7 @@ def random_arr(low: float = 0, high: float = 1, size: tuple = (1, 10), dtype: st
 
     Returns:
         np.ndarray: The generated random array.
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     if 'int' in dtype:
         return np.random.randint(low, high + 1, size, dtype=dtype)
@@ -150,6 +114,7 @@ def b2str(array_: np.ndarray) -> list:
 
     Returns:
         list: List of decoded strings.
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     return [i.decode("utf-8") for i in array_]
 
@@ -164,6 +129,7 @@ def find_indices(lst: list, condition: callable) -> list:
 
     Returns:
         list: List of indices where the condition is true.
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     return [i for i, elem in enumerate(lst) if condition(elem)]
 
@@ -177,6 +143,7 @@ def nan_array(size: int = 1) -> np.ndarray:
 
     Returns:
         np.ndarray: An array filled with NaNs.
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     x = np.zeros(size)
     x[:] = np.NaN
@@ -192,6 +159,7 @@ def remove_np_nans(numpy_array: np.ndarray) -> np.ndarray:
 
     Returns:
         np.ndarray: Array with NaN values removed.
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     return numpy_array[~np.isnan(numpy_array)]
 
@@ -205,6 +173,7 @@ def remove_zeros(data: np.ndarray, axis: int = 0) -> np.ndarray:
 
     Returns:
         np.ndarray: Array with rows/columns removed where all elements were zero.
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     return data[~np.all(data == 0, axis=axis)]
 
@@ -218,6 +187,7 @@ def nby3shape(arr_: np.ndarray) -> np.ndarray:
 
     Returns:
         np.ndarray: Reshaped array with 3 columns.
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     if arr_.ndim == 1:
         return np.reshape(arr_, (1, 3))
@@ -240,6 +210,7 @@ def eformat(f: float, prec: int, exp_digits: int) -> str:
     
     Returns:
         str: The formatted string in scientific notation.
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     s = "%.*e" % (prec, f)
     mantissa, exp = s.split('e')
@@ -259,6 +230,7 @@ def extractNum(s: str) -> int:
 
     Returns:
         int: The first integer found in the string.
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     numre = re.compile('[0-9]+')
     return int(numre.search(s).group())
@@ -273,18 +245,19 @@ def sortbynum(files: List[str]) -> List[str]:
 
     Returns:
         List[str]: Sorted list of file paths.
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     if len(files[0].split('/')) > 1:
         files_shortened = []
         file_prefix = '/'.join(files[0].split('/')[:-1])
         for file in files:
             files_shortened.append(file.split('/')[-1])
-        files_sorted = sorted(files_shortened, key=lambda x: float(re.findall("(\d+)", x)[0]))
+        files_sorted = sorted(files_shortened, key=lambda x: float(re.findall(r"(\d+)", x)[0]))
         sorted_files = []
         for file in files_sorted:
             sorted_files.append(f'{file_prefix}/{file}')
     else:
-        sorted_files = sorted(files, key=lambda x: float(re.findall("(\d+)", x)[0]))
+        sorted_files = sorted(files, key=lambda x: float(re.findall(r"(\d+)", x)[0]))
     return sorted_files
 
 
@@ -297,6 +270,7 @@ def issorted(test_list: List) -> bool:
 
     Returns:
         bool: True if the list is sorted, False otherwise.
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     flag = False
     if test_list == sorted(test_list):
@@ -317,6 +291,7 @@ def byte2str(byte_string: bytes) -> str:
 
     Returns:
         str: The decoded string.
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     try:
         return [x.decode("utf-8") for x in byte_string]
@@ -333,6 +308,7 @@ def flatten(t: List[List]) -> List:
 
     Returns:
         List: A flattened list containing all the elements.
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     return [item for sublist in t for item in sublist]
 
@@ -348,6 +324,8 @@ def ETA(idx: int, total_num: int, start_loop_time: float) -> None:
 
     Returns:
         None
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     eta = (total_num - idx) * (timer() - start_loop_time) / 60
     if eta > 60:
@@ -366,6 +344,8 @@ def elapsed_time(start_time: float) -> None:
 
     Returns:
         None
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     delta_t = (timer() - start_time)
     if delta_t < .1:
@@ -388,6 +368,8 @@ def size(a: np.ndarray, axis: Optional[int] = None) -> int:
 
     Returns:
         int: Size of the array or length of the specified axis.
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     if axis is None:
         try:
@@ -411,6 +393,8 @@ def sortbylist(X: List, Y: List) -> List:
 
     Returns:
         List: Sorted version of X according to the order in Y.
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     return [x for _, x in sorted(zip(Y, X))]
 
@@ -425,6 +409,8 @@ def find_nearest(array: np.ndarray, value: float = 0) -> Tuple[int, float]:
 
     Returns:
         Tuple[int, float]: Index of the nearest element and the difference from the value.
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     array = np.asarray(array)
     idx = np.nanargmin((np.abs(array - value)))
@@ -442,6 +428,8 @@ def sample(seq: List, n: int, replacement: bool = False) -> np.ndarray:
 
     Returns:
         np.ndarray: Randomly sampled elements.
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     return np.random.choice(seq, n, replacement)
 
@@ -456,6 +444,8 @@ def rand_num(low: float = 0, high: float = 1) -> float:
 
     Returns:
         float: Random number between the specified bounds.
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     return float(np.random.uniform(low, high, 1).astype('float64'))
 
@@ -469,6 +459,8 @@ def isint(var_: object) -> bool:
 
     Returns:
         bool: True if the variable is an integer, False otherwise.
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     return isinstance(var_, int)
 
@@ -482,6 +474,8 @@ def isfloat(var_: object) -> bool:
 
     Returns:
         bool: True if the variable is a float, False otherwise.
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     return isinstance(var_, float)
 
@@ -495,6 +489,8 @@ def isstr(var_: object) -> bool:
 
     Returns:
         bool: True if the variable is a string, False otherwise.
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     return isinstance(var_, str)
 
@@ -508,6 +504,8 @@ def shuffle(x: List) -> None:
 
     Returns:
         None
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     return random.shuffle(x)
 
@@ -523,6 +521,8 @@ def divby0(n: float, d: float, Δ: float = np.nan) -> float:
 
     Returns:
         float: The result of division, or the default value in case of zero denominator.
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     return n / d if d else Δ
 
@@ -536,6 +536,8 @@ def kde(data_: np.ndarray) -> stats.gaussian_kde:
 
     Returns:
         stats.gaussian_kde: KDE object.
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     kde = stats.gaussian_kde(data_)
     return kde
@@ -555,6 +557,8 @@ def body_pos(body: str = 'earth', t: Optional[float] = None, coord: str = 'icrs'
 
     Returns:
         np.ndarray: Position of the body in the specified coordinate system.
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     if t is None:
         t = Time(date, format=format)
@@ -580,6 +584,8 @@ def close_to_any(a: np.ndarray, floats: np.ndarray, **kwargs) -> bool:
 
     Returns:
         bool: True if any element in `a` is close to any in `floats`, False otherwise.
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     return np.any(np.isclose(a, floats, **kwargs))
 
@@ -594,6 +600,8 @@ def distance3d(x: float, y: float, z: float, xe: float, ye: float, ze: float) ->
 
     Returns:
         float: The Euclidean distance between the two points.
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     distance = ((x - xe) ** 2 + (y - ye) ** 2 + (z - ze) ** 2) ** (1 / 2)
     return distance
@@ -608,6 +616,8 @@ def find_local_extrema(arr: np.ndarray) -> Tuple[List[int], List[int]]:
 
     Returns:
         Tuple[List[int], List[int]]: List of indices of local minima and maxima.
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     if len(np.shape(arr)) > 1:
         print(f"array shape: {np.shape(arr)}, reducing along last axis.")
@@ -628,6 +638,8 @@ def graham_scan(points: np.ndarray) -> np.ndarray:
 
     Returns:
         np.ndarray: Array of points forming the convex hull.
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     def orientation(p, q, r):
         val = (q[1] - p[1]) * (r[0] - q[0]) - (q[0] - p[0]) * (r[1] - q[1])
@@ -661,6 +673,8 @@ def contours_2d(points: np.ndarray, plot: bool = False) -> np.ndarray:
 
     Returns:
         np.ndarray: Array of points forming the convex hull.
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     hull_vertices = graham_scan(points)
     if plot:
@@ -690,6 +704,8 @@ def contours_3d(points_3d: np.ndarray, plot: bool = False) -> scipy.spatial.Conv
 
     Returns:
         scipy.spatial.ConvexHull: The convex hull object representing the 3D hull.
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     from scipy.spatial import ConvexHull
     # Compute Convex Hull using scipy's ConvexHull
@@ -713,3 +729,33 @@ def contours_3d(points_3d: np.ndarray, plot: bool = False) -> scipy.spatial.Conv
         plt.legend()
         plt.show()
     return hull
+
+
+def get_sigmas(n=25, path = "/p/lustre2/cislunar/cache/covariance_sigmas.npy"):
+    if os.path.exists(path):
+        print("Loading sigmas.")
+        sigmas = np.load(path)
+        compute_new = False
+        if not np.shape(sigmas)[0] == n:
+            compute_new = True
+    if compute_new:
+        print("Computing sigmas.")
+        sigmas = np.zeros((n, 6))
+        for _ in range(n):
+            # position and velocity kicks to give randomly to additional N particles
+            x_dist = 10  # m
+            v_dist = 1  # m/s
+            i = 0
+            while i < 1:
+                tmpx = np.random.uniform(-x_dist, x_dist)
+                tmpy = np.random.uniform(-x_dist, x_dist)
+                tmpz = np.random.uniform(-x_dist, x_dist)
+                tmpvx = np.random.uniform(-v_dist, v_dist)
+                tmpvy = np.random.uniform(-v_dist, v_dist)
+                tmpvz = np.random.uniform(-v_dist, v_dist)
+                if np.sqrt(tmpx ** 2 + tmpy ** 2 + tmpz ** 2) <= x_dist:
+                    if np.sqrt(tmpvx**2 + tmpvy**2 + tmpvz**2) <= v_dist:
+                        i = 2
+            sigmas[_, :] = [tmpx, tmpy, tmpz, tmpvx, tmpvy, tmpvz]
+        np.save(path, sigmas)
+    return sigmas

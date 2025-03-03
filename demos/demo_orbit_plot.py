@@ -1,0 +1,43 @@
+from yeager_utils import ssapy_orbit, orbit_plot, cislunar_plot, RGEO, get_lunar_rv, Time
+import os
+import numpy as np
+
+
+def imname(filename):
+    save_dir = "/g/g16/yeager7/workdir/yeager_utils/demos/images/"
+    os.makedirs(save_dir, exist_ok=True)
+    return f"{save_dir}{filename}.png"
+
+
+times = Time("2024-1-1").gps
+print(times)
+r_moon, v_moon = get_lunar_rv(times)
+print(r_moon, v_moon)
+
+r0 = r_moon[0] + (1000e3 * r_moon[0] / np.linalg.norm(r_moon[0]))
+v0 = v_moon[0] + 100
+print(r0, v0)
+
+# single orbit
+print("Calculating orbit.")
+r, v, t = ssapy_orbit(r=r0, v=v0, duration=(1, 'month'))
+# print(t, type(t), type(np.array(t)), type([]), type([t, t]))
+print(f"Plotting orbit. {np.shape(r)} {np.shape(t)}")
+orbit_plot(r=r, t=t, save_path=imname("orbit_plot"))
+cislunar_plot(r=r, t=t, save_path=imname("cislunar_plot"))
+
+# two same length orbit
+print("Calculating 2 orbit.")
+r2, v2, t2 = ssapy_orbit(a=9 * RGEO, e=0.5, i=.25, pa=np.pi / 2, duration=(1, 'month'))
+print(f"Plotting two orbits same length. {np.shape(r)} {np.shape(r2)} {np.shape(t)}")
+orbit_plot(r=[r, r2], t=t, save_path=imname("orbit_plot_two_orbits"))
+
+cislunar_plot(r=[r, r2], t=t, save_path=imname("cislunar_plot_two_orbits"))
+
+# two orbit different lengths
+print("Calculating 2 different orbit.")
+r3, v3, t3 = ssapy_orbit(a=5 * RGEO, e=0.5, i=.75, duration=(7, 'day'), t0="2024-1-1")
+print("Plotting two orbits different lengths.")
+orbit_plot(r=[r, r3], t=[t, t3], save_path=imname("orbit_plot_two_different_length_orbits"))
+orbit_plot(r=[r, r3], t=[t, t3], save_path=imname("orbit_plot_two_different_length_orbits_itrf"), frame='itrf')
+cislunar_plot(r=[r, r3], t=[t, t3], save_path=imname("cislunar_plot_two_different_length_orbits"))

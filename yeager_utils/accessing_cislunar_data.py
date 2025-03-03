@@ -1,15 +1,16 @@
 import h5py
 import numpy as np
-from .constants import MOON_RADIUS
-from .io import read_h5
+from .io.csv import save_csv_line
+from .io.hdf5 import read_h5
+from .io.io_utils import rmfile
 from .time import Time, get_times
 from typing import List
-
+from astropy import units as u
 
 main_dataset = "/p/lustre2/cislunar/data_six_year_1.0GEO_to_18.2GEO/"
 copy_dataset = "/p/lustre2/cislunar/data_six_year_1.0GEO_to_18.2GEO_copy/"
 
-csv_data = "/p/lustre2/cislunar/data_six_year_1.0GEO_to_18.2GEO_descriptive_data.csv"
+cislunar_csv_data = "/p/lustre2/cislunar/data_six_year_1.0GEO_to_18.2GEO_descriptive_data.csv"
 cislunar_h5_keys = ['ejection', 'lifetime', 'period', 'perigee', 'apogee',
                     'r', 'v', 'ra', 'dec', 'range', 'pm_ra', 'pm_dec', 'pm_r', 'M_v',
                     'semi_major_axis', 'eccentricity', 'inclination', 
@@ -23,21 +24,48 @@ cislunar_h5_keys = ['ejection', 'lifetime', 'period', 'perigee', 'apogee',
                     ]
 
 
-def get_chance_radius(v: np.ndarray) -> float:
+def index_from_cislunar_filename(filename: str) -> int:
     """
-    Calculate the chance radius based on the velocity vector.
+    Extract the index from a cislunar dataset filename.
 
     Parameters
     ----------
-    v : np.ndarray
-        The velocity vector of the object at the final time step.
+    filename : str
+        The full filename path for the dataset.
 
     Returns
     -------
-    float
-        The calculated chance radius in arcseconds.
+    int
+        The extracted index corresponding to the orbital dataset.
     """
-    return np.linalg.norm(v[-1]) * 3600 / MOON_RADIUS * 4 + 2
+    import re
+
+    # Match the orbital ID pattern in the filename
+    match = re.search(r"orb_id_(\d+)_to_(\d+)\.h5", filename)
+    if not match:
+        raise ValueError("Filename does not match the expected format.")
+
+    lower_bound = int(match.group(1))
+    return lower_bound // 50
+
+
+def cislunar_orb_ids_from_h5(h5_file: str) -> np.ndarray:
+    """
+    Generate a range of orbital IDs based on an index.
+
+    Parameters
+    ----------
+    index : int
+        The index to generate orbital IDs.
+
+    Returns
+    -------
+    np.ndarray
+        A numpy array of orbital IDs.
+    """
+
+    lower = int(index_from_cislunar_filename(h5_file) * 50)
+    return np.arange(lower, lower + 50)
 
 
 def cislunar_orb_ids_from_index(index: int) -> np.ndarray:
@@ -155,6 +183,7 @@ def cislunar_keys(unique_id: int = 0, dataset: str = main_dataset) -> List[str]:
 
 
 sim_start_time = Time("1980-01-01", scale='utc')
+sim_time_step_hours = 1 * u.Unit('hour').to(u.Unit('hour'))
 
 
 def get_ctimes() -> np.ndarray:
@@ -166,8 +195,100 @@ def get_ctimes() -> np.ndarray:
     np.ndarray
         A numpy array of times from the start time.
     """
-    times = get_times(duration=(6, 'year'), freq=(1, 'hour'), t=sim_start_time)
+    times = get_times(duration=(6, 'year'), freq=(1, 'hour'), t0=sim_start_time)
     return times
+
+
+def get_csv_file(h5_file):
+    csv_file = f"{'.'.join(h5_file.split('.')[:-1])}.csv"
+    return csv_file
+
+
+def build_csv_from_h5(h5_file):
+    # REBUILD CSVS
+    def save_to_csv(csv_file, data):
+        # BUILD CSV DATAFRAME FROM DATA VAR
+        df = {
+            'orb_id': [data['orb_id']],
+            'ejection': [data['ejection']],
+            'lifetime': [data['lifetime']],
+            'period': [data['period']],
+            'perigee': [data['perigee']],
+            'apogee': [data['apogee']],
+            'r0': [data['r_initial']],
+            'v0': [data['r_initial']],
+            'pm_ra_min': [np.min(data['pm_ra'])],
+            'pm_dec_min': [np.min(data['pm_dec'])],
+            'pm_ra_max': [np.max(data['pm_ra'])],
+            'pm_dec_max': [np.max(data['pm_dec'])],
+            'M_v_min': [np.min(data['M_v'])],
+            'M_v_max': [np.max(data['M_v'])],
+            'a': [data['semi_major_axis'][0]],
+            'e': [data['eccentricity'][0]],
+            'i': [data['inclination'][0]],
+            'tl': [data['true_longitude'][0]],
+            'pa': [data['argument_of_periapsis'][0]],
+            'raan': [data['longitude_of_ascending_node'][0]],
+            'ta': [data['true_anomaly'][0]],
+            'vmin': [data['vmin']],
+            'vmax': [data['vmax']],
+            'r_vmin': [data['r_vmin']],
+            'r_vmax': [data['r_vmax']],
+            'std_divergence': [data['std_divergence']],
+            'median_divergence': [data['median_divergence']],
+            'mean_divergence': [data['mean_divergence']],
+            'max_divergence': [data['max_divergence']],
+            'threebody_std_divergence': [data['threebody_std_divergence']],
+            'threebody_median_divergence': [data['threebody_median_divergence']],
+            'threebody_mean_divergence': [data['threebody_mean_divergence']],
+            'threebody_max_divergence': [data['threebody_max_divergence']],
+        }
+        save_csv_line(csv_file, df)
+        return
+
+    csv_file = get_csv_file(h5_file)
+    orb_ids = cislunar_orb_ids_from_h5(h5_file)
+    rmfile(csv_file)
+    for orb_id in orb_ids:
+        data = {
+            'orb_id': orb_id,
+            'ejection': read_h5(h5_file, f"{orb_id}/ejection"),
+            'lifetime': read_h5(h5_file, f"{orb_id}/lifetime"),
+            'period': read_h5(h5_file, f"{orb_id}/period"),
+            'perigee': read_h5(h5_file, f"{orb_id}/perigee"),
+            'apogee': read_h5(h5_file, f"{orb_id}/apogee"),
+            'r_initial': read_h5(h5_file, f"{orb_id}/r_initial"),
+            'v_initial': read_h5(h5_file, f"{orb_id}/v_initial"),
+            'pm_ra': read_h5(h5_file, f"{orb_id}/pm_ra"),
+            'pm_dec': read_h5(h5_file, f"{orb_id}/pm_dec"),
+            'M_v': read_h5(h5_file, f"{orb_id}/M_v"),
+            'semi_major_axis': read_h5(h5_file, f"{orb_id}/semi_major_axis"),
+            'eccentricity': read_h5(h5_file, f"{orb_id}/eccentricity"),
+            'inclination': read_h5(h5_file, f"{orb_id}/inclination"),
+            'true_longitude': read_h5(h5_file, f"{orb_id}/true_longitude"),
+            'argument_of_periapsis': read_h5(h5_file, f"{orb_id}/argument_of_periapsis"),
+            'longitude_of_ascending_node': read_h5(h5_file, f"{orb_id}/longitude_of_ascending_node"),
+            'true_anomaly': read_h5(h5_file, f"{orb_id}/true_anomaly"),
+            'vmin': read_h5(h5_file, f"{orb_id}/vmin"),
+            'vmax': read_h5(h5_file, f"{orb_id}/vmax"),
+            'r_vmin': read_h5(h5_file, f"{orb_id}/r_vmin"),
+            'r_vmax': read_h5(h5_file, f"{orb_id}/r_vmax"),
+            'std_divergence': read_h5(h5_file, f"{orb_id}/std_divergence"),
+            'median_divergence': read_h5(h5_file, f"{orb_id}/median_divergence"),
+            'mean_divergence': read_h5(h5_file, f"{orb_id}/mean_divergence"),
+            'max_divergence': read_h5(h5_file, f"{orb_id}/max_divergence"),
+            'threebody_std_divergence': read_h5(h5_file, f"{orb_id}/threebody_std_divergence"),
+            'threebody_median_divergence': read_h5(h5_file, f"{orb_id}/threebody_median_divergence"),
+            'threebody_mean_divergence': read_h5(h5_file, f"{orb_id}/threebody_mean_divergence"),
+            'threebody_max_divergence': read_h5(h5_file, f"{orb_id}/threebody_max_divergence")
+        }
+
+        save_to_csv(csv_file, data)
+    return
+
+
+sim_lowest_alt = 35_786_035.36450565
+sim_max_distance = 768_798_000
 
 
 if __name__ == "__main__":

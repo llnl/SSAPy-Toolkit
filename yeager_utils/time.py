@@ -13,8 +13,20 @@ def now() -> str:
     -------
     str
         The current date and time as a formatted string.
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     return datetime.now().strftime('%Y-%m-%d %H:%M')
+
+
+def to_gps(t):
+    if np.size(t) > 1:
+        if isinstance(t[0], Time):
+            t = t.gps
+    else:
+        if isinstance(t, Time):
+            t = t.gps
+    return t
 
 
 def _gpsToTT(t: float) -> float:
@@ -30,6 +42,8 @@ def _gpsToTT(t: float) -> float:
     -------
     float
         The corresponding TT time in days.
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     return 44244.0 + (t + 51.184) / 86400
 
@@ -47,6 +61,8 @@ def dms_to_dd(dms: Union[str, List[str]]) -> Union[float, List[float]]:
     -------
     float or list of float
         The decimal degree equivalent(s) of the input DMS.
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     dms, out = [[dms] if isinstance(dms, str) else dms][0], []
     for i in dms:
@@ -70,6 +86,8 @@ def dd_to_dms(degree_decimal: float) -> str:
     -------
     str
         The corresponding DMS string in the format 'deg:min:sec'.
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     _d, __d = np.trunc(degree_decimal), degree_decimal - np.trunc(degree_decimal)
     __d = -__d if degree_decimal < 0 else __d
@@ -97,6 +115,8 @@ def hms_to_dd(hms: Union[str, List[str]]) -> Union[float, List[float]]:
     -------
     float or list of float
         The decimal degree equivalent(s) of the input HMS.
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     _type = type(hms)
     hms, out = [[hms] if _type == str else hms][0], []
@@ -124,6 +144,8 @@ def dd_to_hms(degree_decimal: float) -> str:
     -------
     str
         The corresponding HMS string in the format 'hour:minute:second'.
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     if isinstance(degree_decimal, str):
         degree_decimal = dms_to_dd(degree_decimal)
@@ -161,6 +183,8 @@ def get_times(duration: Tuple[int, str], freq: Tuple[int, str], t0: Union[str, T
     -------
     np.ndarray
         A list of times spaced equally apart over the specified duration.
+
+    Author: Travis Yeager (yeager7@llnl.gov)
     """
     if isinstance(t0, str):
         t0 = Time(t0, scale='utc')
