@@ -1,6 +1,7 @@
 # Folders
 from .accelerations import *
 from .compute import *
+from .coordinates import *
 from .integrators import *
 from .io import *
 from .orbital_mechanics import *
@@ -10,7 +11,6 @@ from .plots import *
 from .accessing_cislunar_data import *
 from .asteroids import *
 from .constants import *
-from .coordinates import *
 from .hpc import *
 from .orbit_initializer import *
 from .ssapy_wrapper import *

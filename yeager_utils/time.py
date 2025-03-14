@@ -1,5 +1,5 @@
 import numpy as np
-from astropy.time import Time
+from astropy.time import Time, TimeDelta
 from astropy import units as u
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -22,7 +22,11 @@ def now() -> str:
 def to_gps(t):
     if np.size(t) > 1:
         if isinstance(t[0], Time):
-            t = t.gps
+            try:
+                t = t.gps
+            except AttributeError:
+                t = [time.iso for time in t]
+                t = Time(t, format='iso').gps
     else:
         if isinstance(t, Time):
             t = t.gps

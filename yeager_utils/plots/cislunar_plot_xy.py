@@ -2,15 +2,13 @@ from .plotutils import check_numpy_array, check_type
 
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
-from matplotlib.ticker import MaxNLocator
+from matplotlib.ticker import MultipleLocator
 from matplotlib.legend_handler import HandlerBase
 from matplotlib.collections import LineCollection
 from matplotlib.patches import Patch
 from matplotlib.lines import Line2D
 import matplotlib.font_manager as font_manager
-
 import numpy as np
-
 from ssapy import get_body
 from ..coordinates import gcrf_to_lunar_fixed
 from ..constants import RGEO, EARTH_RADIUS, MOON_RADIUS
@@ -166,8 +164,8 @@ def cislunar_plot_xy(r, t=None, figsize=(8, 8), fontsize=12, save_path=False, sh
         for (point, pos) in lagrange_points_lunar_fixed_frame().items():
             pos = pos / unit_conversion
             if bounds_lunar["lower"][0] <= pos[0] <= bounds_lunar["upper"][0] and bounds_lunar["lower"][1] <= pos[1] <= bounds_lunar["upper"][1]:
-                ax2.scatter(pos[0], pos[1], color='grey', label=point, s=10)
-                ax2.text(pos[0], pos[1], point, color='grey')
+                ax2.scatter(pos[0], pos[1], color=textcolor, label=point, s=20)
+                ax2.text(pos[0], pos[1], point, color=textcolor, fontsize=fontsize)
 
     # Set 2D limits using only x and y from the cube bounds
     ax1.set_xlim(bounds_gcrf["lower"][0], bounds_gcrf["upper"][0])
@@ -188,19 +186,18 @@ def cislunar_plot_xy(r, t=None, figsize=(8, 8), fontsize=12, save_path=False, sh
     legend_elements = [
         Patch(facecolor='lightblue', edgecolor=textcolor, label='Earth'),
         Patch(facecolor='lightgrey', edgecolor=textcolor, label='Moon'),
-        Line2D([0], [0], marker='o', color='none', markerfacecolor='grey', markersize=6, label='Lagrange Points'),
+        Line2D([0], [0], marker='o', color='none', markerfacecolor='grey', markersize=10, label='Lagrange Points'),
     ]
 
     if num_orbits == 1:
         legend_elements.append(rainbow_line)
 
-    font_properties = font_manager.FontProperties()
+    font_properties = font_manager.FontProperties(size=fontsize - 4 if fontsize > 16 else fontsize)
 
     ax2.legend(
         handles=legend_elements,
         handler_map={rainbow_line: GradientLineHandler()} if num_orbits == 1 else {},
         loc='upper left',
-        fontsize=12,
         facecolor=plotcolor,
         edgecolor=textcolor,
         prop=font_properties,
@@ -215,8 +212,12 @@ def cislunar_plot_xy(r, t=None, figsize=(8, 8), fontsize=12, save_path=False, sh
             label.set_fontsize(fontsize)
         for spine in ax.spines.values():
             spine.set_edgecolor(textcolor)
-        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-        ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+        x_range = ax.get_xlim()[1] - ax.get_xlim()[0]
+        y_range = ax.get_ylim()[1] - ax.get_ylim()[0]
+        x_step = np.ceil(x_range / 6)  # 4 intervals = 5 ticks
+        y_step = np.ceil(y_range / 6)
+        ax.xaxis.set_major_locator(MultipleLocator(base=x_step))
+        ax.yaxis.set_major_locator(MultipleLocator(base=y_step))
 
     ax1.set_zorder(2)
     ax2.set_zorder(1)

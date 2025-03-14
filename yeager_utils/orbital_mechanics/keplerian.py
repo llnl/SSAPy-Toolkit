@@ -716,6 +716,95 @@ def calculate_orbital_elements(r_, v_, mu_barycenter=EARTH_MU):
     }
 
 
+def a_from_periap(rp, ra):
+    """
+    Compute the semi-major axis (a) from perigee (rp) and apogee (ra) distances.
+
+    Parameters
+    ----------
+    rp : float
+        Perigee distance (m), measured from the center of the body.
+    ra : float
+        Apogee distance (m), measured from the center of the body.
+
+    Returns
+    -------
+    float
+        Semi-major axis (a) in meters.
+
+    Author
+    ------
+    Travis Yeager (yeager7@llnl.gov)
+    """
+    if rp <= 0 or ra <= 0:
+        raise ValueError("Perigee and apogee distances must be positive.")
+    if ra < rp:
+        raise ValueError("Apogee distance must be greater than or equal to perigee distance.")
+    return (rp + ra) / 2.0
+
+
+def e_from_periap(rp, ra):
+    """
+    Compute the eccentricity (e) from perigee (rp) and apogee (ra) distances.
+
+    Parameters
+    ----------
+    rp : float
+        Perigee distance (m), measured from the center of the body.
+    ra : float
+        Apogee distance (m), measured from the center of the body.
+
+    Returns
+    -------
+    float
+        Eccentricity (e), unitless (0 <= e < 1 for an ellipse).
+
+    Author
+    ------
+    Travis Yeager (yeager7@llnl.gov)
+    """
+    if rp <= 0 or ra <= 0:
+        raise ValueError("Perigee and apogee distances must be positive.")
+    if ra < rp:
+        raise ValueError("Apogee distance must be greater than or equal to perigee distance.")
+    return (ra - rp) / (ra + rp)
+
+
+def ae_from_periap(rp, ra):
+    """
+    Author
+    ------
+    Travis Yeager (yeager7@llnl.gov)
+    """
+
+    return a_from_periap(rp, ra), e_from_periap(rp, ra)
+
+
+def keplerian_from_peri_apo(rp, ra):
+    """
+    Compute semi-major axis (a) and eccentricity (e) from perigee (rp) and apogee (ra).
+
+    Parameters
+    ----------
+    rp : float
+        Perigee distance (m), measured from the center of the body.
+    ra : float
+        Apogee distance (m), measured from the center of the body.
+
+    Returns
+    -------
+    tuple
+        (a, e) where a is semi-major axis (m) and e is eccentricity (unitless).
+
+    Author
+    ------
+    Travis Yeager (yeager7@llnl.gov)
+    """
+    a = semi_major_axis(rp, ra)
+    e = eccentricity(rp, ra)
+    return a, e
+
+
 def periapsis(a, e):
     return (1 - e) * a
 

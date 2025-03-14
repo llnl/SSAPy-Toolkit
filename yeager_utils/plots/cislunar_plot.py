@@ -180,8 +180,8 @@ def cislunar_plot(r, t=None, figsize=(8, 8), fontsize=12, save_path=False, show=
         for (point, pos) in lagrange_points_lunar_fixed_frame().items():
             pos = pos / unit_conversion
             if bounds_lunar["lower"][0] <= pos[0] <= bounds_lunar["upper"][0] and bounds_lunar["lower"][1] <= pos[1] <= bounds_lunar["upper"][1] and bounds_lunar["lower"][2] <= pos[2] <= bounds_lunar["upper"][2]:
-                ax2.scatter(pos[0], pos[1], pos[2], color='black', label=point, s=10)
-                ax2.text(pos[0], pos[1], pos[2], point, color='black')
+                ax2.scatter(pos[0], pos[1], pos[2], color=textcolor, label=point, s=10)
+                ax2.text(pos[0], pos[1], pos[2], point, color=textcolor)
 
     ax1.set_xlim(bounds_gcrf["lower"][0], bounds_gcrf["upper"][0])
     ax1.set_ylim(bounds_gcrf["lower"][1], bounds_gcrf["upper"][1])
