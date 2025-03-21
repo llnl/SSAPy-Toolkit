@@ -3,7 +3,7 @@ from ssapy import rv, Orbit, SciPyPropagator, AccelKepler
 from yeager_utils import hkoe, RGEO, get_times, Time, transfer_plot
 
 
-def transfer_shooter(r1, v1, r2, v2, tol=100, max_iter=50, show=False, status=False):
+def transfer_shooter(r1, v1, r2, v2, tol=1, max_iter=50, show=False, status=False):
     """
     Finds an initial delta-v that will lead to a transfer orbit with an arrival position
     within tol (in meters) of the target position r2.
@@ -20,7 +20,7 @@ def transfer_shooter(r1, v1, r2, v2, tol=100, max_iter=50, show=False, status=Fa
     r2, v2 : array_like
         Target position and velocity vectors.
     tol : float, optional
-        Tolerance (in meters) for the arrival position error. Default is 100.
+        Tolerance (in meters) for the arrival position error. Default is 1.
     max_iter : int, optional
         Maximum number of iterations for the Newton method.
     status : bool, optional
