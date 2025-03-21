@@ -1,141 +1,162 @@
-from ..constants import EARTH_MU, EARTH_RADIUS
-from ..ssapy_wrapper import ssapy_orbit
-from ..time import Time, to_gps
 import numpy as np
-from poliastro.iod import izzo
-import astropy.units as u
-from ssapy import Orbit
-import matplotlib.pyplot as plt
-from matplotlib.patches import Circle
+from ..constants import EARTH_MU, EARTH_RADIUS
+from ..integrators import leapfrog
 
 
-def lambertian_transfer(elements1, elements2, t0=Time("2025-1-1", scale='utc'), mu=EARTH_MU, plot=False):
+def state_vector_to_conic(r1, r2, v1_t, mu=EARTH_MU):
+    """Convert transfer orbit to conic coefficients (ellipse or hyperbola).
+
+    Args:
+        r1: Initial position vector [x1, y1] (m)
+        r2: Final position vector [x2, y2] (m)
+        v1_t: Transfer velocity at r1 [vx, vy] (m/s)
+        mu: Gravitational parameter (m^3/s^2), default Earth
+
+    Returns:
+        List of [A, B, C, D, E, F] coefficients for the conic equation
     """
-    Computes a general Lambertian transfer between two orbits with the shortest time of flight.
+    r1_mag = np.linalg.norm(r1)
+    r2_mag = np.linalg.norm(r2)
 
-    Parameters
-    ----------
-    elements1 : tuple or list
-        Six Keplerian elements of the initial orbit: (a, e, i, Omega, omega, nu) in (m, -, rad, rad, rad, rad).
-    elements2 : tuple or list
-        Six Keplerian elements of the final orbit: (a, e, i, Omega, omega, nu) in (m, -, rad, rad, rad, rad).
-    t0 : float or Time, optional
-        Initial time (e.g., GPS seconds or Time object).
-    mu : float, optional
-        Gravitational parameter (m^3/s^2), defaults to EARTH_MU.
-    plot : bool, optional
-        If True, plots the initial orbit, final orbit, and transfer trajectory.
+    h = r1[0] * v1_t[1] - r1[1] * v1_t[0]  # Angular momentum (z-component)
+    p = h**2 / mu  # Semi-latus rectum
 
-    Returns
-    -------
-    dict
-        Dictionary containing:
-            - 'transfer_orbit': Orbit object for the transfer orbit.
-            - 'delta_v1': Delta-V required at departure (m/s).
-            - 'delta_v2': Delta-V required at arrival (m/s).
-            - 'tof': Shortest time of flight (s).
-            - 't_to_transfer': Time to wait until transfer (s, 0 for immediate departure).
-            - 'fig': Matplotlib figure object (if plot=True).
+    v1_t_mag = np.linalg.norm(v1_t)
+    epsilon = v1_t_mag**2 / 2 - mu / r1_mag  # Specific energy
 
-    Author: Travis Yeager (yeager7@llnl.gov)
+    a = -mu / (2 * epsilon)  # Semi-major axis (negative for hyperbola)
+    e = np.sqrt(1 - p / a) if epsilon < 0 else np.sqrt(1 + p / abs(a))  # Eccentricity
+
+    cos_theta1 = r1[0] / r1_mag
+    sin_theta1 = r1[1] / r1_mag
+    center_x = -a * e * cos_theta1
+    center_y = -a * e * sin_theta1
+
+    if epsilon < 0:  # Ellipse
+        b = a * np.sqrt(1 - e**2)  # Semi-minor axis
+    else:  # Hyperbola
+        b = abs(a) * np.sqrt(e**2 - 1)  # Semi-transverse axis
+
+    A = b**2
+    B = 0  # No tilt assumed
+    C = a**2
+    D = -2 * A * center_x
+    E = -2 * C * center_y
+    F = A * center_x**2 + C * center_y**2 - a**2 * b**2
+
+    F_adjusted = -(A * 0**2 + B * 0 * 0 + C * 0**2 + D * 0 + E * 0)
+    coeffs = [A, B, C, D, E, F_adjusted]
+
+    norm_factor = abs(F_adjusted) if F_adjusted != 0 else 1
+    return [c / norm_factor for c in coeffs]
+
+
+def find_intersection_time(r_start, v_start, r_ref, t_max):
+    """Find time when orbit from (r_start, v_start) nearly intersects r_ref."""
+    r_orbit, _ = leapfrog(r_start, v_start, t=np.arange(0, t_max, 1))
+    distances = np.linalg.norm(r_orbit - r_ref, axis=1)
+    idx = np.argmin(distances)
+    return idx  # Time index of closest approach in seconds
+
+
+def transfer_lambertian(r1, v1, r2, v2, MIN_PERIGEE=EARTH_RADIUS + 100000, mu=EARTH_MU):
+    """Find transfer conic (ellipse or hyperbola) connecting r1 and r2 with perigee >= 6478 km.
+
+    Args:
+        r1: Initial position vector (m)
+        v1: Initial velocity vector (m/s)
+        r2: Final position vector (m)
+        v2: Final velocity vector (m/s)
+        mu: Gravitational parameter (m^3/s^2), default Earth
+
+    Returns:
+        Tuple (coeffs, v1_t, v2_t, tof, orbit_type):
+            - coeffs: [A, B, C, D, E, F] of transfer conic
+            - v1_t: Transfer velocity at r1 (m/s)
+            - v2_t: Transfer velocity at r2 (m/s)
+            - tof: Time of flight from r1 to r2 (s)
+            - orbit_type: 'ellipse' or 'hyperbola'
     """
-    t0 = to_gps(t0)
+    r1_mag = np.linalg.norm(r1)
+    r2_mag = np.linalg.norm(r2)
 
-    # Convert elements1 to Orbit object if it’s a list/tuple
-    if isinstance(elements1, (list, tuple)):
-        if len(elements1) != 6:
-            raise ValueError("elements1 must contain exactly 6 Keplerian elements.")
-        a1, e1, i1, ap1, raan1, trueAnomaly1 = elements1
-        orbit1 = Orbit.fromKeplerianElements(a1, e1, i1, ap1, raan1, trueAnomaly1, t=t0, mu=mu)
-    elif isinstance(elements1, Orbit):
-        orbit1 = elements1
-        if not np.isclose(orbit1.t, t0, atol=1e-6):
-            orbit1 = orbit1.at(t0)
-    else:
-        raise TypeError("elements1 must be an ssapy.Orbit object or a list/tuple of 6 elements.")
+    # Check if either point is below MIN_PERIGEE
+    if r1_mag < MIN_PERIGEE or r2_mag < MIN_PERIGEE:
+        raise ValueError(f"Cannot satisfy perigee >= 6478 km: r1 = {r1_mag/1000:.0f} km or r2 = {r2_mag/1000:.0f} km below constraint")
 
-    # Convert elements2 to Orbit object if it’s a list/tuple
-    if isinstance(elements2, (list, tuple)):
-        if len(elements2) != 6:
-            raise ValueError("elements2 must contain exactly 6 Keplerian elements.")
-        a2, e2, i2, ap2, raan2, trueAnomaly2 = elements2
-        orbit2 = Orbit.fromKeplerianElements(a2, e2, i2, ap2, raan2, trueAnomaly2, t=t0, mu=mu)
-    elif isinstance(elements2, Orbit):
-        orbit2 = elements2
-        if not np.isclose(orbit2.t, t0, atol=1e-6):
-            orbit2 = orbit2.at(t0)
-    else:
-        raise TypeError("elements2 must be an ssapy.Orbit object or a list/tuple of 6 elements.")
+    cos_dnu = np.dot(r1, r2) / (r1_mag * r2_mag)
+    dnu = np.arccos(np.clip(cos_dnu, -1.0, 1.0))
+    cross_r = np.cross(r1, r2)
+    if len(r1) == 3 and cross_r[2] < 0:  # 3D check
+        dnu = 2 * np.pi - dnu
 
-    r1 = orbit1.r
-    v1_orbit1 = orbit1.v
-    r2_initial = orbit2.r
-    r1_norm = np.linalg.norm(r1)
-    r2_norm = np.linalg.norm(r2_initial)
-    c = np.linalg.norm(r2_initial - r1)
-    s = (r1_norm + r2_norm + c) / 2.0
-    a_min = s / 2.0
-    tof = np.pi * np.sqrt(a_min**3 / mu)
+    # Minimum energy transfer (Hohmann-like) for initial guess
+    s = r1_mag + r2_mag + np.sqrt(np.sum((r1 - r2)**2))
+    a_min = s / 4
+    tof_min = np.pi * np.sqrt(a_min**3 / mu)
 
-    t_arrive = t0 + tof
+    def lambert_velocity(tof):
+        a = (mu * tof**2 / (dnu**2))**(1 / 3)  # Approximate a
+        p = r1_mag * r2_mag * np.sin(dnu)**2
+        p /= (r1_mag + r2_mag - 2 * np.sqrt(r1_mag * r2_mag) * np.cos(dnu))
+        e = np.sqrt(1 - p / a) if p < a else np.sqrt(1 + p / a)
+        f = 1 - r2_mag * (1 - np.cos(dnu)) / p
+        g = r1_mag * r2_mag * np.sin(dnu) / np.sqrt(mu * p)
+        v1_t = (r2 - f * r1) / g
+        v2_t = (-r1 + f * r2) / g
+        return v1_t, v2_t
 
-    orbit2_at_arrive = orbit2.at(t_arrive)
-    r2 = orbit2_at_arrive.r
-    v2_orbit2 = orbit2_at_arrive.v
+    # Initial attempt
+    tof = tof_min
+    v1_t, v2_t = lambert_velocity(tof)
+    h = r1[0] * v1_t[1] - r1[1] * v1_t[0]
+    p = h**2 / mu
+    v1_t_mag = np.linalg.norm(v1_t)
+    epsilon = v1_t_mag**2 / 2 - mu / r1_mag
+    a = -mu / (2 * epsilon)
+    e = np.sqrt(1 - p / a) if epsilon < 0 else np.sqrt(1 + p / abs(a))
+    r_p = a * (1 - e) if epsilon < 0 else abs(a) * (e - 1)
 
-    v1_trans, v2_trans = izzo.lambert(
-        mu * u.m**3 / u.s**2,
-        r1 * u.m,
-        r2 * u.m,
-        tof * u.s
-    )
-    v1_trans = v1_trans.to_value(u.m / u.s)
-    v2_trans = v2_trans.to_value(u.m / u.s)
-
-    delta_v1 = np.linalg.norm(v1_trans - v1_orbit1)
-    delta_v2 = np.linalg.norm(v2_orbit2 - v2_trans)
-
-    transfer_orbit = Orbit(r=r1, v=v1_trans, t=t0, mu=mu)
-
-    result = {
-        'initial': orbit1,
-        'final': orbit2,
-        'transfer': transfer_orbit,
-        'delta_v1': delta_v1,
-        'delta_v2': delta_v2,
-        'v_dep': v1_trans,
-        'v_arr': v2_trans,
-        'tof': tof,
-        't_to_transfer': 0
-    }
-
-    if plot:
-        r_traj1, _, times1 = ssapy_orbit(orbit=orbit1, duration=(orbit1.period, 's'), t0=Time(orbit1.t, format='gps'))
-        r_traj2, _, times2 = ssapy_orbit(orbit=orbit2, duration=(orbit2.period, 's'), t0=Time(orbit2.t, format='gps'))
-        r_traj_transfer, _, times_transfer = ssapy_orbit(
-            r=transfer_orbit.r,
-            v=transfer_orbit.v,
-            duration=(tof, 's'),
-            t0=Time(transfer_orbit.t, format='gps')
-        )
-
-        fig, ax = plt.subplots(figsize=(7, 7))
-        ax.plot(r_traj1[:, 0], r_traj1[:, 1], label="Initial Orbit", linestyle="dashed", c='LightBlue')
-        ax.plot(r_traj2[:, 0], r_traj2[:, 1], label="Final Orbit", linestyle="dotted", c='Orange')
-        if np.isclose(r1_norm, r2_norm, rtol=1e-6):
-            ax.scatter(r1[0], r1[1], s=6, color='Green', label="Transfer Point")
+    # Adjust TOF if perigee is too low
+    if r_p < MIN_PERIGEE:
+        print(f"Initial perigee {r_p/1000:.0f} km < 6478 km, adjusting TOF...")
+        tof_values = [tof_min * (1 + 0.1 * i) for i in range(20)] + \
+                     [tof_min * i for i in [0.5, 2, 5, 10, 20]]  # Wide range
+        for tof in tof_values:
+            v1_t, v2_t = lambert_velocity(tof)
+            h = r1[0] * v1_t[1] - r1[1] * v1_t[0]
+            p = h**2 / mu
+            v1_t_mag = np.linalg.norm(v1_t)
+            epsilon = v1_t_mag**2 / 2 - mu / r1_mag
+            a = -mu / (2 * epsilon)
+            e = np.sqrt(1 - p / a) if epsilon < 0 else np.sqrt(1 + p / abs(a))
+            r_p = a * (1 - e) if epsilon < 0 else abs(a) * (e - 1)
+            if r_p >= MIN_PERIGEE:
+                print(f"Adjusted to perigee {r_p/1000:.0f} km >= 6478 km with TOF {tof/60:.0f} min")
+                break
         else:
-            ax.plot(r_traj_transfer[:, 0], r_traj_transfer[:, 1], label="Transfer Orbit", c="Green")
-        ax.add_patch(Circle((0, 0), radius=EARTH_RADIUS, color='Blue', alpha=0.5, label="Earth"))
-        ax.scatter(r1[0], r1[1], color='LightBlue', marker='o', label="Departure Point")
-        ax.scatter(r2[0], r2[1], color='Orange', marker='o', label="Arrival Point")
-        ax.set_xlabel("X Position (m)")
-        ax.set_ylabel("Y Position (m)")
-        ax.set_title(f"Lambertian Transfer (TOF = {tof / 60:.0f} min\nΔv₁ = {delta_v1 / 1000:.3f} km/s, Δv₂ = {delta_v2 / 1000:.3f} km/s)")
-        ax.legend(loc='upper left')
-        plt.axis('equal')
-        plt.show()
+            raise ValueError("No transfer orbit found with perigee >= 6478 km")
 
-        result['fig'] = fig
+    coeffs = state_vector_to_conic(r1, r2, v1_t, mu)
+    orbit_type = 'ellipse' if epsilon < 0 else 'hyperbola'
+    t_max = 2 * np.pi * np.sqrt(a**3 / mu) if epsilon < 0 else 2 * tof
+    tof = find_intersection_time(r1, v1_t, r2, t_max)
 
-    return result
+    return coeffs, v1_t, v2_t, tof, orbit_type
+
+
+if __name__ == "__main__":
+    from yeager_utils import kepler_to_state, hkoe, RGEO, transfer_plot
+
+    # Initial orbit (LEO)
+    r1, v1 = kepler_to_state(*hkoe(0.5 * RGEO, 0.1, 0, 0, 0, 0))
+    # Final orbit (another LEO or beyond)
+    r2, v2 = kepler_to_state(*hkoe(1.0 * RGEO, 0.5, 0, 0, 0, 10))
+
+    coeffs, v1_t, v2_t, tof, orbit_type = transfer_ellipse(r1, v1, r2, v2)
+    state_vectors = [(r1, v1), (r1, v1_t), (r2, v2)]
+
+    print(f"Transfer time: {tof/60:.0f} minutes")
+    print(f"Orbit type: {orbit_type}")
+    transfer_plot(state_vectors, show=True, c='black',
+                  title=f'Transfer time: {tof/60:.0f} minutes ({orbit_type})')

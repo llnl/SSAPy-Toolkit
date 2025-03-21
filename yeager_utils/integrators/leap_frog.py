@@ -3,7 +3,7 @@ from ..accelerations import accel_point_earth
 from ..time import to_gps
 
 
-def leapfrog_integrate(r0, v0, t, dt=1, accel=accel_point_earth):
+def leapfrog(r0, v0, t, accel=accel_point_earth):
     """
     Integrate equations of motion using Leapfrog (velocity Verlet) method.
 
@@ -21,6 +21,8 @@ def leapfrog_integrate(r0, v0, t, dt=1, accel=accel_point_earth):
     """
 
     t = to_gps(t)
+
+    dt = t[1] - t[0]
 
     n_steps = len(t)
     r = np.zeros((n_steps, 3))

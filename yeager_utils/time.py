@@ -170,7 +170,7 @@ def dd_to_hms(degree_decimal: float) -> str:
     return f'{int(_h)}:{int(_m)}:{_s}'
 
 
-def get_times(duration: Tuple[int, str], freq: Tuple[int, str], t0: Union[str, Time] = "2025-01-01") -> np.ndarray:
+def get_times(duration: Tuple[int, str], freq: Tuple[int, str] = (1, 's'), t0: Union[str, Time] = "2025-01-01") -> np.ndarray:
     """
     Calculate a list of times spaced equally apart over a specified duration.
 

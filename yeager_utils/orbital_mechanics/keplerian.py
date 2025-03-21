@@ -10,6 +10,13 @@ import numpy as np
 from typing import Union
 
 
+def hkoe(a, e, i, ap, raan, nu):
+    """
+    Human readable KOE to SSAPy readable
+    """
+    return a, e, np.radians(i), np.radians(ap), np.radians(raan), np.radians(nu)
+
+
 def get_chance_radius(v: np.ndarray, time_step: float) -> float:
     """
     Calculate the chance radius based on the velocity vector.
@@ -34,7 +41,7 @@ def get_chance_radius(v: np.ndarray, time_step: float) -> float:
 
 
 
-def orbital_period(a: Union[float, np.ndarray], mu_barycenter: float = 3.986004418e14) -> Union[float, np.ndarray]:
+def period(a: Union[float, np.ndarray], mu_barycenter: float = EARTH_MU) -> Union[float, np.ndarray]:
     """
     Calculate the orbital period from the semi-major axis (a) using Kepler's third law.
 
@@ -47,11 +54,11 @@ def orbital_period(a: Union[float, np.ndarray], mu_barycenter: float = 3.9860044
       parameter in m^3/s^2).
 
     Returns:
-    - A float or numpy array representing the orbital period(s) in days.
+    - A float or numpy array representing the orbital period(s) in seconds.
 
     Author: Travis Yeager (yaeger7@llnl.gov)
     """
-    period_seconds = np.sqrt(4 * np.pi**2 / mu_barycenter * a**3) / 86400  # Convert seconds to days
+    period_seconds = np.sqrt(4 * np.pi**2 / mu_barycenter * a**3)
     return period_seconds
 
 
@@ -269,7 +276,7 @@ def j2000_orbitals(planet='earth', Teph=2451545.0):  # date input is in jd
     return {'a': a, 'e': e, 'i': deg90to90(i), 'mean_longitude': deg0to360(mean_longitude), 'longitude_of_perihelion': deg0to360(longitude_of_perihelion), 'longitude_of_the_ascending_node': deg0to360(longitude_of_the_ascending_node)}
 
 
-def kepler_to_state(a=1, e=0, i=0, raan=0, w=0, nu=0, mu=3.986004418e14):
+def kepler_to_state(a=1, e=0, i=0, ap=0, raan=0, nu=0, mu=EARTH_MU):
     """
     Converts Keplerian orbital elements to state vectors using NumPy broadcasting.
     If any inputs are invalid (e.g., NaN or out-of-range values), the corresponding output is replaced 
@@ -285,7 +292,7 @@ def kepler_to_state(a=1, e=0, i=0, raan=0, w=0, nu=0, mu=3.986004418e14):
         Inclination (rad). Must be in the range [0, π]. Can be a single value or an array of values.
     raan : float or array-like
         Right ascension of the ascending node (rad). Must be in the range [0, 2π]. Can be a single value or an array of values.
-    w : float or array-like
+    ap : float or array-like
         Argument of perigee (rad). Must be in the range [0, 2π]. Can be a single value or an array of values.
     nu : float or array-like
         True anomaly (rad). Must be in the range [0, 2π]. Can be a single value or an array of values.
@@ -322,7 +329,7 @@ def kepler_to_state(a=1, e=0, i=0, raan=0, w=0, nu=0, mu=3.986004418e14):
     e = np.atleast_1d(e)
     i = np.atleast_1d(i)
     raan = np.atleast_1d(raan)
-    w = np.atleast_1d(w)
+    ap = np.atleast_1d(ap)
     nu = np.atleast_1d(nu)
 
     # Validate inputs
@@ -340,8 +347,8 @@ def kepler_to_state(a=1, e=0, i=0, raan=0, w=0, nu=0, mu=3.986004418e14):
     # Precompute trigonometric terms
     cos_raan = np.cos(raan)
     sin_raan = np.sin(raan)
-    cos_w = np.cos(w)
-    sin_w = np.sin(w)
+    cos_w = np.cos(ap)
+    sin_w = np.sin(ap)
     cos_i = np.cos(i)
     sin_i = np.sin(i)
 
@@ -395,7 +402,7 @@ def kepler_to_state(a=1, e=0, i=0, raan=0, w=0, nu=0, mu=3.986004418e14):
     return r, v
 
 
-def kepler_to_state_loop(a=1, e=0, i=0, raan=0, w=0, nu=0, mu=EARTH_MU):
+def kepler_to_state_loop(a=1, e=0, i=0, ap=0, raan=0, nu=0, mu=EARTH_MU):
     """
     Converts Keplerian orbital elements to a state vector (position and velocity).
 
@@ -409,7 +416,7 @@ def kepler_to_state_loop(a=1, e=0, i=0, raan=0, w=0, nu=0, mu=EARTH_MU):
         Inclination (rad). Can be a single value or an array of values.
     raan : float or array-like
         Right ascension of the ascending node (rad). Can be a single value or an array of values.
-    w : float or array-like
+    ap : float or array-like
         Argument of perigee (rad). Can be a single value or an array of values.
     nu : float or array-like
         True anomaly (rad). Can be a single value or an array of values.
@@ -446,7 +453,7 @@ def kepler_to_state_loop(a=1, e=0, i=0, raan=0, w=0, nu=0, mu=EARTH_MU):
         e = np.array([e])
         i = np.array([i])
         raan = np.array([raan])
-        w = np.array([w])
+        ap = np.array([ap])
         nu = np.array([nu])
 
     # Check validity of inputs
@@ -459,7 +466,7 @@ def kepler_to_state_loop(a=1, e=0, i=0, raan=0, w=0, nu=0, mu=EARTH_MU):
     r_list = []
     v_list = []
 
-    for ai, ei, ii, raani, wi, nui in zip(a, e, i, raan, w, nu):
+    for ai, ei, ii, raani, wi, nui in zip(a, e, i, raan, ap, nu):
         # Compute the position vector in the perifocal frame
         r_pf = ai * (1 - ei**2) / (1 + ei * np.cos(nui)) * np.array([np.cos(nui), np.sin(nui), 0])
 
@@ -518,10 +525,10 @@ def state_to_kepler(r, v, mu=EARTH_MU):
             Eccentricity (dimensionless).
         - i : float or ndarray
             Inclination (rad).
+        - ap : float or ndarray
+            Argument of perigee (rad).
         - raan : float or ndarray
             Right ascension of the ascending node (rad).
-        - w : float or ndarray
-            Argument of perigee (rad).
         - nu : float or ndarray
             True anomaly (rad).
 
@@ -553,16 +560,20 @@ def state_to_kepler(r, v, mu=EARTH_MU):
     i = np.arccos(h[2] / np.linalg.norm(h))
 
     # Compute the right ascension of the ascending node
-    if h[0] >= 0:
-        raan = np.arccos(h[0] / np.linalg.norm(h[:2]))
+    h_xy_norm = np.linalg.norm(h[:2])
+    if h_xy_norm < 1e-10:  # Tolerance for equatorial orbit
+        raan = 0  # RAAN is undefined, set to 0
     else:
-        raan = 2 * np.pi - np.arccos(h[0] / np.linalg.norm(h[:2]))
+        if h[0] >= 0:
+            raan = np.arccos(h[0] / h_xy_norm)
+        else:
+            raan = 2 * np.pi - np.arccos(h[0] / h_xy_norm)
 
     # Compute the argument of perigee
     if e_vec[2] >= 0:
-        w = np.arccos(np.dot(h, e_vec) / (np.linalg.norm(h) * e))
+        ap = np.arccos(np.dot(h, e_vec) / (np.linalg.norm(h) * e))
     else:
-        w = 2 * np.pi - np.arccos(np.dot(h, e_vec) / (np.linalg.norm(h) * e))
+        ap = 2 * np.pi - np.arccos(np.dot(h, e_vec) / (np.linalg.norm(h) * e))
 
     # Compute the true anomaly
     if np.dot(r, v) >= 0:
@@ -570,14 +581,14 @@ def state_to_kepler(r, v, mu=EARTH_MU):
     else:
         nu = 2 * np.pi - np.arccos(np.dot(e_vec, r) / (e * np.linalg.norm(r)))
 
-    return a, e, i, raan, w, nu
+    return a, e, i, ap, raan, nu
 
 
-def kepler_to_parametric(a, e, i, omega, w, theta):
+def kepler_to_parametric(a, e, i, omega, ap, theta):
     # Convert to radians
     i = np.radians(i)
     omega = np.radians(omega)
-    w = np.radians(w)
+    ap = np.radians(ap)
     theta = np.radians(theta)
 
     # Compute the semi-major and semi-minor axes
@@ -597,7 +608,7 @@ def kepler_to_parametric(a, e, i, omega, w, theta):
     z_prime_prime = z_prime
 
     # Translate the ellipse
-    x_final = x_prime_prime + w
+    x_final = x_prime_prime + ap
     y_final = y_prime_prime
     z_final = z_prime_prime
     return x_final, y_final, z_final
@@ -624,21 +635,21 @@ def calculate_orbital_elements(r_, v_, mu_barycenter=EARTH_MU):
     -------
     dict
         A dictionary containing the following orbital elements:
-        - 'a' : list of float
+        - 'a' : nd.array of float
             Semi-major axis (m).
-        - 'e' : list of float
+        - 'e' : nd.array of float
             Eccentricity (dimensionless).
-        - 'i' : list of float
+        - 'i' : nd.array of float
             Inclination (rad).
-        - 'tl' : list of float
+        - 'tl' : nd.array of float
             True longitude (rad).
-        - 'ap' : list of float
+        - 'ap' : nd.array of float
             Argument of periapsis (rad).
-        - 'raan' : list of float
+        - 'raan' : nd.array of float
             Longitude of ascending node (rad).
-        - 'ta' : list of float
+        - 'ta' : nd.array of float
             True anomaly (rad).
-        - 'L' : list of float
+        - 'L' : nd.array of float
             Specific angular momentum magnitude (m^2/s).
 
     Notes
@@ -705,14 +716,14 @@ def calculate_orbital_elements(r_, v_, mu_barycenter=EARTH_MU):
         true_anomalyarr.append(true_anomaly)
         hmagarr.append(hmag)
     return {
-        'a': aarr,
-        'e': earr,
-        'i': incarr,
-        'tl': true_longitudearr,
-        'ap': argument_of_periapsisarr,
-        'raan': longitude_of_ascending_nodearr,
-        'ta': true_anomalyarr,
-        'L': hmagarr
+        'a': np.array(aarr),
+        'e': np.array(earr),
+        'i': np.array(incarr),
+        'tl': np.array(true_longitudearr),
+        'ap': np.array(argument_of_periapsisarr),
+        'raan': np.array(longitude_of_ascending_nodearr),
+        'ta': np.array(true_anomalyarr),
+        'L': np.array(hmagarr)
     }
 
 

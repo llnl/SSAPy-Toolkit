@@ -1,26 +1,62 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from yeager_utils import EARTH_RADIUS, EARTH_MU, launch_pads, Time, TimeDelta
+from yeager_utils import EARTH_RADIUS, launch_pads, Time, get_times, load_earth_file, save_plot, groundTrack, mkdir
 import ssapy
-from PIL import Image
+from matplotlib.patches import Circle
 
-# Simulation start time and launch pad selection.
-time_of_launch = Time("2025-1-1")
+time_of_launch = Time("2025-3-21")
 pad_name = "Kennedy Space Center LC-39A"
-G0 = 9.81
 
-# Falcon 9–like first stage parameters.
-ROCKET = {
-    "m0": 549054.0,      # Initial mass at liftoff (kg)
-    "m_fuel": 518800.0,  # Fuel mass (kg) [m0 minus dry mass]
-    "thrust": 7.6e6,     # Sea–level thrust (N)
-    "Isp": 282.0,        # Sea–level specific impulse (s)
-    "burn_time": 280.0,  # Burn time of the first stage (s)
-    "dt": 0.1,           # Time step for integration (s)
-}
-ROCKET["ve"] = ROCKET["Isp"] * G0
-ROCKET["mdot"] = ROCKET["thrust"] / ROCKET["ve"]
-ROCKET["t_max"] = min(ROCKET["burn_time"], ROCKET["m_fuel"] / ROCKET["mdot"])
+
+def groundTrackPlot(r, time, launch_pads, save_path=False):
+    if isinstance(r, np.ndarray):
+        r = [r]
+    if isinstance(time, np.ndarray):
+        if isinstance(time, list):
+            time_list = time
+        else:
+            time_list = []
+            for _ in r:
+                time_list.append(time)
+    else:
+        time_list = [time]
+
+    fig = plt.figure(figsize=(15, 12))
+    plt.imshow(load_earth_file(), extent=[-180, 180, -90, 90])
+
+    standard_colors = ['C0', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9']
+
+    for i, orbit in enumerate(r):
+        if len(r) <= len(standard_colors):
+            print(len(r), len(standard_colors))
+            color = standard_colors[i]
+        else:
+            color = plt.cm.rainbow(i / len(r))
+
+        lon, lat, height = groundTrack(orbit, time_list[i])
+
+        lon_deg = np.degrees(lon)
+        lat_deg = np.degrees(lat)
+        discont_indices = np.where(np.abs(np.diff(lon_deg)) > 179)[0]
+
+        segments = np.split(np.arange(len(lon_deg)), discont_indices + 1)
+
+        for j, segment in enumerate(segments):
+            plt.plot(lon_deg[segment], lat_deg[segment], linewidth=8, color=color, label=f"Launch Stage {i+1}" if j == 0 else "")
+
+    for launch_pad in launch_pads:
+        plt.scatter(launch_pad[1], launch_pad[0], s=50, color='Red', label=pad_name)
+
+    plt.ylim(-90, 90)
+    plt.xlim(-180, 180)
+    plt.xlabel("Longitude [deg]", fontsize=24)
+    plt.ylabel("Latitude [deg]", fontsize=24)
+    plt.tick_params(axis='both', labelsize=20)
+    plt.legend(fontsize=14)
+    plt.show()
+
+    if save_path:
+        save_plot(fig, save_path)  # Save ground track plot
 
 
 def launchpad_positions():
@@ -34,94 +70,77 @@ def launchpad_positions():
     return np.array(positions)
 
 
-def simulate_trajectory(state0, time_of_launch, max_time=1000.0):
-    t = 0.0
-    states = [state0]
-    times = [time_of_launch]
-    dt = ROCKET["dt"]
-    dt_astropy = TimeDelta(dt, format="sec")
-    while t < max_time:
-        state_new = rk4_step(states[-1], t, dt)
-        # Stop simulation if the rocket would hit Earth.
-        if np.linalg.norm(state_new[:3]) < EARTH_RADIUS:
-            break
-        states.append(state_new)
-        times.append(times[-1] + dt_astropy)
-        t += dt
-    states = np.array(states)
-    r = states[:, :3]
-    v = states[:, 3:6]
-    t_arr = np.array(times)
-    return r, v, t_arr
+def simulate_launch(pad_name="Kennedy Space Center LC-39A", time_of_launch=Time("2025-1-1"), save_path="/g/g16/yeager7/workdir/yeager_utils/demos/images/launches/"):
+    mkdir(save_path)
+    ROCKET = {
+        "name": 'Falcon 9',         # Name of the rocket
+        "m0": 549054.0,            # Initial mass at liftoff (kg)
+        "m_fuel": 518800.0,        # Fuel mass (kg) [m0 minus dry mass]
+        "thrust": 7.6e6,           # Sea-level thrust (N)
+        "Isp": 282.0,              # Sea-level specific impulse (s)
+        "burn_time": 1200,         # Burn time of the first stage (s)
+        "dt": 1.0,                 # Time step for integration (s)
+    }
+    ROCKET["ve"] = ROCKET["Isp"] * 9.81
+    ROCKET["mdot"] = ROCKET["thrust"] / ROCKET["ve"]
+    ROCKET["t_max"] = ROCKET["burn_time"]
+
+    times = get_times(duration=(ROCKET["burn_time"], 's'), freq=(ROCKET["dt"], 's'), t0=time_of_launch).gps
+
+    lat, lon = launch_pads[pad_name]["latitude"], launch_pads[pad_name]["longitude"]
+
+    observer = ssapy.EarthObserver(lon=lon, lat=lat, fast=False)
+    r_launch, v_launch = observer.getRV(times[0])
+
+    earth = ssapy.get_body("earth", model='egm2008')
+    aEarth = ssapy.AccelKepler() + ssapy.AccelHarmonic(earth, 140, 140)
+
+    m_f = ROCKET["m0"] - ROCKET["m_fuel"]
+    delta_v = ROCKET["ve"] * np.log(ROCKET["m0"] / m_f)
+    a_avg = delta_v / ROCKET["t_max"] + 10
+
+    print(f'Burn time {ROCKET["t_max"]}, delta V: {delta_v}, a_avg: {a_avg}')
+    burn1 = ssapy.AccelConstNTW(
+        accelntw=[40, 0, 0.0],
+        time_breakpoints=[times[0], times[0] + 600]
+    )
+    burn2 = ssapy.AccelConstNTW(
+        accelntw=[20, 20, 0.0],
+        time_breakpoints=[times[0] + 600, times[0] + 1200]
+    )
+    accel = aEarth + burn1 + burn2
+
+    r, v = ssapy.rv(ssapy.Orbit(r=r_launch, v=v_launch, t=times[0]), time=times, propagator=ssapy.RK8Propagator(accel, h=1))
+
+    if save_path is not False:
+        groundTrackPlot(r, Time(times, format='gps'), launch_pads=[(lat, lon),], save_path=f"{save_path}ground_track.png")
+
+        fig, ax = plt.subplots(figsize=(7, 7))
+        ax.plot(r[:, 0] / 1000, r[:, 1] / 1000, label="Rocket Path", c="Green", linewidth=10)
+        ax.add_patch(Circle((0, 0), radius=EARTH_RADIUS / 1000, color='Blue', alpha=0.5, label="Earth"))
+        ax.set_xlabel("X Position (km)")
+        ax.set_ylabel("Y Position (km)")
+        ax.set_title("Rocket Trajectory")
+        ax.legend(loc='upper left')
+        plt.axis('equal')
+        plt.show()
+        save_plot(fig, f"{save_path}rocket_trajectory.png")  # Save trajectory plot
+
+        fig, ax1 = plt.subplots(figsize=(7, 6))
+        ax1.plot(times - times[0], (np.linalg.norm(r, axis=-1) - np.linalg.norm(r_launch, axis=-1)) / 1000, label="Altitude", color="blue")
+        ax1.set_xlabel("Time (s)")
+        ax1.set_ylabel("Altitude (km)", color="blue")
+        ax1.tick_params(axis='y', labelcolor="blue")
+        ax1.grid(True)
+        plt.show()
+        save_plot(fig, f"{save_path}altitude_vs_time.png")  # Save altitude plot
+
+    return {'r': r,
+            'v': v,
+            'altitude': (np.linalg.norm(r, axis=-1) - np.linalg.norm(r_launch, axis=-1)),
+            'time': Time(times, format='gps'),
+            'seconds': times - times[0]
+            }
 
 
-# Compute initial conditions at the chosen launch pad.
-lat, lon = np.deg2rad(launch_pads[pad_name]["latitude"]), np.deg2rad(
-    launch_pads[pad_name]["longitude"]
-)
-
-observer = ssapy.Orbit.EarthObserver(lon=lon, lat=lat)  # Example: 75°W, 40°N
-r_launch, v_launch = observer.getRV(time_of_launch)
-
-state0 = np.concatenate((r_launch, v_launch, [ROCKET["m0"]]))
-
-r, v, t_arr = simulate_trajectory(state0, time_of_launch, max_time=1000.0)
-altitude = np.linalg.norm(r, axis=1) - EARTH_RADIUS
-
-# Plot altitude vs. time.
-plt.figure(figsize=(7, 6))
-plt.plot(np.arange(len(r)) * ROCKET["dt"], altitude / 1000, label="Altitude")
-plt.xlabel("Time (s)")
-plt.ylabel("Altitude (km)")
-plt.title("Altitude vs Time")
-plt.legend()
-plt.grid(True)
-plt.show()
-
-# 3D plot of the trajectory.
-fig = plt.figure(figsize=(10, 8))
-ax = fig.add_subplot(111, projection="3d")
-earth_png = Image.open(ssapy.utils.find_file("earth", ext=".png"))
-earth_png = earth_png.resize((5400 // 5, 2700 // 5))
-bm = np.array(earth_png) / 256.0
-lons = np.linspace(-180, 180, bm.shape[1]) * np.pi / 180
-lats = np.linspace(-90, 90, bm.shape[0])[::-1] * np.pi / 180
-shrink = 1.0
-mesh_x = np.outer(np.cos(lons), np.cos(lats)).T * EARTH_RADIUS / 1e3 * shrink
-mesh_y = np.outer(np.sin(lons), np.cos(lats)).T * EARTH_RADIUS / 1e3 * shrink
-mesh_z = np.outer(np.ones(np.size(lons)), np.sin(lats)).T * EARTH_RADIUS / 1e3 * shrink
-ax.plot_surface(mesh_x, mesh_y, mesh_z, rstride=4, cstride=4,
-                facecolors=bm, shade=False)
-
-# Plot launch pad positions.
-launch_positions = launchpad_positions()
-launch_positions_km = launch_positions / 1e3
-for i, pos in enumerate(launch_positions_km):
-    ax.scatter(pos[0], pos[1], pos[2], c="red", s=100,
-               label="Launch Pads" if i == 0 else "")
-# Plot the rocket trajectory.
-ax.scatter(r[:, 0] / 1e3, r[:, 1] / 1e3, r[:, 2] / 1e3, c="yellow", s=10,
-           label="Rocket Path")
-ax.set_xlabel("X (km)")
-ax.set_ylabel("Y (km)")
-ax.set_zlabel("Z (km)")
-ax.set_title("Rocket Trajectory in ITRF")
-ax.legend()
-ax.set_box_aspect([1, 1, 1])  # For an equal aspect ratio
-
-# Compute final orbit parameters.
-r_final, v_final = r[-1], v[-1]
-r_mag, v_mag = np.linalg.norm(r_final), np.linalg.norm(v_final)
-energy = v_mag**2 / 2 - EARTH_MU / r_mag
-a = -EARTH_MU / (2 * energy)
-h_vec = np.cross(r_final, v_final)
-h = np.linalg.norm(h_vec)
-e = np.sqrt(1 + (2 * energy * h**2) / EARTH_MU**2)
-perigee = a * (1 - e)
-perigee_altitude = perigee - EARTH_RADIUS
-
-print(f"Final Altitude: {altitude[-1] / 1000:.2f} km")
-print(f"Final Speed: {v_mag / 1000:.2f} km/s")
-print(f"Semi-major axis: {a / 1000:.2f} km")
-print(f"Eccentricity: {e:.3f}")
-print(f"Perigee Altitude: {perigee_altitude / 1000:.2f} km")
+info = simulate_launch(pad_name, time_of_launch)
