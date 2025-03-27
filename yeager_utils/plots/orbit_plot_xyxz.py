@@ -1,7 +1,6 @@
 from ..constants import RGEO, EARTH_RADIUS, MOON_RADIUS
 from ..coordinates import gcrf_to_itrf, gcrf_to_lunar, gcrf_to_lunar_fixed
 from .plotutils import check_numpy_array, check_type, save_plot
-from ..orbital_mechanics import lagrange_points_lunar_frame, lagrange_points_lunar_fixed_frame
 from ..time import Time
 from ..compute import find_smallest_bounding_cube
 from ssapy import get_body
@@ -59,6 +58,8 @@ def orbit_plot_xyxz(r, t=None, title='', figsize=(7, 7), save_path=False, frame=
     -------
     Travis Yeager (yeager7@llnl.gov)
     """
+    from ..orbital_mechanics import lagrange_points_lunar_frame, lagrange_points_lunar_fixed_frame
+
     input_type = check_numpy_array(r)
     t_type = check_type(t)
 

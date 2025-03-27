@@ -13,7 +13,6 @@ from ssapy import get_body
 from ..coordinates import gcrf_to_lunar_fixed
 from ..constants import RGEO, EARTH_RADIUS, MOON_RADIUS
 from ..compute import find_smallest_bounding_cube
-from ..orbital_mechanics import lagrange_points_lunar_fixed_frame
 from .plotutils import save_plot
 
 
@@ -36,6 +35,8 @@ class GradientLineHandler(HandlerBase):
 
 
 def cislunar_plot_xy(r, t=None, figsize=(8, 8), fontsize=12, save_path=False, show=False, title=None, c='black'):
+    from ..orbital_mechanics import lagrange_points_lunar_fixed_frame
+
     input_type = check_numpy_array(r)
     t_type = check_type(t)
     if title is None:

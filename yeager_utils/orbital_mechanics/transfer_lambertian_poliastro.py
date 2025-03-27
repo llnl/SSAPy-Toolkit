@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 
 
-def lambertian_transfer(elements1, elements2, t0=Time("2025-1-1", scale='utc'), mu=EARTH_MU, plot=False):
+def transfer_lambertian_poliastro(elements1, elements2, t0=Time("2025-1-1", scale='utc'), mu=EARTH_MU, plot=False):
     """
     Computes a general Lambertian transfer between two orbits with the shortest time of flight.
 

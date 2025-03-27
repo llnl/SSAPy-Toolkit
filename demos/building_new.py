@@ -1,139 +1,127 @@
 import numpy as np
-from ssapy import rv, Orbit, SciPyPropagator, AccelKepler
-from yeager_utils import hkoe, RGEO, get_times, Time, transfer_plot
+import matplotlib.pyplot as plt
+
+# Constants
+MU_EARTH = 398600  # Gravitational parameter for Earth (km^3/s^2)
+EARTH_RADIUS = 6371  # Earth's radius (km)
 
 
-def transfer_shooter(r1, v1, r2, v2, tol=1, max_iter=50, show=False, status=False):
+def calculate_finite_burn_acceleration(delta_v, t_impulsive, a_magnitude):
     """
-    Finds an initial delta-v that will lead to a transfer orbit with an arrival position
-    within tol (in meters) of the target position r2.
+    Calculate the acceleration to approximate an instantaneous orbital transfer with a finite burn.
 
-    This function uses a finite-difference Newton shooting method. At each iteration, the error
-    vector is defined as F(delta_v) = r_arrival(delta_v) - r2, where r_arrival is the position
-    at the time of closest approach. The Jacobian dF/d(delta_v) is approximated via finite differences,
-    and a Newton update is computed.
+    Parameters:
+    - delta_v: np.array, shape (3,), impulsive delta-v vector in inertial frame (m/s)
+    - t_impulsive: float, time of the impulsive burn (s)
+    - a_magnitude: float, constant acceleration magnitude from specific thrust (m/s^2)
 
-    Parameters
-    ----------
-    r1, v1 : array_like
-        Initial position and velocity vectors.
-    r2, v2 : array_like
-        Target position and velocity vectors.
-    tol : float, optional
-        Tolerance (in meters) for the arrival position error. Default is 1.
-    max_iter : int, optional
-        Maximum number of iterations for the Newton method.
-    status : bool, optional
-        If True, prints iteration details.
-
-    Returns
-    -------
-    r_transfer, v_transfer : array_like
-        Propagated transfer orbit states (position and velocity arrays) for the final guess.
-
-    Author: Travis Yeager (yeager7@llnl.gov)
+    Returns:
+    - a_vector: np.array, shape (3,), constant acceleration vector (m/s^2)
+    - t_burn: float, duration of the burn (s)
+    - t_start: float, start time of the burn (s)
+    - t_end: float, end time of the burn (s)
     """
-    t0 = Time("2025-1-1")
-    delta_v = np.zeros(3)
-    eps = 1e-6  # finite difference step
+    # Compute the magnitude of delta-v
+    dv_norm = np.linalg.norm(delta_v)
+    if dv_norm == 0:
+        raise ValueError("Delta-v is zero; no burn is required.")
 
-    def propagate(delta_v_in):
-        """Propagate orbit with current delta_v and return arrival position and velocity."""
-        v_transfer = v1 + delta_v_in
-        orbit_transfer = Orbit(r=r1, v=v_transfer, t=t0)
-        # Use the period of orbit1 to set a propagation duration.
-        try:
-            period = orbit_transfer.period
-            if np.isinf(period) or period > 1e7:
-                # fall back on a reasonable period
-                period = 2 * 3600  # 2 hours, for example
-            times = get_times(duration=(period, 's'), freq=(1, 's'), t0=t0)
-        except OverflowError:
-            period = 2 * 3600
-            times = get_times(duration=(period, 's'), freq=(1, 's'), t0=t0)
-        try:
-            r_traj, v_traj = rv(orbit_transfer, time=times)
-        except RuntimeError:
-            r_traj, v_traj = rv(orbit_transfer, time=times, propagator=SciPyPropagator(AccelKepler()))
-        # Find the time of closest approach to r2
-        distances = np.linalg.norm(r_traj - r2, axis=1)
-        idx_min = np.argmin(distances)
-        return r_traj[idx_min], v_traj[idx_min], times[idx_min]
+    # Direction of acceleration is the same as delta-v
+    direction = delta_v / dv_norm
+    a_vector = a_magnitude * direction
 
-    # Initial propagation and error
-    r_arrival, v_arrival, t_arrival = propagate(delta_v)
-    error = r_arrival - r2
+    # Burn duration to achieve the required delta-v
+    t_burn = dv_norm / a_magnitude
 
-    for it in range(max_iter):
-        error_norm = np.linalg.norm(error)
-        if status:
-            print(f"Iteration {it}: Error norm = {error_norm:.6f} m")
-        if error_norm < tol:
-            break
+    # Center the burn around the impulsive burn time
+    t_start = t_impulsive - t_burn / 2
+    t_end = t_impulsive + t_burn / 2
 
-        # Compute Jacobian J ~ dF/d(delta_v) using finite differences.
-        J = np.zeros((3, 3))
-        for i in range(3):
-            delta = np.zeros(3)
-            delta[i] = eps
-            r_arrival_pert, _, _ = propagate(delta_v + delta)
-            F_pert = r_arrival_pert - r2
-            J[:, i] = (F_pert - error) / eps
-
-        # Solve for the update: J * delta = -error
-        try:
-            delta_update = np.linalg.solve(J, -error)
-        except np.linalg.LinAlgError:
-            if status:
-                print("Jacobian is singular. Exiting iteration.")
-            break
-
-        # Update delta_v
-        delta_v = delta_v + delta_update
-        # Recompute error
-        r_arrival, v_arrival, t_arrival = propagate(delta_v)
-        error = r_arrival - r2
-
-    else:
-        if status:
-            print("Maximum iterations reached without meeting tolerance.")
-
-    # Compute final transfer orbit using the converged delta_v
-    v_transfer_initial = v1 + delta_v
-    orbit_transfer = Orbit(r=r1, v=v_transfer_initial, t=t0)
-    try:
-        period = orbit_transfer.period
-        if np.isinf(period) or period > 1e7:
-            period = 2 * 3600
-        times = get_times(duration=(period, 's'), freq=(1, 's'), t0=t0)
-    except OverflowError:
-        period = 2 * 3600
-        times = get_times(duration=(period, 's'), freq=(1, 's'), t0=t0)
-    try:
-        r_transfer, v_transfer = rv(orbit_transfer, time=times)
-    except RuntimeError:
-        r_transfer, v_transfer = rv(orbit_transfer, time=times, propagator=SciPyPropagator(AccelKepler()))
-
-    if status:
-        final_error = np.linalg.norm(r_arrival - r2)
-        print("Converged:")
-        print(f"Final delta_v = {delta_v} m/s")
-        print(f"Final arrival error = {final_error:.6f} m at time {t_arrival.gps - times[0].gps:.0f} s after t0")
-        print(f"Arrival velocity = {v_arrival} m/s")
-        arrival_delta_v = v2 - v_arrival
-        print(f"Required correction at arrival = {arrival_delta_v} m/s")
-
-    if show:
-        transfer_plot(r1, v1, r_transfer[0], v_transfer[0], r2, v2, show=show)
-
-    return r_transfer, v_transfer
+    return a_vector, t_burn, t_start, t_end
 
 
-if __name__ == '__main__':
-    t0 = Time("2025-1-1")
-    orbit1 = Orbit.fromKeplerianElements(*hkoe(1 * RGEO, 0.0, 0, 0, 0, 0), t=t0)
-    r1, v1 = orbit1.r, orbit1.v
-    orbit2 = Orbit.fromKeplerianElements(*hkoe(2 * RGEO, 0.0, 0, 0, 0, 90), t=t0)
-    r2, v2 = orbit2.r, orbit2.v
-    print(f"Running Newton shooting method for transfer from\n{r1, v1}\nto\n{r2, v2}\n")
-    transfer_shooter(r1, v1, r2, v2, tol=100, max_iter=50, show=True, status=True)
+def keplerian_acceleration(position):
+    """
+    Calculate the gravitational acceleration due to a central body (Keplerian acceleration).
+
+    Parameters:
+    - position: np.array, shape (3,), spacecraft position (m)
+
+    Returns:
+    - acceleration: np.array, shape (3,), gravitational acceleration (m/s^2)
+    """
+    r = np.linalg.norm(position)  # Distance from the center of Earth
+    direction = -position / r  # Unit vector pointing towards the center of Earth
+    a_gravity = -MU_EARTH / r**2  # Gravitational acceleration magnitude
+    return a_gravity * direction
+
+
+def leapfrog_integrator(position, velocity, a_magnitude, burn_vector, t_start, t_end, dt):
+    """
+    Propagate the spacecraft's position and velocity using the leapfrog integrator under both burn and Keplerian accelerations.
+
+    Parameters:
+    - position: np.array, shape (3,), initial position (m)
+    - velocity: np.array, shape (3,), initial velocity (m/s)
+    - a_magnitude: float, constant acceleration magnitude from the burn (m/s^2)
+    - burn_vector: np.array, shape (3,), direction of the constant burn acceleration (m/s^2)
+    - t_start: float, start time of the burn (s)
+    - t_end: float, end time of the burn (s)
+    - dt: float, time step (s)
+
+    Returns:
+    - positions: list of np.array, positions at each time step
+    - velocities: list of np.array, velocities at each time step
+    """
+    positions = [position]
+    velocities = [velocity]
+
+    # Half-step initial velocity
+    velocity += (a_magnitude * burn_vector) * dt / 2
+
+    t = 0.0
+    while t < t_end:
+        a_gravity = keplerian_acceleration(position)
+
+        position += velocity * dt
+        acceleration = a_gravity + a_magnitude * burn_vector
+        velocity += acceleration * dt
+
+        positions.append(position.copy())
+        velocities.append(velocity.copy())
+        t += dt
+
+    return np.array(positions), np.array(velocities)
+
+# Example usage
+if __name__ == "__main__":
+    # Example inputs
+    delta_v = np.array([300.0, -1000.0, 0.0])  # 100 m/s along x-axis
+    t_impulsive = 0.0  # Impulsive burn at t = 0 s
+    a_magnitude = 2.0  # Acceleration of 2 m/s^2
+
+    # Calculate the burn parameters
+    burn_vector, t_b, t_s, t_e = calculate_finite_burn_acceleration(delta_v, t_impulsive, a_magnitude)
+    print(f"Burn vector: {burn_vector} m/s^2")
+    print(f"Burn duration: {t_b} s")
+    print(f"Burn start time: {t_s} s")
+    print(f"Burn end time: {t_e} s")
+
+    # Define initial conditions for position and velocity (assuming a low Earth orbit)
+    initial_position = np.array([7000e3, 0.0, 0.0])  # Initial position (m)
+    initial_velocity = np.array([0.0, 7.5e3, 0.0])  # Initial velocity (m/s)
+
+    # Simulate the trajectory with the leapfrog integrator
+    dt = 1  # Time step (s)
+    positions, velocities = leapfrog_integrator(initial_position, initial_velocity, a_magnitude, burn_vector, t_s, t_e, dt)
+
+    # Plot the trajectory
+    plt.figure(figsize=(8, 6))
+    plt.plot(positions[:, 0], positions[:, 1], label='Trajectory in XY-plane')
+    plt.scatter([0], [0], color='red', label='Earth Center')  # Earth at the origin
+    plt.title('Spacecraft Trajectory Under Finite Burn Maneuver and Keplerian Acceleration')
+    plt.xlabel('X Position (m)')
+    plt.ylabel('Y Position (m)')
+    plt.legend()
+    plt.grid(True)
+    plt.show()

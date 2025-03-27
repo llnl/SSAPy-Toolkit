@@ -1,8 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from .plotutils import save_plot
 from ..constants import EARTH_MU, EARTH_RADIUS
-from ..orbital_mechanics import period, a_from_periap
+from .plotutils import save_plot
 from ..integrators import leapfrog
 from ssapy import Orbit
 
@@ -23,6 +22,8 @@ def orbit_plot_rv(state_vectors, colors=False, mu=EARTH_MU, show=True, c='black'
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
+    from ..orbital_mechanics import period, a_from_periap
+
     if c in ('black', 'b'):
         plotcolor = 'black'
         textcolor = 'white'

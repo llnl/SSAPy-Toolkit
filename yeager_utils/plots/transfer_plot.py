@@ -4,7 +4,6 @@ from mpl_toolkits.mplot3d import Axes3D  # noqa: F401; required for 3D projectio
 from matplotlib.lines import Line2D
 from .plotutils import save_plot
 from ..constants import EARTH_MU, EARTH_RADIUS
-from ..orbital_mechanics import period, a_from_periap
 from ..integrators import leapfrog
 from ssapy import Orbit
 
@@ -17,7 +16,7 @@ def find_intersection_time(r_start, v_start, r_ref, t_max, mu=EARTH_MU, tol=1e3)
     return idx  # Time index of closest approach
 
 
-def transfer_plot(r0, v0, rtransfer, vtransfer, rf, vf, mu=EARTH_MU, show=True, c='black',
+def transfer_plot(r0, v0, rtransfer, vtransfer, rf, vf, show=True, c='black',
                   figsize=(7, 7), save_path=False, title=''):
     """Plots a 3D orbital transfer with transfer orbit from departure to arrival.
 
@@ -28,7 +27,6 @@ def transfer_plot(r0, v0, rtransfer, vtransfer, rf, vf, mu=EARTH_MU, show=True, 
         vtransfer: Transfer orbit velocity vector (m/s, SI units)
         rf: Final position vector (m, SI units)
         vf: Final velocity vector (m/s, SI units)
-        mu: Gravitational parameter (default: Earth's, m^3/s^2)
         show: If True, display the plot
         c: Color theme ('black', 'b', 'white', 'w')
         figsize: Figure size (width, height)
@@ -37,6 +35,8 @@ def transfer_plot(r0, v0, rtransfer, vtransfer, rf, vf, mu=EARTH_MU, show=True, 
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
+    from ..orbital_mechanics import period, a_from_periap
+
     r0, v0 = np.array(r0), np.array(v0)
     rtransfer, vtransfer = np.array(rtransfer), np.array(vtransfer)
     rf, vf = np.array(rf), np.array(vf)
@@ -128,8 +128,7 @@ def transfer_plot(r0, v0, rtransfer, vtransfer, rf, vf, mu=EARTH_MU, show=True, 
         save_plot(fig, save_path)
     if show:
         plt.show()
-    else:
-        plt.close(fig)
+    return fig
 
 
 if __name__ == '__main__':

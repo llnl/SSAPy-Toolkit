@@ -5,7 +5,6 @@
 import numpy as np
 from ssapy.body import get_body
 from ..constants import RGEO, EARTH_MU, MOON_MU
-from ..orbital_mechanics import calculate_orbital_elements
 from ..time import Time
 from .plotutils import make_black, make_white, save_plot
 
@@ -59,6 +58,8 @@ def koe_plot(r: np.ndarray, v: np.ndarray, t: Optional[Time] = None,
     """
     
     # Calculate orbital elements for Earth or Moon
+    from ..orbital_mechanics import calculate_orbital_elements
+
     if 'earth' in body.lower():
         orbital_elements = calculate_orbital_elements(r, v, mu_barycenter=EARTH_MU)
     else:
