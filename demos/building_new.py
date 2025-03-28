@@ -1,10 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Constants
-MU_EARTH = 398600  # Gravitational parameter for Earth (km^3/s^2)
-EARTH_RADIUS = 6371  # Earth's radius (km)
-
 
 def calculate_finite_burn_acceleration(delta_v, t_impulsive, a_magnitude):
     """
@@ -50,9 +46,10 @@ def keplerian_acceleration(position):
     Returns:
     - acceleration: np.array, shape (3,), gravitational acceleration (m/s^2)
     """
+    from yeager_utils import EARTH_MU
     r = np.linalg.norm(position)  # Distance from the center of Earth
     direction = -position / r  # Unit vector pointing towards the center of Earth
-    a_gravity = -MU_EARTH / r**2  # Gravitational acceleration magnitude
+    a_gravity = -EARTH_MU / r**2  # Gravitational acceleration magnitude
     return a_gravity * direction
 
 
@@ -93,10 +90,11 @@ def leapfrog_integrator(position, velocity, a_magnitude, burn_vector, t_start, t
 
     return np.array(positions), np.array(velocities)
 
+
 # Example usage
 if __name__ == "__main__":
     # Example inputs
-    delta_v = np.array([300.0, -1000.0, 0.0])  # 100 m/s along x-axis
+    delta_v = np.array([-3000.0, -1000.0, 10000.0])  # 100 m/s along x-axis
     t_impulsive = 0.0  # Impulsive burn at t = 0 s
     a_magnitude = 2.0  # Acceleration of 2 m/s^2
 
@@ -117,7 +115,7 @@ if __name__ == "__main__":
 
     # Plot the trajectory
     plt.figure(figsize=(8, 6))
-    plt.plot(positions[:, 0], positions[:, 1], label='Trajectory in XY-plane')
+    plt.scatter(positions[:, 0], positions[:, 1], label='Trajectory in XY-plane')
     plt.scatter([0], [0], color='red', label='Earth Center')  # Earth at the origin
     plt.title('Spacecraft Trajectory Under Finite Burn Maneuver and Keplerian Acceleration')
     plt.xlabel('X Position (m)')
