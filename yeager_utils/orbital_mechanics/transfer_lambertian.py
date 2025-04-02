@@ -8,12 +8,13 @@ from ssapy import Orbit
 def find_intersection_time(r_start, v_start, r_ref, t_max):
     """Find trajectory and validate TOF for orbit from (r_start, v_start) to r_ref."""
     t_array = np.arange(0, t_max, 1)
-    r_orbit, _ = leapfrog(r_start, v_start, t=t_array)
+    r_orbit, v_orbit = leapfrog(r_start, v_start, t=t_array)
     distances = np.linalg.norm(r_orbit - r_ref, axis=1)
     idx = np.argmin(distances)
     tof = t_array[idx]
-    r_arc = r_orbit[:idx + 1]  # Trajectory from start to intersection
-    return tof, r_arc
+    r_transfer = r_orbit[:idx + 1]  # Trajectory from start to intersection
+    v_transfer = v_orbit[:idx + 1]
+    return tof, r_transfer, v_transfer
 
 
 def transfer_lambertian(*args, r1=None, v1=None, r2=None, v2=None, elements1=None, elements2=None, orbit1=None, orbit2=None, MIN_PERIGEE=EARTH_RADIUS + 100000, mu=EARTH_MU, plot=False):
@@ -165,10 +166,10 @@ def transfer_lambertian(*args, r1=None, v1=None, r2=None, v2=None, elements1=Non
     v1_t, v2_t, a, e, tof = lambert_velocity(tof)
     orbit_type = 'ellipse' if e < 1 else 'hyperbola'
     t_max = tof * 1.5  # Slightly larger than exact TOF for safety
-    _, r_arc = find_intersection_time(r1, v1_t, r2, t_max)
+    _, r_transfer, v_transfer = find_intersection_time(r1, v1_t, r2, t_max)
 
     # Check minimum radius along the transfer arc
-    r_mags = np.linalg.norm(r_arc, axis=1)
+    r_mags = np.linalg.norm(r_transfer, axis=1)
     min_radius = np.min(r_mags)
     if min_radius < MIN_PERIGEE:
         print(f"Transfer arc dips to {min_radius/1000:.0f} km < {MIN_PERIGEE/1000:.0f} km, adjusting TOF...")
@@ -176,8 +177,8 @@ def transfer_lambertian(*args, r1=None, v1=None, r2=None, v2=None, elements1=Non
         for tof_guess in sorted(tof_values):
             v1_t, v2_t, a, e, tof = lambert_velocity(tof_guess)
             t_max = tof * 1.5
-            _, r_arc = find_intersection_time(r1, v1_t, r2, t_max)
-            r_mags = np.linalg.norm(r_arc, axis=1)
+            _, r_transfer, v_transfer = find_intersection_time(r1, v1_t, r2, t_max)
+            r_mags = np.linalg.norm(r_transfer, axis=1)
             min_radius = np.min(r_mags)
             if min_radius >= MIN_PERIGEE:
                 print(f"Adjusted to min radius {min_radius/1000:.0f} km with TOF {tof/60:.0f} min")
@@ -189,7 +190,7 @@ def transfer_lambertian(*args, r1=None, v1=None, r2=None, v2=None, elements1=Non
     v1_t, v2_t, a, e, tof = lambert_velocity(tof)
     orbit_type = 'ellipse' if e < 1 else 'hyperbola'
     t_max = tof * 1.5
-    _, r_arc = find_intersection_time(r1, v1_t, r2, t_max)
+    _, r_transfer, v_transfer = find_intersection_time(r1, v1_t, r2, t_max)
 
     delta_v1 = v1_t - v1
     delta_v2 = v2 - v2_t
@@ -201,10 +202,11 @@ def transfer_lambertian(*args, r1=None, v1=None, r2=None, v2=None, elements1=Non
         '|delta_v2|': np.linalg.norm(delta_v2),
         'delta_v1': delta_v1,
         'delta_v2': delta_v2,
+        'r_transfer': r_transfer,
+        'v_transfer': v_transfer,
         'tof': tof,
         't_to_transfer': 0,
         'orbit_type': orbit_type,
-        'r_arc': r_arc
     }
 
     if plot:
