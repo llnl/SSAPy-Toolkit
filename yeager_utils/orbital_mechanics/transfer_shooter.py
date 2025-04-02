@@ -217,7 +217,7 @@ def transfer_shooter(*args, r1=None, v1=None, r2=None, v2=None, orbit1=None, orb
 
     if plot:
         from ..plots import transfer_plot
-        fig = transfer_plot(r1, v1, r_transfer, v_transfer, r2, v2, title=f"Transfer time: {result['tof'] / 60:.0f} min\n|Δv₁| {np.linalg.norm(delta_v) / 1e3:.3f}, |Δv₂| {np.linalg.norm(v2 - v_transfer[closest_idx]) / 1e3:.3f} km/s", show=True)
+        fig = transfer_plot(r1, v1, r_transfer, v_transfer, r2, v2, title=f"Transfer time: {result['tof'] / 60:.0f} min\n|Δv₁| {np.linalg.norm(delta_v) / 1e3:.3f}, |Δv₂| {np.linalg.norm(v2 - v_transfer[closest_idx]) / 1e3:.3f} km/s", show=False)
         result['fig'] = fig
 
     return result

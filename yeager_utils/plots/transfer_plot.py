@@ -16,7 +16,7 @@ def find_intersection_time(r_start, v_start, r_ref, t_max):
     return idx  # Time index of closest approach
 
 
-def transfer_plot(r0, v0, rtransfer, vtransfer, rf, vf, show=True, c='black',
+def transfer_plot(r0, v0, rtransfer, vtransfer, rf, vf, show=False, c='black',
                   figsize=(7, 7), save_path=False, title=''):
     """Plots a 3D orbital transfer with transfer orbit from departure to arrival.
 

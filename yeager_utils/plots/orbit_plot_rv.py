@@ -45,7 +45,7 @@ def orbit_plot_rv(state_vectors, colors=False, mu=EARTH_MU, show=True, c='black'
 
     # Create figure
     earth_radius_km = EARTH_RADIUS / 1000.0
-    fig = plt.figure(dpi=100, figsize=figsize, facecolor=plotcolor)
+    fig = plt.figure(dpi=300, figsize=figsize, facecolor=plotcolor)
     ax = fig.add_subplot(111, projection='3d')
     ax.set_facecolor(plotcolor)
 
