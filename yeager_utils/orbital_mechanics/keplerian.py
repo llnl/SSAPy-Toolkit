@@ -10,11 +10,58 @@ import numpy as np
 from typing import Union
 
 
-def hkoe(a, e, i, ap, raan, nu):
+import numpy as np
+
+def hkoe(kElements_or_a, e=None, i=None, ap=None, raan=None, nu=None):
     """
-    Human readable KOE to SSAPy readable
+    Convert human-readable Keplerian Orbital Elements (KOE) to SSAPy-readable format.
+    
+    Parameters:
+    -----------
+    kElements_or_a : list, array, or float
+        If a 6-element iterable [a, e, i, ap, raan, nu], it’s treated as the full set of elements.
+        If a float, it’s treated as the semimajor axis (a), followed by 5 more positional arguments.
+        Elements are:
+        - a: semimajor axis (units depend on SSAPy, e.g., meters)
+        - e: eccentricity (unitless)
+        - i: inclination (degrees)
+        - ap: argument of periapsis (degrees)
+        - raan: right ascension of ascending node (degrees)
+        - nu: true anomaly (degrees)
+    e, i, ap, raan, nu : float, optional
+        Remaining elements if 6 positional arguments are provided (degrees for angles).
+    
+    Returns:
+    --------
+    numpy.ndarray
+        Array of [a, e, i_rad, ap_rad, raan_rad, nu_rad] with angles in radians.
+        Can be unpacked into individual variables or used as a single array.
+    
+    Raises:
+    -------
+    ValueError
+        If arguments don’t match expected patterns (6-element iterable or 6 positional args).
+    
+    Author:
+    ------
+    Travis Yeager (yeager7@llnl.gov)
     """
-    return a, e, np.radians(i), np.radians(ap), np.radians(raan), np.radians(nu)
+    # Case 1: Single 6-element iterable provided
+    if hasattr(kElements_or_a, '__iter__') and not isinstance(kElements_or_a, (str, bytes)):
+        if len(kElements_or_a) != 6:
+            raise ValueError("kElements must be a 6-element iterable")
+        a, e, i, ap, raan, nu = kElements_or_a
+    # Case 2: 6 positional arguments provided
+    elif e is not None and i is not None and ap is not None and raan is not None and nu is not None:
+        a = kElements_or_a  # First arg is a
+        # e, i, ap, raan, nu are already set from positional args
+    # Invalid case
+    else:
+        raise ValueError("Must provide either a 6-element iterable or 6 positional arguments (a, e, i, ap, raan, nu)")
+    
+    # Create array with converted angles
+    result = np.array([a, e, np.radians(i), np.radians(ap), np.radians(raan), np.radians(nu)])
+    return result
 
 
 def get_chance_radius(v: np.ndarray, time_step: float) -> float:
@@ -791,31 +838,6 @@ def ae_from_periap(rp, ra):
     return a_from_periap(rp, ra), e_from_periap(rp, ra)
 
 
-def keplerian_from_peri_apo(rp, ra):
-    """
-    Compute semi-major axis (a) and eccentricity (e) from perigee (rp) and apogee (ra).
-
-    Parameters
-    ----------
-    rp : float
-        Perigee distance (m), measured from the center of the body.
-    ra : float
-        Apogee distance (m), measured from the center of the body.
-
-    Returns
-    -------
-    tuple
-        (a, e) where a is semi-major axis (m) and e is eccentricity (unitless).
-
-    Author
-    ------
-    Travis Yeager (yeager7@llnl.gov)
-    """
-    a = semi_major_axis(rp, ra)
-    e = eccentricity(rp, ra)
-    return a, e
-
-
 def periapsis(a, e):
     return (1 - e) * a
 
@@ -837,7 +859,7 @@ def peri_apo_apsis_from_rv(r, v):
     return {"periapsis": periapsis(temp['a'], temp['e']), "apoapsis": apoapsis(temp['a'], temp['e'])}
 
 
-def vcirc(r=au_to_m, mu_=1.32712440018e20 + 2.2032e13 + 3.24859e14):
+def vcircular(r=au_to_m, mu_=1.32712440018e20 + 2.2032e13 + 3.24859e14):
     return np.sqrt(mu_ / r)
 
 

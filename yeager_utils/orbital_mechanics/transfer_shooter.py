@@ -1,5 +1,6 @@
 import numpy as np
 from ssapy import rv, Orbit, SciPyPropagator, AccelKepler
+from ..constants import EARTH_MU
 from ..time import get_times, Time
 
 
@@ -19,8 +20,10 @@ def transfer_shooter(*args, r1=None, v1=None, r2=None, v2=None, orbit1=None, orb
         Positional arguments: either (orbit1, orbit2) or (r1, v1, r2, v2).
     r1, v1 : array_like, optional
         Initial position and velocity vectors (m, m/s).
-    r2, v2 : array_like, optional
-        Target position and velocity vectors (m, m/s).
+    r2 : array_like, optional
+        Target position vector (m).
+    v2 : array_like, optional
+        Target velocity vector (m/s). If not provided and r2 is given, assumes a circular orbit at r2.
     orbit1 : ssapy.Orbit, optional
         Initial orbit object; if provided, r1 and v1 are extracted from it.
     orbit2 : ssapy.Orbit, optional
@@ -70,6 +73,8 @@ def transfer_shooter(*args, r1=None, v1=None, r2=None, v2=None, orbit1=None, orb
                 orbit1, orbit2 = arg1, arg2
             else:
                 raise ValueError("Two positional arguments must be Orbit objects (orbit1, orbit2)")
+        elif len(args) == 3:
+            r1, v1, r2 = args
         elif len(args) == 4:
             r1, v1, r2, v2 = args
         else:
@@ -94,8 +99,13 @@ def transfer_shooter(*args, r1=None, v1=None, r2=None, v2=None, orbit1=None, orb
             raise ValueError("orbit2 must be an ssapy.Orbit object")
         r2 = orbit2.r
         v2 = orbit2.v
-    elif r2 is None or v2 is None:
-        raise ValueError("Must provide either orbit2 or both r2 and v2")
+    elif v2 is None:
+        r2 = np.asarray(r2)
+        r2_norm = np.linalg.norm(r2)
+        v_circ = np.sqrt(EARTH_MU / r2_norm)
+        v2 = np.array([0, v_circ, 0])
+    elif r2 is None:
+        raise ValueError("Must provide either orbit2 or both r2")
 
     delta_v = np.zeros(3)
     eps = 1e-6  # finite difference step
@@ -181,14 +191,21 @@ def transfer_shooter(*args, r1=None, v1=None, r2=None, v2=None, orbit1=None, orb
     v_transfer = v_transfer[:closest_idx + 1]
     tof = times[closest_idx].gps - t0.gps
 
+    if v2 is None:
+        delta_v2 = None
+        delta_v2_mag = None
+    else:
+        delta_v2 = v2 - v_transfer[closest_idx]
+        delta_v2_mag = np.linalg.norm(delta_v2)
+
     result = {
         'initial': Orbit(r=r1, v=v1, t=t0),
         'final': Orbit(r=r2, v=v2, t=t0 + tof),
         'transfer': orbit_transfer,
         '|delta_v1|': np.linalg.norm(delta_v),
-        '|delta_v2|': np.linalg.norm(v2 - v_transfer[closest_idx]),
+        '|delta_v2|': delta_v2_mag,
         'delta_v1': delta_v,
-        'delta_v2': v2 - v_transfer[closest_idx],
+        'delta_v2': delta_v2,
         'r_transfer': r_transfer,
         'v_transfer': v_transfer,
         'tof': tof,
@@ -196,12 +213,11 @@ def transfer_shooter(*args, r1=None, v1=None, r2=None, v2=None, orbit1=None, orb
         'error': np.linalg.norm(r_arrival - r2)
     }
     if status:
-        print("\nConverged:")
-        print(f"{result}")
+        print(f"Some Results: tof {tof / 60:.0f} min\n|Δv₁| {np.linalg.norm(delta_v)}\n|Δv₂| {delta_v2_mag}\nv1 - vtransfer[0] {np.linalg.norm(v1 - v_transfer[0])}")
 
     if plot:
         from ..plots import transfer_plot
-        fig = transfer_plot(r1, v1, r_transfer[0], v_transfer[0], r2, v2, show=True)
+        fig = transfer_plot(r1, v1, r_transfer, v_transfer, r2, v2, title=f"Transfer time: {result['tof'] / 60:.0f} min\n|Δv₁| {np.linalg.norm(delta_v) / 1e3:.3f}, |Δv₂| {np.linalg.norm(v2 - v_transfer[closest_idx]) / 1e3:.3f} km/s", show=True)
         result['fig'] = fig
 
     return result

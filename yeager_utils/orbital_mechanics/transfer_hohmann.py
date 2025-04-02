@@ -36,8 +36,10 @@ def transfer_hohmann(*args, r1=None, v1=None, r2=None, v2=None, elements1=None, 
         Positional arguments: either (orbit1, orbit2), (r1, v1, r2, v2), or (elements1, elements2).
     r1, v1 : array_like, optional
         Initial position and velocity vectors (m, m/s).
-    r2, v2 : array_like, optional
-        Target position and velocity vectors (m, m/s).
+    r2 : array_like, optional
+        Target position vector (m).
+    v2 : array_like, optional
+        Target velocity vector (m/s). If not provided and r2 is given, assumes a circular orbit at r2.
     orbit1, orbit2 : ssapy.Orbit, optional
         Initial and target orbit objects.
     elements1, elements2 : tuple/list or Orbit, optional
@@ -68,6 +70,8 @@ def transfer_hohmann(*args, r1=None, v1=None, r2=None, v2=None, elements1=None, 
                 elements1, elements2 = arg1, arg2
             else:
                 raise ValueError("Two positional arguments must be either (orbit1, orbit2) or (elements1, elements2)")
+        elif len(args) == 3:
+            r1, v1, r2 = args
         elif len(args) == 4:
             r1, v1, r2, v2 = args
         else:
@@ -89,7 +93,14 @@ def transfer_hohmann(*args, r1=None, v1=None, r2=None, v2=None, elements1=None, 
         v2 = orbit2.v
 
     # Determine input mode and create Orbit objects
-    if r1 is not None and v1 is not None and r2 is not None and v2 is not None:
+    if r1 is not None and v1 is not None and r2 is not None:
+        if v2 is None:
+            r2 = np.asarray(r2)
+            r2_norm = np.linalg.norm(r2)
+            v_circ = np.sqrt(EARTH_MU / r2_norm)
+            v2 = np.cross(r2 / r2_norm, [0, 0, 1]) * v_circ
+            if np.allclose(v2, 0):
+                v2 = np.cross(r2 / r2_norm, [0, 1, 0]) * v_circ
         orbit1 = Orbit(r=r1, v=v1, t=t0, mu=mu)
         orbit2 = Orbit(r=r2, v=v2, t=t0, mu=mu)
     elif elements1 is not None and elements2 is not None:
@@ -97,7 +108,7 @@ def transfer_hohmann(*args, r1=None, v1=None, r2=None, v2=None, elements1=None, 
             if len(elements1) != 6:
                 raise ValueError("elements1 must contain exactly 6 Keplerian elements.")
             a1, e1, i1, ap1, raan1, trueAnomaly1 = elements1
-            orbit1 = Orbit.fromKeplerianElements(a1, e1, i1, ap1, raan1, trueAnomaly1, t=t0, mu=mu)
+            orbit1 = Orbit.fromKeplerianElements(*[a1, e1, i1, ap1, raan1, trueAnomaly1], t=t0, mu=mu)
         elif isinstance(elements1, Orbit):
             orbit1 = elements1
             if not np.isclose(orbit1.t, t0, atol=1e-6):
@@ -109,7 +120,7 @@ def transfer_hohmann(*args, r1=None, v1=None, r2=None, v2=None, elements1=None, 
             if len(elements2) != 6:
                 raise ValueError("elements2 must contain exactly 6 Keplerian elements.")
             a2, e2, i2, ap2, raan2, trueAnomaly2 = elements2
-            orbit2 = Orbit.fromKeplerianElements(a2, e2, i2, ap2, raan2, trueAnomaly2, t=t0, mu=mu)
+            orbit2 = Orbit.fromKeplerianElements(*[a2, e2, i2, ap2, raan2, trueAnomaly2], t=t0, mu=mu)
         elif isinstance(elements2, Orbit):
             orbit2 = elements2
             if not np.isclose(orbit2.t, t0, atol=1e-6):
@@ -133,12 +144,12 @@ def transfer_hohmann(*args, r1=None, v1=None, r2=None, v2=None, elements1=None, 
         trueAnomaly2_adjusted = np.pi
 
     orbit2 = Orbit.fromKeplerianElements(
-        orbit2.a,
+        *[orbit2.a,
         orbit2.e,
         orbit1.i,
         ap2_adjusted,
         orbit2.raan,
-        trueAnomaly2_adjusted,
+        trueAnomaly2_adjusted],
         t=t0,
         mu=mu
     )
@@ -229,7 +240,7 @@ def transfer_hohmann(*args, r1=None, v1=None, r2=None, v2=None, elements1=None, 
         ax.scatter(r2[0], r2[1], color='Orange', marker='o', label="Arrival Point")
         ax.set_xlabel("X Position (m)")
         ax.set_ylabel("Y Position (m)")
-        ax.set_title(f"Hohmann Transfer (TOF = {tof / 60:.0f} min\n|Δv₁| = {delta_v1 / 1000:.3f} km/s, |Δv₂| = {delta_v2 / 1000:.3f} km/s)")
+        ax.set_title(f"Hohmann Transfer\nTOF {tof / 60:.0f} min\n|Δv₁| {delta_v1 / 1000:.3f} km/s, |Δv₂| {delta_v2 / 1000:.3f} km/s")
         ax.legend(loc='upper left')
         plt.axis('equal')
         plt.show()

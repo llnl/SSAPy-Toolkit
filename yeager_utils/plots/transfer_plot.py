@@ -8,7 +8,7 @@ from ..integrators import leapfrog
 from ssapy import Orbit
 
 
-def find_intersection_time(r_start, v_start, r_ref, t_max, mu=EARTH_MU, tol=1e3):
+def find_intersection_time(r_start, v_start, r_ref, t_max):
     """Find time when orbit from (r_start, v_start) nearly intersects r_ref."""
     r_orbit, _ = leapfrog(r_start, v_start, t=np.arange(0, t_max, 1))
     distances = np.linalg.norm(r_orbit - r_ref, axis=1)
@@ -68,23 +68,27 @@ def transfer_plot(r0, v0, rtransfer, vtransfer, rf, vf, show=True, c='black',
     orbits = [(r0, v0, "Initial"), (rtransfer, vtransfer, "Transfer"), (rf, vf, "Final")]
 
     for idx, (r, v, orbit_type) in enumerate(orbits):
-        orbit = Orbit(r=r, v=v, t=0, mu=EARTH_MU)
-        max_time = orbit.period
-
-        if orbit.period >= 1e7:
-            max_time = period(a_from_periap(np.linalg.norm(r), np.linalg.norm(r)))
-
-        if orbit_type == "Transfer":  # Transfer orbit: integrate from departure to arrival
-            t_intersect = find_intersection_time(r, v, rf, max_time)
-            t_array = np.arange(0, t_intersect + 1, 1)  # From 0 to intersection
-            r_orbit, _ = leapfrog(r, v, t=t_array)
+        if r.ndim > 1 and r.shape[0] > 1:
+            r_km = r[0] / 1000
+            r_orbit = r
+            orbit = Orbit(r=r[0], v=v[0], t=0, mu=EARTH_MU)
         else:
-            r_orbit, _ = leapfrog(r, v, t=np.arange(0, max_time, 1))
+            r_km = r / 1000
+            orbit = Orbit(r=r, v=v, t=0, mu=EARTH_MU)
+            max_time = orbit.period
+            if orbit.period >= 1e7:
+                max_time = period(a_from_periap(np.linalg.norm(r), np.linalg.norm(r)))
+
+            if orbit_type == "Transfer":  # Transfer orbit: integrate from departure to arrival
+                t_intersect = find_intersection_time(r, v, rf, max_time)
+                t_array = np.arange(0, t_intersect + 1, 1)  # From 0 to intersection
+                r_orbit, _ = leapfrog(r, v, t=t_array)
+            else:
+                r_orbit, _ = leapfrog(r, v, t=np.arange(0, max_time, 1))
 
         x = r_orbit[:, 0] / 1000
         y = r_orbit[:, 1] / 1000
         z = r_orbit[:, 2] / 1000
-        r_km = r / 1000
 
         orbit_line = ax.plot(x, y, z, color=orbit_colors[idx], linewidth=4)[0]
 
