@@ -1,6 +1,7 @@
 # flake8: noqa: E501
 import numpy as np
 import os
+import re
 from glob import glob
 import shutil
 from ..utils import sortbynum
@@ -79,6 +80,8 @@ def mvdir(source_: str, destination_: str) -> None:
     Returns
     -------
     None
+
+    Author: Travis Yeager
     """
     if not exists(destination_):
         print(f"Moving {source_} to {destination_}")
@@ -99,6 +102,8 @@ def rmdir(source_: str) -> None:
     Returns
     -------
     None
+
+    Author: Travis Yeager
     """
     if not exists(source_):
         print(f'{source_} does not exist, no delete.')
@@ -122,6 +127,8 @@ def rmfile(pathname: str) -> None:
     Returns
     -------
     None
+
+    Author: Travis Yeager
     """
     if exists(pathname):
         os.remove(pathname)
@@ -132,7 +139,7 @@ def listdir(
     dir_path: str = '*', 
     files_only: bool = False, 
     exclude: Optional[str] = None, 
-    sorted: bool = False
+    sorted: bool = True
 ) -> List[str]:
     """
     List files in a directory, with options to filter, exclude, and sort.
@@ -152,6 +159,8 @@ def listdir(
     -------
     List[str]
         A list of file paths in the directory that match the conditions.
+
+    Author: Travis Yeager
     """
     if '*' not in dir_path:
         dir_path = os.path.join(dir_path, '*')
@@ -171,6 +180,79 @@ def listdir(
         return sortbynum(files)
     else:
         return files
+
+
+def get_image_paths(folder_path, sort_by_number=True):
+    """
+    Returns a list of full paths for all image files in the specified folder.
+    
+    Args:
+        folder_path (str): Path to the folder to search for images
+        sort_by_number (bool): If True, sorts files by numbers in filename
+        
+    Returns:
+        list: List of full file paths for all images found
+
+    Author: Travis Yeager
+    """
+    # List of common image file extensions
+    image_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp')
+    
+    # Initialize empty list to store image paths
+    image_paths = []
+    
+    # Check if folder exists
+    if not os.path.exists(folder_path):
+        raise ValueError(f"The folder path '{folder_path}' does not exist")
+    
+    # Walk through the folder
+    for root, _, files in os.walk(folder_path):
+        for file in files:
+            # Check if file has an image extension (case-insensitive)
+            if file.lower().endswith(image_extensions):
+                full_path = os.path.join(root, file)
+                image_paths.append(full_path)
+    
+    if sort_by_number:
+        # Function to extract the last changing number from filename for sorting
+        def extract_last_number(path):
+            filename = os.path.basename(path)
+            # Find all numbers in the filename
+            numbers = re.findall(r'\d+', filename)
+            if not numbers:
+                return (float('inf'), path)  # No numbers, use infinity and path for stable sort
+            
+            # Get all filenames in the same directory for comparison
+            dir_path = os.path.dirname(path)
+            dir_files = [f for f in image_paths if os.path.dirname(f) == dir_path]
+            
+            # Find which number position varies among files in the same directory
+            all_numbers = [re.findall(r'\d+', os.path.basename(f)) for f in dir_files]
+            max_numbers = max(len(nums) for nums in all_numbers) if all_numbers else 0
+            
+            if max_numbers == 0:
+                return (float('inf'), path)
+            
+            # Pad shorter number lists with None
+            all_numbers = [nums + [None] * (max_numbers - len(nums)) for nums in all_numbers]
+            
+            # Find the rightmost position where numbers differ
+            last_varying_pos = -1
+            for pos in range(max_numbers - 1, -1, -1):
+                values = set(nums[pos] for nums in all_numbers if nums[pos] is not None)
+                if len(values) > 1:
+                    last_varying_pos = pos
+                    break
+            
+            # Use the last varying number for sorting, or last number if no variation
+            sort_pos = last_varying_pos if last_varying_pos >= 0 else len(numbers) - 1
+            sort_value = int(numbers[sort_pos]) if sort_pos < len(numbers) else float('inf')
+            return (sort_value, path)  # Tuple for stable sorting
+        
+        # Sort paths based on extracted last changing number
+        image_paths.sort(key=extract_last_number)
+    
+    return image_paths
 
 
 def pd_flatten(data: List[Union[str, float]], factor: float = 1) -> List[float]:
