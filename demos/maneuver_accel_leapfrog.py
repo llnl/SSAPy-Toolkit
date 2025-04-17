@@ -14,20 +14,27 @@ n_steps = len(t)
 radial_active = np.zeros(n_steps, dtype=bool)
 velocity_active = np.zeros(n_steps, dtype=bool)
 perp_active = np.zeros(n_steps, dtype=bool)  # Not used for now
+plane_active = np.zeros(n_steps, dtype=bool)  # New mask for plane thrust
 
 # Example: Activate radial thrust for the first 600 seconds
 radial_active[:60 * 10] = True
 
+# Example: Activate radial thrust for the first 600 seconds
+# velocity_active[60 * 10:1000] = True
+
+# Example: Activate plane thrust for the first 1000 seconds
+# plane_active[60 * 10:1000] = True
+
 # --- Integrate the trajectory ---
-radial_thrust = 20  # Radial thrust magnitude
+radial_thrust = 30  # Radial thrust magnitude
 velocity_thrust = 10  # Example: Velocity thrust magnitude
-# perp_thrust = 5  # Perpendicular thrust magnitude (commented out for now)
+plane_thrust = 30  # Plane thrust magnitude (added)
 
 r, v = leapfrog(r0, v0, t, radial_thrust=radial_thrust, 
                 velocity_thrust=velocity_thrust, 
                 radial_active=radial_active, velocity_active=velocity_active, 
-                # perp_thrust=perp_thrust,  # Commented out
-                perp_active=perp_active)  # Not used
+                plane_thrust=plane_thrust,  # Added plane thrust
+                plane_active=plane_active)  # Added plane active mask
 
 # --- Plotting ---
 groundtrack_dashboard(r[:, 0], r[:, 1], r[:, 2], t)
