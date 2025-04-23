@@ -36,7 +36,7 @@ class GradientLineHandler(HandlerBase):
         return [lc]
 
 
-def cislunar_plot_3d(r, t=None, figsize=(8, 8), fontsize=12, save_path=False, show=False, title=None, c='white'):
+def cislunar_plot_3d(r, t=None, figsize=(8, 8), fontsize=12, save_path=False, show=False, legend=True, title='', c='white'):
     """
     Author: Travis Yeager (yeager7@llnl.gov)
     """
@@ -176,16 +176,17 @@ def cislunar_plot_3d(r, t=None, figsize=(8, 8), fontsize=12, save_path=False, sh
 
     font_properties = font_manager.FontProperties()
 
-    ax.legend(
-        handles=legend_elements,
-        handler_map={rainbow_line: GradientLineHandler()} if num_orbits == 1 else {},
-        loc='upper left',
-        fontsize=12,
-        facecolor=plotcolor,
-        edgecolor=textcolor,
-        prop=font_properties,
-        labelcolor=textcolor
-    )
+    if legend:
+        ax.legend(
+            handles=legend_elements,
+            handler_map={rainbow_line: GradientLineHandler()} if num_orbits == 1 else {},
+            loc='upper left',
+            fontsize=12,
+            facecolor=plotcolor,
+            edgecolor=textcolor,
+            prop=font_properties,
+            labelcolor=textcolor
+        )
 
     ax.set_facecolor(plotcolor)
     ax.tick_params(axis='both', colors=textcolor, labelsize=fontsize)
