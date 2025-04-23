@@ -1,4 +1,4 @@
-from yeager_utils import ssapy_orbit, orbit_plot, cislunar_plot, globe_plot, RGEO, get_lunar_rv, Time
+from yeager_utils import ssapy_orbit, orbit_plot, cislunar_plot_3d, cislunar_plot, globe_plot, RGEO, get_lunar_rv, Time
 import os
 import numpy as np
 
@@ -39,6 +39,7 @@ r, v, t = ssapy_orbit(r=r0, v=v0, duration=(1, 'month'))
 print(f"Plotting orbit. {np.shape(r)} {np.shape(t)}")
 orbit_plot(r=r, t=t, save_path=imname("orbit_plot"))
 cislunar_plot(r=r, t=t, save_path=imname("cislunar_plot"))
+cislunar_plot_3d(r=r, t=t, save_path=imname("cislunar_plot_3d"))
 globe_plot(r=r, t=t, save_path=imname("globe_plot_black"), scale=5)
 globe_plot(r=r, t=t, save_path=imname("globe_plot_white"), scale=5, c='white')
 

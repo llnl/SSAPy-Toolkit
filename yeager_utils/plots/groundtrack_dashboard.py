@@ -105,7 +105,7 @@ def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500):
     ax3.set_zlabel('Z (km)', fontsize=16)
     ax3.tick_params(axis='both', labelsize=14)
     ax3.legend(fontsize=14)
-    ax3.set_title('3D ITRF', fontsize=16)
+    ax3.set_title('ITRF', fontsize=16)
 
     lower_bound, upper_bound = find_smallest_bounding_cube(xyz, pad=pad)
     max_bound = np.max(np.abs([lower_bound, upper_bound])) / 1e3
@@ -137,7 +137,7 @@ def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500):
     ax5.set_ylabel('Y (km)', fontsize=16)
     ax5.set_zlabel('Z (km)', fontsize=16)
     ax5.tick_params(axis='both', labelsize=14)
-    ax5.set_title('3D GCRF', fontsize=16)
+    ax5.set_title('GCRF', fontsize=16)
     ax5.set_xlim([-limit, limit])
     ax5.set_ylim([-limit, limit])
     ax5.set_zlim([-limit, limit])
