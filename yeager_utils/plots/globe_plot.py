@@ -79,6 +79,8 @@ def globe_plot(r: np.ndarray, t: np.ndarray, limits: Optional[float] = False, ti
     ax.set_xticks(x_ticks)
     ax.set_yticks(y_ticks)
     ax.set_zticks(z_ticks)
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
 
     # Set axis labels with white color
     ax.set_xlabel('x [GEO]', color=textcolor, fontsize=fontsize)

@@ -1,6 +1,4 @@
 import numpy as np
-from astropy import units as u
-from astropy.units import Quantity
 from ..accelerations import (
     accel_point_earth,
     accel_radial,
@@ -31,13 +29,13 @@ def leapfrog(
     Parameters
     ----------
     r0 : array_like
-        Initial position vector (3-element).
+        Initial position vector [m].
     v0 : array_like
-        Initial velocity vector (3-element).
-    t : array_like or Quantity
-        Array of times. Assumed to be in seconds unless a Quantity with time units is passed.
+        Initial velocity vector [m/s].
+    t : array_like
+        Array of times [s] as floats or datetime-like objects.
     accel : function
-        Function to compute natural accelerations, defaults to accel_point_earth.
+        Function to compute natural accelerations.
     radial : dict or list, optional
         Thrust profile as {'thrust': value, 'start': start_time/index, 'end': end_time/index}.
     velocity : dict or list, optional
@@ -47,32 +45,26 @@ def leapfrog(
     plane : dict or list, optional
         Thrust profile for changing orbital plane orientation.
     circular : dict or list, optional
-        Thrust profile for circularizing orbit. If 'end' not given, thrust continues from 'start'.
+        Thrust profile for circularizing orbit.
     fuel : bool, optional
-        Whether to estimate fuel usage for each active acceleration component.
-    mass0 : float, optional
-        Initial spacecraft mass in kg. Used if fuel=True.
-    isp : float, optional
-        Specific impulse in seconds. Used if fuel=True.
+        Whether to estimate fuel usage.
 
     Returns
     -------
     r : ndarray
-        Position array of shape (n_steps, 3).
+        Position array (n_steps, 3) [m].
     v : ndarray
-        Velocity array of shape (n_steps, 3).
-
-    Notes
-    -----
-    Author: Travis Yeager
+        Velocity array (n_steps, 3) [m/s].
+    fuels : dict (optional)
+        Estimated fuel usage per maneuver type.
     """
 
     def get_mask(n_steps, start, end=None, time_array=None):
-        if isinstance(start, Quantity):
-            start = int(np.searchsorted(time_array, start.to(u.s).value))
-        if end is not None and isinstance(end, Quantity):
-            end = int(np.searchsorted(time_array, end.to(u.s).value))
-        if end is None:
+        if isinstance(start, (float, int)) and time_array is not None:
+            start = int(np.searchsorted(time_array, start))
+        if end is not None and isinstance(end, (float, int)) and time_array is not None:
+            end = int(np.searchsorted(time_array, end))
+        if isinstance(start, int) and end is None:
             end = n_steps
         mask = np.zeros(n_steps, dtype=bool)
         mask[start:end] = True
@@ -83,7 +75,6 @@ def leapfrog(
             return np.zeros(n_steps, float)
         if isinstance(profile, list):
             profile = dict(thrust=profile[0], start=profile[1], end=(profile[2] if len(profile) > 2 else None))
-
         thrust = float(profile["thrust"])
         start = profile["start"]
         end = profile.get("end", None)
@@ -93,7 +84,7 @@ def leapfrog(
         return np.full(n_steps, thrust) * mask
 
     t_arr = to_gps(t)
-    t_arr = t_arr.to_value(u.s) if isinstance(t, Quantity) else np.asarray(t, dtype=float)
+    t_arr = t_arr - t_arr[0]
     n_steps = len(t_arr)
 
     r_th = prep_thrust(n_steps, t_arr, radial)
@@ -122,7 +113,7 @@ def leapfrog(
         )
         v_half = v[i] + 0.5 * dt * a0
         r[i + 1] = r[i] + dt * v_half
-
+        
         a1 = (
             accel(r[i + 1])
             + accel_radial(r[i + 1], r_th[i + 1])
@@ -137,20 +128,10 @@ def leapfrog(
         return r, v
 
     fuels = {
-        "radial": estimate_fuel_usage(
-            np.abs(r_th), dt, r, engine="Mira"
-        ),  # Fuel for radial maneuvers
-        "velocity": estimate_fuel_usage(
-            np.abs(v_th), dt, r, engine="Mira"
-        ),  # Fuel for velocity (in-track) maneuvers
-        "inclination": estimate_fuel_usage(
-            np.abs(i_th), dt, r, engine="Mira"
-        ),  # Fuel for inclination changes
-        "plane": estimate_fuel_usage(
-            np.abs(p_th), dt, r, engine="Mira"
-        ),  # Fuel for plane (out-of-plane) maneuvers
-        "circular": estimate_fuel_usage(
-            np.abs(c_th), dt, r, engine="Mira"
-        ),  # Fuel for circularization maneuvers
+        "radial": estimate_fuel_usage(np.abs(r_th), dt, r, engine="Mira"),
+        "velocity": estimate_fuel_usage(np.abs(v_th), dt, r, engine="Mira"),
+        "inclination": estimate_fuel_usage(np.abs(i_th), dt, r, engine="Mira"),
+        "plane": estimate_fuel_usage(np.abs(p_th), dt, r, engine="Mira"),
+        "circular": estimate_fuel_usage(np.abs(c_th), dt, r, engine="Mira"),
     }
     return r, v, fuels

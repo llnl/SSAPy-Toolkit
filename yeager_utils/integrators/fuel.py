@@ -3,15 +3,14 @@ from ..engines import thrusters
 import numpy as np
 from astropy import units as u
 
-
 def estimate_fuel_usage(
     accels: np.ndarray,
     dt: float,
     positions: np.ndarray,
     engine: str = "Mira",
-) -> np.ndarray:
+) -> float:
     """
-    Estimate cumulative propellant mass used given an acceleration profile,
+    Estimate total propellant mass used given an acceleration profile,
     with gravity computed at each time step based on spacecraft position.
 
     Parameters
@@ -27,8 +26,8 @@ def estimate_fuel_usage(
 
     Returns
     -------
-    fuel_used : np.ndarray
-        Cumulative fuel mass consumed at each step (kg).
+    total_fuel : float
+        Total fuel mass consumed across all steps (kg).
 
     Raises
     ------
@@ -50,20 +49,22 @@ def estimate_fuel_usage(
 
     isp = thrusters[engine]["ISP"]  # Specific impulse in seconds
     mass0 = thrusters[engine]["mass"]  # Initial spacecraft mass in kg
-    n = accels.size
-    fuel_used = np.zeros(n, dtype=float)
+    total_fuel = 0.0  # Total fuel used
     mass = mass0
 
     # Compute gravitational acceleration at each step
-    for i, (a, pos) in enumerate(zip(accels, positions)):
+    for a, pos in zip(accels, positions):
         # Calculate radial distance r = sqrt(x^2 + y^2 + z^2)
         r = np.sqrt(np.sum(pos**2))
         # Compute g = mu / r^2
-        g = (EARTH_MU / (r**2))
+        g = EARTH_MU / (r**2)
+        # Compute force and mass flow rate
         force = mass * a
         mdot = force / (isp * g)
         delta_m = mdot * dt
-        fuel_used[i] = delta_m if i == 0 else fuel_used[i - 1] + delta_m
+        # Accumulate total fuel used
+        total_fuel += delta_m
+        # Update spacecraft mass
         mass -= delta_m
 
-    return fuel_used
+    return total_fuel

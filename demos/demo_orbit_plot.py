@@ -58,3 +58,4 @@ orbit_plot(r=[r, r3], t=[t, t3], save_path=imname("orbit_plot_two_different_leng
 orbit_plot(r=[r, r3], t=[t, t3], save_path=imname("orbit_plot_two_different_length_orbits_itrf"), frame='itrf')
 cislunar_plot(r=[r, r3], t=[t, t3], save_path=imname("cislunar_plot_two_different_length_orbits"))
 
+print("PLOT DEMO DONE.")
