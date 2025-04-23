@@ -118,9 +118,9 @@ def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500):
     ax3.set_zticklabels([])
 
     ax4 = fig.add_subplot(gs[1, 1])
-    ax4.plot(times[1:-1] / 60, velocity[1:-1], color='purple', linewidth=2.5)
+    ax4.plot(times[1:-1] / 60, velocity[1:-1] / 1e3, color='purple', linewidth=2.5)
     ax4.set_xlabel('Time (minutes)', fontsize=18)
-    ax4.set_ylabel('Velocity (m/s)', fontsize=18)
+    ax4.set_ylabel('Velocity (km/s)', fontsize=18)
     ax4.set_title('Velocity vs Time', fontsize=20)
     ax4.tick_params(axis='both', labelsize=16)
     ax4.grid(True)
