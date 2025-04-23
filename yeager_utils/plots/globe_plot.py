@@ -66,9 +66,15 @@ def globe_plot(r: np.ndarray, t: np.ndarray, limits: Optional[float] = False, ti
 
     # Set the view angle and axis limits
     ax.view_init(elev=el, azim=az)
-    x_ticks = np.linspace(-limits, limits, 5)
-    y_ticks = np.linspace(-limits, limits, 5)
-    z_ticks = np.linspace(-limits, limits, 5)
+    if limits < 1:
+        x_ticks = np.linspace(-limits, limits, 5)
+        y_ticks = np.linspace(-limits, limits, 5)
+        z_ticks = np.linspace(-limits, limits, 5)
+    else:
+        int_limit = int(np.ceil(limits))  # Round up to ensure coverage
+        x_ticks = np.arange(-int_limit, int_limit + 1, 1)  # Integer ticks
+        y_ticks = np.arange(-int_limit, int_limit + 1, 1)
+        z_ticks = np.arange(-int_limit, int_limit + 1, 1)
 
     ax.set_xticks(x_ticks)
     ax.set_yticks(y_ticks)

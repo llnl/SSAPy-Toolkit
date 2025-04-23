@@ -184,10 +184,25 @@ def figname(filename):
     -------
     Travis Yeager (yeager7@llnl.gov)
     """
-    fig_path = "/p/lustre1/yeager7/cislunar/figures/"
-    full_path = os.path.join(fig_path, filename + ".jpg")
-    os.makedirs(os.path.dirname(full_path), exist_ok=True)
-    return full_path
+    # List of directories to try
+    directories = [
+        "/p/lustre1/yeager7/cislunar/figures/",
+        "/g/g16/yeager7/workdir/Figures/",
+        "/home/yeager7/Figures/"
+    ]
+    
+    for fig_path in directories:
+        try:
+            # Create full path and ensure directory exists
+            full_path = os.path.join(fig_path, filename + ".jpg")
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            return full_path
+        except (OSError, PermissionError):
+            # Skip to next directory if there's an error
+            continue
+    
+    # If all directories fail, raise an exception
+    raise Exception("Could not create or access any of the specified directories")
 
 
 save_plot_to_pdf_call_count = 0
