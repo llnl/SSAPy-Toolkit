@@ -5,13 +5,13 @@ import numpy as np
 from typing import Tuple, Optional
 
 from ssapy.utils import find_file
-from .plotutils import make_black, save_plot
+from .plotutils import make_black, make_white, save_plot
 from ..constants import RGEO, EARTH_RADIUS
 
 
 def globe_plot(r: np.ndarray, t: np.ndarray, limits: Optional[float] = False, title: str = '',
                c='black', figsize: Tuple[int, int] = (7, 8), save_path: Optional[str] = False,
-               el: int = 30, az: int = 0, scale: float = 1) -> Tuple[plt.Figure, plt.Axes]:
+               el: int = 30, az: int = 0, scale: float = 1, fontsize=24) -> Tuple[plt.Figure, plt.Axes]:
     """
     Generate a 3D globe plot showing the position of points in Earth-centered
     coordinates. Optionally save the plot to a file.
@@ -71,28 +71,33 @@ def globe_plot(r: np.ndarray, t: np.ndarray, limits: Optional[float] = False, ti
         y_ticks = np.linspace(-limits, limits, 5)
         z_ticks = np.linspace(-limits, limits, 5)
     else:
-        int_limit = int(np.ceil(limits))  # Round up to ensure coverage
-        x_ticks = np.arange(-int_limit, int_limit + 1, 1)  # Integer ticks
-        y_ticks = np.arange(-int_limit, int_limit + 1, 1)
-        z_ticks = np.arange(-int_limit, int_limit + 1, 1)
+        int_limit = int(np.ceil(limits))
+        x_ticks = [-int_limit, 0, int_limit]
+        y_ticks = [-int_limit, 0, int_limit]
+        z_ticks = [-int_limit, 0, int_limit]
 
     ax.set_xticks(x_ticks)
     ax.set_yticks(y_ticks)
     ax.set_zticks(z_ticks)
 
     # Set axis labels with white color
-    ax.set_xlabel('x [GEO]', color=textcolor)
-    ax.set_ylabel('y [GEO]', color=textcolor)
-    ax.set_zlabel('z [GEO]', color=textcolor)
+    ax.set_xlabel('x [GEO]', color=textcolor, fontsize=fontsize)
+    ax.set_ylabel('y [GEO]', color=textcolor, fontsize=fontsize)
+    ax.set_zlabel('z [GEO]', color=textcolor, fontsize=fontsize)
+    if title:
+        ax.set_title(title, color=textcolor, fontsize=fontsize)
 
     # Set tick label colors to white
-    ax.tick_params(axis='x', colors=textcolor)
-    ax.tick_params(axis='y', colors=textcolor)
-    ax.tick_params(axis='z', colors=textcolor)
+    ax.tick_params(axis='x', colors=textcolor, labelsize=fontsize)
+    ax.tick_params(axis='y', colors=textcolor, labelsize=fontsize)
+    ax.tick_params(axis='z', colors=textcolor, labelsize=fontsize)
     ax.set_aspect('equal')
 
     # Apply black background function (assuming `make_black` function exists)
-    fig, ax = make_black(fig, ax)
+    if c in ('black', 'b'):
+        fig, ax = make_black(fig, ax)
+    elif c in ('white', 'w'):
+        fig, ax = make_white(fig, ax)
 
     # Save the plot if save_path is provided
     if save_path:
