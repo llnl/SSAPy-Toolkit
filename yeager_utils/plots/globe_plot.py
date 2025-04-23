@@ -10,7 +10,7 @@ from ..constants import RGEO, EARTH_RADIUS
 
 
 def globe_plot(r: np.ndarray, t: np.ndarray, limits: Optional[float] = False, title: str = '',
-               figsize: Tuple[int, int] = (7, 8), save_path: Optional[str] = False,
+               c='black', figsize: Tuple[int, int] = (7, 8), save_path: Optional[str] = False,
                el: int = 30, az: int = 0, scale: float = 1) -> Tuple[plt.Figure, plt.Axes]:
     """
     Generate a 3D globe plot showing the position of points in Earth-centered
@@ -20,6 +20,16 @@ def globe_plot(r: np.ndarray, t: np.ndarray, limits: Optional[float] = False, ti
     -------
     Travis Yeager (yeager7@llnl.gov)
     """
+    if c in ('black', 'b'):
+        plotcolor = 'black'
+        textcolor = 'white'
+    elif c in ('white', 'w'):
+        plotcolor = 'white'
+        textcolor = 'black'
+    else:
+        plotcolor = 'white'
+        textcolor = 'black'
+
     # Scale the coordinates by RGEO
     r = r / RGEO
 
@@ -45,10 +55,10 @@ def globe_plot(r: np.ndarray, t: np.ndarray, limits: Optional[float] = False, ti
     # Create the figure and 3D axis
     fig = plt.figure(dpi=100, figsize=figsize)
     ax = fig.add_subplot(111, projection='3d')
-    fig.patch.set_facecolor('black')
-    ax.tick_params(axis='both', colors='white')
+    fig.patch.set_facecolor(plotcolor)
+    ax.tick_params(axis='both', colors=textcolor)
     ax.grid(True, color='grey', linestyle='--', linewidth=0.5)
-    ax.set_facecolor('black')  # Set plot background color to black
+    ax.set_facecolor(plotcolor)  # Set plot background color to black
 
     # Plot the satellite positions and the Earth surface
     ax.scatter(r[:, 0], r[:, 1], r[:, 2], color=dotcolors, s=1)
@@ -65,14 +75,14 @@ def globe_plot(r: np.ndarray, t: np.ndarray, limits: Optional[float] = False, ti
     ax.set_zticks(z_ticks)
 
     # Set axis labels with white color
-    ax.set_xlabel('x [GEO]', color='white')
-    ax.set_ylabel('y [GEO]', color='white')
-    ax.set_zlabel('z [GEO]', color='white')
+    ax.set_xlabel('x [GEO]', color=textcolor)
+    ax.set_ylabel('y [GEO]', color=textcolor)
+    ax.set_zlabel('z [GEO]', color=textcolor)
 
     # Set tick label colors to white
-    ax.tick_params(axis='x', colors='white')
-    ax.tick_params(axis='y', colors='white')
-    ax.tick_params(axis='z', colors='white')
+    ax.tick_params(axis='x', colors=textcolor)
+    ax.tick_params(axis='y', colors=textcolor)
+    ax.tick_params(axis='z', colors=textcolor)
     ax.set_aspect('equal')
 
     # Apply black background function (assuming `make_black` function exists)

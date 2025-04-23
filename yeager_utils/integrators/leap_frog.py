@@ -1,140 +1,156 @@
 import numpy as np
-from ..accelerations import accel_point_earth
-from .accel_radial import accel_radial
-from .accel_velocity import accel_velocity
-from .accel_perp import accel_perp
-from .accel_plane import accel_plane  # Import the accel_plane function
+from astropy import units as u
+from astropy.units import Quantity
+from ..accelerations import (
+    accel_point_earth,
+    accel_radial,
+    accel_velocity,
+    accel_inclination,
+    accel_plane,
+    accel_to_circular,
+)
 from ..time import to_gps
+from .fuel import estimate_fuel_usage
 
 
-def leapfrog(r0, v0, t, accel=accel_point_earth, radial_thrust=0, velocity_thrust=0, perp_thrust=0, 
-             radial_active=None, velocity_active=None, perp_active=None, plane_thrust=0, plane_active=None):
+def leapfrog(
+    r0,
+    v0,
+    t,
+    accel=accel_point_earth,
+    radial=None,
+    velocity=None,
+    inclination=None,
+    plane=None,
+    circular=None,
+    fuel=False,
+):
     """
-    Integrate equations of motion using the velocity Verlet (Leapfrog) method
-    with optional velocity-directed thrust, radial acceleration, perpendicular acceleration,
-    and acceleration in the orbital plane.
+    Propagate position and velocity using Leapfrog integration with optional accelerations.
 
     Parameters
     ----------
     r0 : array_like
-        Initial position [x0, y0, z0] in meters.
+        Initial position vector (3-element).
     v0 : array_like
-        Initial velocity [vx0, vy0, vz0] in meters per second.
-    t : array_like or astropy.time.Time
-        Times at which to compute the solution (s or Time).
-    accel : callable, optional
-        Central acceleration function, defaults to accel_point_earth.
-        Should accept position array and return acceleration array (m/s^2).
-    radial_thrust : float or array_like, optional
-        Magnitude of the radial thrust acceleration. Scalar or array of length n_steps.
-    velocity_thrust : float or array_like, optional
-        Magnitude of the velocity-directed thrust acceleration. Scalar or array of length n_steps.
-    perp_thrust : float or array_like, optional
-        Magnitude of the perpendicular thrust acceleration. Scalar or array of length n_steps.
-    plane_thrust : float or array_like, optional
-        Magnitude of the thrust in the orbital plane. Scalar or array of length n_steps.
-    radial_active : array_like of bool, optional
-        Boolean mask indicating when radial thrust is active. Array of length n_steps.
-    velocity_active : array_like of bool, optional
-        Boolean mask indicating when velocity-directed thrust is active. Array of length n_steps.
-    perp_active : array_like of bool, optional
-        Boolean mask indicating when perpendicular thrust is active. Array of length n_steps.
-    plane_active : array_like of bool, optional
-        Boolean mask indicating when plane-directed thrust is active. Array of length n_steps.
+        Initial velocity vector (3-element).
+    t : array_like or Quantity
+        Array of times. Assumed to be in seconds unless a Quantity with time units is passed.
+    accel : function
+        Function to compute natural accelerations, defaults to accel_point_earth.
+    radial : dict or list, optional
+        Thrust profile as {'thrust': value, 'start': start_time/index, 'end': end_time/index}.
+    velocity : dict or list, optional
+        Thrust profile for along-track acceleration.
+    inclination : dict or list, optional
+        Thrust profile for changing orbital inclination.
+    plane : dict or list, optional
+        Thrust profile for changing orbital plane orientation.
+    circular : dict or list, optional
+        Thrust profile for circularizing orbit. If 'end' not given, thrust continues from 'start'.
+    fuel : bool, optional
+        Whether to estimate fuel usage for each active acceleration component.
+    mass0 : float, optional
+        Initial spacecraft mass in kg. Used if fuel=True.
+    isp : float, optional
+        Specific impulse in seconds. Used if fuel=True.
 
     Returns
     -------
-    r : ndarray, shape (n_steps, 3)
-        Position history (m).
-    v : ndarray, shape (n_steps, 3)
-        Velocity history (m/s).
+    r : ndarray
+        Position array of shape (n_steps, 3).
+    v : ndarray
+        Velocity array of shape (n_steps, 3).
 
+    Notes
+    -----
     Author: Travis Yeager
     """
-    # Convert time to GPS seconds and ensure array
+
+    def get_mask(n_steps, start, end=None, time_array=None):
+        if isinstance(start, Quantity):
+            start = int(np.searchsorted(time_array, start.to(u.s).value))
+        if end is not None and isinstance(end, Quantity):
+            end = int(np.searchsorted(time_array, end.to(u.s).value))
+        if end is None:
+            end = n_steps
+        mask = np.zeros(n_steps, dtype=bool)
+        mask[start:end] = True
+        return mask
+
+    def prep_thrust(n_steps, t_arr, profile, continuous=False):
+        if profile is None:
+            return np.zeros(n_steps, float)
+        if isinstance(profile, list):
+            profile = dict(thrust=profile[0], start=profile[1], end=(profile[2] if len(profile) > 2 else None))
+
+        thrust = float(profile["thrust"])
+        start = profile["start"]
+        end = profile.get("end", None)
+        mask = get_mask(n_steps, start, end, t_arr)
+        if continuous and np.any(mask):
+            mask[np.argmax(mask):] = True
+        return np.full(n_steps, thrust) * mask
+
     t_arr = to_gps(t)
-    t_arr = np.asarray(t_arr, dtype=float)
+    t_arr = t_arr.to_value(u.s) if isinstance(t, Quantity) else np.asarray(t, dtype=float)
     n_steps = len(t_arr)
 
-    # Prepare active masks
-    if radial_active is None:
-        radial_active = np.zeros(n_steps, dtype=bool)
-    if velocity_active is None:
-        velocity_active = np.zeros(n_steps, dtype=bool)
-    if perp_active is None:
-        perp_active = np.zeros(n_steps, dtype=bool)
-    if plane_active is None:
-        plane_active = np.zeros(n_steps, dtype=bool)
+    r_th = prep_thrust(n_steps, t_arr, radial)
+    v_th = prep_thrust(n_steps, t_arr, velocity)
+    i_th = prep_thrust(n_steps, t_arr, inclination)
+    p_th = prep_thrust(n_steps, t_arr, plane)
+    c_th = prep_thrust(n_steps, t_arr, circular, continuous=True)
 
-    # Prepare thrust magnitudes
-    if np.isscalar(radial_thrust):
-        radial_thrust_mags = np.full(n_steps, float(radial_thrust), dtype=float)
-    else:
-        radial_thrust_mags = np.asarray(radial_thrust, dtype=float)
-        if radial_thrust_mags.shape != (n_steps,):
-            raise ValueError("`radial_thrust` must be a scalar or array of length equal to `t`")
-
-    if np.isscalar(velocity_thrust):
-        velocity_thrust_mags = np.full(n_steps, float(velocity_thrust), dtype=float)
-    else:
-        velocity_thrust_mags = np.asarray(velocity_thrust, dtype=float)
-        if velocity_thrust_mags.shape != (n_steps,):
-            raise ValueError("`velocity_thrust` must be a scalar or array of length equal to `t`")
-
-    if np.isscalar(perp_thrust):
-        perp_thrust_mags = np.full(n_steps, float(perp_thrust), dtype=float)
-    else:
-        perp_thrust_mags = np.asarray(perp_thrust, dtype=float)
-        if perp_thrust_mags.shape != (n_steps,):
-            raise ValueError("`perp_thrust` must be a scalar or array of length equal to `t`")
-
-    if np.isscalar(plane_thrust):
-        plane_thrust_mags = np.full(n_steps, float(plane_thrust), dtype=float)
-    else:
-        plane_thrust_mags = np.asarray(plane_thrust, dtype=float)
-        if plane_thrust_mags.shape != (n_steps,):
-            raise ValueError("`plane_thrust` must be a scalar or array of length equal to `t`")
-
-    # Apply mask to thrust magnitudes
-    radial_thrust_mags *= radial_active
-    velocity_thrust_mags *= velocity_active
-    perp_thrust_mags *= perp_active
-    plane_thrust_mags *= plane_active
-
-    # Time step (assumes uniform spacing)
     dt_vals = np.diff(t_arr)
     if not np.allclose(dt_vals, dt_vals[0]):
-        raise ValueError("Time steps must be uniform for this implementation.")
+        raise ValueError("non-uniform dt not supported")
     dt = dt_vals[0]
 
-    # Allocate arrays
-    r = np.zeros((n_steps, 3), dtype=float)
-    v = np.zeros((n_steps, 3), dtype=float)
+    r = np.zeros((n_steps, 3))
+    v = np.zeros((n_steps, 3))
+    r[0], v[0] = np.array(r0), np.array(v0)
 
-    r[0] = np.asarray(r0, dtype=float)
-    v[0] = np.asarray(v0, dtype=float)
-
-    # Leapfrog integration loop
     for i in range(n_steps - 1):
-        # Current acceleration (gravity + velocity-directed thrust + radial thrust + perpendicular thrust + plane thrust)
-        a_curr = (
-            accel(r[i]) +
-            accel_velocity(v[i], velocity_thrust_mags[i]) +
-            accel_radial(r[i], radial_thrust_mags[i]) +
-            accel_perp(v[i], r[i], perp_thrust_mags[i]) +
-            accel_plane(r[i], v[i], plane_thrust_mags[i])  # Added accel_plane
+        a0 = (
+            accel(r[i])
+            + accel_radial(r[i], r_th[i])
+            + accel_velocity(v[i], v_th[i])
+            + accel_inclination(r[i], v[i], i_th[i])
+            + accel_plane(r[i], v[i], p_th[i])
+            + accel_to_circular(r[i], v[i], c_th[i])
         )
-        v_half = v[i] + 0.5 * dt * a_curr
+        v_half = v[i] + 0.5 * dt * a0
         r[i + 1] = r[i] + dt * v_half
 
-        # Next acceleration and full-step velocity update
-        a_next = (
-            accel(r[i + 1]) +
-            accel_velocity(v_half, velocity_thrust_mags[i + 1]) +
-            accel_radial(r[i + 1], radial_thrust_mags[i + 1]) +
-            accel_perp(v_half, r[i + 1], perp_thrust_mags[i + 1]) +
-            accel_plane(r[i + 1], v_half, plane_thrust_mags[i + 1])  # Added accel_plane
+        a1 = (
+            accel(r[i + 1])
+            + accel_radial(r[i + 1], r_th[i + 1])
+            + accel_velocity(v_half, v_th[i + 1])
+            + accel_inclination(r[i + 1], v_half, i_th[i + 1])
+            + accel_plane(r[i + 1], v_half, p_th[i + 1])
+            + accel_to_circular(r[i + 1], v_half, c_th[i + 1])
         )
-        v[i + 1] = v_half + 0.5 * dt * a_next
+        v[i + 1] = v_half + 0.5 * dt * a1
 
-    return r, v
+    if not fuel:
+        return r, v
+
+    fuels = {
+        "radial": estimate_fuel_usage(
+            np.abs(r_th), dt, r, engine="Mira"
+        ),  # Fuel for radial maneuvers
+        "velocity": estimate_fuel_usage(
+            np.abs(v_th), dt, r, engine="Mira"
+        ),  # Fuel for velocity (in-track) maneuvers
+        "inclination": estimate_fuel_usage(
+            np.abs(i_th), dt, r, engine="Mira"
+        ),  # Fuel for inclination changes
+        "plane": estimate_fuel_usage(
+            np.abs(p_th), dt, r, engine="Mira"
+        ),  # Fuel for plane (out-of-plane) maneuvers
+        "circular": estimate_fuel_usage(
+            np.abs(c_th), dt, r, engine="Mira"
+        ),  # Fuel for circularization maneuvers
+    }
+    return r, v, fuels

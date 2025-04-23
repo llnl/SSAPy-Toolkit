@@ -87,4 +87,4 @@ x, y, z = sol.y[0], sol.y[1], sol.y[2]
 landing = [x[-1], y[-1], z[-1]]
 print(f"Landing position: ({landing[0]:.2f}, {landing[1]:.2f}, {landing[2]:.2f}) m")
 
-fig = groundtrack_dashboard(x, y, z, sol.t, save_path=None)
+fig = groundtrack_dashboard(x, y, z, sol.t, save_path="images/simple_arc.jpg")

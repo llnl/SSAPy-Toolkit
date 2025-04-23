@@ -76,38 +76,39 @@ def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500):
     ax1.add_feature(cfeature.LAKES, alpha=0.5)
     ax1.add_feature(cfeature.RIVERS)
     ax1.stock_img()
-    ax1.gridlines(draw_labels=True)
-    ax1.coastlines()
-    ax1.gridlines(draw_labels=True)
 
-    ax1.plot(lon, lat, color='red', label='Ground Track', transform=ccrs.Geodetic())
-    ax1.plot(lon[0], lat[0], 'g*', markersize=14, label='Start', transform=ccrs.Geodetic())
-    ax1.plot(lon[-1], lat[-1], 'kx', markersize=12, label='End', transform=ccrs.Geodetic())
-    ax1.legend(loc='lower left', fontsize=20)
-    ax1.set_title("Ground Track", fontsize=28)
+    gl = ax1.gridlines(draw_labels=True)
+    gl.xlabel_style = {'size': 24}
+    gl.ylabel_style = {'size': 24}
+
+    ax1.coastlines()
+
+    ax1.plot(lon, lat, color='red', label='Ground Track', transform=ccrs.Geodetic(), linewidth=4.0)
+    ax1.plot(lon[0], lat[0], 'g*', markersize=28, label='Start', transform=ccrs.Geodetic())
+    ax1.plot(lon[-1], lat[-1], 'kx', markersize=18, label='End', transform=ccrs.Geodetic())
+    ax1.legend(loc='lower left', fontsize=24)
 
     ax2 = fig.add_subplot(gs[1, 0])
-    ax2.plot(times / 60, altitude / 1000, color='blue')
-    ax2.set_xlabel('Time (minutes)', fontsize=22)
-    ax2.set_ylabel('Altitude (km)', fontsize=22)
+    ax2.plot(times / 60, altitude / 1000, color='Red', linewidth=4.0)
+    ax2.set_xlabel('Time (minutes)', fontsize=24)
+    ax2.set_ylabel('Altitude (km)', fontsize=24)
     ax2.set_title('Altitude vs Time', fontsize=26)
-    ax2.tick_params(axis='both', labelsize=20)
+    ax2.tick_params(axis='both', labelsize=24)
     ax2.grid(True)
 
     ax3 = fig.add_subplot(gs[1, 1], projection='3d')
     ax3.plot_surface(earth_x / 1e3, earth_y / 1e3, earth_z / 1e3,
                      color='blue', alpha=0.5, linewidth=0)
-    ax3.plot(x / 1e3, y / 1e3, z / 1e3, color='red', label='Orbit')
+    ax3.plot(x / 1e3, y / 1e3, z / 1e3, color='red', label='Orbit', linewidth=4.0)
     ax3.scatter(x[0] / 1e3, y[0] / 1e3, z[0] / 1e3,
                 color='green', marker='*', s=160, label='Start')
     ax3.scatter(x[-1] / 1e3, y[-1] / 1e3, z[-1] / 1e3,
                 color='black', marker='x', s=140, label='End')
-    ax3.set_xlabel('X (km)', fontsize=20)
-    ax3.set_ylabel('Y (km)', fontsize=20)
-    ax3.set_zlabel('Z (km)', fontsize=20)
-    ax3.set_title('3D Trajectory', fontsize=26)
-    ax3.tick_params(axis='both', labelsize=18)
-    ax3.legend(fontsize=18)
+    ax3.set_xlabel('X (km)', fontsize=24)
+    ax3.set_ylabel('Y (km)', fontsize=24)
+    ax3.set_zlabel('Z (km)', fontsize=24)
+    ax3.tick_params(axis='both', labelsize=24)
+    ax3.legend(fontsize=24)
 
     # Calculate bounding cube
     lower_bound, upper_bound = find_smallest_bounding_cube(xyz, pad=pad)
@@ -122,6 +123,8 @@ def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500):
     ax3.set_xticks([-limit, limit])
     ax3.set_yticks([-limit, limit])
     ax3.set_zticks([-limit, limit])
+    ax3.set_yticklabels([])
+    ax3.set_zticklabels([])
 
     plt.tight_layout()
     plt.show()
