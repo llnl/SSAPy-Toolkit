@@ -70,23 +70,47 @@ def leapfrog(
         mask[start:end] = True
         return mask
 
-    def prep_thrust(n_steps, t_arr, profile, continuous=False):
-        if profile is None:
-            return np.zeros(n_steps, float)
-        if isinstance(profile, list):
-            profile = dict(thrust=profile[0], start=profile[1], end=(profile[2] if len(profile) > 2 else None))
-        thrust = float(profile["thrust"])
-        start = profile["start"]
-        end = profile.get("end", None)
-        mask = get_mask(n_steps, start, end, t_arr)
-        if continuous and np.any(mask):
-            mask[np.argmax(mask):] = True
-        return np.full(n_steps, thrust) * mask
+    def prep_thrust(n_steps, t_arr, profiles, continuous=False):
+        """
+        Accepts None, a single profile dict, or a list of them.
+        Returns the combined thrust-time array for all profiles.
+        """
+        # start with nothing
+        total = np.zeros(n_steps, float)
 
+        if profiles is None:
+            return total
+
+        # normalize to a list
+        if isinstance(profiles, dict):
+            profiles = [profiles]
+
+        if isinstance(profile, list):
+            for p in profile:
+                thrust = float(p[0])  # Thrust value
+                start = p[1]          # Start time/index
+                end = p[2] if len(p) > 2 else None  # End time/index (optional)
+                mask = get_mask(n_steps, start, end, t_arr)
+                if continuous and np.any(mask):
+                    mask[np.argmax(mask):] = True
+                total += thrust * mask
+        else:
+            thrust = float(profile["thrust"])
+            start = profile["start"]
+            end = profile.get("end", None)
+            mask = get_mask(n_steps, start, end, t_arr)
+            if continuous and np.any(mask):
+                mask[np.argmax(mask):] = True
+            total += thrust * mask
+
+        return total
+
+    # convert time to GPS‐seconds
     t_arr = to_gps(t)
     t_arr = t_arr - t_arr[0]
     n_steps = len(t_arr)
 
+    # now each can be a dict or list of dicts
     r_th = prep_thrust(n_steps, t_arr, radial)
     v_th = prep_thrust(n_steps, t_arr, velocity)
     i_th = prep_thrust(n_steps, t_arr, inclination)
