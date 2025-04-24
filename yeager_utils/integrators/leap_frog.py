@@ -85,23 +85,24 @@ def leapfrog(
         if isinstance(profiles, dict):
             profiles = [profiles]
 
-        if isinstance(profile, list):
-            for p in profile:
-                thrust = float(p[0])  # Thrust value
-                start = p[1]          # Start time/index
-                end = p[2] if len(p) > 2 else None  # End time/index (optional)
+        for profile in profiles:
+            if isinstance(profile, list):
+                for p in profile:
+                    thrust = float(p[0])  # Thrust value
+                    start = p[1]          # Start time/index
+                    end = p[2] if len(p) > 2 else None  # End time/index (optional)
+                    mask = get_mask(n_steps, start, end, t_arr)
+                    if continuous and np.any(mask):
+                        mask[np.argmax(mask):] = True
+                    total += thrust * mask
+            else:
+                thrust = float(profile["thrust"])
+                start = profile["start"]
+                end = profile.get("end", None)
                 mask = get_mask(n_steps, start, end, t_arr)
                 if continuous and np.any(mask):
                     mask[np.argmax(mask):] = True
                 total += thrust * mask
-        else:
-            thrust = float(profile["thrust"])
-            start = profile["start"]
-            end = profile.get("end", None)
-            mask = get_mask(n_steps, start, end, t_arr)
-            if continuous and np.any(mask):
-                mask[np.argmax(mask):] = True
-            total += thrust * mask
 
         return total
 
