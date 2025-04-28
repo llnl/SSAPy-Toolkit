@@ -116,6 +116,7 @@ def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500):
     ax3.set_xticks([-limit, 0, limit])
     ax3.set_yticklabels([])
     ax3.set_zticklabels([])
+    plt.axis('equal')
 
     ax4 = fig.add_subplot(gs[1, 1])
     ax4.plot(times[1:-1] / 60, velocity[1:-1] / 1e3, color='purple', linewidth=2.5)
@@ -144,6 +145,7 @@ def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500):
     ax5.set_xticks([-limit, 0, limit])
     ax5.set_yticklabels([])
     ax5.set_zticklabels([])
+    plt.axis('equal')
 
     plt.tight_layout()
     plt.show()

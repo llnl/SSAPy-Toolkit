@@ -11,6 +11,17 @@ from ..time import to_gps
 from .fuel import estimate_fuel_usage
 
 
+def ensure_list_of_lists(x):
+    if isinstance(x, (list, tuple, np.ndarray)) and all(isinstance(i, (list, tuple, dict, np.ndarray)) for i in x):
+        return x  # Already good
+    else:
+        if not isinstance(x, (list, tuple, np.ndarray)):
+            x = [x]
+        if not isinstance(x[0], (list, tuple, dict, np.ndarray)):
+            x = [x]
+        return x
+
+
 def leapfrog(
     r0,
     v0,
@@ -57,6 +68,8 @@ def leapfrog(
         Velocity array (n_steps, 3) [m/s].
     fuels : dict (optional)
         Estimated fuel usage per maneuver type.
+    
+    Author: Travis Yeager
     """
 
     def get_mask(n_steps, start, end=None, time_array=None):
@@ -72,37 +85,60 @@ def leapfrog(
 
     def prep_thrust(n_steps, t_arr, profiles, continuous=False):
         """
-        Accepts None, a single profile dict, or a list of them.
-        Returns the combined thrust-time array for all profiles.
-        """
-        # start with nothing
-        total = np.zeros(n_steps, float)
+        Build a thrust-time array from profiles that may be:
+        - None
+        - dict with keys 'thrust', 'start', optionally 'end'
+        - list/tuple/ndarray [thrust, start, end?]  (or [thrust, start] if continuous)
+        - list of any of the above
 
+        Overlaps sum naturally.
+        """
+        total = np.zeros(n_steps, float)
         if profiles is None:
             return total
 
-        # normalize to a list
-        if isinstance(profiles, dict):
-            profiles = [profiles]
+        # Normalize to list
+        profiles = ensure_list_of_lists(profiles)
 
-        for profile in profiles:
-            if isinstance(profile, list):
-                for p in profile:
-                    thrust = float(p[0])  # Thrust value
-                    start = p[1]          # Start time/index
-                    end = p[2] if len(p) > 2 else None  # End time/index (optional)
-                    mask = get_mask(n_steps, start, end, t_arr)
-                    if continuous and np.any(mask):
-                        mask[np.argmax(mask):] = True
-                    total += thrust * mask
+        for prof in profiles:
+            # Case A: dict
+            if isinstance(prof, dict):
+                thrust = float(prof["thrust"])
+                start = int(prof["start"])
+                end   = int(prof.get("end", -1))
+
+            # Case B: sequence
+            elif isinstance(prof, (list, tuple, np.ndarray)):
+                arr = list(prof)
+                thrust = float(arr[0])
+                start  = arr[1]
+                if continuous:
+                    end = None
+                else:
+                    end = arr[2] if len(arr) > 2 else None
+
             else:
-                thrust = float(profile["thrust"])
-                start = profile["start"]
-                end = profile.get("end", None)
-                mask = get_mask(n_steps, start, end, t_arr)
-                if continuous and np.any(mask):
-                    mask[np.argmax(mask):] = True
-                total += thrust * mask
+                raise TypeError(f"Unsupported profile type: {type(prof)}")
+
+            # Build mask
+            if isinstance(start, (float, int)) and t_arr is not None:
+                start_idx = int(np.searchsorted(t_arr, start))
+            else:
+                start_idx = start
+            if end is None:
+                end_idx = n_steps
+            else:
+                if isinstance(end, (float, int)) and t_arr is not None:
+                    end_idx = int(np.searchsorted(t_arr, end))
+                else:
+                    end_idx = end
+
+            mask = np.zeros(n_steps, bool)
+            mask[start_idx:end_idx] = True
+            if continuous and mask.any():
+                mask[mask.argmax():] = True
+
+            total += thrust * mask
 
         return total
 

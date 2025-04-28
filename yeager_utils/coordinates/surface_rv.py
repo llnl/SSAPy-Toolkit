@@ -1,8 +1,9 @@
 from ssapy.orbit import EarthObserver
 from astropy.time import Time
+from ..time import to_gps
 
 
-def surface_rv(lon, lat, elevation=0.0, time_gps=None, fast=False):
+def surface_rv(lon, lat, elevation=0.0, time=Time("1980-01-06 00:00:00", format="iso", scale="utc"), fast=False):
     """
     Get GCRF position and velocity of a surface observer at a specific location and time.
 
@@ -26,7 +27,7 @@ def surface_rv(lon, lat, elevation=0.0, time_gps=None, fast=False):
     v : ndarray, shape (3,)
         Velocity vector in GCRF coordinates (m/s).
     """
-    time = Time("1980-01-06 00:00:00", format="iso", scale="utc")
+    time = to_gps(time)
 
     observer = EarthObserver(lon=lon, lat=lat, elevation=elevation, fast=fast)
     return observer.getRV(time)
