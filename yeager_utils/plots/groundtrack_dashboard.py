@@ -1,11 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
-import cartopy.crs as ccrs
-import cartopy.feature as cfeature
-
 from ssapy import groundTrack
-
+import cartopy.crs as ccrs
 from ..compute import find_smallest_bounding_cube
 from ..constants import EARTH_RADIUS
 from ..time import to_gps
@@ -65,6 +62,10 @@ def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500, show=False, o
     ax1.set_global()
 
     if offline:
+        from .plotutils import load_earth_file, drawEarth
+        ax1.imshow(load_earth_file(), extent=[-180, 180, -90, 90])
+    else:
+        import cartopy.feature as cfeature
         ax1.add_feature(cfeature.LAND, edgecolor='black')
         ax1.add_feature(cfeature.OCEAN)
         ax1.add_feature(cfeature.COASTLINE)
@@ -72,13 +73,6 @@ def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500, show=False, o
         ax1.add_feature(cfeature.LAKES, alpha=0.5)
         ax1.add_feature(cfeature.RIVERS)
         ax1.set_facecolor('lightblue')
-    else:
-        from cartopy.feature import NaturalEarthFeature
-        ax1.add_feature(NaturalEarthFeature('physical', 'land', '50m', edgecolor='face'), zorder=0)
-        ax1.add_feature(NaturalEarthFeature('physical', 'ocean', '50m', edgecolor='face'))
-        ax1.add_feature(NaturalEarthFeature('cultural', 'admin_0_countries', '50m'), linestyle=':')
-        ax1.add_feature(NaturalEarthFeature('physical', 'lakes', '50m'), alpha=0.5)
-        ax1.add_feature(NaturalEarthFeature('physical', 'rivers_lake_centerlines', '50m'))
 
     gl = ax1.gridlines(draw_labels=True)
     gl.xlabel_style = {'size': 18}
