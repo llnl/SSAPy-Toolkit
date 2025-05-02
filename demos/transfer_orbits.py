@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-from yeager_utils import transfer_shooter, transfer_hohmann, transfer_lambertian, RGEO, Time, hkoe
+from yeager_utils import transfer_shooter, transfer_hohmann, transfer_lambertian, transfer_coplanar, transfer_coplanarRGEO, Time, hkoe
 from ssapy import Orbit
 
 # Define initial and final orbit Keplerian elements
