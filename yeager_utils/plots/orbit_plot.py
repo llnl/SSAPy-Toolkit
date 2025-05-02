@@ -310,7 +310,7 @@ def orbit_plot(r, t=None, title='', figsize=(7, 7), save_path=False, frame="gcrf
 
         ax4.set_xlabel(f'x [{unit_label}]', color=textcolor)
         ax4.set_ylabel(f'y [{unit_label}]', color=textcolor)
-        ax4.set_ylabel(f'z [{unit_label}]', color=textcolor)
+        ax4.set_zlabel(f'z [{unit_label}]', color=textcolor)
         if 'lunar' in frame:
             lagrange_points = lagrange_points_lunar_frame().items()
             if 'fixed' in frame:
