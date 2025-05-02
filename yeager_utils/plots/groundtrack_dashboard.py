@@ -12,7 +12,7 @@ from ..time import to_gps
 from .plotutils import save_plot
 
 
-def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500):
+def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500, show=False):
     """
     Visualizes a satellite ground track, altitude/velocity over time, and 3D trajectories.
 
@@ -148,7 +148,8 @@ def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500):
     plt.axis('equal')
 
     plt.tight_layout()
-    plt.show()
+    if show:
+        plt.show()
     if save_path:
         save_plot(fig, save_path)
     return fig

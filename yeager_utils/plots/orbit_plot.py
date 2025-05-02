@@ -264,7 +264,7 @@ def orbit_plot(r, t=None, title='', figsize=(7, 7), save_path=False, frame="gcrf
             ax2.scatter(stn['secondary_x'], stn['secondary_z'], color=stn['secondary_color'], s=stn['secondary_size'])
         ax2.set_aspect('equal')
         ax2.set_xlabel(f'x [{unit_label}]', color=textcolor)
-        ax2.set_ylabel(f'y [{unit_label}]', color=textcolor)
+        ax2.set_ylabel(f'z [{unit_label}]', color=textcolor)
         ax2.yaxis.tick_right()  # Move y-axis ticks to the right
         ax2.yaxis.set_label_position("right")  # Move y-axis label to the right
         ax2.set_title(f'{title}', color=textcolor)
@@ -284,8 +284,8 @@ def orbit_plot(r, t=None, title='', figsize=(7, 7), save_path=False, frame="gcrf
         if r_moon[:, 0] is not False:
             ax1.scatter(stn['secondary_y'], stn['secondary_z'], color=stn['secondary_color'], s=stn['secondary_size'])
         ax3.set_aspect('equal')
-        ax3.set_xlabel(f'x [{unit_label}]', color=textcolor)
-        ax3.set_ylabel(f'y [{unit_label}]', color=textcolor)
+        ax3.set_xlabel(f'y [{unit_label}]', color=textcolor)
+        ax3.set_ylabel(f'z [{unit_label}]', color=textcolor)
         if 'lunar' in frame:
             lagrange_points = lagrange_points_lunar_frame().items()
             if 'fixed' in frame:
