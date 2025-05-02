@@ -12,14 +12,9 @@ from ..time import to_gps
 from .plotutils import save_plot
 
 
-def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500, show=False):
+def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500, show=False, offline=True):
     """
     Visualizes a satellite ground track, altitude/velocity over time, and 3D trajectories.
-
-    Generates a dashboard with six subplots: the 2D ground track on a world map,
-    altitude and velocity as functions of time, and 3D orbital views in both ITRF and GCRF.
-    Useful for analyzing orbital behaviors, verifying trajectory simulations,
-    and presenting satellite dynamics.
 
     Parameters
     ----------
@@ -35,15 +30,15 @@ def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500, show=False):
         If provided, saves the figure to the specified path.
     pad : float, optional
         Padding (in meters) for the 3D plot's bounding cube. Defaults to 500 m.
+    show : bool, optional
+        If True, displays the figure.
+    offline : bool, optional
+        If True (default), only offline features are used. If False, enables high-res online map data.
 
     Returns
     -------
     fig : matplotlib.figure.Figure
         The complete dashboard figure object.
-
-    Author
-    ------
-    Travis Yeager
     """
     times = to_gps(times)
     times = times - times[0]
@@ -54,7 +49,6 @@ def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500, show=False):
     lon = np.degrees(np.arctan2(y_gt, x_gt))
     lat = np.degrees(np.arcsin(z_gt / np.linalg.norm(np.stack([x_gt, y_gt, z_gt]), axis=0)))
     altitude = np.linalg.norm(xyz, axis=-1) - EARTH_RADIUS
-
     velocity = np.linalg.norm(np.gradient(xyz, axis=0), axis=1)
 
     phi_earth = np.linspace(0, np.pi, 50)
@@ -69,13 +63,23 @@ def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500, show=False):
 
     ax1 = fig.add_subplot(gs[0, 0:2], projection=ccrs.PlateCarree())
     ax1.set_global()
-    ax1.add_feature(cfeature.LAND, edgecolor='black')
-    ax1.add_feature(cfeature.OCEAN)
-    ax1.add_feature(cfeature.COASTLINE)
-    ax1.add_feature(cfeature.BORDERS, linestyle=':')
-    ax1.add_feature(cfeature.LAKES, alpha=0.5)
-    ax1.add_feature(cfeature.RIVERS)
-    ax1.stock_img()
+
+    if offline:
+        ax1.add_feature(cfeature.LAND, edgecolor='black')
+        ax1.add_feature(cfeature.OCEAN)
+        ax1.add_feature(cfeature.COASTLINE)
+        ax1.add_feature(cfeature.BORDERS, linestyle=':')
+        ax1.add_feature(cfeature.LAKES, alpha=0.5)
+        ax1.add_feature(cfeature.RIVERS)
+        ax1.set_facecolor('lightblue')
+    else:
+        from cartopy.feature import NaturalEarthFeature
+        ax1.add_feature(NaturalEarthFeature('physical', 'land', '50m', edgecolor='face'), zorder=0)
+        ax1.add_feature(NaturalEarthFeature('physical', 'ocean', '50m', edgecolor='face'))
+        ax1.add_feature(NaturalEarthFeature('cultural', 'admin_0_countries', '50m'), linestyle=':')
+        ax1.add_feature(NaturalEarthFeature('physical', 'lakes', '50m'), alpha=0.5)
+        ax1.add_feature(NaturalEarthFeature('physical', 'rivers_lake_centerlines', '50m'))
+
     gl = ax1.gridlines(draw_labels=True)
     gl.xlabel_style = {'size': 18}
     gl.ylabel_style = {'size': 18}
@@ -97,15 +101,14 @@ def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500, show=False):
                      color='blue', alpha=0.5, linewidth=0)
     ax3.plot(x_gt / 1e3, y_gt / 1e3, z_gt / 1e3, color='red', linewidth=2.5)
     ax3.scatter(x_gt[0] / 1e3, y_gt[0] / 1e3, z_gt[0] / 1e3,
-                color='green', marker='*', s=120, label='Start')
+                color='green', marker='*', s=120)
     ax3.scatter(x_gt[-1] / 1e3, y_gt[-1] / 1e3, z_gt[-1] / 1e3,
-                color='black', marker='x', s=100, label='End')
+                color='black', marker='x', s=100)
+    ax3.set_title('ITRF', fontsize=16)
     ax3.set_xlabel('X (km)', fontsize=16)
     ax3.set_ylabel('Y (km)', fontsize=16)
     ax3.set_zlabel('Z (km)', fontsize=16)
     ax3.tick_params(axis='both', labelsize=14)
-    ax3.legend(fontsize=14)
-    ax3.set_title('ITRF', fontsize=16)
 
     lower_bound, upper_bound = find_smallest_bounding_cube(xyz, pad=pad)
     max_bound = np.max(np.abs([lower_bound, upper_bound])) / 1e3
@@ -116,7 +119,6 @@ def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500, show=False):
     ax3.set_xticks([-limit, 0, limit])
     ax3.set_yticklabels([])
     ax3.set_zticklabels([])
-    plt.axis('equal')
 
     ax4 = fig.add_subplot(gs[1, 1])
     ax4.plot(times[1:-1] / 60, velocity[1:-1] / 1e3, color='purple', linewidth=2.5)
@@ -134,18 +136,17 @@ def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500, show=False):
                 color='green', marker='*', s=120)
     ax5.scatter(x[-1] / 1e3, y[-1] / 1e3, z[-1] / 1e3,
                 color='black', marker='x', s=100)
+    ax5.set_title('GCRF', fontsize=16)
     ax5.set_xlabel('X (km)', fontsize=16)
     ax5.set_ylabel('Y (km)', fontsize=16)
     ax5.set_zlabel('Z (km)', fontsize=16)
     ax5.tick_params(axis='both', labelsize=14)
-    ax5.set_title('GCRF', fontsize=16)
     ax5.set_xlim([-limit, limit])
     ax5.set_ylim([-limit, limit])
     ax5.set_zlim([-limit, limit])
     ax5.set_xticks([-limit, 0, limit])
     ax5.set_yticklabels([])
     ax5.set_zticklabels([])
-    plt.axis('equal')
 
     plt.tight_layout()
     if show:
