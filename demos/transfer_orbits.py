@@ -48,3 +48,9 @@ plt.show()
 # result = transfer_shooter(orbit1.r, orbit1.v, orbit2.r, plot=True, status=True)
 # fig = result['fig']
 # plt.show()
+
+
+print("Running coplanar")
+result = transfer_coplanar(orbit1, orbit2, plot=True, status=True)
+fig = result['fig']
+plt.show()
