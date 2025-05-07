@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
+from matplotlib.lines import Line2D
 from ssapy import groundTrack
 import cartopy.crs as ccrs
 from ..compute import find_smallest_bounding_cube
@@ -100,9 +101,9 @@ def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, offline=Tru
         ax1.plot(lon[-1], lat[-1], 'x', color=colors[i], markersize=14)
 
     legend_elements = [
-        plt.lines.Line2D([0], [0], color='black', linewidth=2.5, label='Orbit Track'),
-        plt.lines.Line2D([0], [0], marker='*', color='black', linestyle='None', markersize=12, label='Orbit Start'),
-        plt.lines.Line2D([0], [0], marker='x', color='black', linestyle='None', markersize=10, label='Orbit End')
+        Line2D([0], [0], color='black', linewidth=2.5, label='Orbit Track'),
+        Line2D([0], [0], marker='*', color='black', linestyle='None', markersize=12, label='Orbit Start'),
+        Line2D([0], [0], marker='x', color='black', linestyle='None', markersize=10, label='Orbit End')
     ]
     ax1.legend(handles=legend_elements, loc='lower left', fontsize=16)
 
