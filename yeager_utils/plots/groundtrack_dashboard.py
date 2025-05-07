@@ -6,23 +6,19 @@ import cartopy.crs as ccrs
 from ..compute import find_smallest_bounding_cube
 from ..constants import EARTH_RADIUS
 from ..time import to_gps
-from .plotutils import save_plot
+from .plotutils import save_plot, valid_orbits
 
 
-def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500, show=False, offline=True):
+def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, offline=True):
     """
-    Visualizes a satellite ground track, altitude/velocity over time, and 3D trajectories.
+    Visualizes multiple satellite ground tracks, altitude/velocity over time, and 3D trajectories.
 
     Parameters
     ----------
-    x : array_like
-        X positions in meters.
-    y : array_like
-        Y positions in meters.
-    z : array_like
-        Z positions in meters.
-    times : array_like
-        Time array in seconds or any format convertible by `to_gps`.
+    r : array_like or list of array_like
+        Position vectors in meters. Either a single (n,3) array or a list of (n,3) arrays for multiple orbits.
+    t : array_like or list of array_like
+        Time arrays in seconds or any format convertible by `to_gps`. Single array or list matching `r`.
     save_path : str or None, optional
         If provided, saves the figure to the specified path.
     pad : float, optional
@@ -36,18 +32,35 @@ def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500, show=False, o
     -------
     fig : matplotlib.figure.Figure
         The complete dashboard figure object.
+
+    Author: Travis Yeager
     """
-    times = to_gps(times)
-    times = times - times[0]
 
-    xyz = np.stack([x, y, z], axis=-1)
-    x_gt, y_gt, z_gt = groundTrack(xyz, times, format='cartesian')
+    r, t = valid_orbits(r, t)
+    
+    # Ensure times are converted to GPS and normalized
+    t = [to_gps(t) - to_gps(t)[0] for t in t]
+    
+    # Process each orbit
+    lons, lats, altitudes, velocities, x_gts, y_gts, z_gts = [], [], [], [], [], [], []
+    for r_i, t_i in zip(r, t):
+        xyz = np.array(r_i)  # Ensure r_i is (n,3)
+        x_gt, y_gt, z_gt = groundTrack(xyz, t_i, format='cartesian')
+        
+        lon = np.degrees(np.arctan2(y_gt, x_gt))
+        lat = np.degrees(np.arcsin(z_gt / np.linalg.norm(np.stack([x_gt, y_gt, z_gt]), axis=0)))
+        altitude = np.linalg.norm(xyz, axis=-1) - EARTH_RADIUS
+        velocity = np.linalg.norm(np.gradient(xyz, axis=0), axis=1)
+        
+        lons.append(lon)
+        lats.append(lat)
+        altitudes.append(altitude)
+        velocities.append(velocity)
+        x_gts.append(x_gt)
+        y_gts.append(y_gt)
+        z_gts.append(z_gt)
 
-    lon = np.degrees(np.arctan2(y_gt, x_gt))
-    lat = np.degrees(np.arcsin(z_gt / np.linalg.norm(np.stack([x_gt, y_gt, z_gt]), axis=0)))
-    altitude = np.linalg.norm(xyz, axis=-1) - EARTH_RADIUS
-    velocity = np.linalg.norm(np.gradient(xyz, axis=0), axis=1)
-
+    # Earth surface for 3D plots
     phi_earth = np.linspace(0, np.pi, 50)
     theta_earth = np.linspace(0, 2 * np.pi, 50)
     phi_earth, theta_earth = np.meshgrid(phi_earth, theta_earth)
@@ -55,9 +68,11 @@ def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500, show=False, o
     earth_y = EARTH_RADIUS * np.sin(phi_earth) * np.sin(theta_earth)
     earth_z = EARTH_RADIUS * np.cos(phi_earth)
 
+    # Create figure and grid
     fig = plt.figure(figsize=(24, 16))
     gs = gridspec.GridSpec(2, 3, figure=fig)
 
+    # Ground track plot
     ax1 = fig.add_subplot(gs[0, 0:2], projection=ccrs.PlateCarree())
     ax1.set_global()
 
@@ -77,34 +92,41 @@ def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500, show=False, o
     gl = ax1.gridlines(draw_labels=True)
     gl.xlabel_style = {'size': 18}
     gl.ylabel_style = {'size': 18}
-    ax1.plot(lon, lat, color='red', label='Ground Track', transform=ccrs.Geodetic(), linewidth=2.5)
-    ax1.plot(lon[0], lat[0], 'g*', markersize=20, label='Start', transform=ccrs.Geodetic())
-    ax1.plot(lon[-1], lat[-1], 'kx', markersize=14, label='End', transform=ccrs.Geodetic())
+    
+    colors = plt.cm.tab10(np.linspace(0, 1, len(r)))
+    for i, (lon, lat) in enumerate(zip(lons, lats)):
+        ax1.plot(lon, lat, color=colors[i], label=f'Orbit {i+1} Track', transform=ccrs.Geodetic(), linewidth=2.5)
+        ax1.plot(lon[0], lat[0], '*', color=colors[i], markersize=20, label=f'Orbit {i+1} Start', transform=ccrs.Geodetic())
+        ax1.plot(lon[-1], lat[-1], 'x', color=colors[i], markersize=14, label=f'Orbit {i+1} End', transform=ccrs.Geodetic())
     ax1.legend(loc='lower left', fontsize=16)
 
+    # Altitude plot
     ax2 = fig.add_subplot(gs[1, 0])
-    ax2.plot(times / 60, altitude / 1e3, color='blue', linewidth=2.5)
+    for i, (ti, alt) in enumerate(zip(t, altitudes)):
+        ax2.plot(ti / 60, alt / 1e3, color=colors[i], linewidth=2.5, label=f'Orbit {i+1}')
     ax2.set_xlabel('Time (minutes)', fontsize=18)
     ax2.set_ylabel('Altitude (km)', fontsize=18)
     ax2.set_title('Altitude vs Time', fontsize=20)
     ax2.tick_params(axis='both', labelsize=16)
     ax2.grid(True)
+    ax2.legend(fontsize=14)
 
+    # ITRF 3D plot
     ax3 = fig.add_subplot(gs[0, 2], projection='3d')
-    ax3.plot_surface(earth_x / 1e3, earth_y / 1e3, earth_z / 1e3,
-                     color='blue', alpha=0.5, linewidth=0)
-    ax3.plot(x_gt / 1e3, y_gt / 1e3, z_gt / 1e3, color='red', linewidth=2.5)
-    ax3.scatter(x_gt[0] / 1e3, y_gt[0] / 1e3, z_gt[0] / 1e3,
-                color='green', marker='*', s=120)
-    ax3.scatter(x_gt[-1] / 1e3, y_gt[-1] / 1e3, z_gt[-1] / 1e3,
-                color='black', marker='x', s=100)
+    ax3.plot_surface(earth_x / 1e3, earth_y / 1e3, earth_z / 1e3, color='blue', alpha=0.5, linewidth=0)
+    for i, (x_gt, y_gt, z_gt) in enumerate(zip(x_gts, y_gts, z_gts)):
+        ax3.plot(x_gt / 1e3, y_gt / 1e3, z_gt / 1e3, color=colors[i], linewidth=2.5)
+        ax3.scatter(x_gt[0] / 1e3, y_gt[0] / 1e3, z_gt[0] / 1e3, color=colors[i], marker='*', s=120)
+        ax3.scatter(x_gt[-1] / 1e3, y_gt[-1] / 1e3, z_gt[-1] / 1e3, color=colors[i], marker='x', s=100)
     ax3.set_title('ITRF', fontsize=16)
     ax3.set_xlabel('X (km)', fontsize=16)
     ax3.set_ylabel('Y (km)', fontsize=16)
     ax3.set_zlabel('Z (km)', fontsize=16)
     ax3.tick_params(axis='both', labelsize=14)
 
-    lower_bound, upper_bound = find_smallest_bounding_cube(xyz, pad=pad)
+    # Set 3D plot limits
+    all_xyz = np.concatenate([r_i for r_i in r], axis=0)
+    lower_bound, upper_bound = find_smallest_bounding_cube(all_xyz, pad=pad)
     max_bound = np.max(np.abs([lower_bound, upper_bound])) / 1e3
     limit = max(10.0, max_bound)
     ax3.set_xlim([-limit, limit])
@@ -114,22 +136,25 @@ def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500, show=False, o
     ax3.set_yticklabels([])
     ax3.set_zticklabels([])
 
+    # Velocity plot
     ax4 = fig.add_subplot(gs[1, 1])
-    ax4.plot(times[1:-1] / 60, velocity[1:-1] / 1e3, color='purple', linewidth=2.5)
+    for i, (ti, vel) in enumerate(zip(t, velocities)):
+        ax4.plot(ti[1:-1] / 60, vel[1:-1] / 1e3, color=colors[i], linewidth=2.5, label=f'Orbit {i+1}')
     ax4.set_xlabel('Time (minutes)', fontsize=18)
     ax4.set_ylabel('Velocity (km/s)', fontsize=18)
     ax4.set_title('Velocity vs Time', fontsize=20)
     ax4.tick_params(axis='both', labelsize=16)
     ax4.grid(True)
+    ax4.legend(fontsize=14)
 
+    # GCRF 3D plot
     ax5 = fig.add_subplot(gs[1, 2], projection='3d')
-    ax5.plot_surface(earth_x / 1e3, earth_y / 1e3, earth_z / 1e3,
-                     color='blue', alpha=0.5, linewidth=0)
-    ax5.plot(x / 1e3, y / 1e3, z / 1e3, color='orange', linewidth=2.5)
-    ax5.scatter(x[0] / 1e3, y[0] / 1e3, z[0] / 1e3,
-                color='green', marker='*', s=120)
-    ax5.scatter(x[-1] / 1e3, y[-1] / 1e3, z[-1] / 1e3,
-                color='black', marker='x', s=100)
+    ax5.plot_surface(earth_x / 1e3, earth_y / 1e3, earth_z / 1e3, color='blue', alpha=0.5, linewidth=0)
+    for i, r_i in enumerate(r):
+        x, y, z = r_i[:, 0], r_i[:, 1], r_i[:, 2]
+        ax5.plot(x / 1e3, y / 1e3, z / 1e3, color=colors[i], linewidth=2.5)
+        ax5.scatter(x[0] / 1e3, y[0] / 1e3, z[0] / 1e3, color=colors[i], marker='*', s=120)
+        ax5.scatter(x[-1] / 1e3, y[-1] / 1e3, z[-1] / 1e3, color=colors[i], marker='x', s=100)
     ax5.set_title('GCRF', fontsize=16)
     ax5.set_xlabel('X (km)', fontsize=16)
     ax5.set_ylabel('Y (km)', fontsize=16)
@@ -148,3 +173,13 @@ def groundtrack_dashboard(x, y, z, times, save_path=None, pad=500, show=False, o
     if save_path:
         save_plot(fig, save_path)
     return fig
+
+
+# if __name__ == "__main__":
+#     # Example: simple circular orbit around Earth at 400 km altitude for 90 minutes
+#     from yeager_utils import ssapy_orbit, RGEO
+
+#     r, v, t = ssapy_orbit(a=RGEO, e=0.2, duration=(1, 'day'))
+
+#     # Call the dashboard
+#     fig = groundtrack_dashboard(r, t, show=True, save_path=figname("ground_dashboard_test"))

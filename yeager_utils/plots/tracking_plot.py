@@ -7,7 +7,7 @@ from PIL import Image as PILImage
 from ssapy import groundTrack
 from ssapy.utils import find_file, norm
 from ..constants import RGEO, EARTH_RADIUS
-from .plotutils import save_plot, make_black, check_numpy_array
+from .plotutils import save_plot, make_black, valid_orbits
 
 
 def tracking_plot(r: np.ndarray, t: np.ndarray, ground_stations: Optional[np.ndarray] = None,
@@ -59,12 +59,7 @@ def tracking_plot(r: np.ndarray, t: np.ndarray, ground_stations: Optional[np.nda
     Travis Yeager (yeager7@llnl.gov)
     """
 
-    # Validate input types
-    if not isinstance(r, (np.ndarray, list)):
-        raise TypeError(f"Expected numpy.ndarray or list of numpy.ndarray, got {type(r)}")
-    if isinstance(r, list):
-        if not all(isinstance(item, np.ndarray) for item in r):
-            raise TypeError("If 'r' is a list, all elements must be numpy.ndarray")
+    r, t = valid_orbits(r, t)
 
     def _make_plot(r, t, ground_stations, limits, title, figsize, save_path, scale, orbit_index=''):
         lon, lat, height = groundTrack(r, t)
@@ -169,23 +164,16 @@ def tracking_plot(r: np.ndarray, t: np.ndarray, ground_stations: Optional[np.nda
             save_plot(fig, save_path)
         return fig
 
-    input_type = check_numpy_array(r)
-    fig = None
-    if input_type == "numpy array":
+    r, t = valid_orbits(r, t)
+    for i, row in enumerate(r):
+        t_current = t[i]
+        if isinstance(limits, (int, float)):  # Custom limit for each orbit
+            limits_plot = limits
+        else:  # Calculate the limit dynamically based on the satellite data
+            limits_plot = np.nanmax([np.nanmax(norm(row) / RGEO) for row in r]) * 1.2
         fig = _make_plot(
-            r, t, ground_stations=ground_stations,
-            limits=limits, title=title, figsize=figsize,
-            save_path=save_path, scale=scale)
-
-    if input_type == "list of numpy array":
-        for i, row in enumerate(r):
-            if isinstance(limits, (int, float)):  # Custom limit for each orbit
-                limits_plot = limits
-            else:  # Calculate the limit dynamically based on the satellite data
-                limits_plot = np.nanmax([np.nanmax(norm(row) / RGEO) for row in r]) * 1.2
-            fig = _make_plot(
-                row, t, ground_stations=ground_stations,
-                limits=limits_plot, title=title, figsize=figsize,
-                save_path=save_path, scale=scale, orbit_index=i
+            row, t_current, ground_stations=ground_stations,
+            limits=limits_plot, title=title, figsize=figsize,
+            save_path=save_path, scale=scale, orbit_index=i
             )
     return fig

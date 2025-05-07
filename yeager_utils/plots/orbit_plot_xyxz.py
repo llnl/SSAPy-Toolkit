@@ -1,6 +1,6 @@
 from ..constants import RGEO, EARTH_RADIUS, MOON_RADIUS
 from ..coordinates import gcrf_to_itrf, gcrf_to_lunar, gcrf_to_lunar_fixed
-from .plotutils import check_numpy_array, check_type, save_plot
+from .plotutils import valid_orbits, save_plot
 from ..time import Time
 from ..compute import find_smallest_bounding_cube
 from ssapy import get_body
@@ -60,15 +60,7 @@ def orbit_plot_xyxz(r, t=None, title='', figsize=(7, 7), save_path=False, frame=
     """
     from ..orbital_mechanics import lagrange_points_lunar_frame, lagrange_points_lunar_fixed_frame
 
-    input_type = check_numpy_array(r)
-    t_type = check_type(t)
-
-    if input_type == "numpy array":
-        num_orbits = 1
-        r = [r]
-
-    if input_type == "list of numpy array":
-        num_orbits = len(r)
+    r, t = valid_orbits(r, t)
 
     if 'w' in c:
         textcolor = 'black'
@@ -84,49 +76,11 @@ def orbit_plot_xyxz(r, t=None, title='', figsize=(7, 7), save_path=False, frame=
     bounds = {"lower": np.array([np.inf, np.inf, np.inf]), "upper": np.array([-np.inf, -np.inf, -np.inf])}
 
     # Check if all arrays in `r` are the same shape
-    for orbit_index in range(num_orbits):
+    for orbit_index in range(len(r)):
         xyz = r[orbit_index]
+        t_current = t[orbit_index]
 
-        if t_type is None:
-            if frame == "gcrf":
-                r_moon = np.atleast_2d(get_body("moon").position(Time("2000-1-1")))
-            else:
-                raise ValueError("Need to provide t or list of t for each orbit in itrf, lunar or lunar fixed frames")
-        else:
-            if frame == "gcrf":
-                if t_type == "Single array or np.ndarray":
-                    t_current = t
-                elif t_type == "List of non-arrays" or t_type == "List of arrays":
-                    t_current = max(t, key=len)
-            else:
-                if input_type == "numpy array":
-                    t_current = t
-                    # Single array case
-                    if np.shape(t)[0] != np.shape(r)[1]:
-                        raise ValueError("For a single numpy array 'r', 't' must be a 1D array of the same length as the first dimension of 'r'.")
-
-                elif input_type == "list of numpy array":
-                    same_shape = all(np.shape(arr) == np.shape(r[0]) for arr in r)
-                    if same_shape:
-                        if t_type == "Single array or np.ndarray":
-                            t_current = t
-                        elif t_type == "List of non-arrays" or t_type == "List of arrays":
-                            t_current = max(t, key=len)
-                        # Single `t` array is allowed
-                        if len(t_current) != len(xyz):
-                            raise ValueError("When 'r' is a list of arrays with the same shape, 't' must be a single 1D array matching the length of the first dimension of the arrays in 'r'.")
-                    else:
-                        # `t` must be a list of 1D arrays
-                        if t_type == "Single array or np.ndarray":
-                            raise ValueError("When 'r' is a list of differing size numpy arrays, 't' must be a list of 1D arrays of equal length to the corresponding arrays in 'r'.")
-                        elif t_type == "List of non-arrays" or t_type == "List of arrays":
-                            if len(xyz) == len(t[orbit_index]):
-                                t_current = t[orbit_index]
-                            else:
-                                print(f"length of t: {len(t_current)} and r: {len(xyz)}")
-                                raise ValueError(f"'t' must be a 1D array matching the length of the first dimension of 'r[{orbit_index}]'.")
-
-            r_moon = get_body("moon").position(t_current).T
+        r_moon = get_body("moon").position(t_current).T
         r_earth = np.zeros(np.shape(r_moon))
 
         # Dictionary of frame transformations and titles
@@ -231,10 +185,10 @@ def orbit_plot_xyxz(r, t=None, title='', figsize=(7, 7), save_path=False, frame=
         except KeyError:
             raise ValueError("Unknown plot type provided. Accepted: 'gcrf', 'itrf', 'lunar', 'lunar fixed'")
 
-        if input_type == "numpy array":
+        if len(r) == 1:
             scatter_dot_colors = cm.rainbow(np.linspace(0, 1, len(xyz[:, 0])))
         else:
-            scatter_dot_colors = cm.rainbow(np.linspace(0, 1, num_orbits))[orbit_index]
+            scatter_dot_colors = cm.rainbow(np.linspace(0, 1, len(r)))[orbit_index]
 
         ax1.scatter(xyz[:, 0], xyz[:, 1], color=scatter_dot_colors, s=1)
         ax1.add_patch(plt.Circle(xy=(0, 0), radius=1, color=textcolor, linestyle='dashed', fill=False))  # Circle marking GEO

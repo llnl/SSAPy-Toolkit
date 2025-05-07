@@ -1,64 +1,132 @@
 import numpy as np
-from typing import Union, List, Tuple
-import imageio
 from PIL import Image as PILImage
 import io
-import ipyvolume as ipv
 from PyPDF2 import PdfMerger
 from matplotlib.backends.backend_pdf import PdfPages
 from IPython.display import Image as IPythonImage, display as ipython_display
 import os
 import re
-import cv2
 import matplotlib.pyplot as plt
 from matplotlib.colors import cnames, to_rgb, rgb2hex
-
 from ssapy.utils import find_file
 from ..constants import EARTH_RADIUS, MOON_RADIUS
 from ..time import Time
 from ..vectors import rotation_matrix_from_vectors
+from typing import Any, Union
+import numpy as np
+from enum import Enum, auto
+from typing import Any, List, Tuple, Union
+from astropy.time import Time
 
 
-def check_numpy_array(variable: Union[np.ndarray, list]) -> str:
+class VarType(Enum):
+    NONE = auto()
+    TIME = auto()
+    ARRAY = auto()
+    LIST_ARRAYS = auto()
+    LIST_LISTS = auto()
+    MIXED_LIST = auto()
+    OTHER = auto()
+
+
+def is_list_of_arrays(lst: list) -> bool:
+    return all(isinstance(item, np.ndarray) for item in lst)
+
+
+def is_list_of_lists(lst: list) -> bool:
+    return all(isinstance(item, list) for item in lst)
+
+
+def check_type(var: Any) -> VarType:
     """
-    Checks if the input variable is a NumPy array, a list of NumPy arrays, or neither.
-
-    Parameters
-    ----------
-    variable : Union[np.ndarray, list]
-        The variable to check. It can either be a NumPy array or a list of NumPy arrays.
-
-    Returns
-    -------
-    str
-        Returns a string indicating the type of the variable:
-        - "numpy array" if the variable is a single NumPy array,
-        - "list of numpy array" if it is a list of NumPy arrays,
-        - "not numpy" if it is neither.
+    Classify ‘var’ into one of VarType cases.
     """
-    if isinstance(variable, np.ndarray):
-        return "numpy array"
-    elif isinstance(variable, list):
-        if len(variable) == 0:  # Handle empty list explicitly
-            return "not numpy"
-        elif all(isinstance(item, np.ndarray) for item in variable):
-            return "list of numpy array"
-    return "not numpy"
+    if var is None:
+        return VarType.NONE
+
+    if isinstance(var, Time):
+        return VarType.TIME
+
+    if isinstance(var, np.ndarray):
+        return VarType.ARRAY
+
+    if isinstance(var, list):
+        if len(var) == 0:
+            return VarType.OTHER
+        if is_list_of_arrays(var):
+            if all(isinstance(item.flat[0], Time) for item in var if item.size > 0):
+                return VarType.TIME
+            return VarType.LIST_ARRAYS
+        if is_list_of_lists(var):
+            return VarType.LIST_LISTS
+        if all(isinstance(item, Time) for item in var):
+            return VarType.TIME
+        return VarType.MIXED_LIST
+
+    return VarType.OTHER
 
 
-def check_type(t):
-    if t is None:
-        return None
-    elif isinstance(t, list):
-        # Check if each element is a list or array
-        if all(isinstance(item, (list, np.ndarray)) for item in t):
-            return "List of arrays"
-        else:
-            return "List of non-arrays"
-    elif isinstance(t, (Time, np.ndarray)):
-        return "Single array or np.ndarray"
+def valid_orbits(
+    r: Union[np.ndarray, List[np.ndarray]],
+    t: Union[np.ndarray, List[np.ndarray], Time, List[Time], None]
+) -> Tuple[List[np.ndarray], List[Time]]:
+    """
+    Normalize r and t into parallel lists of shape-(n,3) arrays and Time objects.
+    """
+
+    # ---- classify r ----
+    r_type = check_type(r)
+    if r_type == VarType.ARRAY:
+        r_list = [r]
+    elif r_type == VarType.LIST_ARRAYS:
+        r_list = r
     else:
-        return "Not a list or array"
+        raise ValueError(f"‘r’ must be an ndarray or list of ndarrays; got {r_type}")
+
+    # ---- classify t ----
+    t_type = check_type(t)
+
+    # ---- build t_list ----
+    if t_type == VarType.NONE:
+        t_list = [Time(np.zeros(len(rr)), format="gps") for rr in r_list]
+
+    elif t_type == VarType.ARRAY:
+        if not all(len(t) == len(rr) for rr in r_list):
+            raise ValueError("Single t-array length must match all r-array lengths")
+        t_list = [Time(t, format="gps") for _ in r_list]
+
+    elif t_type == VarType.LIST_ARRAYS:
+        if len(t) != len(r_list):
+            raise ValueError("Number of t-arrays must equal number of r-arrays")
+        t_list = []
+        for rr, tt in zip(r_list, t):
+            if len(tt) != len(rr):
+                raise ValueError("Each t-array must match its corresponding r-array length")
+            t_list.append(Time(tt, format="gps"))
+
+    elif t_type == VarType.TIME:
+        if isinstance(t, Time):
+            if not all(len(t) == len(rr) for rr in r_list):
+                raise ValueError("Single Time object length must match all r-array lengths")
+            t_list = [t for _ in r_list]
+        elif isinstance(t, list) and all(isinstance(tt, Time) for tt in t):
+            if len(t) != len(r_list):
+                raise ValueError("Number of Time objects must equal number of r-arrays")
+            if not all(len(tt) == len(rr) for tt, rr in zip(t, r_list)):
+                raise ValueError("Each Time object must match its corresponding r-array length")
+            t_list = t
+        else:
+            raise ValueError("Unsupported Time object input format.")
+
+    else:
+        raise ValueError(f"‘t’ must be None, ndarray, list of ndarrays, or Time object(s); got {t_type}")
+
+    try:
+        print(f"Returning arrays shaped: {np.shape(r_list)}, {np.shape(t_list)}")
+    except Exception as e:
+        print(f"Returning arrays with varying shapes (could not determine): {type(r_list)=}, {type(t_list)=}, error={e}")
+
+    return r_list, t_list
 
 
 def load_earth_file() -> 'PILImage':
@@ -85,6 +153,8 @@ def drawEarth(time: Union[np.ndarray, 'Time'], ngrid: int = 100, R: float = EART
     -------
     Travis Yeager (yeager7@llnl.gov)
     """
+    import ipyvolume as ipv
+
     earth = load_earth_file()
 
     from numbers import Real
@@ -146,6 +216,8 @@ def drawMoon(time: Union[np.ndarray, 'Time'], ngrid: int = 100, R: float = MOON_
 
     from numbers import Real
     from erfa import gst94
+    import ipyvolume as ipv
+
     lat = np.linspace(-np.pi / 2, np.pi / 2, ngrid)
     lon = np.linspace(-np.pi, np.pi, ngrid)
     lat, lon = np.meshgrid(lat, lon)
@@ -483,6 +555,8 @@ def write_video(video_name: str, frames: List[str], fps: int = 30) -> None:
     -------
     Travis Yeager (yeager7@llnl.gov)
     """
+    import cv2
+
     img = cv2.imread(frames[0])
     h, w, layers = img.shape
     fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
@@ -497,6 +571,8 @@ def write_video(video_name: str, frames: List[str], fps: int = 30) -> None:
 
 
 def write_gif(gif_name: str, frames: List[str], fps: int = 30) -> None:
+    import imageio
+
     print(f'Writing gif: {gif_name}')
     with imageio.get_writer(gif_name, mode='I', duration=1 / fps) as writer:
         for i, filename in enumerate(frames):

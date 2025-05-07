@@ -5,7 +5,7 @@ import numpy as np
 from typing import Tuple, Optional
 
 from ssapy.utils import find_file
-from .plotutils import make_black, make_white, save_plot
+from .plotutils import make_black, make_white, save_plot, valid_orbits
 from ..constants import RGEO, EARTH_RADIUS
 
 
@@ -20,6 +20,9 @@ def globe_plot(r: np.ndarray, t: np.ndarray, limits: Optional[float] = False, ti
     -------
     Travis Yeager (yeager7@llnl.gov)
     """
+
+    r, t = valid_orbits(r, t)
+
     if c in ('black', 'b'):
         plotcolor = 'black'
         textcolor = 'white'
@@ -29,13 +32,6 @@ def globe_plot(r: np.ndarray, t: np.ndarray, limits: Optional[float] = False, ti
     else:
         plotcolor = 'white'
         textcolor = 'black'
-
-    # Scale the coordinates by RGEO
-    r = r / RGEO
-
-    # Set limits if not provided
-    if limits is False:
-        limits = np.nanmax(np.abs([r[:, 0], r[:, 1], r[:, 2]])) * 1.2
 
     # Load and scale Earth image
     earth_png = PILImage.open(find_file("earth", ext=".png"))
@@ -49,9 +45,6 @@ def globe_plot(r: np.ndarray, t: np.ndarray, limits: Optional[float] = False, ti
     mesh_y = np.outer(np.sin(lons), np.cos(lats)).T * EARTH_RADIUS / RGEO
     mesh_z = np.outer(np.ones(np.size(lons)), np.sin(lats)).T * EARTH_RADIUS / RGEO
 
-    # Set color for the scatter plot
-    dotcolors = plt.cm.rainbow(np.linspace(0, 1, len(r[:, 0])))
-
     # Create the figure and 3D axis
     fig = plt.figure(dpi=100, figsize=figsize)
     ax = fig.add_subplot(111, projection='3d')
@@ -59,10 +52,28 @@ def globe_plot(r: np.ndarray, t: np.ndarray, limits: Optional[float] = False, ti
     ax.tick_params(axis='both', colors=textcolor)
     ax.grid(True, color='grey', linestyle='--', linewidth=0.5)
     ax.set_facecolor(plotcolor)  # Set plot background color to black
+    ax.plot_surface(mesh_x, mesh_y, mesh_z, rstride=4, cstride=4, facecolors=bm, shade=False)
 
     # Plot the satellite positions and the Earth surface
-    ax.scatter(r[:, 0], r[:, 1], r[:, 2], color=dotcolors, s=1)
-    ax.plot_surface(mesh_x, mesh_y, mesh_z, rstride=4, cstride=4, facecolors=bm, shade=False)
+    if len(r) == 1:
+        # Set color for the scatter plot
+        cmap = plt.cm.rainbow(np.linspace(0, 1, len(r[0])))
+    else:
+        cmap_vals = np.linspace(0, 1, len(r))
+        cmap = [plt.cm.rainbow(val) for val in cmap_vals]
+
+    max_extent = 0  # initialize limit tracker
+
+    for i, ri in enumerate(r):
+        color = cmap[i] if len(r) > 1 else cmap
+
+        ri = ri / RGEO
+        current_max = np.nanmax(np.abs(ri))
+        max_extent = max(max_extent, current_max)  # track the largest extent
+        ax.scatter(ri[:, 0], ri[:, 1], ri[:, 2], color=color, s=1)
+
+    if limits is False:
+        limits = max_extent * 1.2
 
     # Set the view angle and axis limits
     ax.view_init(elev=el, azim=az)

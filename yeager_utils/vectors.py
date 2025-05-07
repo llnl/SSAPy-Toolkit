@@ -10,6 +10,14 @@ def unit_vector(vector):
     return vector / np.linalg.norm(vector)
 
 
+def extend_vector(vector: np.ndarray, distance: float) -> np.ndarray:
+    norm = np.linalg.norm(vector)
+    if norm == 0:
+        raise ValueError("Cannot extend a zero vector.")
+    unit_vector = vector / norm
+    return vector + unit_vector * distance
+
+
 def getAngle(a: np.ndarray, b: np.ndarray, c: np.ndarray) -> np.ndarray:
     """
     Calculate the angle between vectors a, b, and c, where b is the vertex.

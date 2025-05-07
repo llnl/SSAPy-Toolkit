@@ -1,4 +1,4 @@
-from .plotutils import check_numpy_array, check_type
+from .plotutils import valid_orbits
 
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -37,18 +37,11 @@ class GradientLineHandler(HandlerBase):
 def cislunar_plot_xy(r, t=None, figsize=(8, 8), fontsize=12, save_path=False, show=False, title=None, c='black'):
     from ..orbital_mechanics import lagrange_points_lunar_fixed_frame
 
-    input_type = check_numpy_array(r)
-    t_type = check_type(t)
+    r, t = valid_orbits(r, t)
     if title is None:
         title = 'Frame: GCRF'
     else:
         title = f'{title}\nFrame: GCRF'
-    if input_type == "numpy array":
-        num_orbits = 1
-        r = [r]
-
-    if input_type == "list of numpy array":
-        num_orbits = len(r)
 
     if 'w' in c:
         textcolor = 'black'
@@ -64,36 +57,11 @@ def cislunar_plot_xy(r, t=None, figsize=(8, 8), fontsize=12, save_path=False, sh
     bounds_gcrf = {"lower": np.array([np.inf, np.inf, np.inf]), "upper": np.array([-np.inf, -np.inf, -np.inf])}
     bounds_lunar = {"lower": np.array([np.inf, np.inf, np.inf]), "upper": np.array([-np.inf, -np.inf, -np.inf])}
 
-    for orbit_index in range(num_orbits):
+    for orbit_index in range(len(r)):
         xyz = r[orbit_index]
+        t_current = t[orbit_index]
 
-        if t_type is None:
-            raise ValueError("Need to provide t or list of t for each orbit in itrf, lunar or lunar fixed frames")
-        else:
-            if input_type == "numpy array":
-                t_current = t
-                if np.shape(t)[0] != np.shape(r)[1]:
-                    raise ValueError("For a single numpy array 'r', 't' must be a 1D array of the same length as the first dimension of 'r'.")
-            elif input_type == "list of numpy array":
-                same_shape = all(np.shape(arr) == np.shape(r[0]) for arr in r)
-                if same_shape:
-                    if t_type == "Single array or np.ndarray":
-                        t_current = t
-                    elif t_type == "List of non-arrays" or t_type == "List of arrays":
-                        t_current = max(t, key=len)
-                    if len(t_current) != len(xyz):
-                        raise ValueError("When 'r' is a list of arrays with the same shape, 't' must be a single 1D array matching the length of the first dimension of the arrays in 'r'.")
-                else:
-                    if t_type == "Single array or np.ndarray":
-                        raise ValueError("When 'r' is a list of differing size numpy arrays, 't' must be a list of 1D arrays of equal length to the corresponding arrays in 'r'.")
-                    elif t_type == "List of non-arrays" or t_type == "List of arrays":
-                        if len(xyz) == len(t[orbit_index]):
-                            t_current = t[orbit_index]
-                        else:
-                            print(f"length of t: {len(t_current)} and r: {len(xyz)}")
-                            raise ValueError(f"'t' must be a 1D array matching the length of the first dimension of 'r[{orbit_index}]'.")
-
-            r_moon = get_body("moon").position(t_current).T
+        r_moon = get_body("moon").position(t_current).T
         r_earth = np.zeros(np.shape(r_moon))
 
         if max(np.linalg.norm(xyz, axis=-1) >= .95 * RGEO):
@@ -139,10 +107,10 @@ def cislunar_plot_xy(r, t=None, figsize=(8, 8), fontsize=12, save_path=False, sh
         else:
             blue_colors = "lightblue"
 
-        if input_type == "numpy array":
+        if len(r) == 1:
             scatter_dot_colors = cm.rainbow(np.linspace(0, 1, len(xyz[:, 0])))
         else:
-            scatter_dot_colors = cm.rainbow(np.linspace(0, 1, num_orbits))[orbit_index]
+            scatter_dot_colors = cm.rainbow(np.linspace(0, 1, len(r)))[orbit_index]
 
         # Create 2D circles
         earth_circle = plt.Circle((0, 0), EARTH_RADIUS / unit_conversion, color='lightblue', alpha=0.8, linestyle='dashed', fill=True)
@@ -190,14 +158,14 @@ def cislunar_plot_xy(r, t=None, figsize=(8, 8), fontsize=12, save_path=False, sh
         Line2D([0], [0], marker='o', color='none', markerfacecolor='grey', markersize=10, label='Lagrange Points'),
     ]
 
-    if num_orbits == 1:
+    if len(r) == 1:
         legend_elements.append(rainbow_line)
 
     font_properties = font_manager.FontProperties(size=fontsize - 4 if fontsize > 16 else fontsize)
 
     ax2.legend(
         handles=legend_elements,
-        handler_map={rainbow_line: GradientLineHandler()} if num_orbits == 1 else {},
+        handler_map={rainbow_line: GradientLineHandler()} if len(r) == 1 else {},
         loc='upper left',
         facecolor=plotcolor,
         edgecolor=textcolor,
