@@ -95,10 +95,16 @@ def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, offline=Tru
     
     colors = plt.cm.tab10(np.linspace(0, 1, len(r)))
     for i, (lon, lat) in enumerate(zip(lons, lats)):
-        ax1.plot(lon, lat, color=colors[i], label=f'Orbit {i+1} Track', transform=ccrs.Geodetic(), linewidth=2.5)
-        ax1.plot(lon[0], lat[0], '*', color=colors[i], markersize=20, label=f'Orbit {i+1} Start', transform=ccrs.Geodetic())
-        ax1.plot(lon[-1], lat[-1], 'x', color=colors[i], markersize=14, label=f'Orbit {i+1} End', transform=ccrs.Geodetic())
-    ax1.legend(loc='lower left', fontsize=16)
+        ax1.plot(lon, lat, color=colors[i], transform=ccrs.Geodetic(), linewidth=2.5)
+        ax1.plot(lon[0], lat[0], '*', color=colors[i], markersize=20)
+        ax1.plot(lon[-1], lat[-1], 'x', color=colors[i], markersize=14)
+
+    legend_elements = [
+        plt.lines.Line2D([0], [0], color='black', linewidth=2.5, label='Orbit Track'),
+        plt.lines.Line2D([0], [0], marker='*', color='black', linestyle='None', markersize=12, label='Orbit Start'),
+        plt.lines.Line2D([0], [0], marker='x', color='black', linestyle='None', markersize=10, label='Orbit End')
+    ]
+    ax1.legend(handles=legend_elements, loc='lower left', fontsize=16)
 
     # Altitude plot
     ax2 = fig.add_subplot(gs[1, 0])
