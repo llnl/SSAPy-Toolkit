@@ -170,16 +170,23 @@ def dd_to_hms(degree_decimal: float) -> str:
     return f'{int(_h)}:{int(_m)}:{_s}'
 
 
-def get_times(duration: Tuple[int, str], freq: Tuple[int, str] = (1, 's'), t0: Union[str, Time] = "2025-01-01") -> np.ndarray:
+from typing import Union, Tuple
+import numpy as np
+from astropy.time import Time
+import astropy.units as u
+
+def get_times(duration: Union[int, Tuple[int, str]],
+              freq: Tuple[int, str] = (1, 's'),
+              t0: Union[str, Time] = "2025-01-01") -> np.ndarray:
     """
     Calculate a list of times spaced equally apart over a specified duration.
 
     Parameters
     ----------
-    duration : tuple
-        A tuple containing the length of time and the unit (e.g., (30, 'day')).
+    duration : int or tuple
+        A duration in seconds (int), or a tuple like (30, 'day').
     freq : tuple
-        A tuple containing the frequency value and its unit (e.g., (1, 'hr')).
+        A tuple containing the frequency value and its unit, default is (1, 's').
     t0 : str or Time, optional
         The starting time. Default is "2025-01-01".
 
@@ -192,20 +199,32 @@ def get_times(duration: Tuple[int, str], freq: Tuple[int, str] = (1, 's'), t0: U
     """
     if isinstance(t0, str):
         t0 = Time(t0, scale='utc')
-    unit_dict = {'second': 1, 'sec': 1, 's': 1, 'minute': 60, 'min': 60, 'hour': 3600, 'hr': 3600, 'h': 3600, 'day': 86400, 'd': 86400, 'week': 604800, 'month': 2630016, 'mo': 2630016, 'year': 31557600, 'yr': 31557600}
-    dur_val, dur_unit = duration
-    freq_val, freq_unit = freq
-    if dur_unit[-1] == 's' and len(dur_unit) > 1:
-        dur_unit = dur_unit[:-1]
-    if freq_unit[-1] == 's' and len(freq_unit) > 1:
-        freq_unit = freq_unit[:-1]
-    if dur_unit.lower() not in unit_dict:
-        raise ValueError(f'Error, {dur_unit} is not a valid time unit. Valid options are: {", ".join(unit_dict.keys())}.')
-    if freq_unit.lower() not in unit_dict:
-        raise ValueError(f'Error, {freq_unit} is not a valid time unit. Valid options are: {", ".join(unit_dict.keys())}.')
-    dur_seconds = dur_val * unit_dict[dur_unit.lower()]
-    freq_seconds = freq_val * unit_dict[freq_unit.lower()]
-    timesteps = int(dur_seconds / freq_seconds) + 1
 
+    unit_dict = {
+        'second': 1, 'sec': 1, 's': 1,
+        'minute': 60, 'min': 60,
+        'hour': 3600, 'hr': 3600, 'h': 3600,
+        'day': 86400, 'd': 86400,
+        'week': 604800,
+        'month': 2630016, 'mo': 2630016,
+        'year': 31557600, 'yr': 31557600
+    }
+
+    if isinstance(duration, int):
+        dur_seconds = duration
+    else:
+        dur_val, dur_unit = duration
+        dur_unit = dur_unit.lower().rstrip('s')
+        if dur_unit not in unit_dict:
+            raise ValueError(f'Error, {dur_unit} is not a valid time unit. Valid options are: {", ".join(unit_dict.keys())}.')
+        dur_seconds = dur_val * unit_dict[dur_unit]
+
+    freq_val, freq_unit = freq
+    freq_unit = freq_unit.lower().rstrip('s')
+    if freq_unit not in unit_dict:
+        raise ValueError(f'Error, {freq_unit} is not a valid time unit. Valid options are: {", ".join(unit_dict.keys())}.')
+    freq_seconds = freq_val * unit_dict[freq_unit]
+
+    timesteps = int(dur_seconds / freq_seconds) + 1
     times = t0 + np.linspace(0, dur_seconds, timesteps) / unit_dict['day'] * u.day
     return times
