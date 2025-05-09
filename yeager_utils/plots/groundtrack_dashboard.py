@@ -10,7 +10,7 @@ from ..time import to_gps
 from .plotutils import save_plot, valid_orbits
 
 
-def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, offline=True):
+def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, offline=True, show_legend=True):
     """
     Visualizes multiple satellite ground tracks, altitude/velocity over time, and 3D trajectories.
 
@@ -116,7 +116,8 @@ def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, offline=Tru
     ax2.set_title('Altitude vs Time', fontsize=20)
     ax2.tick_params(axis='both', labelsize=16)
     ax2.grid(True)
-    ax2.legend(fontsize=14)
+    if show_legend:
+        ax2.legend(fontsize=14)
 
     # ITRF 3D plot
     ax3 = fig.add_subplot(gs[0, 2], projection='3d')
@@ -146,13 +147,12 @@ def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, offline=Tru
     # Velocity plot
     ax4 = fig.add_subplot(gs[1, 1])
     for i, (ti, vel) in enumerate(zip(t, velocities)):
-        ax4.plot(ti[1:-1] / 60, vel[1:-1] / 1e3, color=colors[i], linewidth=2.5, label=f'Orbit {i+1}')
+        ax4.plot(ti[1:-1] / 60, vel[1:-1] / 1e3, color=colors[i], linewidth=2.5)
     ax4.set_xlabel('Time (minutes)', fontsize=18)
     ax4.set_ylabel('Velocity (km/s)', fontsize=18)
     ax4.set_title('Velocity vs Time', fontsize=20)
     ax4.tick_params(axis='both', labelsize=16)
     ax4.grid(True)
-    ax4.legend(fontsize=14)
 
     # GCRF 3D plot
     ax5 = fig.add_subplot(gs[1, 2], projection='3d')
