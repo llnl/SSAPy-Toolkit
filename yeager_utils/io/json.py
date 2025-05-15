@@ -6,7 +6,7 @@ import numpy as np
 from astropy.time import Time
 
 
-def save_json(data: Any, filename: str) -> None:
+def save_json(filename: str, data: Any) -> None:
     """Save data to a JSON file with support for NumPy, datetime, and Astropy Time."""
 
     def encode(obj: Any) -> Any:

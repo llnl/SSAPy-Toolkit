@@ -103,7 +103,24 @@ def transfer_shooter(*args, r1=None, v1=None, r2=None, v2=None, orbit1=None, orb
         r2 = np.asarray(r2)
         r2_norm = np.linalg.norm(r2)
         v_circ = np.sqrt(EARTH_MU / r2_norm)
-        v2 = np.array([0, v_circ, 0])
+
+        # 1) orbit‑1 plane tangent
+        n1 = np.cross(r1, v1)
+        tangent = np.cross(n1, r2)
+        if np.linalg.norm(tangent) < 1e-8:
+            # 2) fallback: project v1 onto plane ⟂ r2
+            proj = (np.dot(v1, r2) / r2_norm**2) * r2
+            tangent = v1 - proj
+            if np.linalg.norm(tangent) < 1e-8:
+                # 3) ultimate fallback: XY‑plane tangent at r2
+                # ensure r2 isn’t on z-axis
+                if np.linalg.norm(r2[:2]) < 1e-8:
+                    raise ValueError("r2 lies on z‑axis; cannot define XY tangent.")
+                # tangent = [-y, x, 0]
+                tangent = np.array([-r2[1], r2[0], 0.0])
+
+        tangent /= np.linalg.norm(tangent)
+        v2 = v_circ * tangent
     elif r2 is None:
         raise ValueError("Must provide either orbit2 or both r2")
 

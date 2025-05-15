@@ -110,6 +110,21 @@ def read_h5(filename: str, pathname: str) -> Optional[np.ndarray]:
         raise
 
 
+def read_h5_to_dict(file_path):
+    def recursively_load(h5obj):
+        data_dict = {}
+        for key in h5obj.keys():
+            item = h5obj[key]
+            if isinstance(item, h5py.Group):
+                data_dict[key] = recursively_load(item)
+            elif isinstance(item, h5py.Dataset):
+                data_dict[key] = item[()]  # Load dataset as a NumPy array or scalar
+        return data_dict
+
+    with h5py.File(file_path, 'r') as h5file:
+        return recursively_load(h5file)
+    
+
 def read_h5_all(file_path: str) -> dict:
     """
     Load all data from an HDF5 file.
