@@ -1,11 +1,11 @@
 import numpy as np
-from astropy.time import Time
 from ssapy.orbit import Orbit
+from .surface_rv import surface_rv
 from ..constants import EARTH_MU
-from ..coordinates import surface_rv
-from ..time import to_gps
+from ..time import to_gps, Time
 
-def lonlat_perigee(lon, lat, t0, a, e, i, mu=EARTH_MU):
+
+def lonlat_perigee(lon, lat, a, e=0, i=None, t0=Time(0, format='gps'), mu=EARTH_MU):
     """
     Create an Orbit whose perigee is exactly over the fixed geodetic
     longitude/latitude (lon, lat) at epoch t0.
@@ -32,6 +32,10 @@ def lonlat_perigee(lon, lat, t0, a, e, i, mu=EARTH_MU):
     Orbit
         Orbit object with perigee over (lon, lat) at time t0.
     """
+    
+    if i is None:
+        i = lat
+
     t0 = to_gps(t0)
 
     r_surf, _ = surface_rv(lon, lat, elevation=0.0, fast=False)
