@@ -67,19 +67,33 @@ def check_type(var: Any) -> VarType:
 
 
 def valid_orbits(
-    r: Union[np.ndarray, List[np.ndarray]],
-    t: Union[np.ndarray, List[np.ndarray], Time, List[Time], None]
+    r: Union[np.ndarray, List[np.ndarray], list, float, int],
+    t: Union[np.ndarray, List[np.ndarray], Time, List[Time], float, int, None]
 ) -> Tuple[List[np.ndarray], List[Time]]:
     """
     Normalize r and t into parallel lists of shape-(n,3) arrays and Time objects.
     """
 
-    # ---- classify r ----
+    def to_array3(x) -> np.ndarray:
+        """Convert input to shape-(n,3) ndarray"""
+        arr = np.asarray(x, dtype=float).squeeze()
+        if arr.ndim == 1 and arr.size == 3:
+            return arr.reshape(1, 3)
+        elif arr.ndim == 2 and arr.shape in [(3, 1), (1, 3)]:
+            return arr.reshape(1, 3)
+        elif arr.ndim == 2 and arr.shape[1] == 3:
+            return arr
+        raise ValueError(f"Cannot interpret r shape: {arr.shape}")
+
+    # ---- classify and normalize r ----
     r_type = check_type(r)
-    if r_type == VarType.ARRAY:
-        r_list = [r]
+    if r_type in {VarType.ARRAY, VarType.LIST_LISTS, VarType.MIXED_LIST, VarType.OTHER}:
+        try:
+            r_list = [to_array3(r)]
+        except Exception:
+            raise ValueError(f"‘r’ must be convertible to shape-(n,3); got {type(r)}")
     elif r_type == VarType.LIST_ARRAYS:
-        r_list = r
+        r_list = [to_array3(ri) for ri in r]
     else:
         raise ValueError(f"‘r’ must be an ndarray or list of ndarrays; got {r_type}")
 
@@ -106,9 +120,12 @@ def valid_orbits(
 
     elif t_type == VarType.TIME:
         if isinstance(t, Time):
-            if not all(len(t) == len(rr) for rr in r_list):
-                raise ValueError("Single Time object length must match all r-array lengths")
-            t_list = [t for _ in r_list]
+            if t.isscalar:
+                t_list = [Time(np.full(len(rr), t.value), format=t.format) for rr in r_list]
+            else:
+                if not all(len(t) == len(rr) for rr in r_list):
+                    raise ValueError("Single Time object length must match all r-array lengths")
+                t_list = [t for _ in r_list]
         elif isinstance(t, list) and all(isinstance(tt, Time) for tt in t):
             if len(t) != len(r_list):
                 raise ValueError("Number of Time objects must equal number of r-arrays")
@@ -118,13 +135,16 @@ def valid_orbits(
         else:
             raise ValueError("Unsupported Time object input format.")
 
+    elif isinstance(t, (int, float)):
+        t_list = [Time(np.full(len(rr), t), format="gps") for rr in r_list]
+
     else:
-        raise ValueError(f"‘t’ must be None, ndarray, list of ndarrays, or Time object(s); got {t_type}")
+        raise ValueError(f"‘t’ must be None, float, ndarray, list of ndarrays, or Time object(s); got {t_type}")
 
     try:
         print(f"Returning arrays shaped: {np.shape(r_list)}, {np.shape(t_list)}")
     except Exception as e:
-        print(f"Returning arrays with varying shapes (could not determine): {type(r_list)=}, {type(t_list)=}, error={e}")
+        print(f"Returning arrays with varying shapes: {type(r_list)=}, {type(t_list)=}, error={e}")
 
     return r_list, t_list
 

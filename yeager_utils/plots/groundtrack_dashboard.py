@@ -4,6 +4,7 @@ from matplotlib import gridspec
 from matplotlib.lines import Line2D
 from ssapy import groundTrack
 import cartopy.crs as ccrs
+from ..coordinates import gcrf_to_lonlat
 from ..compute import find_smallest_bounding_cube
 from ..constants import EARTH_RADIUS
 from ..time import to_gps
@@ -47,15 +48,16 @@ def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, offline=Tru
     for r_i, t_i in zip(r, t):
         xyz = np.array(r_i)  # Ensure r_i is (n,3)
         x_gt, y_gt, z_gt = groundTrack(xyz, t_i, format='cartesian')
-        
-        lon = np.degrees(np.arctan2(y_gt, x_gt))
-        lat = np.degrees(np.arcsin(z_gt / np.linalg.norm(np.stack([x_gt, y_gt, z_gt]), axis=0)))
-        altitude = np.linalg.norm(xyz, axis=-1) - EARTH_RADIUS
-        velocity = np.linalg.norm(np.gradient(xyz, axis=0), axis=1)
-        
+        lon, lat, height = gcrf_to_lonlat(xyz, t_i)
+        # altitude = np.linalg.norm(xyz, axis=-1) - EARTH_RADIUS
+        try:
+            velocity = np.linalg.norm(np.gradient(xyz, axis=0), axis=1)
+        except:
+            velocity = 0
+
         lons.append(lon)
         lats.append(lat)
-        altitudes.append(altitude)
+        altitudes.append(height)
         velocities.append(velocity)
         x_gts.append(x_gt)
         y_gts.append(y_gt)
@@ -147,7 +149,10 @@ def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, offline=Tru
     # Velocity plot
     ax4 = fig.add_subplot(gs[1, 1])
     for i, (ti, vel) in enumerate(zip(t, velocities)):
-        ax4.plot(ti[1:-1] / 60, vel[1:-1] / 1e3, color=colors[i], linewidth=2.5)
+        if np.ndim(vel) > 0 and len(vel) > 3:
+            ti = ti[1:-1]
+            vel = vel[1:-1]
+        ax4.plot(ti / 60, vel / 1e3, color=colors[i], linewidth=2.5)
     ax4.set_xlabel('Time (minutes)', fontsize=18)
     ax4.set_ylabel('Velocity (km/s)', fontsize=18)
     ax4.set_title('Velocity vs Time', fontsize=20)

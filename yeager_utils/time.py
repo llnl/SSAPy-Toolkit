@@ -216,7 +216,7 @@ def get_times(duration: Union[int, Tuple[int, str]],
         dur_val, dur_unit = duration
         dur_unit = dur_unit.lower()
         if len(dur_unit) > 1:
-            dur_unit.rstrip('s')
+            dur_unit = dur_unit.rstrip('s')
 
         if dur_unit not in unit_dict:
             raise ValueError(f'Error, {dur_unit} is not a valid time unit. Valid options are: {", ".join(unit_dict.keys())}.')
@@ -225,7 +225,7 @@ def get_times(duration: Union[int, Tuple[int, str]],
     freq_val, freq_unit = freq
     freq_unit = freq_unit.lower()
     if len(freq_unit) > 1:
-        freq_unit.rstrip('s')
+        freq_unit = freq_unit.rstrip('s')
     if freq_unit not in unit_dict:
         raise ValueError(f'Error, {freq_unit} is not a valid time unit. Valid options are: {", ".join(unit_dict.keys())}.')
     freq_seconds = freq_val * unit_dict[freq_unit]

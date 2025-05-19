@@ -5,8 +5,8 @@ from ssapy import Orbit, rv
 # Define initial and final orbit Keplerian elements
 t0 = Time("2025-01-01").gps
 
-orbit1 = Orbit.fromKeplerianElements(*hkoe([10000e3 + EARTH_RADIUS, 0.1, -9.0, 0.0, 0.0, 180.0]), t=t0)
-orbit2 = Orbit.fromKeplerianElements(*hkoe([20000e3 + EARTH_RADIUS, 0.0, 0, 0, 0.0, 0]), t=t0)
+orbit1 = Orbit.fromKeplerianElements(*hkoe([20000e3 + EARTH_RADIUS, 0.1, -60.0, 90.0, 0.0, 180.0]), t=t0)
+orbit2 = Orbit.fromKeplerianElements(*hkoe([10000e3 + EARTH_RADIUS, 0.1, 0, 0, 0.0, 0]), t=t0)
 
 # Compute Hohmann transfer using the function with plot=False
 print("Running Hohmann")
