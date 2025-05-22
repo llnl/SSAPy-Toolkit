@@ -4,13 +4,13 @@ from typing import Any, List, Optional
 import os
 
 
-def append_h5(filename: str, pathname: str, append_data: Any) -> None:
+def append_h5(filename: str, key: str, append_data: Any) -> None:
     """
     Append data to an existing key in an HDF5 file.
 
     Args:
         filename (str): The filename of the HDF5 file.
-        pathname (str): The path to the key in the HDF5 file.
+        key (str): The path to the key in the HDF5 file.
         append_data (Any): The data to be appended.
 
     Returns:
@@ -18,25 +18,25 @@ def append_h5(filename: str, pathname: str, append_data: Any) -> None:
     """
     try:
         with h5py.File(filename, "a") as f:
-            if pathname in f:
-                path_data_old = np.array(f.get(pathname))
+            if key in f:
+                path_data_old = np.array(f.get(key))
                 append_data = np.append(path_data_old, np.array(append_data))
-                del f[pathname]
-            f.create_dataset(pathname, data=np.array(append_data), maxshape=None)
+                del f[key]
+            f.create_dataset(key, data=np.array(append_data), maxshape=None)
     except FileNotFoundError:
         print(f"File not found: {filename}\nCreating new dataset: {filename}")
-        save_h5(filename, pathname, append_data)
+        save_h5(filename, key, append_data)
     except (ValueError, KeyError) as err:
         print(f"Error: {err}")
 
 
-def overwrite_h5(filename: str, pathname: str, new_data: Any) -> None:
+def overwrite_h5(filename: str, key: str, new_data: Any) -> None:
     """
     Overwrite data for a key in an HDF5 file.
 
     Args:
         filename (str): The filename of the HDF5 file.
-        pathname (str): The path to the key in the HDF5 file.
+        key (str): The path to the key in the HDF5 file.
         new_data (Any): The new data to overwrite the old data.
 
     Returns:
@@ -44,27 +44,27 @@ def overwrite_h5(filename: str, pathname: str, new_data: Any) -> None:
     """
     try:
         with h5py.File(filename, "a") as f:
-            f.create_dataset(pathname, data=new_data, maxshape=None)
+            f.create_dataset(key, data=new_data, maxshape=None)
     except (FileNotFoundError, ValueError, KeyError):
         try:
             with h5py.File(filename, 'r+') as f:
-                del f[pathname]
+                del f[key]
         except (FileNotFoundError, ValueError, KeyError) as err:
             print(f'Error: {err}')
         try:
             with h5py.File(filename, "a") as f:
-                f.create_dataset(pathname, data=new_data, maxshape=None)
+                f.create_dataset(key, data=new_data, maxshape=None)
         except (FileNotFoundError, ValueError, KeyError) as err:
-            print(f'File: {filename}{pathname}, Error: {err}')
+            print(f'File: {filename}{key}, Error: {err}')
 
 
-def save_h5(filename: str, pathname: str, data: Any) -> None:
+def save_h5(filename: str, key: str, data: Any) -> None:
     """
     Save data to an HDF5 file.
 
     Args:
         filename (str): The filename of the HDF5 file.
-        pathname (str): The path to the data in the HDF5 file.
+        key (str): The path to the data in the HDF5 file.
         data (Any): The data to be saved.
 
     Returns:
@@ -72,30 +72,30 @@ def save_h5(filename: str, pathname: str, data: Any) -> None:
     """
     try:
         with h5py.File(filename, "a") as f:
-            f.create_dataset(pathname, data=data, maxshape=None)
+            f.create_dataset(key, data=data, maxshape=None)
             f.flush()
     except ValueError as err:
-        print(f"Did not save, key: {pathname} exists in file: {filename}. {err}")
+        print(f"Did not save, key: {key} exists in file: {filename}. {err}")
         return
     except (BlockingIOError, OSError) as err:
-        print(f"\n{err}\nPath: {pathname}\nFile: {filename}\n")
+        print(f"\n{err}\nPath: {key}\nFile: {filename}\n")
         return
 
 
-def read_h5(filename: str, pathname: str) -> Optional[np.ndarray]:
+def read_h5(filename: str, key: str) -> Optional[np.ndarray]:
     """
     Load data from an HDF5 file.
 
     Args:
         filename (str): The filename of the HDF5 file.
-        pathname (str): The path to the data in the HDF5 file.
+        key (str): The path to the data in the HDF5 file.
 
     Returns:
         Optional[np.ndarray]: The data loaded from the HDF5 file, or None if the key does not exist.
     """
     try:
         with h5py.File(filename, 'r') as f:
-            data = f.get(pathname)
+            data = f.get(key)
             if data is None:
                 return None
             else:
@@ -106,7 +106,7 @@ def read_h5(filename: str, pathname: str) -> Optional[np.ndarray]:
         print(f'File not found. {filename}')
         raise
     except (BlockingIOError, OSError) as err:
-        print(f"\n{err}\nPath: {pathname}\nFile: {filename}\n")
+        print(f"\n{err}\nPath: {key}\nFile: {filename}\n")
         raise
 
 
