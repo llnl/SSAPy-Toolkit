@@ -11,6 +11,13 @@ from ..time import to_gps
 from .plotutils import save_plot, valid_orbits
 
 
+def clean_lonlat(lon, lat):
+    wraps = np.abs(np.diff(lon)) > 180
+    lon_nan = np.insert(lon, np.where(wraps)[0] + 1, np.nan)
+    lat_nan = np.insert(lat, np.where(wraps)[0] + 1, np.nan)
+    return lon_nan, lat_nan
+
+
 def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, offline=True, show_legend=True):
     """
     Visualizes multiple satellite ground tracks, altitude/velocity over time, and 3D trajectories.
