@@ -77,7 +77,13 @@ def orbit_plot(r, t=None, title='', figsize=(7, 7), save_path=False, frame="gcrf
 
     bounds = {"lower": np.array([np.inf, np.inf, np.inf]), "upper": np.array([-np.inf, -np.inf, -np.inf])}
 
-    # Check if all arrays in `r` are the same shape
+    if any(np.max(np.linalg.norm(xyz, axis=-1)) >= 0.95 * RGEO for xyz in r):
+        unit_conversion = RGEO
+        unit_label = 'GEO'
+    else:
+        unit_conversion = 1e3
+        unit_label = 'km'
+
     for orbit_index in range(len(r)):
         xyz = r[orbit_index]
         t_current = t[orbit_index]
@@ -122,13 +128,6 @@ def orbit_plot(r, t=None, title='', figsize=(7, 7), save_path=False, frame="gcrf
                 r_earth = transform_func(r_earth, t_current)
         else:
             raise ValueError("Unknown plot type provided. Accepted: gcrf, itrf, lunar, lunar fixed")
-
-        if max(np.linalg.norm(xyz, axis=-1) >= .95 * RGEO):
-            unit_conversion = RGEO
-            unit_label = 'GEO'
-        else:
-            unit_conversion = 1e3
-            unit_label = 'km'
 
         xyz = xyz / unit_conversion
         r_moon = r_moon / unit_conversion

@@ -3,95 +3,90 @@ from scipy.integrate import solve_ivp
 import warnings
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from ..plots.set_axes_equal import set_axes_equal
+from ..plots import set_axes_equal, save_plot
 from ..constants import EARTH_MU, EARTH_RADIUS
 
 
 def transfer_inclination_continuous(r0,
                          v0,
-                         i_target,
-                         a_thrust,
+                         i_target=None,
+                         delta_v=None,
+                         a_thrust=1,
                          mu=EARTH_MU,
                          t0=0.0,
                          max_time=1e6,
                          body_radius=EARTH_RADIUS,
-                         plot=False):
+                         plot=False,
+                         save_path=False):
     """
-    Change orbital inclination to i_target by continuous normal thrust.
+    Change orbital inclination via continuous normal thrust.
 
-    Parameters:
-    - r0: Initial position vector [m]
-    - v0: Initial velocity vector [m/s]
-    - i_target: Target inclination [rad]
-    - a_thrust: Thrust acceleration magnitude [m/s^2]
-    - mu: Gravitational parameter [m^3/s^2]
-    - t0: Start time [s]
-    - max_time: Maximum integration time [s]
-    - body_radius: Radius of the central body [m]
-    - plot: Whether to plot the trajectory
-
-    Returns:
-    - r_final: Final position vector [m]
-    - v_final: Final velocity vector [m/s]
-    - t_final: Time at which inclination was reached [s]
+    Either i_target (rad) or delta_v (m/s) must be specified, but not both.
     """
+
+    if (i_target is None) == (delta_v is None):
+        raise ValueError("Specify exactly one of i_target or delta_v.")
 
     def equations(t, y):
-        r = y[:3]
-        v = y[3:]
+        r, v = y[:3], y[3:]
         r_norm = np.linalg.norm(r)
         a_grav = -mu * r / r_norm**3
         h = np.cross(r, v)
-        h_norm = np.linalg.norm(h)
-        n_vec = h / h_norm if h_norm > 0.0 else np.zeros(3)
+        if np.linalg.norm(h) > 0:
+            n_vec = h / np.linalg.norm(h)
+            if delta_v is not None and delta_v < 0:
+                n_vec = -n_vec
+        else:
+            n_vec = np.zeros(3)
         a = a_grav + a_thrust * n_vec
-        return np.hstack((v, a))
+        return np.concatenate((v, a))
 
     def inclination_event(t, y):
-        r = y[:3]
-        v = y[3:]
+        r, v = y[:3], y[3:]
         h = np.cross(r, v)
         h_norm = np.linalg.norm(h)
-        if h_norm == 0.0:
-            return -i_target  # stay safe if undefined
-        inc = np.arccos(np.clip(h[2] / h_norm, -1.0, 1.0))
-        sign = np.sign(h[2])  # +z is positive inclination
-        signed_inc = inc if sign >= 0 else -inc
-        return signed_inc - i_target
-
+        if h_norm == 0:
+            return np.inf  # Avoid divide by zero
+        inclination = np.arccos(np.clip(h[2] / h_norm, -1.0, 1.0))
+        if h[1] < 0:  # Use h[1] or node vector to define hemisphere
+            inclination = -inclination
+        return inclination - i_target
     inclination_event.terminal = True
     inclination_event.direction = 1
 
-    y0 = np.hstack((r0, v0))
+    def deltav_event(t, y):
+        return a_thrust * (t - t0) - abs(delta_v)
+    deltav_event.terminal = True
+    deltav_event.direction = 1
+
+    y0 = np.concatenate((r0, v0))
+    event_fn = inclination_event if i_target is not None else deltav_event
+
     sol = solve_ivp(
-        fun=equations,
-        t_span=(t0, t0 + max_time),
-        y0=y0,
-        events=inclination_event,
-        method="RK45",
+        equations,
+        (t0, t0 + max_time),
+        y0,
+        events=event_fn,
+        method='RK45',
         rtol=1e-8,
         atol=1e-10,
-        dense_output=True,
+        dense_output=True
     )
 
     if sol.status != 1 or sol.t_events[0].size == 0:
-        raise ValueError("Target inclination not reached within max_time")
+        raise ValueError("Condition not reached within max_time.")
 
     t_final = sol.t_events[0][0]
     y_final = sol.sol(t_final)
     r_final, v_final = y_final[:3], y_final[3:]
 
-    energy = 0.5 * np.dot(v_final, v_final) - mu / np.linalg.norm(r_final)
-    if energy > 0.0:
-        warnings.warn("Final orbit is unbound (specific energy > 0)", RuntimeWarning)
-
     if plot:
-        _plot_transfer(sol, r0, v0, r_final, v_final, t0, t_final, mu, body_radius)
+        _plot_transfer(sol, r0, v0, r_final, v_final, t0, t_final, mu, body_radius, save_path)
 
     return r_final, v_final, t_final
 
 
-def _plot_transfer(sol, r0, v0, r_final, v_final, t0, t_final, mu, body_radius):
+def _plot_transfer(sol, r0, v0, r_final, v_final, t0, t_final, mu, body_radius, save_path):
     def kepler_eq(t, y):
         r = y[:3]
         v = y[3:]
@@ -154,3 +149,6 @@ def _plot_transfer(sol, r0, v0, r_final, v_final, t0, t_final, mu, body_radius):
     ax.set_box_aspect([1, 1, 1])
     set_axes_equal(ax)
     plt.show()
+
+    if save_path:
+        save_plot(fig, save_path)

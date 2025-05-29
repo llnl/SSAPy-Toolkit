@@ -118,8 +118,11 @@ def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, offline=Tru
 
     # Altitude plot
     ax2 = fig.add_subplot(gs[1, 0])
+    altmax = 0
     for i, (ti, alt) in enumerate(zip(t, altitudes)):
         ax2.plot(ti / 60, alt / 1e3, color=colors[i], linewidth=2.5, label=f'Orbit {i+1}')
+        altmax = max(altmax, np.max(alt))
+    ax2.set_ylim(0, altmax  / 1e3 * 1.1)
     ax2.set_xlabel('Time (minutes)', fontsize=18)
     ax2.set_ylabel('Altitude (km)', fontsize=18)
     ax2.set_title('Altitude vs Time', fontsize=20)
@@ -140,6 +143,7 @@ def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, offline=Tru
     ax3.set_ylabel('Y (km)', fontsize=16)
     ax3.set_zlabel('Z (km)', fontsize=16)
     ax3.tick_params(axis='both', labelsize=14)
+    plt.axis('equal')
 
     # Set 3D plot limits
     all_xyz = np.concatenate([r_i for r_i in r], axis=0)
@@ -155,11 +159,14 @@ def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, offline=Tru
 
     # Velocity plot
     ax4 = fig.add_subplot(gs[1, 1])
+    vmax = 0
     for i, (ti, vel) in enumerate(zip(t, velocities)):
         if np.ndim(vel) > 0 and len(vel) > 3:
             ti = ti[1:-1]
             vel = vel[1:-1]
         ax4.plot(ti / 60, vel / 1e3, color=colors[i], linewidth=2.5)
+        vmax = max(vmax, np.max(vel))
+    ax4.set_ylim(0, vmax  / 1e3 + 1)
     ax4.set_xlabel('Time (minutes)', fontsize=18)
     ax4.set_ylabel('Velocity (km/s)', fontsize=18)
     ax4.set_title('Velocity vs Time', fontsize=20)
@@ -185,6 +192,7 @@ def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, offline=Tru
     ax5.set_xticks([-limit, 0, limit])
     ax5.set_yticklabels([])
     ax5.set_zticklabels([])
+    plt.axis('equal')
 
     plt.tight_layout()
     if show:

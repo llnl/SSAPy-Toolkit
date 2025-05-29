@@ -31,7 +31,7 @@ for peri in perigees:
     dt = t[1] - t[0]
 
     # Integrate using Leapfrog
-    r, v = leapfrog(r0=r0, v0=v0, t=t, dt=dt, accel=accel_uniform_earth)
+    r, v = leapfrog(r0=r0, v0=v0, t=t, accel=accel_uniform_earth)
     rs.append(r)
 
 # Plot orbits using orbit_plot_xy
@@ -39,5 +39,6 @@ orbit_plot_xy(
     rs,
     save_path="/g/g16/yeager7/workdir/yeager_utils/demos/images/testing_ellipses_leapfrog.jpg",
     pad=500,
-    title="Earth as an extended body"
+    title="Earth as an extended body",
+    show=True
 )

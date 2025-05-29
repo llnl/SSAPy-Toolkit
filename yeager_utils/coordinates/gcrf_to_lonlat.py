@@ -19,6 +19,8 @@ def gcrf_to_lonlat(r_gcrf: np.ndarray, t: np.ndarray):
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
+    t = np.atleast_1d(t)
+    r_gcrf = np.atleast_2d(r_gcrf)
     t = to_gps(t)
     lon, lat, height = groundTrack(r_gcrf, t, format='geodetic')
     return np.degrees(lon), np.degrees(lat), height

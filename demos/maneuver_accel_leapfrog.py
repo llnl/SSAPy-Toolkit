@@ -23,4 +23,4 @@ r, v = leapfrog(
 
 print(r[-1], v[-1])
 
-groundtrack_dashboard(r[:, 0], r[:, 1], r[:, 2], t, save_path="/home/yeager7/yeager_utils/demos/images/testing_leapfrog_maneuvers.jpg")
+groundtrack_dashboard(r, t, save_path="/home/yeager7/yeager_utils/demos/images/testing_leapfrog_maneuvers.jpg")

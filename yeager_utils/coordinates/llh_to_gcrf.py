@@ -5,7 +5,7 @@ from astropy.coordinates import EarthLocation, GCRS
 
 def llh_to_gcrf(lon: float,
                 lat: float,
-                time: Time,
+                t: Time,
                 height: float = 0.0):
     """
     Convert geodetic (lon, lat, height) at a given time to GCRF (GCRS) position & velocity.
@@ -16,7 +16,7 @@ def llh_to_gcrf(lon: float,
         Geodetic longitude in degrees (east-positive).
     lat : float
         Geodetic latitude in degrees (north-positive).
-    time : astropy.time.Time
+    t : astropy.time.Time
         The observation time (UTC or TAI, etc.).
     height : float, optional
         Height above the reference ellipsoid in meters.
@@ -34,7 +34,7 @@ def llh_to_gcrf(lon: float,
                         height=height * u.m)
 
     # Get GCRS coordinate (includes velocity differential)
-    gcrs = loc.get_gcrs(obstime=time)
+    gcrs = loc.get_gcrs(obstime=t)
 
     # Position in meters
     r_gcrf = gcrs.cartesian.xyz.to(u.m).value

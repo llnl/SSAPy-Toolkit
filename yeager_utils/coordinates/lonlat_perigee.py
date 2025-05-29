@@ -5,7 +5,7 @@ from ..constants import EARTH_MU
 from ..time import to_gps, Time
 
 
-def lonlat_perigee(lon, lat, a, e=0, i=None, t0=Time(0, format='gps'), mu=EARTH_MU):
+def lonlat_perigee(lon, lat, a, e=0, i=None, t=Time(0, format='gps'), mu=EARTH_MU):
     """
     Create an Orbit whose perigee is exactly over the fixed geodetic
     longitude/latitude (lon, lat) at epoch t0.
@@ -36,9 +36,9 @@ def lonlat_perigee(lon, lat, a, e=0, i=None, t0=Time(0, format='gps'), mu=EARTH_
     if i is None:
         i = lat
 
-    t0 = to_gps(t0)
+    t = to_gps(t)
 
-    r_surf, _ = surface_rv(lon, lat, elevation=0.0, fast=False)
+    r_surf, _ = surface_rv(lon, lat, elevation=0.0, t=t, fast=False)
     rp = a * (1 - e)
     r_peri = rp * (r_surf / np.linalg.norm(r_surf))
     r_hat = r_peri / np.linalg.norm(r_peri)
@@ -64,4 +64,4 @@ def lonlat_perigee(lon, lat, a, e=0, i=None, t0=Time(0, format='gps'), mu=EARTH_
     v_peri = v_hat * np.sqrt(mu * (1 + e) / (a * (1 - e)))
 
     # Construct orbit from state vectors
-    return Orbit(r=r_peri, v=v_peri, t=t0, mu=mu)
+    return Orbit(r=r_peri, v=v_peri, t=t, mu=mu)
