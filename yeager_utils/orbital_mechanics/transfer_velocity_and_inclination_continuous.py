@@ -15,8 +15,8 @@ def transfer_velocity_and_inclination_continuous(
     a_thrust,
     mu=EARTH_MU,
     t0=0.0,
-    max_time1=1000.0,
-    max_time2=1e6,
+    max_time1=36000,
+    max_time2=36000,
     body_radius=EARTH_RADIUS,
     plot=False
 ):
@@ -87,13 +87,30 @@ def transfer_velocity_and_inclination_continuous(
     if energy > 0.0:
         warnings.warn("Final orbit is unbound (specific energy > 0)", RuntimeWarning)
 
+    # Create concatenated full state vectors and time arrays for output
+    # Sample sol1 and sol2 up to event time for smooth plotting and output
+    t1_full = sol1.t
+    r1_full = sol1.y[:3].T
+    v1_full = sol1.y[3:].T
+
+    # For sol2, sample from start to event time (t_final)
+    t2_full = np.linspace(sol2.t[0], t_final, 300)
+    y2_full = sol2.sol(t2_full).T
+    r2_full = y2_full[:, :3]
+    v2_full = y2_full[:, 3:]
+
+    # Concatenate phase 1 and phase 2 trajectories (excluding overlap at t1)
+    t_full = np.hstack((t1_full, t2_full[1:]))
+    r_full = np.vstack((r1_full, r2_full[1:]))
+    v_full = np.vstack((v1_full, v2_full[1:]))
+
     if plot:
-        _plot_transfer(r0, v0, sol1, sol2, r_final, v_final, t0, t_final, mu, body_radius)
+        _plot_transfer(r0, v0, r_full, v_full, t_full, t0, t_final, mu, body_radius)
 
-    return r_final, v_final, t_final
+    return r_full, v_full, t_full
 
 
-def _plot_transfer(r0, v0, sol1, sol2, r_final, v_final, t0, t_final, mu, body_radius):
+def _plot_transfer(r0, v0, r_full, v_full, t_full, t0, t_final, mu, body_radius):
     def kepler_eq(t, y):
         r = y[:3]
         v = y[3:]
@@ -101,16 +118,21 @@ def _plot_transfer(r0, v0, sol1, sol2, r_final, v_final, t0, t_final, mu, body_r
         a = -mu * r / r_norm**3
         return np.concatenate((v, a))
 
+    # Compute initial orbit parameters for plotting
     r0_mag = np.linalg.norm(r0)
     v0_mag = np.linalg.norm(v0)
     a0 = 1 / (2 / r0_mag - v0_mag**2 / mu)
     T0 = 2 * np.pi * np.sqrt(abs(a0)**3 / mu)
 
-    rf_mag = np.linalg.norm(r_final)
-    vf_mag = np.linalg.norm(v_final)
+    # Compute final orbit parameters for plotting
+    rf = r_full[-1]
+    vf = v_full[-1]
+    rf_mag = np.linalg.norm(rf)
+    vf_mag = np.linalg.norm(vf)
     af = 1 / (2 / rf_mag - vf_mag**2 / mu)
     Tf = 2 * np.pi * np.sqrt(abs(af)**3 / mu)
 
+    # Propagate initial orbit for one period
     sol_initial = solve_ivp(
         kepler_eq,
         (t0, t0 + T0),
@@ -120,23 +142,20 @@ def _plot_transfer(r0, v0, sol1, sol2, r_final, v_final, t0, t_final, mu, body_r
         atol=1e-10,
     )
 
+    # Propagate final orbit for one period
     sol_final = solve_ivp(
         kepler_eq,
         (t_final, t_final + Tf),
-        np.concatenate((r_final, v_final)),
+        np.concatenate((rf, vf)),
         t_eval=np.linspace(t_final, t_final + Tf, 200),
         rtol=1e-8,
         atol=1e-10,
     )
 
-    t1_burn = np.linspace(t0, sol1.t[-1], 300)
-    r1_burn = sol1.sol(t1_burn)[:3].T
-    t2_burn = np.linspace(sol2.t[0], t_final, 300)
-    r2_burn = sol2.sol(t2_burn)[:3].T
-
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111, projection='3d')
 
+    # Plot Earth
     u = np.linspace(0, 2 * np.pi, 30)
     v = np.linspace(0, np.pi, 30)
     x = body_radius * np.outer(np.cos(u), np.sin(v))
@@ -144,12 +163,16 @@ def _plot_transfer(r0, v0, sol1, sol2, r_final, v_final, t0, t_final, mu, body_r
     z = body_radius * np.outer(np.ones_like(u), np.cos(v))
     ax.plot_surface(x, y, z, color='blue', alpha=0.3)
 
-    ax.plot(*sol_initial.y[:3], 'g--', label='Initial Orbit')
-    ax.plot(*sol_final.y[:3], 'b--', label='Final Orbit')
-    ax.plot(r1_burn[:, 0], r1_burn[:, 1], r1_burn[:, 2], 'orange', label='Velocity Burn')
-    ax.plot(r2_burn[:, 0], r2_burn[:, 1], r2_burn[:, 2], 'r', label='Normal Burn')
+    # Plot initial and final orbits
+    ax.plot(sol_initial.y[0], sol_initial.y[1], sol_initial.y[2], 'g--', label='Initial Orbit')
+    ax.plot(sol_final.y[0], sol_final.y[1], sol_final.y[2], 'b--', label='Final Orbit')
+
+    # Plot transfer trajectory
+    ax.plot(r_full[:, 0], r_full[:, 1], r_full[:, 2], 'r-', label='Transfer Trajectory')
+
+    # Mark start and end points
     ax.scatter(*r0, color='green', s=50, label='Start')
-    ax.scatter(*r_final, color='blue', s=50, label='End')
+    ax.scatter(*r_full[-1], color='blue', s=50, label='End')
 
     ax.set_xlabel('X (m)')
     ax.set_ylabel('Y (m)')

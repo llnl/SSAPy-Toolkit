@@ -17,7 +17,7 @@ r, v, fuel = leapfrog(
     plane=[0, 5 * u.min, 10 * u.min],
     inclination={"thrust": 0, "start": 60 * u.min, "end": 65 * u.min},
     circular={"thrust": 5, "start": 10 * u.min},
-    fuel=True
+    fuel=False
 )
 print(fuel)
-groundtrack_dashboard(r[:, 0], r[:, 1], r[:, 2], t.value, save_path="images/groundtrack_dashboard.jpg")
+groundtrack_dashboard(r, t.value, show=True, save_path="images/groundtrack_dashboard.jpg")

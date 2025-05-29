@@ -175,9 +175,9 @@ import numpy as np
 from astropy.time import Time
 import astropy.units as u
 
-def get_times(duration: Union[int, float, Tuple[Union[int, float], str]],
-              freq: Union[int, float, Tuple[Union[int, float], str]] = (1, 's'),
-              t0: Union[str, Time] = Time(0, format='gps')) -> np.ndarray:
+def get_times(duration,
+              freq=(1, 's'),
+              t0=Time(0, format='gps')) -> np.ndarray:
     """
     Calculate a list of times spaced equally apart over a specified duration.
 
@@ -215,7 +215,10 @@ def get_times(duration: Union[int, float, Tuple[Union[int, float], str]],
             return float(value)
         else:
             val, unit = value
-            unit = unit.lower().rstrip('s')
+            unit = unit.lower()
+            if len(unit) > 1:
+                unit = unit.rstrip('s')
+
             if unit not in unit_dict:
                 raise ValueError(f'Error, {unit} is not a valid time unit. Valid options are: {", ".join(unit_dict.keys())}.')
             return float(val) * unit_dict[unit]

@@ -15,7 +15,7 @@ def transfer_velocity_continuous(
     a_thrust=1.0,
     mu=EARTH_MU,
     t0=0.0,
-    max_time=3600,
+    max_time=36000,
     body_radius=EARTH_RADIUS,
     plot=False,
     save_path=False
@@ -25,22 +25,10 @@ def transfer_velocity_continuous(
     Accumulate delta_v as the integral of absolute thrust acceleration (always positive).
     If v_target is None, burn for full max_time.
 
-    Parameters:
-    - r0: Initial position vector [m]
-    - v0: Initial velocity vector [m/s]
-    - v_target: Target delta_v magnitude [m/s] (positive scalar), or None to burn full time
-    - a_thrust: Thrust acceleration magnitude [m/s^2]
-    - mu: Gravitational parameter [m^3/s^2]
-    - t0: Start time [s]
-    - max_time: Maximum integration time [s]
-    - body_radius: Radius of the central body [m]
-    - plot: Whether to plot the trajectory
-    - save_path: Path to save the plot if plot is True
-
     Returns:
-    - r_final: Final position vector [m]
-    - v_final: Final velocity vector [m/s]
-    - t_final: Time when delta_v magnitude is reached or max_time elapsed [s]
+    - r: (n,3) array of positions during burn
+    - v: (n,3) array of velocities during burn
+    - t: (n,) array of time points during burn
     """
 
     def equations(t, y):
@@ -89,8 +77,15 @@ def transfer_velocity_continuous(
     else:
         t_final = sol.t[-1]
 
-    y_final = sol.sol(t_final)
-    r_final, v_final = y_final[:3], y_final[3:6]
+    # Extract full solution arrays up to t_final
+    # Interpolate dense output at fine resolution
+    t_vals = np.linspace(t0, t_final, 1000)
+    y_vals = sol.sol(t_vals)
+    r_vals = y_vals[:3].T
+    v_vals = y_vals[3:6].T
+
+    r_final = r_vals[-1]
+    v_final = v_vals[-1]
 
     energy = 0.5 * np.dot(v_final, v_final) - mu / np.linalg.norm(r_final)
     if energy > 0.0:
@@ -99,7 +94,7 @@ def transfer_velocity_continuous(
     if plot:
         _plot_transfer(sol, r0, v0, r_final, v_final, t0, t_final, mu, body_radius, save_path)
 
-    return r_final, v_final, t_final
+    return r_vals, v_vals, t_vals
 
 
 def _plot_transfer(sol, r0, v0, r_final, v_final, t0, t_final, mu, body_radius, save_path):
