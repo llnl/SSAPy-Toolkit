@@ -1,5 +1,7 @@
 from astropy.coordinates import GCRS, ITRS, EarthLocation, CartesianRepresentation
 from astropy import units as u
+import numpy as np
+
 
 def gcrf_to_llh(r_gcrf, t):
     """

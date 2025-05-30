@@ -1,14 +1,14 @@
 import numpy as np
 from ssapy.orbit import Orbit
-from .surface_rv import surface_rv
-from ..constants import EARTH_MU
+from ..yastropy import astropy_surface_rv
+from ..constants import EARTH_MU, EARTH_RADIUS
 from ..time import to_gps, Time
 
 
-def lonlat_perigee(lon, lat, a, e=0, i=None, t=Time(0, format='gps'), mu=EARTH_MU):
+def lonlat_perigee(lon, lat, t, alt=1000e3, e=0, i=None, EARTH_MU=EARTH_MU):
     """
     Create an Orbit whose perigee is exactly over the fixed geodetic
-    longitude/latitude (lon, lat) at epoch t0.
+    longitude/latitude (lon, lat) at epoch t.
 
     Parameters
     ----------
@@ -16,33 +16,34 @@ def lonlat_perigee(lon, lat, a, e=0, i=None, t=Time(0, format='gps'), mu=EARTH_M
         Geodetic longitude in degrees.
     lat : float
         Geodetic latitude in degrees.
-    t0 : str or Time
+    t : str or Time
         Epoch (ISO string or Astropy Time).
-    a : float
-        Semimajor axis [m].
+    alt : float
+        Altitude above Earth surface in meters.
     e : float
-        Eccentricity.
+        Eccentricity of the orbit.
     i : float
-        Inclination in degrees.
-    mu : float, optional
-        Gravitational parameter [m³/s²], by default EARTH_MU.
+        Inclination in degrees. Defaults to the same as latitude if None.
+    EARTH_MU : float
+        Earth's gravitational parameter [m³/s²].
 
     Returns
     -------
     Orbit
-        Orbit object with perigee over (lon, lat) at time t0.
+        Orbit object with perigee over (lon, lat) at time t.
     """
-    
     if i is None:
         i = lat
 
-    t = to_gps(t)
+    # Get surface position vector in GCRF
+    r_gcrf, _ = astropy_surface_rv(lon, lat, t=t)
 
-    r_surf, _ = surface_rv(lon, lat, elevation=0.0, t=t, fast=False)
-    rp = a * (1 - e)
-    r_peri = rp * (r_surf / np.linalg.norm(r_surf))
-    r_hat = r_peri / np.linalg.norm(r_peri)
+    # Set perigee radius
+    rp = EARTH_RADIUS + alt
+    r_hat = r_gcrf / np.linalg.norm(r_gcrf)
+    r_peri = rp * r_hat
 
+    # Use Rodrigues' rotation formula to tilt the angular momentum vector
     def rodrigues(u, k, theta):
         return (
             u * np.cos(theta)
@@ -50,18 +51,20 @@ def lonlat_perigee(lon, lat, a, e=0, i=None, t=Time(0, format='gps'), mu=EARTH_M
             + k * (np.dot(k, u)) * (1 - np.cos(theta))
         )
 
-    # Rotate Earth's spin axis by inclination about the periapsis direction
+    # Define unit vector for Earth's rotation axis
     k_hat = np.array([0.0, 0.0, 1.0])
     i_rad = np.deg2rad(i)
+
+    # Get angular momentum direction
     h_hat = rodrigues(k_hat, r_hat, i_rad)
     h_hat /= np.linalg.norm(h_hat)
 
-    # Velocity direction perpendicular to r_hat in the orbital plane
+    # Velocity direction is perpendicular to both h_hat and r_hat
     v_hat = np.cross(h_hat, r_hat)
     v_hat /= np.linalg.norm(v_hat)
 
-    # Perigee speed
-    v_peri = v_hat * np.sqrt(mu * (1 + e) / (a * (1 - e)))
+    # Perigee speed for elliptical orbit
+    v_mag = np.sqrt(EARTH_MU * (1 + e) / rp)
+    v_peri = v_hat * v_mag
 
-    # Construct orbit from state vectors
-    return Orbit(r=r_peri, v=v_peri, t=t, mu=mu)
+    return Orbit(r=r_peri, v=v_peri, t=t, mu=EARTH_MU)

@@ -4,6 +4,7 @@ from matplotlib import gridspec
 from matplotlib.lines import Line2D
 from ssapy import groundTrack
 import cartopy.crs as ccrs
+from ..yastropy import astropy_gcrf_to_llh
 from ..coordinates import gcrf_to_lonlat
 from ..compute import find_smallest_bounding_cube
 from ..constants import EARTH_RADIUS
@@ -48,14 +49,14 @@ def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, offline=Tru
     r, t = valid_orbits(r, t)
     
     # Ensure times are converted to GPS and normalized
-    t = [to_gps(t) - to_gps(t)[0] for t in t]
+    t_zero = [to_gps(t) - to_gps(t)[0] for t in t]
     
     # Process each orbit
     lons, lats, altitudes, velocities, x_gts, y_gts, z_gts = [], [], [], [], [], [], []
     for r_i, t_i in zip(r, t):
         xyz = np.array(r_i)  # Ensure r_i is (n,3)
         x_gt, y_gt, z_gt = groundTrack(xyz, t_i, format='cartesian')
-        lon, lat, height = gcrf_to_lonlat(xyz, t_i)
+        lon, lat, height = astropy_gcrf_to_llh(xyz, t_i)
         # altitude = np.linalg.norm(xyz, axis=-1) - EARTH_RADIUS
         try:
             velocity = np.linalg.norm(np.gradient(xyz, axis=0), axis=1)
@@ -119,7 +120,7 @@ def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, offline=Tru
     # Altitude plot
     ax2 = fig.add_subplot(gs[1, 0])
     altmax = 0
-    for i, (ti, alt) in enumerate(zip(t, altitudes)):
+    for i, (ti, alt) in enumerate(zip(t_zero, altitudes)):
         ax2.plot(ti / 60, alt / 1e3, color=colors[i], linewidth=2.5, label=f'Orbit {i+1}')
         altmax = max(altmax, np.max(alt))
     ax2.set_ylim(0, altmax  / 1e3 * 1.1)
@@ -160,7 +161,7 @@ def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, offline=Tru
     # Velocity plot
     ax4 = fig.add_subplot(gs[1, 1])
     vmax = 0
-    for i, (ti, vel) in enumerate(zip(t, velocities)):
+    for i, (ti, vel) in enumerate(zip(t_zero, velocities)):
         if np.ndim(vel) > 0 and len(vel) > 3:
             ti = ti[1:-1]
             vel = vel[1:-1]

@@ -13,17 +13,17 @@ if __name__ == "__main__":
     # Initial orbit (roughly circular GEO altitude)
     r0 = np.array([RGEO, 0.0, 0.0])
     v0 = np.array([0.0, VGEO, 0.0])
-    a_thrust = 0.5  # Moderate thrust [m/s^2]
+    a_thrust = 0.1  # Moderate thrust [m/s^2]
 
     print("=== Velocity Direction Burn ===")
-    v_target = 400  # Positive for acceleration along velocity
+    v_target = -900  # Positive for acceleration along velocity
     r1, v1, t1 = transfer_velocity_continuous(
         r0, v0, v_target=v_target, a_thrust=a_thrust,
         plot=False)
     print(f"After velocity burn: r = {r1[-1]}, v = {v1[-1]}, t = {t1[-1]:.1f} s\n")
 
     print("=== Inclination Change Burn ===")
-    delta_v = 200  # Target inclination change
+    delta_v = -800  # Target inclination change
     r2, v2, t2 = transfer_inclination_continuous(
         r1[-1], v1[-1], delta_v=delta_v, a_thrust=a_thrust,
         plot=False, save_path=figpath("demo_combined_inclination_burn.jpg")
