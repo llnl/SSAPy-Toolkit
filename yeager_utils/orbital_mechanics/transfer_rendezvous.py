@@ -3,6 +3,59 @@ from ssapy import rv, Orbit, SciPyPropagator, AccelKepler
 from ..constants import EARTH_MU
 from ..time import get_times, Time
 
+
+def rendezvous_plot(r0, v0, rtransfer, vtransfer, rfinal, vfinal, r_rendezvous, title=''):
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D  # noqa
+    from matplotlib.lines import Line2D
+    from ..constants import EARTH_RADIUS
+    from ..plotutils import save_plot
+
+    fig = plt.figure(dpi=100, figsize=(7, 7), facecolor='black')
+    ax = fig.add_subplot(111, projection='3d')
+    ax.set_facecolor('black')
+
+    # Earth
+    u = np.linspace(0, 2 * np.pi, 30)
+    v = np.linspace(0, np.pi, 30)
+    x = EARTH_RADIUS / 1e3 * np.outer(np.cos(u), np.sin(v))
+    y = EARTH_RADIUS / 1e3 * np.outer(np.sin(u), np.sin(v))
+    z = EARTH_RADIUS / 1e3 * np.outer(np.ones(np.size(u)), np.cos(v))
+    ax.plot_surface(x, y, z, color='blue', alpha=0.3)
+
+    # Chaser's initial position
+    r0_km = r0 / 1e3
+    ax.plot([r0_km[0]], [r0_km[1]], [r0_km[2]], 'o', color='cyan', label='Chaser Start')
+
+    # Transfer path
+    x = rtransfer[:, 0] / 1e3
+    y = rtransfer[:, 1] / 1e3
+    z = rtransfer[:, 2] / 1e3
+    ax.plot(x, y, z, color='yellow', lw=2, label='Transfer Arc')
+
+    # Rendezvous point
+    r_rend_km = r_rendezvous / 1e3
+    ax.plot([r_rend_km[0]], [r_rend_km[1]], [r_rend_km[2]],
+            'o', color='magenta', markersize=10, label='Rendezvous Point')
+
+    # Target's arrival position
+    rfinal_km = rfinal / 1e3
+    ax.plot([rfinal_km[0]], [rfinal_km[1]], [rfinal_km[2]], 'o',
+            color='green', label='Target at Intercept')
+
+    ax.set_xlabel("X (km)", color='white')
+    ax.set_ylabel("Y (km)", color='white')
+    ax.set_zlabel("Z (km)", color='white')
+    ax.set_title(title, color='white')
+    ax.tick_params(axis='x', colors='white')
+    ax.tick_params(axis='y', colors='white')
+    ax.tick_params(axis='z', colors='white')
+    ax.legend(facecolor='black', edgecolor='white', labelcolor='white', loc='upper left')
+
+    plt.axis('equal')
+    return fig
+
+
 def transfer_rendezvous(orbit1, orbit2, tol=1, max_iter=50, plot=False, status=False):
     """
     Finds the delta-v that leads to a transfer rendezvous with a moving target orbit.
@@ -59,9 +112,9 @@ def transfer_rendezvous(orbit1, orbit2, tol=1, max_iter=50, plot=False, status=F
         try:
             period = orb_tr.period
             if np.isinf(period) or period > 1e7:
-                period = 2 * 3600  # fallback to 2 h
+                period = 48 * 3600  # fallback to 48 h
         except OverflowError:
-            period = 2 * 3600
+            period = 48 * 3600
 
         # Sample at 1 s intervals
         times = get_times(duration=(float(period), 'sec'), freq=(1, 'sec'), t0=t0)
@@ -172,10 +225,18 @@ def transfer_rendezvous(orbit1, orbit2, tol=1, max_iter=50, plot=False, status=F
         print(f"Converged in {it+1} steps: Δv₁ = {delta_v1_mag:.6f} m/s, Δv₂ = {delta_v2_mag:.6f} m/s, TOF = {tof/60:.2f} min")
 
     if plot:
-        from ..plots import transfer_plot
-        fig = transfer_plot(r1, v1, r_transfer, v_transfer, r2_arr, v2_arr,
-                            title=f"Transfer TOF: {tof/60:.1f} min\n|Δv₁| {delta_v1_mag/1e3:.3f} km/s, |Δv₂| {delta_v2_mag/1e3:.3f} km/s",
-                            show=False)
+        fig = rendezvous_plot(
+            r1, v1,
+            r_transfer, v_transfer,
+            r2_arr, v2_arr,
+            r_arr,  # Point of rendezvous from chaser side
+            title=(
+                f"Transfer Rendezvous\n"
+                f"TOF: {tof/60:.1f} min | "
+                f"|Δv₁| = {delta_v1_mag/1e3:.3f} km/s, "
+                f"|Δv₂| = {delta_v2_mag/1e3:.3f} km/s"
+            )
+        )
         result['fig'] = fig
 
     return result
