@@ -1,30 +1,17 @@
 import numpy as np
 from ssapy import Orbit
-from yeager_utils import transfer_rendezvous, Time, EARTH_MU, EARTH_RADIUS, RGEO
-
-# Define initial and target orbit radii
-r1_mag = RGEO                    # GEO radius
-r2_mag = 2 * RGEO                # 2×GEO radius
-
-# Position vectors (circular, equatorial)
-r1 = np.array([r1_mag, 0, 0])
-r2 = np.array([0, r2_mag, 0])
-
-# Circular velocities
-v1_mag = np.sqrt(EARTH_MU / r1_mag)
-v2_mag = np.sqrt(EARTH_MU / r2_mag)
-v1 = np.array([0, v1_mag, 0])
-v2 = np.array([-v2_mag, 0, 0])
+from yeager_utils import transfer_rendezvous, transfer_rendezvous_gradientfree, Time, EARTH_MU, EARTH_RADIUS, RGEO
 
 # Set same epoch for both orbits
 t = Time(0, format='gps')
 
 # Build Orbit objects
-orbit1 = Orbit(r=r1, v=v1, t=t)
-orbit2 = Orbit(r=r2, v=v2, t=t)
+orbit1 = Orbit.fromKeplerianElements(a=RGEO, e=0.5, i=np.radians(0), pa=0, raan=0, trueAnomaly=0, t=t)
+orbit2 = Orbit.fromKeplerianElements(a=2 * RGEO, e=0, i=np.radians(40), pa=0, raan=0, trueAnomaly=np.radians(90), t=t)
 
 # Run rendezvous calculation
-result = transfer_rendezvous(orbit1, orbit2, tol=1.0, status=True, plot=True)
+# result = transfer_rendezvous(orbit1, orbit2, status=True, plot=True)
+result = transfer_rendezvous_gradientfree(orbit1, orbit2, status=True, plot=True)
 
 # Output results
 print(f"Initial Δv magnitude: {result['|delta_v1|']:.3f} m/s")
