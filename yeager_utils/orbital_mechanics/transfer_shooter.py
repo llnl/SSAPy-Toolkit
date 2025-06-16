@@ -4,7 +4,7 @@ from ..constants import EARTH_MU
 from ..time import get_times, Time
 
 
-def transfer_shooter(*args, r1=None, v1=None, r2=None, v2=None, orbit1=None, orbit2=None, tol=1, max_iter=50, plot=False, status=False):
+def transfer_shooter(*args, r1=None, v1=None, r2=None, v2=None, orbit1=None, orbit2=None, tol=1, max_iter=50, plot=False, status=False, accel=AccelKepler()):
     """
     Finds an initial delta-v that will lead to a transfer orbit with an arrival position
     within tol (in meters) of the target position r2.
@@ -143,7 +143,7 @@ def transfer_shooter(*args, r1=None, v1=None, r2=None, v2=None, orbit1=None, orb
         try:
             r_traj, v_traj = rv(orbit_transfer, time=times)
         except RuntimeError:
-            r_traj, v_traj = rv(orbit_transfer, time=times, propagator=SciPyPropagator(AccelKepler()))
+            r_traj, v_traj = rv(orbit_transfer, time=times, propagator=SciPyPropagator(accel))
         distances = np.linalg.norm(r_traj - r2, axis=1)
         idx_min = np.argmin(distances)
         return r_traj[idx_min], v_traj[idx_min], times[idx_min]
@@ -200,7 +200,7 @@ def transfer_shooter(*args, r1=None, v1=None, r2=None, v2=None, orbit1=None, orb
     try:
         r_transfer, v_transfer = rv(orbit_transfer, time=times)
     except RuntimeError:
-        r_transfer, v_transfer = rv(orbit_transfer, time=times, propagator=SciPyPropagator(AccelKepler()))
+        r_transfer, v_transfer = rv(orbit_transfer, time=times, propagator=SciPyPropagator(accel))
 
     distances = np.linalg.norm(r_transfer - r2, axis=1)
     closest_idx = np.argmin(distances)

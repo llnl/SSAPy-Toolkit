@@ -1,198 +1,195 @@
 import numpy as np
-from ..accelerations import (
-    accel_point_earth,
-    accel_radial,
-    accel_velocity,
-    accel_inclination,
-    accel_plane,
-    accel_to_circular,
-)
+from ..constants import EARTH_MU
 from ..time import to_gps
-from .fuel import estimate_fuel_usage
 
 
-def ensure_list_of_lists(x):
-    if isinstance(x, (list, tuple, np.ndarray)) and all(isinstance(i, (list, tuple, dict, np.ndarray)) for i in x):
-        return x  # Already good
+def _accel_point_earth(r):
+    """Two-body Earth gravity (μ / r²) toward Earth centre."""
+    x, y, z = r
+    r_mag = np.sqrt(x**2 + y**2 + z**2)
+    factor = -EARTH_MU / r_mag**3
+    return np.array([factor * x, factor * y, factor * z])
+
+
+def _accel_velocity(v, thrust_mag):
+    """Thrust vector along spacecraft velocity."""
+    v = np.asarray(v)
+    norm = np.linalg.norm(v)
+    if norm == 0.0:
+        return np.zeros(3)
+    return thrust_mag * v / norm
+
+
+def _accel_radial(r, magnitude):
+    """Thrust vector along spacecraft radius (outward if magnitude > 0)."""
+    r = np.asarray(r)
+    norm = np.linalg.norm(r)
+    if norm == 0.0:
+        return np.zeros(3)
+    return magnitude * r / norm
+
+
+def _accel_inclination(r, v, magnitude):
+    """
+    Thrust perpendicular to orbital plane (changes inclination).
+    Positive magnitude ≈ push toward geocentric north.
+    """
+    r = np.asarray(r, float)
+    norm_r = np.linalg.norm(r)
+    if norm_r == 0.0 or magnitude == 0.0:
+        return np.zeros(3)
+
+    r_hat = r / norm_r
+    z_hat = np.array([0.0, 0.0, 1.0])
+    north_dir = z_hat - np.dot(z_hat, r_hat) * r_hat
+    norm_nd = np.linalg.norm(north_dir)
+    if norm_nd == 0.0:
+        return np.zeros(3)
+    return magnitude * north_dir / norm_nd
+
+
+# ---------------------------------------------------------------------------
+# Thrust-profile builder
+# ---------------------------------------------------------------------------
+def _build_profile(profile, t_arr):
+    """
+    Expand a thrust description into an array of magnitudes
+    aligned with t_arr.
+
+    Accepts:
+      • None              → all zeros
+      • scalar            → constant
+      • iterable length N → already per-step
+      • tuple/list of segments:
+          (start, end, thrust) or (start, thrust),
+        where start/end are indices *or* time values (same units as t_arr)
+    """
+    n = len(t_arr)
+    out = np.zeros(n, float)
+
+    if profile is None:
+        return out
+
+    if np.isscalar(profile):
+        out[:] = float(profile)
+        return out
+
+    if isinstance(profile, (list, tuple, np.ndarray)) and len(profile) == n:
+        return np.asarray(profile, float)
+
+    # Normalize to list of segments, handling a single tuple
+    if isinstance(profile, tuple) and (len(profile) == 2 or len(profile) == 3):
+        segments = [profile]
+    elif isinstance(profile, (list, tuple)):
+        segments = profile
     else:
-        if not isinstance(x, (list, tuple, np.ndarray)):
-            x = [x]
-        if not isinstance(x[0], (list, tuple, dict, np.ndarray)):
-            x = [x]
-        return x
+        raise TypeError("Unsupported profile format")
 
+    for seg in segments:
+        if len(seg) == 2:          # (start, thrust) – continuous to end
+            start, thrust = seg
+            end = None
+        elif len(seg) == 3:        # (start, end, thrust)
+            start, end, thrust = seg
+        else:
+            raise ValueError("Segment must be (start, thrust) or (start, end, thrust)")
+
+        # Convert to indices
+        start_idx = (
+            int(start)
+            if isinstance(start, (int, np.integer))
+            else int(np.searchsorted(t_arr, start))
+        )
+        end_idx = (
+            n
+            if end is None
+            else (
+                int(end)
+                if isinstance(end, (int, np.integer))
+                else int(np.searchsorted(t_arr, end))
+            )
+        )
+        if start_idx >= n:
+            continue
+        out[start_idx:end_idx] += float(thrust)
+
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Leapfrog propagator (velocity-Verlet)
+# ---------------------------------------------------------------------------
 
 def leapfrog(
     r0,
     v0,
     t,
-    accel=accel_point_earth,
     radial=None,
     velocity=None,
     inclination=None,
-    plane=None,
-    circular=None,
-    fuel=False,
+    accel_gravity=_accel_point_earth,
 ):
     """
-    Propagate position and velocity using Leapfrog integration with optional accelerations.
+    Symplectic leapfrog integrator with optional thrust along:
+      • radial (out/in)         via `radial`
+      • velocity (along-track)  via `velocity`
+      • normal to plane         via `inclination`
 
     Parameters
     ----------
-    r0 : array_like
-        Initial position vector [m].
-    v0 : array_like
-        Initial velocity vector [m/s].
+    r0, v0 : array_like (3,)
+        Initial Cartesian state [m, m/s].
     t : array_like
-        Array of times [s] as floats or datetime-like objects.
-    accel : function
-        Function to compute natural accelerations.
-    radial : dict or list, optional
-        Thrust profile as {'thrust': value, 'start': start_time/index, 'end': end_time/index}.
-    velocity : dict or list, optional
-        Thrust profile for along-track acceleration.
-    inclination : dict or list, optional
-        Thrust profile for changing orbital inclination.
-    plane : dict or list, optional
-        Thrust profile for changing orbital plane orientation.
-    circular : dict or list, optional
-        Thrust profile for circularizing orbit.
-    fuel : bool, optional
-        Whether to estimate fuel usage.
+        Time axis (s or datetime-like).  Uniform Δt required.
+    accel_gravity : callable
+        Function f(r) → gravitational acceleration (default: 2-body Earth).
+    radial, velocity, inclination :
+        Thrust profiles (see _build_profile).
 
     Returns
     -------
-    r : ndarray
-        Position array (n_steps, 3) [m].
-    v : ndarray
-        Velocity array (n_steps, 3) [m/s].
-    fuels : dict (optional)
-        Estimated fuel usage per maneuver type.
-    
-    Author: Travis Yeager
+    r, v : ndarray
+        Arrays of shape (N, 3) with propagated positions and velocities.
     """
-
-    def get_mask(n_steps, start, end=None, time_array=None):
-        if isinstance(start, (float, int)) and time_array is not None:
-            start = int(np.searchsorted(time_array, start))
-        if end is not None and isinstance(end, (float, int)) and time_array is not None:
-            end = int(np.searchsorted(time_array, end))
-        if isinstance(start, int) and end is None:
-            end = n_steps
-        mask = np.zeros(n_steps, dtype=bool)
-        mask[start:end] = True
-        return mask
-
-    def prep_thrust(n_steps, t_arr, profiles, continuous=False):
-        """
-        Build a thrust-time array from profiles that may be:
-        - None
-        - dict with keys 'thrust', 'start', optionally 'end'
-        - list/tuple/ndarray [thrust, start, end?]  (or [thrust, start] if continuous)
-        - list of any of the above
-
-        Overlaps sum naturally.
-        """
-        total = np.zeros(n_steps, float)
-        if profiles is None:
-            return total
-
-        # Normalize to list
-        profiles = ensure_list_of_lists(profiles)
-
-        for prof in profiles:
-            # Case A: dict
-            if isinstance(prof, dict):
-                thrust = float(prof["thrust"])
-                start = int(prof["start"])
-                end   = int(prof.get("end", -1))
-
-            # Case B: sequence
-            elif isinstance(prof, (list, tuple, np.ndarray)):
-                arr = list(prof)
-                thrust = float(arr[0])
-                start  = arr[1]
-                if continuous:
-                    end = None
-                else:
-                    end = arr[2] if len(arr) > 2 else None
-
-            else:
-                raise TypeError(f"Unsupported profile type: {type(prof)}")
-
-            # Build mask
-            if isinstance(start, (float, int)) and t_arr is not None:
-                start_idx = int(np.searchsorted(t_arr, start))
-            else:
-                start_idx = start
-            if end is None:
-                end_idx = n_steps
-            else:
-                if isinstance(end, (float, int)) and t_arr is not None:
-                    end_idx = int(np.searchsorted(t_arr, end))
-                else:
-                    end_idx = end
-
-            mask = np.zeros(n_steps, bool)
-            mask[start_idx:end_idx] = True
-            if continuous and mask.any():
-                mask[mask.argmax():] = True
-
-            total += thrust * mask
-
-        return total
-
-    # convert time to GPS‐seconds
+    # -- Time array in seconds from epoch -----------------------------------
     t_arr = to_gps(t)
     t_arr = t_arr - t_arr[0]
     n_steps = len(t_arr)
 
-    # now each can be a dict or list of dicts
-    r_th = prep_thrust(n_steps, t_arr, radial)
-    v_th = prep_thrust(n_steps, t_arr, velocity)
-    i_th = prep_thrust(n_steps, t_arr, inclination)
-    p_th = prep_thrust(n_steps, t_arr, plane)
-    c_th = prep_thrust(n_steps, t_arr, circular, continuous=True)
-
     dt_vals = np.diff(t_arr)
     if not np.allclose(dt_vals, dt_vals[0]):
-        raise ValueError("non-uniform dt not supported")
+        raise ValueError("Non-uniform Δt not supported")
     dt = dt_vals[0]
 
-    r = np.zeros((n_steps, 3))
-    v = np.zeros((n_steps, 3))
-    r[0], v[0] = np.array(r0), np.array(v0)
+    # -- Expand thrust schedules -------------------------------------------
+    r_th = _build_profile(radial,       t_arr)
+    v_th = _build_profile(velocity,     t_arr)
+    i_th = _build_profile(inclination,  t_arr)
 
+    # -- Allocate state arrays ---------------------------------------------
+    r = np.empty((n_steps, 3))
+    v = np.empty((n_steps, 3))
+    r[0] = np.asarray(r0, float)
+    v[0] = np.asarray(v0, float)
+
+    # -- Leapfrog integration ----------------------------------------------
     for i in range(n_steps - 1):
         a0 = (
-            accel(r[i])
-            + accel_radial(r[i], r_th[i])
-            + accel_velocity(v[i], v_th[i])
-            + accel_inclination(r[i], v[i], i_th[i])
-            + accel_plane(r[i], v[i], p_th[i])
-            + accel_to_circular(r[i], v[i], c_th[i])
+            accel_gravity(r[i])
+            + _accel_radial(r[i],            r_th[i])
+            + _accel_velocity(v[i],          v_th[i])
+            + _accel_inclination(r[i], v[i], i_th[i])
         )
+
         v_half = v[i] + 0.5 * dt * a0
         r[i + 1] = r[i] + dt * v_half
-        
+
         a1 = (
-            accel(r[i + 1])
-            + accel_radial(r[i + 1], r_th[i + 1])
-            + accel_velocity(v_half, v_th[i + 1])
-            + accel_inclination(r[i + 1], v_half, i_th[i + 1])
-            + accel_plane(r[i + 1], v_half, p_th[i + 1])
-            + accel_to_circular(r[i + 1], v_half, c_th[i + 1])
+            accel_gravity(r[i + 1])
+            + _accel_radial(r[i + 1],            r_th[i + 1])
+            + _accel_velocity(v_half,            v_th[i + 1])
+            + _accel_inclination(r[i + 1], v_half, i_th[i + 1])
         )
         v[i + 1] = v_half + 0.5 * dt * a1
 
-    if not fuel:
-        return r, v
-
-    fuels = {
-        "radial": estimate_fuel_usage(np.abs(r_th), dt, r, engine="Mira"),
-        "velocity": estimate_fuel_usage(np.abs(v_th), dt, r, engine="Mira"),
-        "inclination": estimate_fuel_usage(np.abs(i_th), dt, r, engine="Mira"),
-        "plane": estimate_fuel_usage(np.abs(p_th), dt, r, engine="Mira"),
-        "circular": estimate_fuel_usage(np.abs(c_th), dt, r, engine="Mira"),
-    }
-    return r, v, fuels
+    return r, v

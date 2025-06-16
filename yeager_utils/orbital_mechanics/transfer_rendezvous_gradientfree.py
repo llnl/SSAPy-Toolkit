@@ -4,7 +4,6 @@ from ssapy import rv, Orbit, SciPyPropagator, AccelKepler
 from ..constants import EARTH_RADIUS
 from ..time import get_times, Time
 from ..plots import rendezvous_plot
-from typing import Callable, Union, Tuple, Sequence
 
 
 def transfer_rendezvous_gradientfree(
@@ -14,7 +13,8 @@ def transfer_rendezvous_gradientfree(
     max_iter=1000,
     plot=False,
     status=False,
-    MIN_ALTITUDE = EARTH_RADIUS
+    MIN_ALTITUDE=EARTH_RADIUS,
+    accel=AccelKepler()
 ):
     """
     Finds the delta-v that leads to a transfer rendezvous with a moving target.
@@ -70,15 +70,12 @@ def transfer_rendezvous_gradientfree(
     v1 = orbit1.v
     t0 = Time(orbit1.t, format='gps')
 
-    def get_target_rv(
-        target: Union[Orbit, Callable],
-        times: Sequence[Time],
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    def get_target_rv(target, times):
         if isinstance(target, Orbit):
             try:
                 return rv(target, time=times)
             except RuntimeError:
-                return rv(target, time=times, propagator=SciPyPropagator(AccelKepler()))
+                return rv(target, time=times, propagator=SciPyPropagator(accel))
         if callable(target):
             r_list, v_list = [], []
             for t in times:
@@ -104,7 +101,7 @@ def transfer_rendezvous_gradientfree(
         try:
             r_traj, v_traj = rv(orb_tr, time=times)
         except RuntimeError:
-            r_traj, v_traj = rv(orb_tr, time=times, propagator=SciPyPropagator(AccelKepler()))
+            r_traj, v_traj = rv(orb_tr, time=times, propagator=SciPyPropagator(accel))
 
         r2_traj, v2_traj = get_target_rv(orbit2, times)
         distances = np.linalg.norm(r_traj - r2_traj, axis=1)
@@ -168,7 +165,7 @@ def transfer_rendezvous_gradientfree(
     try:
         r_full, v_full = rv(orb_tr, time=times_full)
     except RuntimeError:
-        r_full, v_full = rv(orb_tr, time=times_full, propagator=SciPyPropagator(AccelKepler()))
+        r_full, v_full = rv(orb_tr, time=times_full, propagator=SciPyPropagator(accel))
 
     r2_full, v2_full = get_target_rv(orbit2, times_full)
     dist_full = np.linalg.norm(r_full - r2_full, axis=1)
