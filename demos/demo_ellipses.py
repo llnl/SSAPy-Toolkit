@@ -1,4 +1,4 @@
-from yeager_utils import RGEO, ellipse_arc, eccentricity_range
+from yeager_utils import RGEO, ellipse_arc, eccentricity_range, velocity_along_ellipse
 import numpy as np
 
 
@@ -18,3 +18,14 @@ if __name__ == "__main__":
     e = 0.9
     arc, prm = ellipse_arc(P1_demo, P2_demo, e=e, n_pts=400, plot=True)
     print(f"e = {e}:", prm)
+
+
+    vel       = velocity_along_ellipse(arc,
+                                 a=prm['a'],
+                                 e=prm['e'],
+                                 F2=prm['F2'],
+                                 mu=EARTH_MU)
+
+    print("first 3 state-vectors:")
+    for r, v in zip(arc[:3], vel[:3]):
+        print("r =", r, "  v =", v)
