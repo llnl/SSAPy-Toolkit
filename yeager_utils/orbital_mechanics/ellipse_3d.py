@@ -20,8 +20,9 @@ Example
 {'a': 3.473…, 'e': 0.383…, 'F2': array([1.334…, 2.065…, 0.098…])}
 """
 
+from ..compute import velocity_along_ellipse
+from ..plots import save_plot
 import numpy as np
-from yeager_utils import RGEO   # Earth-radius constant for the self-test
 
 # ──────────────────────────────────────────────────────────────────────────────
 #   Internal helpers
@@ -169,7 +170,7 @@ def eccentricity_range(P1, P2, *, tol=1e-10):
     return e_min, 1.0
 
 
-def ellipse_arc(P1, P2, *,
+def ellipse_arc(P1, P2, *, vel=False, save_path=False,
                 a=None, e=None, F2=None, inc: float = 0.0,
                 n_pts: int = 200, tol=1e-10, plot=False):
     """
@@ -232,5 +233,11 @@ def ellipse_arc(P1, P2, *,
         plt.title('Full ellipse (dashed) and selected arc (solid)')
         plt.axis('equal')
         plt.show()
+        if save_path:
+            save_plot(fig, save_path)
 
-    return arc3d, {'a': a, 'e': e, 'F2': F2}
+    if vel is not False:
+        vel3d = velocity_along_ellipse(arc3d, a=a, e=e, F2=F2)
+        return arc3d, vel3d, {'a': a, 'e': e, 'F2': F2}
+    else:
+        return arc3d, {'a': a, 'e': e, 'F2': F2}
