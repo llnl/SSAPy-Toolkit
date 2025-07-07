@@ -4,7 +4,7 @@
 from ..constants import EARTH_MU
 
 
-def velocities_along_arc(arc3d, *, a, e, F2, mu=EARTH_MU):
+def velocity_along_ellipse(arc3d, *, a, e, F2, mu=EARTH_MU):
     """
     Compute the 3-D inertial velocity at every point of an ellipse arc.
 
