@@ -2,6 +2,7 @@
 #   Orbital-velocity helper
 # ──────────────────────────────────────────────────────────────────────────────
 from ..constants import EARTH_MU
+import numpy as np
 
 
 def velocity_along_ellipse(arc3d, *, a, e, F2, mu=EARTH_MU):
