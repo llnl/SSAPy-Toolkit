@@ -17,11 +17,8 @@ if __name__ == "__main__":
     e_lo, e_hi = eccentricity_range(P1_demo, P2_demo)
     print(f"{e_lo:.6f} < e < {e_hi}")
 
-
-    
-
     # 3. user-chosen eccentricity
-    e = 0.7
+    e = 0.2
     arc, vel, prm = ellipse_arc(P1_demo, P2_demo, e=e, n_pts=400, plot=True, vel=True)
     print(f"e = {e}:", prm)
     print("first 3 state-vectors:")

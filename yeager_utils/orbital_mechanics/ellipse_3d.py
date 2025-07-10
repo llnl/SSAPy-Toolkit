@@ -217,7 +217,7 @@ def ellipse_arc(P1, P2, *, vel=False, save_path=False,
     # 4. optional preview
     if plot:
         import matplotlib.pyplot as plt
-        fig = plt.figure(); ax = fig.add_subplot(111, projection='3d')
+        fig = plt.figure(figsize=(8, 8)); ax = fig.add_subplot(111, projection='3d')
         ax.plot(arc3d[:,0], arc3d[:,1], arc3d[:,2], lw=1.6, label='arc')
         # complementary arc (dashed, for context)
         t_dash = np.linspace(t2, t1+2*np.pi, n_pts)
