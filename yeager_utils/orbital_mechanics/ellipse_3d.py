@@ -20,9 +20,12 @@ Example
 {'a': 3.473…, 'e': 0.383…, 'F2': array([1.334…, 2.065…, 0.098…])}
 """
 
+from ..constants import EARTH_MU
 from ..compute import velocity_along_ellipse
 from ..plots import save_plot
 import numpy as np
+from astropy.time import Time, TimeDelta
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 #   Internal helpers
@@ -170,9 +173,78 @@ def eccentricity_range(P1, P2, *, tol=1e-10):
     return e_min, 1.0
 
 
-def ellipse_arc(P1, P2, *, vel=False, save_path=False,
+def time_of_flight(P1, P2, *, a=None, e=None, F2=None, inc=0.0,
+                   mu=EARTH_MU,  # [km³/s²] default: Earth
+                   tol=1e-10):
+    """
+    Return the Keplerian time-of-flight (in seconds) along the elliptical arc from P1 to P2.
+    
+    Parameters
+    ----------
+    P1, P2 : (3,) arrays
+        Start and end points on the ellipse.
+    a, e, F2 : optional
+        Provide one of these to define the ellipse; otherwise the least-eccentric solution is used.
+    inc : float
+        Inclination fallback in degrees if P1, P2, O are colinear.
+    mu : float
+        Standard gravitational parameter (μ = GM), in km³/s². Default is for Earth.
+    tol : float
+        Numerical tolerance for root finding.
+        
+    Returns
+    -------
+    tof : float
+        Time of flight from P1 to P2, in seconds.
+    """
+    P1 = np.asarray(P1, float)
+    P2 = np.asarray(P2, float)
+    u, v = _plane_basis(P1, P2, incl=inc)
+    F2, a, e = _solve_focus(P1, P2, u, v, a=a, e=e, F2=F2, tol=tol)
+
+    # ellipse in 2D coordinates
+    f2_2d = _in_plane(F2, u, v)
+    C     = 0.5 * f2_2d
+    c     = 0.5 * np.linalg.norm(F2)
+    b     = np.sqrt(max(a*a - c*c, 0.0))
+
+    phi = -np.arctan2(C[1], C[0])
+    R = np.array([[np.cos(phi), -np.sin(phi)],
+                  [np.sin(phi),  np.cos(phi)]])
+    def _rot(p): return R @ (p - C)
+
+    p1r = _rot(_in_plane(P1, u, v))
+    p2r = _rot(_in_plane(P2, u, v))
+
+    t1 = np.arctan2(p1r[1]/b, p1r[0]/a)
+    t2 = np.arctan2(p2r[1]/b, p2r[0]/a)
+    if t2 < t1: t1, t2 = t2, t1
+    if t2 - t1 > np.pi: t1, t2 = t2, t1 + 2*np.pi
+
+    # mean motion and orbital period
+    n = np.sqrt(mu / a**3)  # mean motion in rad/s
+    T = 2 * np.pi / n       # full period in seconds
+
+    # eccentric anomalies
+    E1 = 2 * np.arctan(np.tan(t1 / 2) / np.sqrt((1 + e) / (1 - e)))
+    E2 = 2 * np.arctan(np.tan(t2 / 2) / np.sqrt((1 + e) / (1 - e)))
+
+    # unwrap anomalies
+    E1 = E1 % (2*np.pi)
+    E2 = E2 % (2*np.pi)
+    if E2 < E1:
+        E2 += 2*np.pi
+
+    # time-of-flight formula
+    tof = (E2 - E1 - e*(np.sin(E2) - np.sin(E1))) / n
+    return tof
+
+
+def ellipse_arc(P1, P2, *, vel=True, times=True,
                 a=None, e=None, F2=None, inc: float = 0.0,
-                n_pts: int = 200, tol=1e-10, plot=False):
+                n_pts: int = 200, tol=1e-10,
+                plot=False, save_path=False
+                ):
     """
     Sample `n_pts` along the shorter arc of the ellipse through P1 & P2.
     One of (a, e, F2) may be given; otherwise the least-eccentric ellipse
@@ -214,8 +286,20 @@ def ellipse_arc(P1, P2, *, vel=False, save_path=False,
     xy_arc = (R.T @ _xy(t_arc).T).T + C
     arc3d  = np.array([_to_3d(p, u, v) for p in xy_arc])
 
+    tof = None
+    if times:
+        mu = 398600.4418  # Earth's μ [km^3/s^2]
+        n = np.sqrt(mu / a**3)  # mean motion [rad/s]
+        t_arc = np.linspace(t1, t2, n_pts)
+        E = 2 * np.arctan(np.tan(t_arc / 2) / np.sqrt((1 + e) / (1 - e)))
+        E = E % (2 * np.pi)
+        M = E - e * np.sin(E)
+        t_rel = M / n  # seconds
+        t0 = Time.now()
+        times_array = t0 + TimeDelta(t_rel, format="sec")
+
     # 4. optional preview
-    if plot:
+    if plot or save_path:
         import matplotlib.pyplot as plt
         fig = plt.figure(figsize=(8, 8)); ax = fig.add_subplot(111, projection='3d')
         ax.plot(arc3d[:,0], arc3d[:,1], arc3d[:,2], lw=1.6, label='arc')
@@ -232,12 +316,16 @@ def ellipse_arc(P1, P2, *, vel=False, save_path=False,
         ax.legend()
         plt.title('Full ellipse (dashed) and selected arc (solid)')
         plt.axis('equal')
-        plt.show()
+        if plot:
+            plt.show()
         if save_path:
             save_plot(fig, save_path)
 
+    result = (arc3d,)
     if vel is not False:
         vel3d = velocity_along_ellipse(arc3d, a=a, e=e, F2=F2)
-        return arc3d, vel3d, {'a': a, 'e': e, 'F2': F2}
-    else:
-        return arc3d, {'a': a, 'e': e, 'F2': F2}
+        result += (vel3d,)
+    if times:
+        result += (times_array,)
+    result += ({'a': a, 'e': e, 'F2': F2},)
+    return result
