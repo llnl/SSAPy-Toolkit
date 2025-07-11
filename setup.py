@@ -24,6 +24,7 @@ setup(
         'ipympl',
         'jplephem',
         'lmfit',
+        'llnl-ssapy',
         'matplotlib',
         'mpmath',
         'numpy',
@@ -45,7 +46,6 @@ setup(
         'regex',
         'scikit-learn',
         'seaborn',
-        # 'stats',  ← REMOVE or replace
         'sympy',
         'tqdm',
         'vg',
