@@ -24,7 +24,6 @@ setup(
         'ipympl',
         'jplephem',
         'lmfit',
-        'llnl-ssapy',
         'matplotlib',
         'mpmath',
         'numpy',
