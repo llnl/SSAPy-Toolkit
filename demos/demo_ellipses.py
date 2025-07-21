@@ -2,8 +2,8 @@ from yeager_utils import RGEO, ellipse_arc
 import numpy as np
 
 if __name__ == "__main__":
-    P1 = np.array([-RGEO, 0, 0])
-    P2 = np.array([3 * RGEO, 0, 0])
+    P1 = np.array([RGEO, 0, 0])
+    P2 = np.array([-RGEO, -4*RGEO, 0])
 
     for ccw in [False, True]:
         print(f"CCW: {ccw}")

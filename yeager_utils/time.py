@@ -199,6 +199,8 @@ def get_times(duration,
     """
     if isinstance(t0, str):
         t0 = Time(t0, scale='utc')
+    if isinstance(t0, (float, int)):
+        t0 = Time(t0, scale='utc', format='gps')
 
     unit_dict = {
         'second': 1, 'sec': 1, 's': 1,
