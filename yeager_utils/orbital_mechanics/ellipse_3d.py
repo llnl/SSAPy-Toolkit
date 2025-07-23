@@ -9,7 +9,13 @@ Returns
 arc3d : (N,3) ndarray   Cartesian positions  [m]
 vel3d : (N,3) ndarray   Inertial velocities  [m s⁻¹]
 t_rel : (N,)  ndarray   Relative flight‑time [s]  (t_rel[0] == 0)
-info  : dict            {'a', 'e', 'F2'}
+info  : dict
+    Dictionary of orbital parameters and diagnostics including:
+    - Classical orbital elements (a, e, i, RAAN, ω, ν)
+    - Focus/geometry info (F2, b, c, center, rotation matrix)
+    - Arc endpoints (r0, v0, r1, v1), true anomaly bounds
+    - Plane basis (u, v, w)
+    - Collision avoidance flag
 """
 
 from ..plots     import save_plot
@@ -20,10 +26,11 @@ def ellipse_arc(P1, P2, *,
                 a=None, e=None, F2=None, inc: float = 0.0,
                 n_pts: int = 1000, tol=1e-10,
                 ccw: bool = True,
+                collision=True, safe_margin=100e3,
                 plot=False, save_path=False,
                 debug=False):
 
-    from ..constants import EARTH_MU           # [m³ s⁻²]
+    from ..constants import EARTH_MU, EARTH_RADIUS             # [m³ s⁻²], meters
 
     # ───────────────────────── internal helpers ──────────────────────────
     def _plane_basis(p1, p2, *, incl: float = 0.0, eps: float = 1e-12):
@@ -171,24 +178,56 @@ def ellipse_arc(P1, P2, *,
 
     u, v, w = _plane_basis(P1, P2, incl=inc)
 
-    F2, a, e = _solve_focus(P1, P2, u, v, a=a, e=e, F2=F2, tol=tol)
+    max_iter = 10
+    scale_factor = 1.05
 
-    f2_2d = _in_plane(F2, u, v)
-    C     = 0.5 * f2_2d
-    c     = 0.5 * np.linalg.norm(F2)
-    b     = np.sqrt(max(a*a - c*c, 0.0))
+    attempt = 0
+    collision_avoided = False
+    while attempt < max_iter:
+        F2_try, a_try, e_try = _solve_focus(P1, P2, u, v, a=a, e=e, F2=F2, tol=tol)
 
-    phi   = -np.arctan2(C[1], C[0])
-    R2D   = np.array([[np.cos(phi), -np.sin(phi)],
-                      [np.sin(phi),  np.cos(phi)]])
+        f2_2d = _in_plane(F2_try, u, v)
+        C     = 0.5 * f2_2d
+        c     = 0.5 * np.linalg.norm(F2_try)
+        b     = np.sqrt(max(a_try*a_try - c*c, 0.0))
 
-    t_full = np.linspace(0, 2*np.pi, n_pts, endpoint=False)
-    xy_full = np.vstack((a * np.cos(t_full), b * np.sin(t_full))).T
-    xy_full = (R2D.T @ xy_full.T).T + C
-    full3d = np.array([_to_3d(p, u, v) for p in xy_full])
+        phi   = -np.arctan2(C[1], C[0])
+        R2D   = np.array([[np.cos(phi), -np.sin(phi)],
+                        [np.sin(phi),  np.cos(phi)]])
+
+        t_full = np.linspace(0, 2*np.pi, n_pts, endpoint=False)
+        xy_full = np.vstack((a_try * np.cos(t_full), b * np.sin(t_full))).T
+        xy_full = (R2D.T @ xy_full.T).T + C
+        full3d_try = np.array([_to_3d(p, u, v) for p in xy_full])
+
+        min_dist = np.min(np.linalg.norm(full3d_try, axis=1))
+
+        if (not collision) or (min_dist > EARTH_RADIUS + safe_margin):
+            # Safe orbit found
+            F2, a, e = F2_try, a_try, e_try
+            full3d = full3d_try
+            break
+        else:
+            # Adjust a/e to lift periapsis
+            collision_avoided = True
+            if a is not None:
+                a *= scale_factor
+            elif e is not None:
+                e *= 0.95
+            else:
+                a = _a_for(F2_try, P1) * scale_factor
+            attempt += 1
+
+    if attempt == max_iter:
+        raise RuntimeError("Could not find a collision-free ellipse after several attempts.")
+
 
     i1 = np.argmin(np.linalg.norm(full3d - P1, axis=1))
     i2 = np.argmin(np.linalg.norm(full3d - P2, axis=1))
+    if debug:
+        if np.linalg.norm(full3d[i1] - P1) > 1e-3 or np.linalg.norm(full3d[i2] - P2) > 1e-3:
+            print("[WARNING] P1 or P2 is far from nearest sampled point")
+
 
     arc_short, arc_long = slice_arc_segments(full3d, i1, i2)
     arc_long = arc_long[::-1]
@@ -352,5 +391,67 @@ def ellipse_arc(P1, P2, *,
             plt.show()
         if save_path:
             save_plot(fig, save_path)
+    
+    inclination = np.arccos(w[2])  # radians
+    k_hat = np.array([0, 0, 1])
+    n_vec = np.cross(k_hat, w)
+    n_norm = np.linalg.norm(n_vec)
 
-    return arc3d, vel3d, t_rel, {'a': a, 'e': e, 'F2': F2}
+    if n_norm < 1e-12:
+        RAAN = 0.0
+    else:
+        RAAN = np.arccos(n_vec[0] / n_norm)
+        if n_vec[1] < 0:
+            RAAN = 2 * np.pi - RAAN
+
+    e_vec = (np.cross(v0, np.cross(r0, v0)) / EARTH_MU) - (r0 / np.linalg.norm(r0))
+    e_vec /= np.linalg.norm(e_vec)
+
+    if n_norm < 1e-12:
+        arg_periapsis = np.arccos(np.dot(e_vec, r0) / np.linalg.norm(r0))
+    else:
+        arg_periapsis = np.arccos(np.dot(n_vec, e_vec) / n_norm)
+        if e_vec[2] < 0:
+            arg_periapsis = 2 * np.pi - arg_periapsis
+
+    true_anomaly = np.arccos(np.dot(e_vec, r0) / (np.linalg.norm(r0)))
+    if np.dot(r0, v0) < 0:
+        true_anomaly = 2 * np.pi - true_anomaly
+
+    info = {
+        # ───── Orbital Elements (Classical Keplerian) ─────
+        'a'              : a,                   # Semi-major axis [m]
+        'e'              : e,                   # Eccentricity [-]
+        'b'              : b,                   # Semi-minor axis [m]
+        'c'              : c,                   # Linear eccentricity [m]
+        'i'              : inclination,         # Inclination [rad]
+        'raan'           : RAAN,                # Right Ascension of Ascending Node [rad]
+        'ap'             : arg_periapsis,       # Argument of Periapsis [rad]
+        'ta'             : true_anomaly,        # True anomaly at arc start [rad]
+        'T'              : 2 * np.pi * np.sqrt(a**3 / EARTH_MU),  # Orbital period [s]
+        'h'              : h,                   # Specific angular momentum [m²/s]
+
+        # ───── Focus and Geometry ─────
+        'F2'             : F2,                  # Secondary focus (origin is primary) [m]
+        'center'         : C,                   # Ellipse center in orbital plane [2D]
+        'R2D'            : R2D,                 # Rotation matrix from canonical ellipse to true ellipse
+
+        # ───── Plane Vectors ─────
+        'u'              : u,                   # Unit vector from origin toward P1
+        'v'              : v,                   # Unit vector completing plane (in-plane)
+        'w'              : w,                   # Normal to orbital plane (right-hand) [unit]
+
+        # ───── Positions and Velocities ─────
+        'r0'             : r0,                  # Position at arc start [m]
+        'v0'             : v0,                  # Velocity at arc start [m/s]
+        'r1'             : arc3d[-1],           # Position at arc end [m]
+        'v1'             : vel3d[-1],           # Velocity at arc end [m/s]
+
+        # ───── Arc Properties ─────
+        'true_anomaly_start': f[0],             # First point in-plane angle [rad]
+        'true_anomaly_end'  : f[-1],            # Last point in-plane angle [rad]
+        # ───── Flags ─────
+        'collision_avoided': collision_avoided, 
+    }
+
+    return arc3d, vel3d, t_rel, info
