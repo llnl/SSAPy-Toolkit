@@ -31,7 +31,7 @@ dict
       "b"            : float           Semi-minor axis                           [m],
       "p"            : float           Semi-latus rectum                         [m],
       "mean_motion"  : float           n = √(μ/a³)                               [rad s⁻¹],
-      "eta"          : float           η = √(1 - e²) (circularity factor)         [-],
+      "eta"          : float           η = √(1 - e²) (circularity factor)        [-],
       "period"       : float           Keplerian orbital period                  [s],
 
       # ───────── vectors / invariants ─────────

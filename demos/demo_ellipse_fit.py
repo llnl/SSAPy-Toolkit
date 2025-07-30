@@ -4,24 +4,12 @@
 # ----------------------------------------------------------------------
 # Imports
 # ----------------------------------------------------------------------
-from yeager_utils import RGEO, ellipse_arc, get_times           # type: ignore
+from yeager_utils import RGEO, ellipse_arc, get_times, pprint           # type: ignore
 from ssapy.simple import ssapy_orbit                           # type: ignore
 from ssapy.plotUtils import orbit_plot                         # type: ignore
 from ssapy import Orbit                                        # type: ignore
 import numpy as np
 
-
-# ----------------------------------------------------------------------
-# Pretty printer for a handful of arc samples
-# ----------------------------------------------------------------------
-def print_samples(label: str, rs, vs, ts):
-    print(f"--- {label} ---")
-    for i, (r, v_i, t_i) in enumerate(zip(rs, vs, ts), start=1):
-        print(f" Sample {i:1d}:")
-        print(f"   r = {r}")
-        print(f"   v = {v_i}")
-        print(f"   t = {t_i:.6f} s")
-    print()
 
 
 # ----------------------------------------------------------------------
@@ -29,7 +17,7 @@ def print_samples(label: str, rs, vs, ts):
 # ----------------------------------------------------------------------
 if __name__ == "__main__":
     P1 = np.array([RGEO, 0.0, 0.0])
-    P2 = np.array([-0.0 * RGEO, -1.0 * RGEO, 0.0 * RGEO])
+    P2 = np.array([-0.0 * RGEO, -1.1 * RGEO, 0.1 * RGEO])
 
     # ------------------------------------------------------------------
     # Run ellipse_arc twice (CW and CCW) and collect results
@@ -49,20 +37,12 @@ if __name__ == "__main__":
         )
 
         # Split out convenience aliases
-        arc = res["arc3d"]
-        vel = res["vel3d"]
+        arc = res["r"]
+        vel = res["v"]
         times = res["t_rel"]
 
         # Quick sanity print‑out
-        print(f"Total flight time: {times[-1]:.3f} s")
-        print("Keplerian elements (rad):")
-        print(
-            f"  a = {res['a']:.3f} m  |  e = {res['e']:.6f}\n"
-            f"  i = {res['i']:.6f}\n"
-            f"  raan = {res['raan']:.6f}\n"
-            f"  ω    = {res['pa']:.6f}\n"
-            f"  ν0   = {res['ta']:.6f}\n"
-        )
+        pprint(res)
 
         # Uncomment to inspect the first / last samples
         # print_samples("First sample", arc[:1], vel[:1], times[:1])
