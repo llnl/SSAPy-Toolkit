@@ -13,7 +13,7 @@ def figpath(filename):
     directories = [
         "/p/lustre1/yeager7/cislunar/figures/",
         "/g/g16/yeager7/workdir/Figures/",
-        "/home/yeager7/Figures/"
+        "/home/yeager7/Figures/",
     ]
 
     for fig_path in directories:

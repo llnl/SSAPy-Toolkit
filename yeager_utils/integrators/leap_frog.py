@@ -1,6 +1,5 @@
 import numpy as np
-from scipy.interpolate import interp1d
-from ..constants import EARTH_MU, MOON_MU, SUN_MU
+from ..constants import EARTH_RADIUS
 from ..time import to_gps
 from .int_utils import (
     accel_point_earth, 
@@ -50,6 +49,9 @@ def leapfrog(
     a_sun_all  = accel_sun(r, t, interp_sun)
 
     for i in range(n_steps - 1):
+        if np.linalg.norm(r[i]) < EARTH_RADIUS:
+            print(f"Integration stopped: impact at step {i}, time {t_arr[i]:.2f} s")
+            return r[:i+1], v[:i+1]
         a0 = (
             accel_gravity(r[i])
             + a_moon_all[i]

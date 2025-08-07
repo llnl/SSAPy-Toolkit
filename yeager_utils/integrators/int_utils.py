@@ -92,6 +92,40 @@ def build_profile(profile, t_arr):
     if isinstance(profile, (list, tuple, np.ndarray)) and len(profile) == n:
         return np.asarray(profile, float)
 
+    # Handle single dictionary
+    if isinstance(profile, dict):
+        profile = [profile]  # wrap in list for uniform handling
+
+    # Handle list of dicts
+    if isinstance(profile, (list, tuple)) and all(isinstance(p, dict) for p in profile):
+        segments = profile
+        for seg in segments:
+            start = seg.get("start", 0)
+            end = seg.get("end", None)
+            thrust = seg.get("thrust", seg.get("accel", 0))
+
+            start_idx = (
+                int(start)
+                if isinstance(start, (int, np.integer))
+                else int(np.searchsorted(t_arr, start))
+            )
+            end_idx = (
+                n
+                if end is None
+                else (
+                    int(end)
+                    if isinstance(end, (int, np.integer))
+                    else int(np.searchsorted(t_arr, end))
+                )
+            )
+
+            if start_idx >= n:
+                continue
+            out[start_idx:end_idx] += float(thrust)
+
+        return out
+
+    # Handle tuple-based segment(s) as before
     if isinstance(profile, tuple) and (len(profile) == 2 or len(profile) == 3):
         segments = [profile]
     elif isinstance(profile, (list, tuple)):
