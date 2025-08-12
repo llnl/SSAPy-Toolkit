@@ -1,4 +1,4 @@
-from yeager_utils import orbit_plot_xy, np, leapfrog, accel_uniform_earth, figpath
+from yeager_utils import orbit_plot_xy, np, leapfrog, accel_uniform_earth, figpath, RGEO, VGEO
 
 # Constants (SI units)
 G = 6.67430e-11      # Gravitational constant (m^3 kg^-1 s^-2)
@@ -31,7 +31,7 @@ for peri in perigees:
     dt = t[1] - t[0]
 
     # Integrate using Leapfrog
-    r, v = leapfrog(r0=r0, v0=v0, t=t, accel_gravity=accel_uniform_earth)
+    r, v = leapfrog(r0=r0, v0=v0, t=t)
     rs.append(r)
 
 # Plot orbits using orbit_plot_xy
@@ -40,5 +40,25 @@ orbit_plot_xy(
     save_path=figpath("testing_ellipses_leapfrog.jpg"),
     pad=500,
     title="Earth as an extended body",
+    show=True
+)
+
+# RGEO
+r, v = leapfrog(r0=[RGEO, 0, 0], v0=[0, VGEO, 0], t=np.arange(0, 3600 * 24))
+orbit_plot_xy(
+    r,
+    save_path=figpath("testing_leapfrog_RGEO.jpg"),
+    pad=0.1,
+    title="GEO",
+    show=True
+)
+
+# VELOCITY BURN
+r, v = leapfrog(r0=[RGEO, 0, 0], v0=[0, VGEO, 0], t=np.arange(0, 3600 * 24), velocity=(0, 600, -1))
+orbit_plot_xy(
+    r,
+    save_path=figpath("testing_leapfrog_RGEO_velocity_burn.jpg"),
+    pad=0.1,
+    title="GEO",
     show=True
 )
