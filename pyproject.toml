@@ -1,3 +1,65 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "yeager_utils"
+version = "1.0"
+description = "Helpful utilities"
+authors = [{ name = "Travis R. Yeager", email = "yeager7@llnl.gov" }]
+readme = "README.md"
+requires-python = ">=3.8"
+
+# Runtime deps only (what your package needs to import/run)
+dependencies = [
+  "astropy",
+  "astroquery",
+  "cartopy",
+  "cmake",
+  "corner",
+  "emcee",
+  "gitpython",
+  "h5py",
+  "imageio",
+  "ipympl",
+  "ipython",
+  "ipytree",
+  "ipyvolume",
+  "jplephem",
+  "llnl-ssapy",        # see note below about private indexes
+  "lmfit",
+  "matplotlib",
+  "mpmath",
+  "nexusformat",
+  "npy-append-array",
+  "numpy",
+  "opencv-python",
+  "pandas",
+  "pickle4",
+  "pillow",
+  "poliastro",
+  "psutil",
+  "pybind11",
+  "pyerfa",
+  "PyPDF2",
+  "python-xlib",
+  "rebound",
+  "regex",
+  "requests",
+  "scikit-learn",
+  "seaborn",
+  "sympy",
+  "tqdm",
+  "vg",
+  "yapf",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-mpi",
+  "ipykernel",     # handy for local dev, but not required at runtime
+]
+
+[tool.setuptools]
+packages = { find = { where = ["."], include = ["yeager_utils*"] } }
