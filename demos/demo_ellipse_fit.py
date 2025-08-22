@@ -30,7 +30,7 @@ if __name__ == "__main__":
             P1,
             P2,
             n_pts=400,
-            plot=True,
+            plot=False,
             inc=0.0,
             ccw=ccw,
             debug=True,
