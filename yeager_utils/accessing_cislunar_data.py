@@ -1,9 +1,9 @@
 import h5py
 import numpy as np
-from .io.csv import save_csv_line
-from .io.hdf5 import read_h5
-from .io.io_utils import rmfile
-from .time import Time, get_times
+from .IO.csv import save_csv_line
+from .IO.hdf5 import read_h5
+from .IO.io_utils import rmfile
+from .Time_Functions import Time, get_times
 from typing import List
 from astropy import units as u
 

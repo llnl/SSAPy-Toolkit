@@ -1,7 +1,7 @@
 # flake8: noqa: E501
 
 from .vectors import points_on_circle
-from .time import get_times
+from .Time_Functions import get_times
 from astropy.time import Time
 from ssapy import Orbit, rv
 from ssapy.accel import AccelKepler, AccelSolRad, AccelEarthRad, AccelDrag
