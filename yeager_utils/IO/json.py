@@ -53,3 +53,44 @@ def load_json(filename: str) -> Any:
 
     with open(filename, "r", encoding="utf-8") as f:
         return json.load(f, object_hook=decode)
+
+
+def append_json(filename: str, new_data: Any) -> None:
+    """Append data into an existing JSON file.
+    
+    - If root is a dict:
+        * For each key in new_data:
+            - If key exists and is a list, extend or append.
+            - If key exists and is not a list, convert to list and append.
+            - If key does not exist, add it.
+    - If root is a list, append or extend.
+    - If file does not exist, save new_data as-is.
+    - If types mismatch, wrap both into a list.
+    """
+    try:
+        data = load_json(filename)
+    except FileNotFoundError:
+        save_json(filename, new_data)
+        return
+
+    if isinstance(data, dict) and isinstance(new_data, dict):
+        for key, value in new_data.items():
+            if key in data:
+                if isinstance(data[key], list):
+                    if isinstance(value, list):
+                        data[key].extend(value)
+                    else:
+                        data[key].append(value)
+                else:
+                    data[key] = [data[key], value]
+            else:
+                data[key] = value
+    elif isinstance(data, list):
+        if isinstance(new_data, list):
+            data.extend(new_data)
+        else:
+            data.append(new_data)
+    else:
+        data = [data, new_data]
+
+    save_json(filename, data)

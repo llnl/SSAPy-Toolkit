@@ -1,6 +1,6 @@
 import numpy as np
 from ssapy.orbit import Orbit
-from ..yastropy import astropy_surface_rv
+from ..Yastropy import astropy_surface_rv
 from ..constants import EARTH_MU, EARTH_RADIUS
 from ..Time_Functions import to_gps, Time
 

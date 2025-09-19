@@ -4,7 +4,7 @@ from matplotlib import gridspec
 from matplotlib.lines import Line2D
 from ssapy import groundTrack
 import cartopy.crs as ccrs
-from ..yastropy import astropy_gcrf_to_llh
+from ..Yastropy import astropy_gcrf_to_llh
 from ..Coordinates import gcrf_to_lonlat
 from ..Compute import find_smallest_bounding_cube
 from ..constants import EARTH_RADIUS

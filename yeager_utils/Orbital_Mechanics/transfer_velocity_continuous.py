@@ -3,7 +3,7 @@ from scipy.integrate import solve_ivp
 import warnings
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from ..accelerations import accel_velocity
+from ..Accelerations import accel_velocity
 from ..Plots import set_axes_equal, save_plot
 from ..constants import EARTH_MU, EARTH_RADIUS
 

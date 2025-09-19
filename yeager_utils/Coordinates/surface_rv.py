@@ -1,6 +1,6 @@
 from ssapy.orbit import EarthObserver
 from astropy.time import Time
-from ..yastropy import astropy_surface_rv
+from ..Yastropy import astropy_surface_rv
 from ..Time_Functions import to_gps
 
 
