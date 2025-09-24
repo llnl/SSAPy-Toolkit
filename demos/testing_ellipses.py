@@ -1,4 +1,4 @@
-from yeager_utils import AccelKepler, SciPyPropagator, EARTH_RADIUS, Time, Orbit, get_times, orbit_plot_xy, rv, np
+from yeager_utils import AccelKepler, SciPyPropagator, EARTH_RADIUS, Time, Orbit, get_times, orbit_plot_xy, rv, np, figpath
 from tqdm import tqdm
 print("Finished imports.")
 
@@ -24,4 +24,4 @@ for peri in tqdm(np.linspace(10e3, EARTH_RADIUS, 10)):
     rs.append(r)
 
 
-orbit_plot_xy(rs, save_path="/g/g16/yeager7/workdir/yeager_utils/demos/images/testing_ellipses.jpg", pad=500, title='Point source Earth')
+orbit_plot_xy(rs, save_path=figpath("testing_ellipses.jpg"), pad=500, title='Point source Earth')

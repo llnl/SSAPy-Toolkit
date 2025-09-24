@@ -1,35 +1,74 @@
 import os
+from pathlib import Path
+
+ENV_VAR = "YEAGER_UTILS_FIG_DIRS"   # colon-separated list of dirs
+CONFIG_FILE = Path.home() / ".config" / "yeager_utils" / "figdirs.txt"
 
 
-def figpath(filename):
-    """
-    Author:
-    -------
-    Travis Yeager (yeager7@llnl.gov)
-    """
-    # Remove any extension if present
-    filename = os.path.splitext(filename)[0]
+def _candidate_dirs(user_dirs=None):
+    # 1) explicit arg wins
+    if user_dirs:
+        return [Path(p).expanduser() for p in user_dirs]
 
-    directories = [
-        "/p/lustre1/yeager7/cislunar/figures/",
-        "/g/g16/yeager7/workdir/Figures/",
-        "/home/yeager7/Figures/",
-    ]
+    # 2) env var (colon-separated on all OSes)
+    env = os.environ.get(ENV_VAR, "")
+    if env.strip():
+        return [Path(p).expanduser() for p in env.split(":") if p.strip()]
 
-    for fig_path in directories:
+    # 3) config file: one path per line, comments with #
+    if CONFIG_FILE.exists():
         try:
-            os.makedirs(fig_path, exist_ok=True)
-            base = os.path.join(fig_path, filename)
-            jpg_path = base + ".jpg"
+            lines = CONFIG_FILE.read_text(encoding="utf-8").splitlines()
+            paths = []
+            for line in lines:
+                line = line.split("#", 1)[0].strip()
+                if line:
+                    paths.append(Path(line).expanduser())
+            if paths:
+                return paths
+        except Exception:
+            pass  # fall through to defaults
 
-            # Remove files with same base name and different extension
-            for f in os.listdir(fig_path):
-                f_path = os.path.join(fig_path, f)
-                if os.path.isfile(f_path) and f.startswith(filename + ".") and f != filename + ".jpg":
-                    os.remove(f_path)
+    # 4) sensible defaults (no personal paths!)
+    defaults = [
+        Path.home() / "Figures",
+        Path.home() / "Pictures",
+        Path.cwd() / "figures",
+    ]
+    return defaults
 
-            return jpg_path  # Always return path to write .jpg (overwrite if it exists)
+
+def figpath(filename, fmt=".jpg", dirs=None, clean_conflicts=True):
+    """
+    Returns a target file path for `filename` in the first writable figure directory.
+
+    Search order:
+      1) `dirs` argument (list of paths)
+      2) env var YEAGER_UTILS_FIG_DIRS (colon-separated list)
+      3) ~/.config/yeager_utils/figdirs.txt (one path per line, '#' comments OK)
+      4) Defaults: ~/Figures, ~/Pictures, ./figures
+
+    It will create the chosen directory if missing. If clean_conflicts=True,
+    it removes files that share the same base name but different extension.
+    """
+    base_name = Path(filename).stem  # strip any existing extension
+
+    for d in _candidate_dirs(dirs):
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+            target = d / f"{base_name}{fmt}"
+
+            if clean_conflicts:
+                for f in d.iterdir():
+                    if f.is_file() and f.stem == base_name and f.suffix != fmt:
+                        try:
+                            f.unlink()
+                        except Exception:
+                            pass  # ignore failure to remove unrelated files
+
+            return str(target)
         except (OSError, PermissionError):
             continue
 
-    raise Exception("Could not create or access any of the specified directories")
+    # Do not reveal private paths; keep the error generic.
+    raise RuntimeError("Could not create or access any configured figure directory.")

@@ -1,23 +1,29 @@
-# HELLO WORLD
-# WELCOME TO YEAGER UTILITLIES.
+# Yeager Utilities
 
-# Currently these are just helpful tools for data production, analysis and visualization.
+Welcome to **Yeager Utilities** — a collection of helpful tools for data production, analysis, and visualization.
 
-# BUILD ENVIRONMENT
-/usr/gapps/python/toss_4_x86_64_ib/python-3.11.5/bin/python -m venv python3_env
+---
+
+## Features
+- Utility functions for scientific computing and data analysis
+- Helpers for visualization and plotting
+- Tools to support research and engineering workflows
+
+---
+
+## Build Environment
+
+To set up a virtual environment and install the package in editable mode:
+
+```bash
+# Create and activate a virtual environment
+python -m venv python3_env
 source python3_env/bin/activate
+
+# Upgrade pip
 pip install --upgrade pip
 
-
-# INSTALLATION #
-# PRE GIT CLONE A VERSION OF SSAPY
-cd ssapy/
-git submodule update --init --recursive
-python3 setup.py build
-python3 setup.py install
-cd ../
-
-cd yeager_utils/
-python3 setup.py build
-python3 setup.py install
-cd ../
+# Install Yeager Utilities in editable mode
+cd yeager_utils
+pip install -e .
+cd ..

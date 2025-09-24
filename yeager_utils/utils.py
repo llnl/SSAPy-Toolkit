@@ -13,8 +13,8 @@ from contextlib import contextmanager
 import re
 from astropy.time import Time
 from astropy import units as u
-from typing import List, Tuple, Optional
-
+from pathlib import Path
+from .IO.datapath
 
 @contextmanager
 def suppress_stdout():
@@ -41,11 +41,11 @@ def pd_flatten(data: list, factor: float = 1.0) -> list:
     Flattens the data and converts each element to a float, dividing by a factor.
 
     Parameters:
-        data (list): List of string elements to be converted.
+        data (list): list of string elements to be converted.
         factor (float): Factor to divide each number (default is 1.0).
 
     Returns:
-        list: List of converted floats.
+        list: list of converted floats.
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     # Filter out empty strings or any non-convertible strings
@@ -113,7 +113,7 @@ def b2str(array_: np.ndarray) -> list:
         array_ (np.ndarray): Array of byte strings to decode.
 
     Returns:
-        list: List of decoded strings.
+        list: list of decoded strings.
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     return [i.decode("utf-8") for i in array_]
@@ -124,11 +124,11 @@ def find_indices(lst: list, condition: callable) -> list:
     Finds indices in a list that satisfy a given condition.
 
     Parameters:
-        lst (list): List to search through.
+        lst (list): list to search through.
         condition (callable): A function that takes an element and returns True or False.
 
     Returns:
-        list: List of indices where the condition is true.
+        list: list of indices where the condition is true.
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     return [i for i, elem in enumerate(lst) if condition(elem)]
@@ -236,15 +236,15 @@ def extractNum(s: str) -> int:
     return int(numre.search(s).group())
 
 
-def sortbynum(files: List[str]) -> List[str]:
+def sortbynum(files: list) -> list:
     """
     Sorts a list of file paths based on numbers embedded in the filenames.
 
     Parameters:
-        files (List[str]): List of file paths to sort.
+        files (list[str]): list of file paths to sort.
 
     Returns:
-        List[str]: Sorted list of file paths.
+        list[str]: Sorted list of file paths.
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     if len(files[0].split('/')) > 1:
@@ -261,12 +261,12 @@ def sortbynum(files: List[str]) -> List[str]:
     return sorted_files
 
 
-def issorted(test_list: List) -> bool:
+def issorted(test_list: list) -> bool:
     """
     Checks if a list is sorted.
 
     Parameters:
-        test_list (List): The list to check.
+        test_list (list): The list to check.
 
     Returns:
         bool: True if the list is sorted, False otherwise.
@@ -276,9 +276,9 @@ def issorted(test_list: List) -> bool:
     if test_list == sorted(test_list):
         flag = True
     if flag:
-        print("Yes, List is sorted.")
+        print("Yes, list is sorted.")
     else:
-        print("No, List is not sorted.")
+        print("No, list is not sorted.")
     return flag
 
 
@@ -299,15 +299,15 @@ def byte2str(byte_string: bytes) -> str:
         return byte_string.decode("utf-8")
 
 
-def flatten(t: List[List]) -> List:
+def flatten(t: list) -> list:
     """
     Flattens a list of lists into a single list.
 
     Parameters:
-        t (List[List]): The input list of lists.
+        t (list): The input list of lists.
 
     Returns:
-        List: A flattened list containing all the elements.
+        list: A flattened list containing all the elements.
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     return [item for sublist in t for item in sublist]
@@ -358,13 +358,13 @@ def elapsed_time(start_time: float) -> None:
         return print(f'Elapsed time: {delta_t/3600:.2f} hours.')
 
 
-def size(a: np.ndarray, axis: Optional[int] = None) -> int:
+def size(a: np.ndarray, axis=None) -> int:
     """
     Returns the size of an array or the length of a specified axis.
 
     Parameters:
         a (np.ndarray): Input array.
-        axis (Optional[int]): Axis to check the size along (default is None).
+        axis (int): Axis to check the size along (default is None).
 
     Returns:
         int: Size of the array or length of the specified axis.
@@ -383,23 +383,23 @@ def size(a: np.ndarray, axis: Optional[int] = None) -> int:
             return np.asarray(a).shape[axis]
 
 
-def sortbylist(X: List, Y: List) -> List:
+def sortbylist(X: list, Y: list) -> list:
     """
     Sorts one list based on the sorting order of another list.
 
     Parameters:
-        X (List): The list to sort.
-        Y (List): The list used to determine the sorting order.
+        X (list): The list to sort.
+        Y (list): The list used to determine the sorting order.
 
     Returns:
-        List: Sorted version of X according to the order in Y.
+        list: Sorted version of X according to the order in Y.
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     return [x for _, x in sorted(zip(Y, X))]
 
 
-def find_nearest(array: np.ndarray, value: float = 0) -> Tuple[int, float]:
+def find_nearest(array: np.ndarray, value: float = 0) -> tuple:
     """
     Finds the index and difference of the nearest element in an array to a given value.
 
@@ -408,7 +408,7 @@ def find_nearest(array: np.ndarray, value: float = 0) -> Tuple[int, float]:
         value (float): The value to find the nearest element to (default is 0).
 
     Returns:
-        Tuple[int, float]: Index of the nearest element and the difference from the value.
+        tuple: Index of the nearest element and the difference from the value.
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
@@ -417,12 +417,12 @@ def find_nearest(array: np.ndarray, value: float = 0) -> Tuple[int, float]:
     return idx, array[idx] - value
 
 
-def sample(seq: List, n: int, replacement: bool = False) -> np.ndarray:
+def sample(seq: list, n: int, replacement: bool = False) -> np.ndarray:
     """
     Randomly samples n elements from a sequence with or without replacement.
 
     Parameters:
-        seq (List): The sequence to sample from.
+        seq (list): The sequence to sample from.
         n (int): Number of elements to sample.
         replacement (bool): Whether sampling is done with replacement (default is False).
 
@@ -495,12 +495,12 @@ def isstr(var_: object) -> bool:
     return isinstance(var_, str)
 
 
-def shuffle(x: List) -> None:
+def shuffle(x: list) -> None:
     """
     Shuffles the elements of a list in place.
 
     Parameters:
-        x (List): The list to shuffle.
+        x (list): The list to shuffle.
 
     Returns:
         None
@@ -543,14 +543,14 @@ def kde(data_: np.ndarray) -> stats.gaussian_kde:
     return kde
 
 
-def body_pos(body: str = 'earth', t: Optional[float] = None, coord: str = 'icrs', 
+def body_pos(body: str = 'earth', t: float = None, coord: str = 'icrs', 
              date: float = 2451545.0, format: str = 'jd') -> np.ndarray:
     """
     Computes the position of a celestial body at a given time.
 
     Parameters:
         body (str): Name of the celestial body (default is 'earth').
-        t (Optional[float]): Time to evaluate (default is None, uses `date`).
+        t (float): Time to evaluate (default is None, uses `date`).
         coord (str): Coordinate system (default is 'icrs').
         date (float): Julian date if `t` is not provided (default is 2451545.0).
         format (str): Time format (default is 'jd').
@@ -607,7 +607,7 @@ def distance3d(x: float, y: float, z: float, xe: float, ye: float, ze: float) ->
     return distance
 
 
-def find_local_extrema(arr: np.ndarray) -> Tuple[List[int], List[int]]:
+def find_local_extrema(arr: np.ndarray) -> list:
     """
     Finds the local minima and maxima in a 1D array.
 
@@ -615,7 +615,7 @@ def find_local_extrema(arr: np.ndarray) -> Tuple[List[int], List[int]]:
         arr (np.ndarray): The input array.
 
     Returns:
-        Tuple[List[int], List[int]]: List of indices of local minima and maxima.
+        tuple: list of indices of local minima and maxima.
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
@@ -731,31 +731,60 @@ def contours_3d(points_3d: np.ndarray, plot: bool = False) -> scipy.spatial.Conv
     return hull
 
 
-def get_sigmas(n=25, path = "/p/lustre2/cislunar/cache/covariance_sigmas.npy"):
-    if os.path.exists(path):
+ENV_VAR = "YEAGER_UTILS_CACHE"
+DEFAULT_FILE = "covariance_sigmas.npy"
+
+
+def get_sigmas(n=25, path=None):
+    """
+    Returns an (n, 6) array of random sigma perturbations.
+    Cached to disk in a user-configurable directory.
+
+    Resolution order for cache *directory* (when path is None):
+      1) Env var YEAGER_UTILS_CACHE (file stored as covariance_sigmas.npy)
+      2) ~/.cache/yeager_utils/covariance_sigmas.npy
+
+    If `path` is provided, it is treated as an explicit file path and used as-is.
+    """
+    if path is None:
+        # Prefer env-provided directory, then fallback to ~/.cache/yeager_utils
+        env_dir = os.environ.get(ENV_VAR, "").strip()
+        dirs = []
+        if env_dir:
+            dirs.append(Path(env_dir).expanduser())
+        dirs.append(Path.home() / ".cache" / "yeager_utils")
+
+        # Use datapath to choose/create the first usable directory
+        path = Path(datapath(DEFAULT_FILE, dirs=dirs))
+    else:
+        path = Path(path)
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    compute_new = True
+    if path.exists():
         print("Loading sigmas.")
-        sigmas = np.load(path)
-        compute_new = False
-        if not np.shape(sigmas)[0] == n:
+        try:
+            sigmas = np.load(path)
+            compute_new = not (sigmas.ndim == 2 and sigmas.shape[0] == n and sigmas.shape[1] == 6)
+        except Exception:
+            # Corrupt or incompatible file -> recompute
             compute_new = True
+
     if compute_new:
         print("Computing sigmas.")
         sigmas = np.zeros((n, 6))
-        for _ in range(n):
-            # position and velocity kicks to give randomly to additional N particles
-            x_dist = 10  # m
-            v_dist = 1  # m/s
-            i = 0
-            while i < 1:
-                tmpx = np.random.uniform(-x_dist, x_dist)
-                tmpy = np.random.uniform(-x_dist, x_dist)
-                tmpz = np.random.uniform(-x_dist, x_dist)
-                tmpvx = np.random.uniform(-v_dist, v_dist)
-                tmpvy = np.random.uniform(-v_dist, v_dist)
-                tmpvz = np.random.uniform(-v_dist, v_dist)
-                if np.sqrt(tmpx ** 2 + tmpy ** 2 + tmpz ** 2) <= x_dist:
-                    if np.sqrt(tmpvx**2 + tmpvy**2 + tmpvz**2) <= v_dist:
-                        i = 2
-            sigmas[_, :] = [tmpx, tmpy, tmpz, tmpvx, tmpvy, tmpvz]
+        for i in range(n):
+            x_dist, v_dist = 10, 1
+            while True:
+                tmpx, tmpy, tmpz = np.random.uniform(-x_dist, x_dist, 3)
+                tmpvx, tmpvy, tmpvz = np.random.uniform(-v_dist, v_dist, 3)
+                if (
+                    np.sqrt(tmpx**2 + tmpy**2 + tmpz**2) <= x_dist
+                    and np.sqrt(tmpvx**2 + tmpvy**2 + tmpvz**2) <= v_dist
+                ):
+                    break
+            sigmas[i, :] = [tmpx, tmpy, tmpz, tmpvx, tmpvy, tmpvz]
         np.save(path, sigmas)
+
     return sigmas
