@@ -1,0 +1,336 @@
+# flake8: noqa: E501
+import numpy as np
+import os
+import re
+from glob import glob
+import shutil
+from ..utils import sortbynum
+from typing import List, Optional, Union
+
+
+def file_exists(filename: str) -> bool:
+    """
+    Check if a file with the given name exists (including its extensions).
+
+    Parameters
+    ----------
+    filename : str
+        The name of the file to check.
+
+    Returns
+    -------
+    bool
+        True if the file exists, False otherwise.
+    """
+    name, _ = os.path.splitext(filename)
+    return bool(glob(f"{name}.*"))
+
+
+def exists(pathname: str) -> bool:
+    """
+    Check if a given path is either a file or a directory.
+
+    Parameters
+    ----------
+    pathname : str
+        The path to check.
+
+    Returns
+    -------
+    bool
+        True if the path exists as either a directory or file, False otherwise.
+    """
+    if os.path.isdir(pathname) or os.path.isfile(pathname):
+        return True
+    return False
+
+
+def mkdir(pathname: str) -> None:
+    """
+    Create a directory if it does not already exist.
+
+    Parameters
+    ----------
+    pathname : str
+        The path of the directory to create.
+
+    Returns
+    -------
+    None
+    """
+    if not exists(pathname):
+        try:
+            os.makedirs(pathname, exist_ok=True)
+            print(f"Directory '{pathname}' created.")
+        except OSError as e:
+            print(f"Error creating directory {pathname}: {e}")
+
+
+def mvdir(source_: str, destination_: str) -> None:
+    """
+    Move a directory from the source path to the destination path.
+
+    Parameters
+    ----------
+    source_ : str
+        The source directory path.
+    destination_ : str
+        The destination directory path.
+
+    Returns
+    -------
+    None
+
+    Author: Travis Yeager
+    """
+    if not exists(destination_):
+        print(f"Moving {source_} to {destination_}")
+        shutil.move(source_, destination_)
+    else:
+        print(f"Destination path {destination_} already exists.")
+
+
+def rmdir(source_: str) -> None:
+    """
+    Remove a directory and its contents.
+
+    Parameters
+    ----------
+    source_ : str
+        The directory path to remove.
+
+    Returns
+    -------
+    None
+
+    Author: Travis Yeager
+    """
+    if not exists(source_):
+        print(f'{source_} does not exist, no delete.')
+    else:
+        try:
+            shutil.rmtree(source_)
+            print(f'Deleted {source_}')
+        except OSError as e:
+            print(f"Error deleting {source_}: {e}")
+
+
+def rmfile(pathname: str) -> None:
+    """
+    Remove a file if it exists.
+
+    Parameters
+    ----------
+    pathname : str
+        The path to the file to delete.
+
+    Returns
+    -------
+    None
+
+    Author: Travis Yeager
+    """
+    if exists(pathname):
+        os.remove(pathname)
+        print(f"File: '{pathname}' deleted.")
+
+
+def listdir(
+    dir_path: str = '*', 
+    files_only: bool = False, 
+    exclude: Optional[str] = None, 
+    sorted: bool = True
+) -> List[str]:
+    """
+    List files in a directory, with options to filter, exclude, and sort.
+
+    Parameters
+    ----------
+    dir_path : str, optional
+        The directory path or pattern (default is '*'). If '*' is not included, it is appended.
+    files_only : bool, optional
+        If True, only files will be returned. Default is False.
+    exclude : str, optional
+        A substring to exclude from the file names.
+    sorted : bool, optional
+        If True, the file names will be sorted numerically.
+
+    Returns
+    -------
+    List[str]
+        A list of file paths in the directory that match the conditions.
+
+    Author: Travis Yeager
+    """
+    if '*' not in dir_path:
+        dir_path = os.path.join(dir_path, '*')
+    expanded_paths = glob(dir_path)
+
+    if files_only:
+        files = [f for f in expanded_paths if os.path.isfile(f)]
+        print(f'{len(files)} files in {dir_path}')
+    else:
+        files = expanded_paths
+        print(f'{len(files)} files in {dir_path}')
+
+    if exclude:
+        files = [file for file in files if exclude not in os.path.basename(file)]
+        
+    if sorted:
+        return sortbynum(files)
+    else:
+        return files
+
+
+def get_image_paths(folder_path, sort_by_number=True):
+    """
+    Returns a list of full paths for all image files in the specified folder.
+    
+    Args:
+        folder_path (str): Path to the folder to search for images
+        sort_by_number (bool): If True, sorts files by numbers in filename
+        
+    Returns:
+        list: List of full file paths for all images found
+
+    Author: Travis Yeager
+    """
+    # List of common image file extensions
+    image_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp')
+    
+    # Initialize empty list to store image paths
+    image_paths = []
+    
+    # Check if folder exists
+    if not os.path.exists(folder_path):
+        raise ValueError(f"The folder path '{folder_path}' does not exist")
+    
+    # Walk through the folder
+    for root, _, files in os.walk(folder_path):
+        for file in files:
+            # Check if file has an image extension (case-insensitive)
+            if file.lower().endswith(image_extensions):
+                full_path = os.path.join(root, file)
+                image_paths.append(full_path)
+    
+    if sort_by_number:
+        # Function to extract the last changing number from filename for sorting
+        def extract_last_number(path):
+            filename = os.path.basename(path)
+            # Find all numbers in the filename
+            numbers = re.findall(r'\d+', filename)
+            if not numbers:
+                return (float('inf'), path)  # No numbers, use infinity and path for stable sort
+            
+            # Get all filenames in the same directory for comparison
+            dir_path = os.path.dirname(path)
+            dir_files = [f for f in image_paths if os.path.dirname(f) == dir_path]
+            
+            # Find which number position varies among files in the same directory
+            all_numbers = [re.findall(r'\d+', os.path.basename(f)) for f in dir_files]
+            max_numbers = max(len(nums) for nums in all_numbers) if all_numbers else 0
+            
+            if max_numbers == 0:
+                return (float('inf'), path)
+            
+            # Pad shorter number lists with None
+            all_numbers = [nums + [None] * (max_numbers - len(nums)) for nums in all_numbers]
+            
+            # Find the rightmost position where numbers differ
+            last_varying_pos = -1
+            for pos in range(max_numbers - 1, -1, -1):
+                values = set(nums[pos] for nums in all_numbers if nums[pos] is not None)
+                if len(values) > 1:
+                    last_varying_pos = pos
+                    break
+            
+            # Use the last varying number for sorting, or last number if no variation
+            sort_pos = last_varying_pos if last_varying_pos >= 0 else len(numbers) - 1
+            sort_value = int(numbers[sort_pos]) if sort_pos < len(numbers) else float('inf')
+            return (sort_value, path)  # Tuple for stable sorting
+        
+        # Sort paths based on extracted last changing number
+        image_paths.sort(key=extract_last_number)
+    
+    return image_paths
+
+
+def pd_flatten(data: List[Union[str, float]], factor: float = 1) -> List[float]:
+    """
+    Flatten a list of data by splitting string elements representing lists 
+    and converting them into floats. Divides each float by a given factor.
+
+    Parameters
+    ----------
+    data : list of str or float
+        The list of data to flatten. Some elements may be strings representing lists.
+    factor : float, optional
+        A factor to divide each element by (default is 1).
+
+    Returns
+    -------
+    list of float
+        A flattened list of floats.
+    """
+    tmp = []
+    for x in data:
+        try:
+            tmp.extend(x[1:-1].split(','))
+        except TypeError:
+            tmp.append(x)
+    return [float(x) / factor for x in tmp]
+
+
+def str_to_array(s: str) -> np.ndarray:
+    """
+    Convert a string representation of a list (e.g., '[1, 2, 3]') into a NumPy array of floats.
+
+    Parameters
+    ----------
+    s : str
+        A string representation of a list.
+
+    Returns
+    -------
+    np.ndarray
+        A NumPy array of floats.
+    """
+    s = s.replace('[', '').replace(']', '')  # Remove square brackets
+    return np.array([float(x) for x in s.split(',')])
+
+
+def pdstr_to_arrays(df: 'DataFrame') -> np.ndarray:
+    """
+    Apply `str_to_array` to each element of a DataFrame and convert it to a NumPy array of arrays.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        A DataFrame where each element is a string representation of an array.
+
+    Returns
+    -------
+    np.ndarray
+        A NumPy array where each element is a NumPy array converted from the string representation.
+    """
+    return df.apply(str_to_array).to_numpy()
+
+
+def allfiles(dirName: str = os.getcwd()) -> List[str]:
+    """
+    Get a list of all files in the directory tree starting at the given path.
+
+    Parameters
+    ----------
+    dirName : str, optional
+        The directory path to start the search from (default is the current working directory).
+
+    Returns
+    -------
+    list of str
+        A list of file paths.
+    """
+    listOfFiles = list()
+    for (dirpath, dirnames, filenames) in os.walk(dirName):
+        listOfFiles += [os.path.join(dirpath, file) for file in filenames]
+    return listOfFiles

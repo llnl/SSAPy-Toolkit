@@ -4,17 +4,32 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "yeager_utils"
-version = "1.0"
-description = "Helpful utilities"
-authors = [{ name = "Travis R. Yeager", email = "yeager7@llnl.gov" }]
+version = "1.0.0"
+description = "Helpful utilities for orbital mechanics, plotting, and data IO"
+authors = [{ name = "Travis R. Yeager", email = "yeagerastro@gmail.com" }]
 readme = "README.md"
 requires-python = ">=3.8"
+license = { file = "LICENSE" }
+keywords = ["orbital-mechanics", "astrodynamics", "visualization", "utilities"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Operating System :: OS Independent",
+  "Topic :: Scientific/Engineering :: Astronomy",
+  "Topic :: Scientific/Engineering :: Visualization",
+]
 
-# Runtime deps only (what your package needs to import/run)
 dependencies = [
   "astropy",
   "astroquery",
-  "cartopy",
   "cmake",
   "corner",
   "emcee",
@@ -26,7 +41,7 @@ dependencies = [
   "ipytree",
   "ipyvolume",
   "jplephem",
-  "llnl-ssapy",        # see note below about private indexes
+  "llnl-ssapy",
   "lmfit",
   "matplotlib",
   "mpmath",
@@ -58,8 +73,15 @@ dependencies = [
 dev = [
   "pytest",
   "pytest-mpi",
-  "ipykernel",     # handy for local dev, but not required at runtime
+  "ipykernel",
+  "ruff",
 ]
+astro = ["poliastro", "rebound", "jplephem"]
+viz = ["matplotlib", "plotly", "ipympl", "seaborn"]
+
+[project.urls]
+Homepage = "https://github.com/yeager7/yeager-utils"
+Issues = "https://github.com/yeager7/yeager-utils/issues"
 
 [tool.setuptools]
 packages = { find = { where = ["."], include = ["yeager_utils*"] } }

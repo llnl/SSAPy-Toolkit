@@ -24,6 +24,4 @@ source python3_env/bin/activate
 pip install --upgrade pip
 
 # Install Yeager Utilities in editable mode
-cd yeager_utils
 pip install -e .
-cd ..
