@@ -1,5 +1,4 @@
 # flake8: noqa: E501
-from .Plots import figpath
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -137,6 +136,7 @@ def rotate_vector(v_unit, theta, phi, plot=False, save_idx=False):
         plt.grid(True)
         if save_idx is not False:
             from .Plots.misc_plotting import save_plot_to_png
+            from .Plots import figpath
             ax.set_title(f'Vector Plot\ntheta: {np.degrees(theta):.0f}, phi: {np.degrees(phi):.0f}', color='white')
             save_plot_to_png(fig, figpath(f'plots_gif/rotate_vector_frames/{save_idx}.png'))
     return v2 / np.linalg.norm(v2, axis=-1)

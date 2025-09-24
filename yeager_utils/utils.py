@@ -14,7 +14,6 @@ import re
 from astropy.time import Time
 from astropy import units as u
 from pathlib import Path
-from .IO import datapath
 
 @contextmanager
 def suppress_stdout():
@@ -747,6 +746,8 @@ def get_sigmas(n=25, path=None):
     If `path` is provided, it is treated as an explicit file path and used as-is.
     """
     if path is None:
+        from .IO import datapath
+
         # Prefer env-provided directory, then fallback to ~/.cache/yeager_utils
         env_dir = os.environ.get(ENV_VAR, "").strip()
         dirs = []

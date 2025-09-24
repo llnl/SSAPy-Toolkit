@@ -1,6 +1,6 @@
 from ssapy import Orbit, AccelKepler, AccelConstNTW
-from yeager_utils.coordinates import ntw_to_gcrf
-from yeager_utils.integrators import leapfrog
+from yeager_utils.Coordinates import ntw_to_gcrf
+from yeager_utils.Integrators import leapfrog
 import numpy as np
 
 

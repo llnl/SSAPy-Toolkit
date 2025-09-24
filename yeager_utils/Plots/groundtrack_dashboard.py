@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 from matplotlib import gridspec
 from matplotlib.lines import Line2D
 from ssapy import groundTrack
-import cartopy.crs as ccrs
 from ..Yastropy import astropy_gcrf_to_llh
 from ..Coordinates import gcrf_to_lonlat
 from ..Compute import find_smallest_bounding_cube
@@ -19,7 +18,7 @@ def clean_lonlat(lon, lat):
     return lon_nan, lat_nan
 
 
-def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, offline=True, show_legend=True):
+def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, show_legend=True):
     """
     Visualizes multiple satellite ground tracks, altitude/velocity over time, and 3D trajectories.
 
@@ -35,8 +34,6 @@ def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, offline=Tru
         Padding (in meters) for the 3D plot's bounding cube. Defaults to 500 m.
     show : bool, optional
         If True, displays the figure.
-    offline : bool, optional
-        If True (default), only offline features are used. If False, enables high-res online map data.
 
     Returns
     -------
@@ -87,18 +84,8 @@ def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, offline=Tru
     ax1 = fig.add_subplot(gs[0, 0:2], projection=ccrs.PlateCarree())
     ax1.set_global()
 
-    if offline:
-        from .plotutils import load_earth_file, drawEarth
-        ax1.imshow(load_earth_file(), extent=[-180, 180, -90, 90])
-    else:
-        import cartopy.feature as cfeature
-        ax1.add_feature(cfeature.LAND, edgecolor='black')
-        ax1.add_feature(cfeature.OCEAN)
-        ax1.add_feature(cfeature.COASTLINE)
-        ax1.add_feature(cfeature.BORDERS, linestyle=':')
-        ax1.add_feature(cfeature.LAKES, alpha=0.5)
-        ax1.add_feature(cfeature.RIVERS)
-        ax1.set_facecolor('lightblue')
+    from .plotutils import load_earth_file, drawEarth
+    ax1.imshow(load_earth_file(), extent=[-180, 180, -90, 90])
 
     gl = ax1.gridlines(draw_labels=True)
     gl.xlabel_style = {'size': 18}

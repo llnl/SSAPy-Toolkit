@@ -27,6 +27,7 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Visualization",
 ]
 
+# All runtime dependencies installed by default
 dependencies = [
   "astropy",
   "astroquery",
@@ -70,14 +71,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Only dev tools are optional; users install them explicitly with: pip install -e .[dev]
 dev = [
   "pytest",
   "pytest-mpi",
   "ipykernel",
   "ruff",
 ]
-astro = ["poliastro", "rebound", "jplephem"]
-viz = ["matplotlib", "plotly", "ipympl", "seaborn"]
 
 [project.urls]
 Homepage = "https://github.com/yeager7/yeager-utils"
