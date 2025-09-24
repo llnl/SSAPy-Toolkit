@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ellipse_arc.py  ────────────────────────────────────────────────────────────────
+ellipse_fit.py  ────────────────────────────────────────────────────────────────
 Generate sample points and analytic velocities along a Keplerian ellipse in ℝ³
 whose first focus is at the origin.
 
@@ -59,7 +59,7 @@ from ..Plots import save_plot
 import numpy as np
 
 
-def ellipse_arc(P1, P2, *,
+def ellipse_fit(P1, P2, *,
                 a=None, e=None, F2=None, inc: float = 0.0,
                 n_pts: int = 1000, tol=1e-10,
                 ccw: bool = True,
@@ -413,7 +413,7 @@ def ellipse_arc(P1, P2, *,
         # distance‑from‑origin plot --------------------------------------
         ax_dist.plot(t_minutes,
                      np.linalg.norm(arc3d, axis=1) / 1e3,
-                     lw=5, label="ellipse_arc")
+                     lw=5, label="ellipse")
         ax_dist.plot(t_minutes,
                      np.linalg.norm(r_ss, axis=1) / 1e3,
                      lw=5, ls="--", color="red", label="ssapy")
@@ -425,7 +425,7 @@ def ellipse_arc(P1, P2, *,
         # speed plot ------------------------------------------------------
         ax_speed.plot(t_minutes,
                       np.linalg.norm(vel3d, axis=1) / 1e3,
-                      lw=5, label="ellipse_arc")
+                      lw=5, label="ellipse")
         ax_speed.plot(t_minutes,
                       np.linalg.norm(v_ss, axis=1) / 1e3,
                       lw=5, ls="--", color="red", label="ssapy")
