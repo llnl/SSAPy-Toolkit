@@ -37,6 +37,7 @@ dependencies = [
   "gitpython",
   "h5py",
   "imageio",
+  "ipykernel",
   "ipympl",
   "ipython",
   "ipytree",
