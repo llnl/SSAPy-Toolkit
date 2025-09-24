@@ -1,25 +1,24 @@
 import numpy as np
-from typing import Union, Tuple
 from .sky_angles import zenithangle2altitude
 from ..Time_Functions import hms_to_dd, dd_to_hms, dd_to_dms
 
 
-def rightasension2hourangle(right_ascension: Union[str, float], local_time: Union[str, float]) -> str:
+def rightasension2hourangle(right_ascension, local_time):
     """
     Convert right ascension and local time to hour angle.
 
     Parameters:
-    - right_ascension (Union[str, float]): The right ascension of the object in HH:MM:SS format or decimal degrees.
-    - local_time (Union[str, float]): The local time in HH:MM:SS format or decimal hours.
+    - right_ascension (str or float): The right ascension of the object in HH:MM:SS format or decimal degrees.
+    - local_time (str or float): The local time in HH:MM:SS format or decimal hours.
 
     Returns:
     - str: The corresponding hour angle in HH:MM:SS format.
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
-    if type(right_ascension) is not str:
+    if not isinstance(right_ascension, str):
         right_ascension = dd_to_hms(right_ascension)
-    if type(local_time) is not str:
+    if not isinstance(local_time, str):
         local_time = dd_to_dms(local_time)
 
     _ra = float(right_ascension.split(':')[0])
@@ -33,22 +32,26 @@ def rightasension2hourangle(right_ascension: Union[str, float], local_time: Unio
 
 
 def equatorial_to_horizontal(
-    observer_latitude: float, declination: float,
-    right_ascension: Union[str, float] = None, hour_angle: Union[str, float] = None,
-    local_time: Union[str, float] = None, hms=False
-) -> Tuple[float, float]:
+    observer_latitude,
+    declination,
+    right_ascension=None,
+    hour_angle=None,
+    local_time=None,
+    hms=False
+):
     """
     Convert equatorial coordinates (right ascension, declination) to horizontal coordinates (azimuth, altitude).
 
     Parameters:
     - observer_latitude (float): Latitude of the observer in degrees.
     - declination (float): Declination of the object in degrees.
-    - right_ascension (Union[str, float], optional): Right ascension in HH:MM:SS format or decimal degrees.
-    - hour_angle (Union[str, float], optional): Hour angle in HH:MM:SS format or decimal degrees.
-    - local_time (Union[str, float], optional): Local time in HH:MM:SS format or decimal hours.
+    - right_ascension (str or float, optional): Right ascension in HH:MM:SS format or decimal degrees.
+    - hour_angle (str or float, optional): Hour angle in HH:MM:SS format or decimal degrees.
+    - local_time (str or float, optional): Local time in HH:MM:SS format or decimal hours.
+    - hms (bool): If True, interpret inputs as HH:MM:SS strings.
 
     Returns:
-    - Tuple[float, float]: Azimuth and altitude in degrees.
+    - (float, float): Azimuth and altitude in degrees.
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
@@ -67,9 +70,14 @@ def equatorial_to_horizontal(
     else:
         print('Either right_ascension or hour_angle must be provided.')
 
-    observer_latitude, hour_angle_rad, declination = np.radians([observer_latitude, hour_angle_dd, declination])
+    observer_latitude, hour_angle_rad, declination = np.radians(
+        [observer_latitude, hour_angle_dd, declination]
+    )
 
-    zenith_angle = np.arccos(np.sin(observer_latitude) * np.sin(declination) + np.cos(observer_latitude) * np.cos(declination) * np.cos(hour_angle_rad))
+    zenith_angle = np.arccos(
+        np.sin(observer_latitude) * np.sin(declination) +
+        np.cos(observer_latitude) * np.cos(declination) * np.cos(hour_angle_rad)
+    )
 
     altitude = zenithangle2altitude(zenith_angle, deg=False)
 
@@ -84,9 +92,9 @@ def equatorial_to_horizontal(
     return azimuth, altitude
 
 
-def horizontal_to_equatorial(observer_latitude: float, azimuth: float, altitude: float) -> Tuple[float, float]:
+def horizontal_to_equatorial(observer_latitude, azimuth, altitude):
     """
-    Convert horizontal coordinates (azimuth, altitude) to equatorial coordinates (right ascension, declination).
+    Convert horizontal coordinates (azimuth, altitude) to equatorial coordinates (hour angle, declination).
 
     Parameters:
     - observer_latitude (float): Latitude of the observer in degrees.
@@ -94,34 +102,29 @@ def horizontal_to_equatorial(observer_latitude: float, azimuth: float, altitude:
     - altitude (float): Altitude in degrees.
 
     Returns:
-    - Tuple[float, float]: Hour angle and declination in degrees.
+    - (float, float): Hour angle and declination in degrees.
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
-    # Convert inputs to radians
     altitude_rad, azimuth_rad, latitude_rad = np.radians([altitude, azimuth, observer_latitude])
 
-    # Calculate zenith angle
     zenith_angle_rad = np.pi / 2 - altitude_rad
 
-    # Calculate declination
     declination_rad = np.arcsin(
         np.sin(latitude_rad) * np.cos(zenith_angle_rad) +
         np.cos(latitude_rad) * np.sin(zenith_angle_rad) * np.cos(azimuth_rad)
     )
 
-    # Calculate hour angle
-    cos_hour_angle = (np.cos(zenith_angle_rad) - np.sin(latitude_rad) * np.sin(declination_rad)) / \
-                     (np.cos(latitude_rad) * np.cos(declination_rad))
+    cos_hour_angle = (
+        (np.cos(zenith_angle_rad) - np.sin(latitude_rad) * np.sin(declination_rad)) /
+        (np.cos(latitude_rad) * np.cos(declination_rad))
+    )
 
-    # Ensure the hour angle is in the range [0, 2π)
     hour_angle_rad = np.arccos(np.clip(cos_hour_angle, -1, 1))
 
-    # Adjust hour angle based on azimuth quadrant
-    if azimuth_rad > np.pi:  # Azimuth in 3rd or 4th quadrant
+    if azimuth_rad > np.pi:  # 3rd or 4th quadrant
         hour_angle_rad = 2 * np.pi - hour_angle_rad
 
-    # Convert results back to degrees
     declination, hour_angle = np.degrees([declination_rad, hour_angle_rad])
 
     return hour_angle, declination

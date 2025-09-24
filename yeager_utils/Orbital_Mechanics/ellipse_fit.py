@@ -64,7 +64,6 @@ def ellipse_arc(P1, P2, *,
                 n_pts: int = 1000, tol=1e-10,
                 ccw: bool = True,
                 plot=False, save_path=False,
-                debug=False,
                 time_of_departure=None,
                 time_of_arrival=None):
 
@@ -87,8 +86,8 @@ def ellipse_arc(P1, P2, *,
             v0 = np.cross(u, cand)
             v0 /= np.linalg.norm(v0)
             w = np.cross(u, v0)
-            θ = np.deg2rad(incl)
-            v = np.cos(θ) * v0 + np.sin(θ) * w
+            theta = np.deg2rad(incl)
+            v = np.cos(theta) * v0 + np.sin(theta) * w
         else:
             w /= np.linalg.norm(w)
             v = np.cross(w, u)

@@ -1,9 +1,8 @@
-from typing import Tuple
 import numpy as np
 from ..utils import divby0
 
 
-def FFT(data: np.ndarray, time_between_samples: float = 1) -> Tuple[np.ndarray, np.ndarray]:
+def FFT(data: np.ndarray, time_between_samples: float = 1) -> np.ndarray:
     """
     Perform a Fast Fourier Transform on the input data.
 
@@ -23,7 +22,7 @@ def FFT(data: np.ndarray, time_between_samples: float = 1) -> Tuple[np.ndarray, 
     return f, Y
 
 
-def FFTP(data: np.ndarray, time_between_samples: float = 1) -> Tuple[np.ndarray, np.ndarray]:
+def FFTP(data: np.ndarray, time_between_samples: float = 1) -> np.ndarray:
     """
     Perform a Fast Fourier Transform and calculate the period.
 

@@ -1,5 +1,4 @@
 import numpy as np
-from typing import Tuple
 from .unit_conversions import rad0to2pi, deg0to360
 
 
@@ -9,7 +8,7 @@ cos_ec = 0.9174821430960974
 sin_ec = 0.3977769690414367
 
 
-def equatorial_xyz_to_ecliptic_xyz(xq: float, yq: float, zq: float) -> Tuple[float, float, float]:
+def equatorial_xyz_to_ecliptic_xyz(xq: float, yq: float, zq: float) -> float:
     """
     Convert equatorial Cartesian coordinates to ecliptic Cartesian coordinates.
 
@@ -17,7 +16,7 @@ def equatorial_xyz_to_ecliptic_xyz(xq: float, yq: float, zq: float) -> Tuple[flo
     - xq, yq, zq (float): Equatorial Cartesian coordinates.
 
     Returns:
-    - Tuple[float, float, float]: Ecliptic Cartesian coordinates (xc, yc, zc).
+    - float: Ecliptic Cartesian coordinates (xc, yc, zc).
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
@@ -27,7 +26,7 @@ def equatorial_xyz_to_ecliptic_xyz(xq: float, yq: float, zq: float) -> Tuple[flo
     return xc, yc, zc
 
 
-def ecliptic_xyz_to_equatorial_xyz(xc: float, yc: float, zc: float) -> Tuple[float, float, float]:
+def ecliptic_xyz_to_equatorial_xyz(xc: float, yc: float, zc: float) -> float:
     """
     Convert ecliptic Cartesian coordinates to equatorial Cartesian coordinates.
 
@@ -35,7 +34,7 @@ def ecliptic_xyz_to_equatorial_xyz(xc: float, yc: float, zc: float) -> Tuple[flo
     - xc, yc, zc (float): Ecliptic Cartesian coordinates.
 
     Returns:
-    - Tuple[float, float, float]: Equatorial Cartesian coordinates (xq, yq, zq).
+    - float: Equatorial Cartesian coordinates (xq, yq, zq).
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
@@ -45,7 +44,7 @@ def ecliptic_xyz_to_equatorial_xyz(xc: float, yc: float, zc: float) -> Tuple[flo
     return xq, yq, zq
 
 
-def xyz_to_ecliptic(xc: float, yc: float, zc: float, xe: float = 0, ye: float = 0, ze: float = 0, degrees: bool = False) -> Tuple[float, float]:
+def xyz_to_ecliptic(xc: float, yc: float, zc: float, xe: float = 0, ye: float = 0, ze: float = 0, degrees: bool = False) -> float:
     """
     Convert a point in space from equatorial coordinates to ecliptic latitude and longitude.
 
@@ -55,7 +54,7 @@ def xyz_to_ecliptic(xc: float, yc: float, zc: float, xe: float = 0, ye: float = 
     - degrees (bool, optional): If True, return the results in degrees. Default is False (radians).
 
     Returns:
-    - Tuple[float, float]: Ecliptic longitude and latitude (in radians or degrees).
+    - float: Ecliptic longitude and latitude (in radians or degrees).
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
@@ -71,7 +70,7 @@ def xyz_to_ecliptic(xc: float, yc: float, zc: float, xe: float = 0, ye: float = 
         return ec_longitude, ec_latitude
 
 
-def xyz_to_equatorial(xq: float, yq: float, zq: float, xe: float = 0, ye: float = 0, ze: float = 0, degrees: bool = False) -> Tuple[float, float]:
+def xyz_to_equatorial(xq: float, yq: float, zq: float, xe: float = 0, ye: float = 0, ze: float = 0, degrees: bool = False) -> float:
     """
     Convert a point in space from Cartesian coordinates to equatorial right ascension and declination.
 
@@ -81,7 +80,7 @@ def xyz_to_equatorial(xq: float, yq: float, zq: float, xe: float = 0, ye: float 
     - degrees (bool, optional): If True, return the results in degrees. Default is False (radians).
 
     Returns:
-    - Tuple[float, float]: Right ascension and declination (in radians or degrees).
+    - float: Right ascension and declination (in radians or degrees).
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
@@ -98,7 +97,7 @@ def xyz_to_equatorial(xq: float, yq: float, zq: float, xe: float = 0, ye: float 
         return ra, dec
 
 
-def ecliptic_xyz_to_equatorial(xc: float, yc: float, zc: float, xe: float = 0, ye: float = 0, ze: float = 0, degrees: bool = False) -> Tuple[float, float]:
+def ecliptic_xyz_to_equatorial(xc: float, yc: float, zc: float, xe: float = 0, ye: float = 0, ze: float = 0, degrees: bool = False) -> float:
     """
     Convert ecliptic Cartesian coordinates to equatorial right ascension and declination.
 
@@ -108,7 +107,7 @@ def ecliptic_xyz_to_equatorial(xc: float, yc: float, zc: float, xe: float = 0, y
     - degrees (bool, optional): If True, return the results in degrees. Default is False (radians).
 
     Returns:
-    - Tuple[float, float]: Right ascension and declination (in radians or degrees).
+    - float: Right ascension and declination (in radians or degrees).
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
@@ -122,7 +121,7 @@ def ecliptic_xyz_to_equatorial(xc: float, yc: float, zc: float, xe: float = 0, y
         return ra, dec
 
 
-def equatorial_to_ecliptic(right_ascension: float, declination: float, degrees: bool = False) -> Tuple[float, float]:
+def equatorial_to_ecliptic(right_ascension: float, declination: float, degrees: bool = False) -> float:
     """
     Convert equatorial coordinates (right ascension and declination) to ecliptic coordinates (longitude and latitude).
 
@@ -132,7 +131,7 @@ def equatorial_to_ecliptic(right_ascension: float, declination: float, degrees: 
     - degrees (bool, optional): If True, return the results in degrees. Default is False (radians).
 
     Returns:
-    - Tuple[float, float]: Ecliptic longitude and latitude (in radians or degrees).
+    - float: Ecliptic longitude and latitude (in radians or degrees).
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
@@ -145,7 +144,7 @@ def equatorial_to_ecliptic(right_ascension: float, declination: float, degrees: 
         return rad0to2pi(ec_longitude), ec_latitude
 
 
-def ecliptic_to_equatorial(lon: float, lat: float, degrees: bool = False) -> Tuple[float, float]:
+def ecliptic_to_equatorial(lon: float, lat: float, degrees: bool = False) -> float:
     """
     Convert ecliptic coordinates (longitude and latitude) to equatorial coordinates (right ascension and declination).
 
@@ -155,7 +154,7 @@ def ecliptic_to_equatorial(lon: float, lat: float, degrees: bool = False) -> Tup
     - degrees (bool, optional): If True, return the results in degrees. Default is False (radians).
 
     Returns:
-    - Tuple[float, float]: Right ascension and declination (in radians or degrees).
+    - float: Right ascension and declination (in radians or degrees).
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """

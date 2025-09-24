@@ -1,10 +1,9 @@
 import numpy as np
-from typing import Union, Optional, Tuple
 
 
 def proper_motion(x: np.ndarray, y: np.ndarray, z: np.ndarray, vx: np.ndarray, vy: np.ndarray, vz: np.ndarray,
                   xe: float = 0, ye: float = 0, ze: float = 0, vxe: float = 0, vye: float = 0, vze: float = 0,
-                  input_unit: str = 'si') -> Union[float, None]:
+                  input_unit: str = 'si') -> float:
     """
     Calculate the proper motion of an object in space relative to Earth.
 
@@ -47,18 +46,18 @@ def proper_motion(x: np.ndarray, y: np.ndarray, z: np.ndarray, vx: np.ndarray, v
 
 
 def proper_motion_ra_dec(
-    r: Optional[np.ndarray] = None,
-    v: Optional[np.ndarray] = None,
-    x: Optional[float] = None,
-    y: Optional[float] = None,
-    z: Optional[float] = None,
-    vx: Optional[float] = None,
-    vy: Optional[float] = None,
-    vz: Optional[float] = None,
+    r: np.ndarray = None,
+    v: np.ndarray = None,
+    x: float = None,
+    y: float = None,
+    z: float = None,
+    vx: float = None,
+    vy: float = None,
+    vz: float = None,
     r_earth: np.ndarray = np.array([0, 0, 0]),
     v_earth: np.ndarray = np.array([0, 0, 0]),
     input_unit: str = 'si'
-) -> Union[Tuple[np.ndarray, np.ndarray], None]:
+) -> np.ndarray:
     """
     Calculate the proper motion in right ascension (RA) and declination (DEC) for a given position and velocity in 3D space.
 

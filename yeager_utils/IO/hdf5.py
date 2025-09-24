@@ -1,141 +1,147 @@
+import os
 import h5py
 import numpy as np
-from typing import Any, List, Optional
-import os
 
 
-def append_h5(filename: str, key: str, append_data: Any) -> None:
+def _ensure_parent(h5: h5py.File | h5py.Group, key: str) -> h5py.Group:
+    """Ensure parent groups for a full path like 'a/b/c' exist; return the parent group."""
+    parts = key.strip("/").split("/")
+    if len(parts) == 1:
+        return h5  # parent is root
+    parent_path = "/".join(parts[:-1])
+    return h5.require_group(parent_path)
+
+
+def h5_key_exists(filename: str, key: str) -> bool:
     """
-    Append data to an existing key in an HDF5 file.
+    True if `key` exists anywhere in the file (supports nested paths like 'a/b/c').
+    """
+    try:
+        with h5py.File(filename, "r") as f:
+            try:
+                _ = f[key]  # will raise KeyError if not present
+                return True
+            except KeyError:
+                return False
+    except OSError:
+        return False
 
-    Args:
-        filename (str): The filename of the HDF5 file.
-        key (str): The path to the key in the HDF5 file.
-        append_data (Any): The data to be appended.
 
-    Returns:
-        None
+def save_h5(filename: str, key: str, data) -> None:
+    """
+    Create a dataset at `key`. Creates parent groups if needed. Fails if dataset exists.
     """
     try:
         with h5py.File(filename, "a") as f:
-            if key in f:
-                path_data_old = np.array(f.get(key))
-                append_data = np.append(path_data_old, np.array(append_data))
-                del f[key]
-            f.create_dataset(key, data=np.array(append_data), maxshape=None)
-    except FileNotFoundError:
-        print(f"File not found: {filename}\nCreating new dataset: {filename}")
-        save_h5(filename, key, append_data)
-    except (ValueError, KeyError) as err:
-        print(f"Error: {err}")
-
-
-def overwrite_h5(filename: str, key: str, new_data: Any) -> None:
-    """
-    Overwrite data for a key in an HDF5 file.
-
-    Args:
-        filename (str): The filename of the HDF5 file.
-        key (str): The path to the key in the HDF5 file.
-        new_data (Any): The new data to overwrite the old data.
-
-    Returns:
-        None
-    """
-    try:
-        with h5py.File(filename, "a") as f:
-            f.create_dataset(key, data=new_data, maxshape=None)
-    except (FileNotFoundError, ValueError, KeyError):
-        try:
-            with h5py.File(filename, 'r+') as f:
-                del f[key]
-        except (FileNotFoundError, ValueError, KeyError) as err:
-            print(f'Error: {err}')
-        try:
-            with h5py.File(filename, "a") as f:
-                f.create_dataset(key, data=new_data, maxshape=None)
-        except (FileNotFoundError, ValueError, KeyError) as err:
-            print(f'File: {filename}{key}, Error: {err}')
-
-
-def save_h5(filename: str, key: str, data: Any) -> None:
-    """
-    Save data to an HDF5 file.
-
-    Args:
-        filename (str): The filename of the HDF5 file.
-        key (str): The path to the data in the HDF5 file.
-        data (Any): The data to be saved.
-
-    Returns:
-        None
-    """
-    try:
-        with h5py.File(filename, "a") as f:
-            f.create_dataset(key, data=data, maxshape=None)
+            parent = _ensure_parent(f, key)
+            name = key.strip("/").split("/")[-1]
+            parent.create_dataset(name, data=data, maxshape=None)
             f.flush()
     except ValueError as err:
+        # Typically "name already exists"
         print(f"Did not save, key: {key} exists in file: {filename}. {err}")
-        return
     except (BlockingIOError, OSError) as err:
         print(f"\n{err}\nPath: {key}\nFile: {filename}\n")
-        return
 
 
-def read_h5(filename: str, key: str) -> Optional[np.ndarray]:
+def overwrite_h5(filename: str, key: str, new_data) -> None:
     """
-    Load data from an HDF5 file.
+    Overwrite (or create) dataset at `key`.
+    """
+    with h5py.File(filename, "a") as f:
+        parent = _ensure_parent(f, key)
+        name = key.strip("/").split("/")[-1]
+        if name in parent:
+            del parent[name]
+        parent.create_dataset(name, data=new_data, maxshape=None)
 
-    Args:
-        filename (str): The filename of the HDF5 file.
-        key (str): The path to the data in the HDF5 file.
 
-    Returns:
-        Optional[np.ndarray]: The data loaded from the HDF5 file, or None if the key does not exist.
+def append_h5(filename: str, key: str, append_data) -> None:
+    """
+    Append rows along axis 0. If dataset doesn't exist, create it.
+    Note: `append_data` must be broadcastable to the dataset shape except on axis 0.
+    """
+    arr = np.asarray(append_data)
+    with h5py.File(filename, "a") as f:
+        parent = _ensure_parent(f, key)
+        name = key.strip("/").split("/")[-1]
+
+        if name in parent:
+            dset = parent[name]
+            if dset.shape == ():
+                # Scalar in file; replace with 1D array of scalars then append
+                data0 = dset[()]
+                del parent[name]
+                dset = parent.create_dataset(name, data=np.asarray([data0]), maxshape=(None,), chunks=True)
+
+            # Ensure first dimension is the append axis
+            if dset.ndim == 0:
+                raise ValueError(f"Cannot append to scalar dataset at {key}")
+
+            # Prepare append with correct shape
+            arr2 = np.asarray(arr)
+            if arr2.ndim < dset.ndim:
+                # Try to expand dims to match (prepend batch dimension if needed)
+                arr2 = np.expand_dims(arr2, axis=0)
+
+            # Check compatibility (all dims except axis 0)
+            if dset.ndim != arr2.ndim or any(
+                (s is not None) and (s != a)
+                for s, a in zip(dset.shape[1:], arr2.shape[1:])
+            ):
+                raise ValueError(f"Incompatible shapes: existing {dset.shape} vs append {arr2.shape}")
+
+            new_len = dset.shape[0] + arr2.shape[0]
+            dset.resize((new_len, *dset.shape[1:]))
+            dset[-arr2.shape[0]:] = arr2
+        else:
+            # Create a resizable dataset to allow future appends
+            maxshape = (None,) + arr.shape[1:] if arr.ndim >= 1 else (None,)
+            chunks = True
+            parent.create_dataset(name, data=arr, maxshape=maxshape, chunks=chunks)
+
+
+def read_h5(filename: str, key: str):
+    """
+    Load data from an HDF5 file. Returns np.ndarray (or scalar) or None if missing.
     """
     try:
-        with h5py.File(filename, 'r') as f:
-            data = f.get(key)
-            if data is None:
+        with h5py.File(filename, "r") as f:
+            try:
+                data = f[key]
+            except KeyError:
                 return None
-            else:
-                return np.array(data)
-    except (ValueError, KeyError, TypeError):
-        return None
+            return np.array(data) if isinstance(data, h5py.Dataset) else None
     except FileNotFoundError:
         print(f'File not found. {filename}')
         raise
     except (BlockingIOError, OSError) as err:
         print(f"\n{err}\nPath: {key}\nFile: {filename}\n")
         raise
+    except (ValueError, TypeError):
+        return None
 
 
-def read_h5_to_dict(file_path):
+def read_h5_to_dict(file_path: str) -> dict:
     def recursively_load(h5obj):
-        data_dict = {}
-        for key in h5obj.keys():
-            item = h5obj[key]
+        out = {}
+        for k in h5obj.keys():
+            item = h5obj[k]
             if isinstance(item, h5py.Group):
-                data_dict[key] = recursively_load(item)
-            elif isinstance(item, h5py.Dataset):
-                data_dict[key] = item[()]  # Load dataset as a NumPy array or scalar
-        return data_dict
+                out[k] = recursively_load(item)
+            else:
+                out[k] = item[()]
+        return out
 
     with h5py.File(file_path, 'r') as h5file:
         return recursively_load(h5file)
-    
+
 
 def read_h5_all(file_path: str) -> dict:
     """
-    Load all data from an HDF5 file.
-
-    Args:
-        file_path (str): The path to the HDF5 file.
-
-    Returns:
-        dict: A dictionary of all keys and their corresponding data in the HDF5 file.
+    Flatten all datasets into a dict keyed by their full HDF5 paths.
     """
-    data_dict = {}
+    data_dict: dict = {}
 
     with h5py.File(file_path, 'r') as file:
         def traverse(group, path=''):
@@ -145,49 +151,15 @@ def read_h5_all(file_path: str) -> dict:
                     traverse(item, path=new_path)
                 else:
                     data_dict[new_path] = item[()]
-
         traverse(file)
     return data_dict
 
 
-def combine_h5(filename: str, files: List[str], verbose: bool = False, overwrite: bool = False) -> None:
+def h5_keys(file_path: str) -> list[str]:
     """
-    Combine data from multiple HDF5 files into a single HDF5 file.
-
-    Args:
-        filename (str): The filename of the target HDF5 file.
-        files (List[str]): A list of source HDF5 files to combine.
-        verbose (bool): Whether to print detailed processing information.
-        overwrite (bool): Whether to overwrite the target file if it exists.
-
-    Returns:
-        None
+    List full dataset paths in an HDF5 file.
     """
-    if overwrite and os.path.exists(filename):
-        os.remove(filename)  # Ensure filename exists before trying to remove it
-    for idx, file in enumerate(files):
-        try:
-            if not os.path.exists(file):
-                print(f"Skipping inaccessible file: {file}")
-                continue
-            for key in h5_keys(file):
-                if not h5_key_exists(filename, key):
-                    save_h5(filename, key, read_h5(file, key))
-        except Exception as e:
-            print(f"Error processing file {file}: {e}")
-
-
-def h5_keys(file_path: str) -> List[str]:
-    """
-    List all keys in an HDF5 file.
-
-    Args:
-        file_path (str): The file path of the HDF5 file.
-
-    Returns:
-        List[str]: A list of all keys in the HDF5 file.
-    """
-    keys_list = []
+    out: list[str] = []
     with h5py.File(file_path, 'r') as file:
         def traverse(group, path=''):
             for key, item in group.items():
@@ -195,40 +167,41 @@ def h5_keys(file_path: str) -> List[str]:
                 if isinstance(item, h5py.Group):
                     traverse(item, path=new_path)
                 else:
-                    keys_list.append(new_path)
+                    out.append(new_path)
         traverse(file)
-    return keys_list
+    return out
 
 
-def h5_root_keys(file_path: str) -> List[str]:
+def h5_root_keys(file_path: str) -> list[str]:
     """
-    List all top-level keys in an HDF5 file.
-
-    Args:
-        file_path (str): The file path of the HDF5 file.
-
-    Returns:
-        List[str]: A list of top-level keys in the HDF5 file.
+    List top-level members.
     """
     with h5py.File(file_path, 'r') as file:
-        keys_in_root = list(file.keys())
-        return keys_in_root
+        return list(file.keys())
 
 
-def h5_key_exists(filename, key):
+def combine_h5(filename: str, files: list[str], verbose: bool = False, overwrite: bool = False) -> None:
     """
-    Checks if a key exists in an HDF5 file.
-
-    Args:
-        filename (str): The filename of the HDF5 file.
-        key (str): The key to check.
-
-    Returns:
-        True if the key exists, False otherwise.
+    Merge datasets from multiple HDF5 files into `filename` without clobbering existing keys.
     """
+    if overwrite and os.path.exists(filename):
+        os.remove(filename)
 
-    try:
-        with h5py.File(filename, 'r') as f:
-            return str(key) in f
-    except IOError:
-        return False
+    for idx, src in enumerate(files):
+        try:
+            if not os.path.exists(src):
+                if verbose:
+                    print(f"[{idx}] Skipping missing file: {src}")
+                continue
+            for key in h5_keys(src):
+                if not h5_key_exists(filename, key):
+                    data = read_h5(src, key)
+                    if data is None:
+                        if verbose:
+                            print(f"[{idx}] Skipping empty/missing key {key} in {src}")
+                        continue
+                    save_h5(filename, key, data)
+                elif verbose:
+                    print(f"[{idx}] Exists, skip: {key}")
+        except Exception as e:
+            print(f"Error processing file {src}: {e}")

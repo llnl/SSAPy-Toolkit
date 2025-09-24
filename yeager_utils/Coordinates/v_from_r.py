@@ -1,6 +1,7 @@
 import numpy as np
 from ..Time_Functions import Time
 
+
 def v_from_r(r: np.ndarray, t: np.ndarray) -> np.ndarray:
     """
     Calculate velocity from position using numerical differentiation.

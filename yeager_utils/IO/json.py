@@ -1,15 +1,14 @@
 import json
-from typing import Any
 from datetime import datetime
 
 import numpy as np
 from astropy.time import Time
 
 
-def save_json(filename: str, data: Any) -> None:
+def save_json(filename: str, data) -> None:
     """Save data to a JSON file with support for NumPy, datetime, and Astropy Time."""
 
-    def encode(obj: Any) -> Any:
+    def encode(obj):
         if isinstance(obj, np.ndarray):
             return {"__type__": "ndarray", "data": obj.tolist()}
         if isinstance(obj, (np.integer, np.floating)):
@@ -32,10 +31,10 @@ def save_json(filename: str, data: Any) -> None:
         json.dump(data, f, default=encode, indent=4)
 
 
-def load_json(filename: str) -> Any:
+def load_json(filename: str):
     """Load data from a JSON file and decode special types."""
 
-    def decode(obj: Any) -> Any:
+    def decode(obj):
         if not isinstance(obj, dict) or "__type__" not in obj:
             return obj
         obj_type = obj["__type__"]
@@ -55,7 +54,7 @@ def load_json(filename: str) -> Any:
         return json.load(f, object_hook=decode)
 
 
-def append_json(filename: str, new_data: Any) -> None:
+def append_json(filename: str, new_data) -> None:
     """Append data into an existing JSON file.
     
     - If root is a dict:

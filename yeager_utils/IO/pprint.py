@@ -44,6 +44,7 @@ _np_defaults = dict(
 
 def _print_numpy(obj):
     """Pretty-print any Python object, truncating long NumPy arrays."""
+    # np.printoptions supports linewidth; np.array2string below uses max_line_width.
     with np.printoptions(**_np_defaults):
         _pprint(obj)
 
@@ -66,7 +67,11 @@ def _open_hdf5_like(obj):
         return obj, False
 
     if isinstance(obj, (str, pathlib.Path)):
-        fh = h5py.File(obj, "r")
+        # Try to open as HDF5; let OSError bubble up to caller to decide fallback.
+        try:
+            fh = h5py.File(obj, "r")
+        except Exception as e:
+            raise OSError(f"Not an HDF5 file or cannot open: {obj}") from e
         return fh, True
 
     raise TypeError("Object is not an HDF5 file/group/dataset or path to one")
@@ -80,7 +85,6 @@ def _indent_for_name(name: str, indent_per_level: int = 2) -> str:
     if name == "/":
         depth = 0
     else:
-        # Count slashes but subtract 1 to make '/grp' depth 1
         depth = max(0, name.count("/") - 1)
     return " " * (indent_per_level * depth)
 
@@ -91,17 +95,16 @@ def _summarize_group(g: "h5py.Group") -> str:
     """
     n_groups = 0
     n_dsets = 0
-    # Iterate keys without loading data
     for k in g.keys():
         try:
-            item = g.get(k, getlink=False)
+            item = g[k]  # does not load data; returns handle
+            if isinstance(item, h5py.Group):
+                n_groups += 1
+            elif isinstance(item, h5py.Dataset):
+                n_dsets += 1
         except Exception:
             # If access fails, skip counting that child
             continue
-        if isinstance(item, h5py.Group):
-            n_groups += 1
-        elif isinstance(item, h5py.Dataset):
-            n_dsets += 1
     return f"{g.name or '/'} (Group: {n_groups} groups, {n_dsets} datasets)"
 
 
@@ -113,7 +116,7 @@ def _array2string(a: np.ndarray) -> str:
         precision=_np_defaults["precision"],
         suppress_small=_np_defaults["suppress"],
         separator=", ",
-        threshold=1_000_000,  # do not trigger numpy's own ellipsis for our tiny previews
+        threshold=1_000_000,  # avoid numpy's own ellipsis for our tiny previews
     )
 
 
@@ -133,6 +136,10 @@ def _preview_dataset_values(d: "h5py.Dataset", head: int = 3, tail: int = 3, sma
             val = d[()]  # scalar
             return _array2string(np.array([val]))[1:-1]  # strip brackets
 
+        # Guard odd shapes
+        if not d.shape or d.ndim == 0:
+            return ""
+
         # Small datasets: read everything (but keep it small)
         if d.size <= small_limit:
             data = d[...]
@@ -141,13 +148,16 @@ def _preview_dataset_values(d: "h5py.Dataset", head: int = 3, tail: int = 3, sma
 
         # Large datasets
         n0 = d.shape[0]
+        if n0 <= 0:
+            return ""
 
         # Build head and tail slices along the first axis while keeping other dims small
-        # Use slice(None) for remaining dims but cap to 1 to avoid big loads.
         rest_slices = tuple(slice(0, 1) for _ in range(d.ndim - 1))
 
-        h = min(head, n0)
-        t = min(tail, n0 - h) if n0 > h else 0
+        h = min(max(head, 0), n0)
+        t = 0
+        if n0 > h and tail > 0:
+            t = min(tail, max(n0 - h, 0))
 
         head_slice = (slice(0, h),) + rest_slices
         head_block = d[head_slice]
@@ -160,21 +170,20 @@ def _preview_dataset_values(d: "h5py.Dataset", head: int = 3, tail: int = 3, sma
             tail_vals = np.ravel(tail_block)
 
         if head_vals.size + tail_vals.size <= small_limit and t == 0:
-            # Just show the head if that covers all elements along axis 0
             return _array2string(head_vals)[1:-1]
 
-        # Format "x0, x1, x2, ..., y1, y2, y3"
         head_str = _array2string(head_vals).strip()
         tail_str = _array2string(tail_vals).strip() if tail_vals.size else ""
-        head_str = head_str[1:-1] if head_str.startswith("[") and head_str.endswith("]") else head_str
-        tail_str = tail_str[1:-1] if tail_str.startswith("[") and tail_str.endswith("]") else tail_str
+        if head_str.startswith("[") and head_str.endswith("]"):
+            head_str = head_str[1:-1]
+        if tail_str.startswith("[") and tail_str.endswith("]"):
+            tail_str = tail_str[1:-1]
 
         if tail_str:
             return f"{head_str}, ..., {tail_str}"
         else:
             return head_str
     except Exception as e:
-        # On any issue reading data, fall back to a generic note
         return f"<preview unavailable: {type(e).__name__}>"
 
 
@@ -224,20 +233,20 @@ def _print_hdf5_summary(obj):
     try:
         # Print the root (or starting node) first
         if isinstance(handle, (h5py.File, h5py.Group)):
-            head_line = _summarize_group(handle if isinstance(handle, h5py.Group) else handle["/"])
+            root_group = handle if isinstance(handle, h5py.Group) else handle["/"]
+            head_line = _summarize_group(root_group)
             print(head_line)
             attrs_line = _summarize_attrs(handle)
             if attrs_line:
-                print(_indent_for_name(handle.name) + "  " + attrs_line)
+                print(_indent_for_name(root_group.name) + "  " + attrs_line)
         elif isinstance(handle, h5py.Dataset):
             print(_summarize_dataset(handle))
             attrs_line = _summarize_attrs(handle)
             if attrs_line:
                 print(_indent_for_name(handle.name) + "  " + attrs_line)
 
-        # Visit entire subtree starting at handle
+        # Visitor to walk subtree
         def _visitor(name, item):
-            # Skip duplicating the very first node if visititems calls us for it
             if item is handle:
                 return
             pad = _indent_for_name(item.name)
@@ -252,15 +261,15 @@ def _print_hdf5_summary(obj):
                 if attrs_line:
                     print(pad + "  " + attrs_line)
             else:
-                # Other HDF5 object types are uncommon; print a generic line
                 try:
                     print(pad + f"{item.name} (unsupported HDF5 type: {type(item).__name__})")
                 except Exception:
                     print(pad + f"(unsupported HDF5 type: {type(item).__name__})")
 
-        # For a file or group, walk the subtree; for a dataset there is nothing to walk
         if isinstance(handle, (h5py.File, h5py.Group)):
-            handle.visititems(_visitor)
+            # Restrict traversal to the starting group for Group handles.
+            start = handle if isinstance(handle, h5py.Group) else handle["/"]
+            start.visititems(_visitor)
 
     finally:
         if must_close:
@@ -284,10 +293,14 @@ def pprint(obj):
     Otherwise:
         Fall back to NumPy-aware pretty printer for general Python objects.
     """
-    if h5py is not None and (
-        isinstance(obj, (h5py.File, h5py.Group, h5py.Dataset)) or
-        isinstance(obj, (str, pathlib.Path))
-    ):
-        _print_hdf5_summary(obj)
-    else:
-        _print_numpy(obj)
+    # Try HDF5 path/handle if h5py is available; otherwise fall back cleanly.
+    if h5py is not None:
+        try:
+            if isinstance(obj, (h5py.File, h5py.Group, h5py.Dataset)) or isinstance(obj, (str, pathlib.Path)):
+                _print_hdf5_summary(obj)
+                return
+        except (TypeError, OSError, RuntimeError):
+            # Not an HDF5 handle/path or cannot open; fall through to numpy printer.
+            pass
+
+    _print_numpy(obj)

@@ -1,3 +1,5 @@
+import numpy as np
+
 def accel_add(*accel_funcs):
     """
     Returns a function that sums multiple acceleration functions.

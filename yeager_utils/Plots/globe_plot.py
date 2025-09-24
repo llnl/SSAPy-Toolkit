@@ -2,16 +2,15 @@ import matplotlib.pyplot as plt
 from PIL import Image as PILImage
 
 import numpy as np
-from typing import Tuple, Optional
 
 from ssapy.utils import find_file
 from .plotutils import make_black, make_white, save_plot, valid_orbits
 from ..constants import RGEO, EARTH_RADIUS
 
 
-def globe_plot(r: np.ndarray, t: np.ndarray, limits: Optional[float] = False, title: str = '',
-               c='black', figsize: Tuple[int, int] = (7, 8), save_path: Optional[str] = False,
-               el: int = 30, az: int = 0, scale: float = 1, fontsize=18) -> Tuple[plt.Figure, plt.Axes]:
+def globe_plot(r: np.ndarray, t: np.ndarray, limits: float = False, title: str = '',
+               c='black', figsize: int = (7, 8), save_path: str = False,
+               el: int = 30, az: int = 0, scale: float = 1, fontsize=18) -> plt.Figure:
     """
     Generate a 3D globe plot showing the position of points in Earth-centered
     coordinates. Optionally save the plot to a file.

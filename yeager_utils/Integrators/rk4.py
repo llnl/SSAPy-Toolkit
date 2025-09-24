@@ -1,7 +1,6 @@
 import numpy as np
 from ..constants import EARTH_MU
 from ..Time_Functions import to_gps
-from scipy.interpolate import interp1d
 from .int_utils import (
     build_profile, 
     precompute_third_body_positions,

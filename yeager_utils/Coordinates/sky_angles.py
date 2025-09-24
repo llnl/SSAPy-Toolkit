@@ -1,12 +1,11 @@
 import numpy as np
-from typing import Union, Tuple
 from ssapy import get_body, groundTrack, rv, SciPyPropagator, AccelKepler, Orbit
 from ..constants import RGEO
 from ..Time_Functions import Time
 from .unit_conversions import rad0to2pi
 
 
-def sun_ra_dec(time_: Union[int, float, str]) -> Tuple[float, float]:
+def sun_ra_dec(time_):
     """
     Calculate the Right Ascension and Declination of the Sun for a given time.
 
@@ -27,7 +26,7 @@ def ra_dec(
     r_earth: np.ndarray = np.array([0, 0, 0]),
     v_earth: np.ndarray = np.array([0, 0, 0]),
     input_unit: str = 'si'
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> np.ndarray:
     """
     Compute the Right Ascension (RA) and Declination (Dec) of a position and velocity vector,
     relative to Earth's position and velocity.
@@ -61,7 +60,7 @@ def ra_dec(
     return ra, dec
 
 
-def gcrf_to_radec(gcrf_coords: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def gcrf_to_radec(gcrf_coords: np.ndarray) -> np.ndarray:
     """
     Convert GCRF Cartesian coordinates to right ascension and declination.
 
@@ -80,7 +79,7 @@ def gcrf_to_radec(gcrf_coords: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     return ra_deg, dec_deg
 
 
-def gcrf_to_lat_lon(r: np.ndarray, t: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def gcrf_to_lat_lon(r: np.ndarray, t: np.ndarray) -> np.ndarray:
     """
     Convert GCRF coordinates to latitude, longitude, and height above Earth's surface.
 

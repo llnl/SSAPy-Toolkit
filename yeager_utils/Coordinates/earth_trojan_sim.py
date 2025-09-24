@@ -1,10 +1,9 @@
-from typing import Tuple
 from .cartesian_to_spherical import cart2sph_deg
 from .unit_conversions import deg0to360
 import numpy as np
 
 
-def inert2rot(x: float, y: float, xe: float, ye: float, xs: float = 0, ys: float = 0) -> Tuple[float, float]:
+def inert2rot(x: float, y: float, xe: float, ye: float, xs: float = 0, ys: float = 0) -> float:
     """
     Rotate inertial coordinates to a rotated frame defined by the position of Earth.
 
@@ -29,7 +28,7 @@ def inert2rot(x: float, y: float, xe: float, ye: float, xs: float = 0, ys: float
     return xrot, yrot
 
 
-def sim_lonlatrad(x: float, y: float, z: float, xe: float, ye: float, ze: float, xs: float, ys: float, zs: float) -> Tuple[float, float, float]:
+def sim_lonlatrad(x: float, y: float, z: float, xe: float, ye: float, ze: float, xs: float, ys: float, zs: float) -> float:
     """
     Convert Cartesian coordinates (x, y, z) to geodetic longitude, latitude, and radius,
     relative to the Sun's position at the given time.
@@ -40,7 +39,7 @@ def sim_lonlatrad(x: float, y: float, z: float, xe: float, ye: float, ze: float,
     - xs, ys, zs (float): Cartesian coordinates of the Sun.
 
     Returns:
-    - Tuple[float, float, float]: Longitude, latitude, and radius relative to the Sun in degrees and kilometers.
+    - float: Longitude, latitude, and radius relative to the Sun in degrees and kilometers.
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """

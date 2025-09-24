@@ -1,8 +1,7 @@
-from typing import Tuple
 import numpy as np
 
 
-def cart2sph_deg(x: float, y: float, z: float) -> Tuple[float, float, float]:
+def cart2sph_deg(x: float, y: float, z: float) -> float:
     """
     Convert Cartesian coordinates (x, y, z) to spherical coordinates (azimuth, elevation, radius) in degrees.
 
@@ -12,7 +11,7 @@ def cart2sph_deg(x: float, y: float, z: float) -> Tuple[float, float, float]:
     - z (float): The z-coordinate in Cartesian space.
 
     Returns:
-    - Tuple[float, float, float]: Azimuth, elevation, and radius in degrees.
+    - float: Azimuth, elevation, and radius in degrees.
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """

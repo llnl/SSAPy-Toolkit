@@ -1,3 +1,7 @@
+from astropy.utils import iers
+iers.conf.auto_download = True       # download fresh IERS A as needed
+iers.conf.auto_max_age = 365         # days; adjust to your policy
+
 # Folders
 from .Yastropy import *
 from .Accelerations import *

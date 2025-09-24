@@ -1,12 +1,11 @@
 import numpy as np
-from typing import Tuple, Optional, Union
 from ssapy.body import MoonPosition, get_body
 from ssapy.utils import normed
 from ..Time_Functions import Time
 from .v_from_r import v_from_r
 
 
-def gcrf_to_lunar(r: np.ndarray, t: np.ndarray, v: Optional[np.ndarray] = None) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+def gcrf_to_lunar(r: np.ndarray, t: np.ndarray, v: np.ndarray = None) -> np.ndarray:
     """
     Convert position and velocity vectors from GCRF to Lunar coordinates.
 
@@ -49,7 +48,7 @@ def gcrf_to_lunar(r: np.ndarray, t: np.ndarray, v: Optional[np.ndarray] = None) 
         return r_lunar, v_lunar
 
 
-def gcrf_to_lunar_fixed(r: np.ndarray, t: np.ndarray, v: Optional[np.ndarray] = None) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+def gcrf_to_lunar_fixed(r: np.ndarray, t: np.ndarray, v: np.ndarray = None) -> np.ndarray:
     """
     Convert position and velocity vectors from GCRF to Lunar coordinates, with fixed lunar origin.
 

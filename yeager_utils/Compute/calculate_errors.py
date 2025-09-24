@@ -1,8 +1,7 @@
 import numpy as np
-from typing import Tuple
 
 
-def calculate_errors(data: np.ndarray, CI: float = 0.05) -> Tuple[np.ndarray, np.ndarray]:
+def calculate_errors(data: np.ndarray, CI: float = 0.05) -> np.ndarray:
     """
     Calculate the confidence interval errors for a dataset.
 

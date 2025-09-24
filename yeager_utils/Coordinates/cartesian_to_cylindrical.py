@@ -1,8 +1,7 @@
 import numpy as np
-from typing import Tuple
 
 
-def cart_to_cyl(x: float, y: float, z: float) -> Tuple[float, float, float]:
+def cart_to_cyl(x: float, y: float, z: float) -> float:
     """
     Convert Cartesian coordinates (x, y, z) to cylindrical coordinates (radius, angle, z).
 
@@ -12,7 +11,7 @@ def cart_to_cyl(x: float, y: float, z: float) -> Tuple[float, float, float]:
     - z (float): The z-coordinate in Cartesian space.
 
     Returns:
-    - Tuple[float, float, float]: Radius, angle, and z in cylindrical coordinates.
+    - float: Radius, angle, and z in cylindrical coordinates.
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """

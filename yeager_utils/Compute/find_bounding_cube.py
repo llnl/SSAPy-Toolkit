@@ -1,8 +1,7 @@
 import numpy as np
-from typing import Tuple
 
 
-def find_smallest_bounding_cube(r: np.ndarray, pad: float = 0.0) -> Tuple[np.ndarray, np.ndarray]:
+def find_smallest_bounding_cube(r: np.ndarray, pad: float = 0.0) -> np.ndarray:
     """
     Find the smallest bounding cube for a set of 3D coordinates, with optional padding.
 
