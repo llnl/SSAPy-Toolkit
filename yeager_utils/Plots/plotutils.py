@@ -1,20 +1,25 @@
+# --- Standard library ---
+import io
 import os
 import re
-import io
+from enum import Enum, auto
+from numbers import Real
+
+# --- Third-party ---
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.colors import cnames, to_rgb, rgb2hex
 from PIL import Image as PILImage
 from PyPDF2 import PdfMerger
-from matplotlib.backends.backend_pdf import PdfPages
 from IPython.display import Image as IPythonImage, display as ipython_display
-from matplotlib.colors import cnames, to_rgb, rgb2hex
+from astropy.time import Time
+from erfa import gst94
 
+# --- Local modules ---
 from ssapy.utils import find_file
 from ..constants import EARTH_RADIUS, MOON_RADIUS
 from ..vectors import rotation_matrix_from_vectors
-
-from enum import Enum, auto
-from astropy.time import Time
 
 
 class VarType(Enum):
@@ -174,8 +179,6 @@ def drawEarth(time, ngrid=100, R=EARTH_RADIUS, rfactor=1):
         Factor by which to enlarge Earth (for visualization purposes)
     """
     import ipyvolume as ipv
-    from numbers import Real
-    from erfa import gst94
 
     earth = load_earth_file()
 
@@ -227,8 +230,6 @@ def drawMoon(time, ngrid=100, R=MOON_RADIUS, rfactor=1):
         Factor by which to enlarge Moon (for visualization purposes)
     """
     import ipyvolume as ipv
-    from numbers import Real
-    from erfa import gst94
 
     moon = load_moon_file()
 
@@ -324,7 +325,7 @@ def save_plot(figure, save_path, dpi=200):
         base_name, extension = os.path.splitext(save_path)
         if extension.lower() != '.jpg':
             save_path = base_name + '.jpg'
-        figure.savefig(save_path, dpi=dpi, bbox_inches='tight')
+        figure.savefig(save_path, dpi=dpi, bbox_inches=None)
         plt.close(figure)
         print(f"Figure saved at: {save_path}")
     except Exception as e:
@@ -523,53 +524,4 @@ def generate_rainbow_colors(num_iterations):
     return colors
 
 
-def write_video(video_name, frames, fps=30):
-    """
-    Write frames to an MP4 video file.
 
-    Parameters
-    ----------
-    video_name : str
-        Output path ending with .mp4
-    frames : list of str
-        Paths to image files (readable by OpenCV).
-    fps : int
-        Frame rate.
-    """
-    import cv2
-
-    print(f'Writing video: {video_name}')
-
-    img = cv2.imread(frames[0])
-    h, w, _ = img.shape
-    fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
-    writer = cv2.VideoWriter(video_name, fourcc, fps, (w, h))
-
-    for frame in frames:
-        writer.write(cv2.imread(frame))
-
-    writer.release()
-    print(f'Wrote: {video_name}')
-
-
-def write_gif(gif_name, frames, fps=30):
-    """
-    Write frames to a GIF.
-
-    Parameters
-    ----------
-    gif_name : str
-        Output path ending with .gif
-    frames : list of str
-        Paths to image files (readable by imageio).
-    fps : int
-        Frame rate.
-    """
-    import imageio
-
-    print(f'Writing gif: {gif_name}')
-    with imageio.get_writer(gif_name, mode='I', duration=1 / fps) as writer:
-        for filename in frames:
-            image = imageio.imread(filename)
-            writer.append_data(image)
-    print(f'Wrote {gif_name}')
