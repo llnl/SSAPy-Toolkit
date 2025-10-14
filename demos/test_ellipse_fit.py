@@ -4,10 +4,10 @@
 # ----------------------------------------------------------------------
 # Imports
 # ----------------------------------------------------------------------
-from yeager_utils import RGEO, ellipse_fit, get_times, pprint           # type: ignore
-from ssapy.simple import ssapy_orbit                           # type: ignore
-from ssapy.plotUtils import orbit_plot                         # type: ignore
-from ssapy import Orbit                                        # type: ignore
+from yeager_utils import RGEO, ellipse_fit, get_times, pprint, figpath  # type: ignore
+from ssapy.simple import ssapy_orbit                                    # type: ignore
+from ssapy.plotUtils import orbit_plot                                  # type: ignore
+from ssapy import Orbit                                                 # type: ignore
 import numpy as np
 
 # ----------------------------------------------------------------------
@@ -34,16 +34,12 @@ if __name__ == "__main__":
         )
 
         # Split out convenience aliases
-        arc = res["r"]
-        vel = res["v"]
+        arc   = res["r"]
+        vel   = res["v"]
         times = res["t_rel"]
 
-        # Quick sanity print‑out
+        # Quick sanity print-out
         pprint(res)
-
-        # Uncomment to inspect the first / last samples
-        # print_samples("First sample", arc[:1], vel[:1], times[:1])
-        # print_samples("Last  sample", arc[-1:], vel[-1:], times[-1:])
 
         # Stash for later reconstruction tests
         results[ccw] = res
@@ -53,11 +49,11 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------
     sv_recons = []
     for ccw, res in results.items():
-        r0, v0 = res["r0"], res["v0"]
-        T_flight = res["t_rel"][-1]
+        r0, v0     = res["r0"], res["v0"]
+        T_flight   = res["t_rel"][-1]
 
-        # Build an evenly‑spaced epoch vector the same length as t_rel
-        epochs = get_times(duration=(T_flight, "s"), freq=(len(res["t_rel"]), "s"))[0]
+        # evenly-spaced epoch vector (not strictly needed for plotting)
+        _epochs = get_times(duration=(T_flight, "s"), freq=(len(res["t_rel"]), "s"))[0]
 
         r_sv, v_sv, t_sv = ssapy_orbit(
             r=r0,
@@ -68,12 +64,16 @@ if __name__ == "__main__":
 
         sv_recons.append((ccw, r_sv, t_sv))
 
+    # Save the SV reconstruction figure
+    save_path_sv = figpath("testing_ellipse_fit_recons_sv.png")
     orbit_plot(
         [r for _, r, _ in sv_recons],
         t=[t for _, _, t in sv_recons],
         title="SSAPy reconstructions via state vectors",
-        show=True,
+        show=False,
+        save_path=save_path_sv,
     )
+    print(f"[saved] {save_path_sv}")
 
     # ------------------------------------------------------------------
     # 2️⃣  Reconstruct using the *Keplerian* elements returned by ellipse_fit
@@ -95,11 +95,15 @@ if __name__ == "__main__":
 
         ke_recons.append((ccw, r_ke, t_ke))
 
+    # Save the Kepler reconstruction figure
+    save_path_kepler = figpath("testing_ellipse_fit_recons_kepler.png")
     orbit_plot(
         [r for _, r, _ in ke_recons],
         t=[t for _, _, t in ke_recons],
         title="SSAPy reconstructions via Keplerian elements",
-        show=True,
+        show=False,
+        save_path=save_path_kepler,
     )
+    print(f"[saved] {save_path_kepler}")
 
 print("DONE!")

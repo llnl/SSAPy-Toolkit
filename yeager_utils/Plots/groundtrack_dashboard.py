@@ -223,8 +223,9 @@ def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, show_legend
         try: ax.set_proj_type('ortho')
         except Exception: pass
 
-    if show:
-        plt.show()
+    
     if save_path:
         save_plot(fig, save_path)
+    if show:
+        plt.show()
     return fig

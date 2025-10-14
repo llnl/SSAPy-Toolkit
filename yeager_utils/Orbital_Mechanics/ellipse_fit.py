@@ -67,31 +67,51 @@ def ellipse_fit(P1, P2, *,
                 time_of_departure=None,
                 time_of_arrival=None):
 
-    from ..constants import EARTH_MU, EARTH_RADIUS  # [m³ s⁻²]
+    from ..constants import EARTH_MU, EARTH_RADIUS  # [m³ s⁻²]
 
     # ───────────────────────── internal helpers ──────────────────────────
     def _plane_basis(p1, p2, *, incl: float = 0.0, eps: float = 1e-12):
+        """
+        Build an orthonormal basis (u, v, w) with u ∥ p1, v in the plane spanned
+        by {p1, p2} (or tilted by `incl` if colinear), and w = u × v (unit).
+
+        Note: `incl` is interpreted in DEGREES to keep backward compatibility.
+        """
         p1 = np.asarray(p1, float)
         p2 = np.asarray(p2, float)
         if np.linalg.norm(p1) < eps or np.linalg.norm(p2) < eps:
-            raise ValueError("P1 and P2 must be non‑zero")
+            raise ValueError("P1 and P2 must be non-zero")
 
         u = p1 / np.linalg.norm(p1)
         v = p2 - np.dot(p2, u) * u
-        w = np.cross(u, v)
+
         if np.linalg.norm(v) < eps:
+            # P1 and P2 nearly colinear: pick any axis not parallel to u,
+            # construct a default v0, then rotate it by `incl` about an axis
+            # that keeps (u, v, w) orthonormal.
             cand = np.array([0.0, 0.0, 1.0])
             if abs(np.dot(u, cand)) > 1.0 - eps:
                 cand = np.array([1.0, 0.0, 0.0])
             v0 = np.cross(u, cand)
             v0 /= np.linalg.norm(v0)
-            w = np.cross(u, v0)
-            theta = np.deg2rad(incl)
-            v = np.cos(theta) * v0 + np.sin(theta) * w
-        else:
+            w0 = np.cross(u, v0)
+            w0 /= np.linalg.norm(w0)
+
+            theta = np.deg2rad(incl)  # keep API as degrees
+            v = np.cos(theta) * v0 + np.sin(theta) * w0
+
+            # Re-orthonormalize so that w ⟂ (u,v) and has unit length.
+            w = np.cross(u, v)
             w /= np.linalg.norm(w)
             v = np.cross(w, u)
             v /= np.linalg.norm(v)
+        else:
+            # Standard Gram-Schmidt to produce a tight orthonormal frame.
+            w = np.cross(u, v)
+            w /= np.linalg.norm(w)
+            v = np.cross(w, u)
+            v /= np.linalg.norm(v)
+
         return u, v, w
 
     def _in_plane(vec3, u, v):
@@ -151,7 +171,7 @@ def ellipse_fit(P1, P2, *,
             if not sol.success:
                 sol = try_minimize_with("SLSQP")
             if not sol.success:
-                raise RuntimeError("Could not locate least‑eccentric solution")
+                raise RuntimeError("Could not locate least-eccentric solution")
 
             F2 = _to_3d(sol.x, u, v)
             a = _a_for(F2, P1)
@@ -199,16 +219,23 @@ def ellipse_fit(P1, P2, *,
 
         return short_arc, long_arc
 
-    def direction(arc3d, eps=1e-12):
+    def direction(arc3d, u, v, w, eps=1e-12):
+        """
+        Orientation of the arc within its own plane:
+        +1 if CCW when viewed along +w, -1 if CW, 0 if indeterminate.
+        """
+        if len(arc3d) < 2:
+            return 0
         p0 = arc3d[0]
-        p10 = arc3d[10]
-        rotation_vector = np.cross(p0, p10)
-        z = rotation_vector[2]
-        if abs(z) > eps:
-            return int(np.sign(z))
-        x0, y0 = p0[0], p0[1]
-        x1, y1 = p10[0], p10[1]
-        det = x0 * y1 - y0 * x1
+        p1 = arc3d[min(10, len(arc3d) - 1)]  # robust if arc is short
+        s = np.dot(w, np.cross(p0, p1))
+        if abs(s) > eps:
+            return int(np.sign(s))
+
+        # Fallback: use 2D determinant in (u, v) plane if nearly colinear
+        p0_2d = np.array([np.dot(p0, u), np.dot(p0, v)])
+        p1_2d = np.array([np.dot(p1, u), np.dot(p1, v)])
+        det = p0_2d[0] * p1_2d[1] - p0_2d[1] * p1_2d[0]
         if abs(det) < eps:
             return 0
         return int(np.sign(det))
@@ -245,11 +272,12 @@ def ellipse_fit(P1, P2, *,
     i2 = np.argmin(np.linalg.norm(full3d - P2, axis=1))
 
     arc_short, arc_long = slice_arc_segments(full3d, i1, i2)
-    arc_long = arc_long[::-1]
+    arc_long = arc_long[::-1]  # start both arcs at P1 for consistent traversal
 
+    # Choose arc consistent with requested rotation direction; set velocity sign if needed
     vel_mod = 1
     if ccw:
-        if direction(arc_short) > 0:
+        if direction(arc_short, u, v, w) > 0:
             arc3d = arc_short
             arc3d_comp = arc_long
         else:
@@ -257,10 +285,15 @@ def ellipse_fit(P1, P2, *,
             arc3d_comp = arc_short
             vel_mod = -1
     else:
-        arc3d = arc_short
-        arc3d_comp = arc_long
+        if direction(arc_short, u, v, w) < 0:
+            arc3d = arc_short
+            arc3d_comp = arc_long
+        else:
+            arc3d = arc_long
+            arc3d_comp = arc_short
+            vel_mod = -1
 
-    rot_dir = direction(arc3d)
+    rot_dir = direction(arc3d, u, v, w)
 
     xy_arc = np.array([_in_plane(p, u, v) for p in arc3d])
     f = np.arctan2(xy_arc[:, 1], xy_arc[:, 0])
@@ -291,14 +324,10 @@ def ellipse_fit(P1, P2, *,
         v_r = (EARTH_MU / h_scalar) * e * sin_f
         v_t = (EARTH_MU / h_scalar) * (1 + e * cos_f)
 
-        xy = _in_plane(r_vec, u, v)
-        norm_xy = np.linalg.norm(xy)
-        if norm_xy < 1e-12:
-            t_hat = np.zeros(3)
-        else:
-            r_hat_2d = xy / norm_xy
-            t_hat_2d = np.array([-r_hat_2d[1], r_hat_2d[0]])
-            t_hat = _to_3d(t_hat_2d, u, v)
+        # Plane-agnostic transverse direction: always in-plane and ⟂ r̂
+        t_hat = np.cross(w, r_hat)
+        nt = np.linalg.norm(t_hat)
+        t_hat = t_hat / nt if nt > 1e-12 else np.zeros(3)
 
         vel3d[i] = (v_r * r_hat + v_t * t_hat) * vel_mod
 
@@ -306,8 +335,12 @@ def ellipse_fit(P1, P2, *,
 
     t_abs = None
     if time_of_departure is not None:
+        from ..Time_Functions import to_gps
+        time_of_departure = to_gps(time_of_departure)
         t_abs = np.asarray(time_of_departure) + t_rel
     elif time_of_arrival is not None:
+        from ..Time_Functions import to_gps
+        time_of_arrival = to_gps(time_of_arrival)
         t_abs = np.asarray(time_of_arrival) - (t_rel[-1] - t_rel)
 
     mu = EARTH_MU
@@ -358,28 +391,16 @@ def ellipse_fit(P1, P2, *,
         from matplotlib.gridspec import GridSpec
         from ssapy.simple import ssapy_orbit
 
-        # arc‑sample timeline (minutes)
+        # arc-sample timeline (minutes)
         t_minutes = t_rel / 60.0
 
-        # run the ssapy propagator on a *1‑second grid* …
-        # r_ss, v_ss, t_ss = ssapy_orbit(
-        #     r=r0,
-        #     v=v0,
-        #     duration=(t_rel[-1], "s"),
-        #     freq=(1, "s"),             # ← one sample per second
-        # )
-        # t_ss_seconds = np.arange(len(t_ss))        # 0,1,2,…
-        # t_ss_minutes = t_ss_seconds / 60.0         # for x‑axis
-        # print(ssapy_orbit(
-        #     r=r0,
-        #     v=v0,
-        #     t=t_rel,
-        # ))
+        # Propagate with ssapy at the same sample epochs for overlay
         r_ss, v_ss = ssapy_orbit(
             r=r0,
             v=v0,
             t=t_rel,
         )
+
         # set up figure / axes
         fig = plt.figure(figsize=(18, 6))
         gs = GridSpec(1, 3, figure=fig, width_ratios=[3, 2, 2])
@@ -387,7 +408,7 @@ def ellipse_fit(P1, P2, *,
         ax_dist  = fig.add_subplot(gs[1])
         ax_speed = fig.add_subplot(gs[2])
 
-        # 3‑D orbit view --------------------------------------------------
+        # 3-D orbit view --------------------------------------------------
         colors = cm.get_cmap("RdYlGn_r")(np.linspace(0, 1, len(arc3d)))
         ax3d.scatter(arc3d_comp[:, 0] / 1e3, arc3d_comp[:, 1] / 1e3,
                      arc3d_comp[:, 2] / 1e3, c="black", s=10)
@@ -410,7 +431,7 @@ def ellipse_fit(P1, P2, *,
         ax3d.set_title("Full ellipse with ssapy overlay")
         ax3d.legend()
 
-        # distance‑from‑origin plot --------------------------------------
+        # distance-from-origin plot --------------------------------------
         ax_dist.plot(t_minutes,
                      np.linalg.norm(arc3d, axis=1) / 1e3,
                      lw=5, label="ellipse")
@@ -436,15 +457,15 @@ def ellipse_fit(P1, P2, *,
 
         plt.tight_layout()
         plt.show()
-        if save_path: 
+        if save_path:
             save_plot(fig, save_path)
 
     result = {
-        "r"           : arc3d,                          # (N, 3) Cartesian positions           [m]
-        "v"           : vel3d,                          # (N, 3) Inertial velocities           [m s⁻¹]
-        "t_rel"       : t_rel,                          # (N,)   Relative flight‑time (0‑based) [s]
+        "r"           : arc3d,                          # (N, 3) Cartesian positions           [m]
+        "v"           : vel3d,                          # (N, 3) Inertial velocities           [m s⁻¹]
+        "t_rel"       : t_rel,                          # (N,)   Relative flight-time (0-based) [s]
         "t_abs"       : t_abs,                          # (N,)   Absolute epochs (optional)     [s or datetime64]
-        "a"           : a,                              # Semi‑major axis                      [m]
+        "a"           : a,                              # Semi-major axis                      [m]
         "e"           : e,                              # Eccentricity                        [–]
         "i"           : i_rad,                          # Inclination                         [rad]
         "raan"        : raan,                           # Right ascension of ascending node   [rad]
@@ -457,26 +478,26 @@ def ellipse_fit(P1, P2, *,
         "rp_alt"      : a * (1 - e) - EARTH_RADIUS,     # Periapsis altitude above Earth      [m]
         "ra_alt"      : a * (1 + e) - EARTH_RADIUS,     # Apoapsis  altitude above Earth      [m]
 
-        "b"           : b,                              # Semi‑minor axis                     [m]
-        "p"           : a * (1 - e**2),                 # Semi‑latus rectum                   [m]
-        "mean_motion" : np.sqrt(mu / a**3),             # Mean motion                         [rad s⁻¹]
-        "eta"         : np.sqrt(1 - e**2),              # Circularity factor η ≡ √(1−e²)      [–]
+        "b"           : b,                              # Semi-minor axis                     [m]
+        "p"           : a * (1 - e**2),                 # Semi-latus rectum                   [m]
+        "mean_motion" : np.sqrt(mu / a**3),             # Mean motion                         [rad s⁻¹]
+        "eta"         : np.sqrt(1 - e**2),              # Circularity factor η ≡ √(1−e²)      [–]
 
         "period"      : period,                         # Keplerian period                    [s]
-        "h_vec"       : h_vec,                          # Specific angular‑momentum vector    [m² s⁻¹]
-        "h"           : h,                              # |h_vec|                             [m² s⁻¹]
-        "Energy"      : -EARTH_MU / (2 * a),            # Specific mechanical energy          [J kg⁻¹]
+        "h_vec"       : h_vec,                          # Specific angular-momentum vector    [m² s⁻¹]
+        "h"           : h,                              # |h_vec|                             [m² s⁻¹]
+        "Energy"      : -EARTH_MU / (2 * a),            # Specific mechanical energy          [J kg⁻¹]
 
         "e_vec"       : e_vec,                          # Eccentricity vector                 [–]
-        "n_vec"       : n_vec,                          # Ascending‑node vector               [–]
+        "n_vec"       : n_vec,                          # Ascending-node vector               [–]
 
         "r0"          : r0,                             # Departure position                  [m]
-        "v0"          : v0,                             # Departure velocity                  [m s⁻¹]
+        "v0"          : v0,                             # Departure velocity                  [m s⁻¹]
         "F2"          : F2,                             # Second focus position               [m]
 
-        "plane_basis" : (u, v, w),                      # Orthonormal frame (in‑plane u,v; w⊥)
-        "rot_dir"     : rot_dir,                        # +1 = CCW, −1 = CW (viewed along +w)
-        "mu"          : EARTH_MU,                       # Gravitational parameter             [m³ s⁻²]
+        "plane_basis" : (u, v, w),                      # Orthonormal frame (in-plane u,v; w⊥)
+        "rot_dir"     : rot_dir,                        # +1 = CCW, −1 = CW (viewed along +w)
+        "mu"          : EARTH_MU,                       # Gravitational parameter             [m³ s⁻²]
     }
 
     return result
