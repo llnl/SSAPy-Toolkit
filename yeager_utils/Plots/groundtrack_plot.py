@@ -32,7 +32,6 @@ def groundtrack_plot(
     t,
     ground_stations=None,
     save_path=None,
-    show=False,
     title="Ground Track",
     show_legend=True,
     fontsize=18,
@@ -52,8 +51,6 @@ def groundtrack_plot(
         (lat_deg, lon_deg) rows.
     save_path : str, optional
         If provided, saves the figure via `save_plot(fig, save_path)`.
-    show : bool, default True
-        Show the figure.
     title : str, optional
         Title at the top of the plot.
     show_legend : bool, default True
@@ -133,6 +130,4 @@ def groundtrack_plot(
     # finalize
     if save_path:
         save_plot(fig, save_path)
-    if show:
-        plt.show()
     return fig

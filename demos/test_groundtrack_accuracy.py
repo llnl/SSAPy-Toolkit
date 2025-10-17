@@ -4,6 +4,10 @@ from yeager_utils import RGEO, Time, ellipse_fit, figpath, groundtrack_dashboard
 
 from ssapy import Orbit, rv, AccelKepler
 from ssapy.propagator import KeplerianPropagator, RK78Propagator
+from matplotlib import rcParams
+import imageio_ffmpeg
+rcParams["animation.ffmpeg_path"] = imageio_ffmpeg.get_ffmpeg_exe()
+
 
 t0 = Time("2025-1-15")
 r1 = [0, 3 * RGEO, 0]
@@ -42,4 +46,4 @@ plt.savefig(out_path, dpi=150, bbox_inches="tight")
 print(f"Saved: {out_path}")
 
 groundtrack_plot(r=[r_ssa, r_tf], t=t_abs, save_path=figpath("test_transfer_vs_ssapy_diff_groundtrack.jpg"))
-# groundtrack_video(r=[r_ssa, r_tf], t=t_abs, save_path=figpath("test_transfer_vs_ssapy_diff_groundtrack.mp4"))
+groundtrack_video(r=[r_ssa, r_tf], t=t_abs, save_path=figpath("test_transfer_vs_ssapy_diff_groundtrack.mp4"))
