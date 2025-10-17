@@ -3,7 +3,7 @@ import h5py
 import numpy as np
 
 
-def _ensure_parent(h5: h5py.File | h5py.Group, key: str) -> h5py.Group:
+def _ensure_parent(h5, key: str) -> h5py.Group:
     """Ensure parent groups for a full path like 'a/b/c' exist; return the parent group."""
     parts = key.strip("/").split("/")
     if len(parts) == 1:
@@ -155,11 +155,11 @@ def read_h5_all(file_path: str) -> dict:
     return data_dict
 
 
-def h5_keys(file_path: str) -> list[str]:
+def h5_keys(file_path: str) -> list:
     """
     List full dataset paths in an HDF5 file.
     """
-    out: list[str] = []
+    out: list = []
     with h5py.File(file_path, 'r') as file:
         def traverse(group, path=''):
             for key, item in group.items():
@@ -172,7 +172,7 @@ def h5_keys(file_path: str) -> list[str]:
     return out
 
 
-def h5_root_keys(file_path: str) -> list[str]:
+def h5_root_keys(file_path: str) -> list:
     """
     List top-level members.
     """
@@ -180,7 +180,7 @@ def h5_root_keys(file_path: str) -> list[str]:
         return list(file.keys())
 
 
-def combine_h5(filename: str, files: list[str], verbose: bool = False, overwrite: bool = False) -> None:
+def combine_h5(filename: str, files: list, verbose: bool = False, overwrite: bool = False) -> None:
     """
     Merge datasets from multiple HDF5 files into `filename` without clobbering existing keys.
     """

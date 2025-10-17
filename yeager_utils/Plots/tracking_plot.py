@@ -1,5 +1,4 @@
 import numpy as np
-from typing import Optional
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from PIL import Image as PILImage
@@ -10,83 +9,73 @@ from ..constants import RGEO, EARTH_RADIUS
 from .plotutils import save_plot, make_black, valid_orbits
 
 
-def tracking_plot(r: np.ndarray, t: np.ndarray, ground_stations: Optional[np.ndarray] = None,
-                  limits: bool = False, title: str = '', figsize: tuple[int, int] = (12, 8),
-                  save_path: str = False, scale: float = 1) -> None:
+def tracking_plot(
+    r: np.ndarray,
+    t: np.ndarray,
+    ground_stations=None,
+    limits=None,
+    title: str = '',
+    figsize=(12, 8),
+    save_path=None,
+    scale: float = 1
+) -> None:
     """
     Create a 3D tracking plot of satellite positions over time on Earth's surface.
 
     Parameters
     ----------
     r : numpy.ndarray or list of numpy.ndarray
-        Satellite positions in GCRF coordinates. If a single numpy array, it represents the satellite's position vector over time. If a list of numpy arrays, it represents multiple satellite position vectors.
-
+        Satellite positions in GCRF coordinates. If a single numpy array, it represents
+        the satellite's position vector over time. If a list of numpy arrays, it
+        represents multiple satellite position vectors.
     t : numpy.ndarray
         Timestamps corresponding to the satellite positions.
-
-    ground_stations : list of tuples, optional
-        List of ground stations represented as (latitude, longitude) pairs. Default is None.
-
-    limits : float or bool, optional
-        The plot limits for x, y, and z axes. If a float, it sets the limits for all axes. If False, the limits are automatically determined based on the data. Default is False.
-
-    title : str, optional
-        Title for the plot. Default is an empty string.
-
-    figsize : tuple, optional
-        Figure size in inches (width, height). Default is (7, 8).
-
-    save_path : str or bool, optional
-        Path to save the plot as an image or PDF. If False, the plot is not saved. Default is False.
-
-    scale : int, optional
-        Scaling factor for the Earth's image. Default is 5.
+    ground_stations : list of (lat, lon) or None
+        Optional list of ground stations as (latitude, longitude) pairs [deg].
+    limits : float or None
+        Plot limits for x, y, z axes. If float, use that for all axes. If None,
+        limits are auto-determined from the data.
+    title : str
+        Plot title.
+    figsize : tuple
+        Figure size in inches (width, height).
+    save_path : str or None
+        If provided, path where the plot image/PDF will be saved.
+    scale : float
+        Scaling factor for the Earth image.
 
     Returns
     -------
-    matplotlib.figure.Figure
-        The created tracking plot figure.
-
-    Notes
-    -----
-    - The function supports plotting the positions of one or multiple satellites over time.
-    - Ground station locations can be optionally displayed on the plot.
-    - The limits parameter can be set to specify the plot's axis limits or automatically determined if set to False.
-    - The frame parameter determines the coordinate frame for the satellite positions, "gcrf" (default) or "itrf".
-
-    Author:
-    -------
-    Travis Yeager (yeager7@llnl.gov)
+    None
     """
-
     r, t = valid_orbits(r, t)
 
-    def _make_plot(r, t, ground_stations, limits, title, figsize, save_path, scale, orbit_index=''):
-        lon, lat, height = groundTrack(r, t)
+    def _make_plot(r_one, t_one, ground_stations, limits_val, title, figsize, save_path, scale):
+        lon, lat, height = groundTrack(r_one, t_one)
         lon[np.where(np.abs(np.diff(lon)) >= np.pi)] = np.nan
         lat[np.where(np.abs(np.diff(lat)) >= np.pi)] = np.nan
 
-        x = r[:, 0] / RGEO
-        y = r[:, 1] / RGEO
-        z = r[:, 2] / RGEO
+        x = r_one[:, 0] / RGEO
+        y = r_one[:, 1] / RGEO
+        z = r_one[:, 2] / RGEO
 
-        # Handling limits
-        if isinstance(limits, (int, float)):  # Custom limit
-            limits_plot = limits
-        elif limits is False:  # Auto limit based on the data
+        # Resolve plot limits
+        if isinstance(limits_val, (int, float)):
+            limits_plot = limits_val
+        elif limits_val is None:
             limits_plot = np.nanmax(np.abs([x, y, z])) * 1.1
-        else:  # If limits is an array (per satellite data)
-            limits_plot = limits
+        else:
+            limits_plot = limits_val
 
         dotcolors = cm.rainbow(np.linspace(0, 1, len(x)))
 
-        # Creating plot
+        # Figure & Earth texture
         fig = plt.figure(dpi=100, figsize=figsize)
         fig.patch.set_facecolor('black')
         earth_png = PILImage.open(find_file("earth", ext=".png"))
-        earth_png = earth_png.resize((5400 // scale, 2700 // scale))
+        earth_png = earth_png.resize((5400 // max(1, int(scale)), 2700 // max(1, int(scale))))
 
-        # 1st subplot (longitude-latitude plot)
+        # 1) Long/Lat world map
         ax = fig.add_subplot(2, 3, (1, 2))
         ax.imshow(earth_png, extent=[-180, 180, -90, 90])
         ax.plot(np.rad2deg(lon), np.rad2deg(lat))
@@ -101,7 +90,7 @@ def tracking_plot(r: np.ndarray, t: np.ndarray, ground_stations: Optional[np.nda
         ax.tick_params(axis='both', colors='white')
         ax.set_aspect('equal')
 
-        # 2nd subplot (longitude-latitude plot zoomed)
+        # 2) Long/Lat zoomed
         ax = fig.add_subplot(2, 3, 3)
         ax.imshow(earth_png, extent=[-180, 180, -90, 90])
         ax.plot(np.rad2deg(lon), np.rad2deg(lat))
@@ -115,13 +104,13 @@ def tracking_plot(r: np.ndarray, t: np.ndarray, ground_stations: Optional[np.nda
         ax.tick_params(axis='both', colors='white')
         ax.set_aspect('equal')
 
-        # 3rd subplot (XY plot)
+        # 3) XY
         ax = fig.add_subplot(2, 3, 4)
-        ax.scatter(0, 0, color='blue', s=(100 * EARTH_RADIUS / RGEO)**2)
+        ax.scatter(0, 0, color='blue', s=(100 * EARTH_RADIUS / RGEO) ** 2)
         ax.scatter(x, y, color=dotcolors, s=1)
         ax.set_xlim([-limits_plot, limits_plot])
         ax.set_ylim([-limits_plot, limits_plot])
-        ax.set_aspect('equal')  # aspect ratio is 1:1:1 in data space
+        ax.set_aspect('equal')
         ax.set_xlabel('x [GEO]', color='white')
         ax.set_ylabel('y [GEO]', color='white')
         ax.set_title('XY', color='white')
@@ -129,13 +118,13 @@ def tracking_plot(r: np.ndarray, t: np.ndarray, ground_stations: Optional[np.nda
         ax.set_facecolor('black')
         ax.grid(True, color='grey', linestyle='--', linewidth=0.5)
 
-        # 4th subplot (XZ plot)
+        # 4) XZ
         ax = fig.add_subplot(2, 3, 5)
-        ax.scatter(0, 0, color='blue', s=(100 * EARTH_RADIUS / RGEO)**2)
+        ax.scatter(0, 0, color='blue', s=(100 * EARTH_RADIUS / RGEO) ** 2)
         ax.scatter(x, z, color=dotcolors, s=1)
         ax.set_xlim([-limits_plot, limits_plot])
         ax.set_ylim([-limits_plot, limits_plot])
-        ax.set_aspect('equal')  # aspect ratio is 1:1:1 in data space
+        ax.set_aspect('equal')
         ax.set_xlabel('x [GEO]', color='white')
         ax.set_ylabel('z [GEO]', color='white')
         ax.set_title('XZ', color='white')
@@ -143,13 +132,13 @@ def tracking_plot(r: np.ndarray, t: np.ndarray, ground_stations: Optional[np.nda
         ax.set_facecolor('black')
         ax.grid(True, color='grey', linestyle='--', linewidth=0.5)
 
-        # 5th subplot (YZ plot)
+        # 5) YZ
         ax = fig.add_subplot(2, 3, 6)
-        ax.scatter(0, 0, color='blue', s=(100 * EARTH_RADIUS / RGEO)**2)
+        ax.scatter(0, 0, color='blue', s=(100 * EARTH_RADIUS / RGEO) ** 2)
         ax.scatter(y, z, color=dotcolors, s=1)
         ax.set_xlim([-limits_plot, limits_plot])
         ax.set_ylim([-limits_plot, limits_plot])
-        ax.set_aspect('equal')  # aspect ratio is 1:1:1 in data space
+        ax.set_aspect('equal')
         ax.set_xlabel('y [GEO]', color='white')
         ax.set_ylabel('z [GEO]', color='white')
         ax.set_title('YZ', color='white')
@@ -164,16 +153,27 @@ def tracking_plot(r: np.ndarray, t: np.ndarray, ground_stations: Optional[np.nda
             save_plot(fig, save_path)
         return fig
 
-    r, t = valid_orbits(r, t)
-    for i, row in enumerate(r):
-        t_current = t[i]
-        if isinstance(limits, (int, float)):  # Custom limit for each orbit
-            limits_plot = limits
-        else:  # Calculate the limit dynamically based on the satellite data
-            limits_plot = np.nanmax([np.nanmax(norm(row) / RGEO) for row in r]) * 1.2
+    # Compute a consistent limit across all orbits if not provided
+    if isinstance(limits, (int, float)):
+        limits_for_all = limits
+    else:
+        limits_for_all = None
+        try:
+            limits_for_all = np.nanmax([np.nanmax(norm(rr) / RGEO) for rr in r]) * 1.2
+        except Exception:
+            pass
+
+    fig = None
+    for i, r_one in enumerate(r):
+        t_one = t[i]
         fig = _make_plot(
-            row, t_current, ground_stations=ground_stations,
-            limits=limits_plot, title=title, figsize=figsize,
-            save_path=save_path, scale=scale, orbit_index=i
-            )
+            r_one,
+            t_one,
+            ground_stations=ground_stations,
+            limits_val=limits_for_all if limits_for_all is not None else limits,
+            title=title,
+            figsize=figsize,
+            save_path=save_path,
+            scale=scale
+        )
     return fig

@@ -240,10 +240,10 @@ def sortbynum(files: list) -> list:
     Sorts a list of file paths based on numbers embedded in the filenames.
 
     Parameters:
-        files (list[str]): list of file paths to sort.
+        files (list): list of file paths to sort.
 
     Returns:
-        list[str]: Sorted list of file paths.
+        list: Sorted list of file paths.
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     if len(files[0].split('/')) > 1:

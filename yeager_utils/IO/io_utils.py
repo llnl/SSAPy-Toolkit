@@ -71,9 +71,9 @@ def rmfile(pathname: str) -> None:
 def listdir(
     dir_path: str = '*',
     files_only: bool = False,
-    exclude: str | None = None,
+    exclude: str = None,
     do_sort: bool = True,
-) -> list[str]:
+) -> list:
     """
     List files in a directory, with options to filter, exclude, and sort.
     """
@@ -96,12 +96,12 @@ def listdir(
     return files
 
 
-def get_image_paths(folder_path: str, sort_by_number: bool = True) -> list[str]:
+def get_image_paths(folder_path: str, sort_by_number: bool = True) -> list:
     """
     Returns a list of full paths for all image files in the specified folder.
     """
     image_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp')
-    image_paths: list[str] = []
+    image_paths: list = []
 
     if not os.path.exists(folder_path):
         raise ValueError(f"The folder path '{folder_path}' does not exist")
@@ -144,12 +144,12 @@ def get_image_paths(folder_path: str, sort_by_number: bool = True) -> list[str]:
     return image_paths
 
 
-def pd_flatten(data: list[str | float], factor: float = 1) -> list[float]:
+def pd_flatten(data: list, factor: float = 1) -> list:
     """
     Flatten a list of data by splitting string elements like '[1,2,3]'
     and converting them into floats. Divides each float by `factor`.
     """
-    tmp: list[str | float] = []
+    tmp: list = []
     for x in data:
         try:
             tmp.extend(x[1:-1].split(','))
@@ -174,11 +174,11 @@ def pdstr_to_arrays(df) -> np.ndarray:
     return df.apply(str_to_array).to_numpy()
 
 
-def allfiles(dirName: str = os.getcwd()) -> list[str]:
+def allfiles(dirName: str = os.getcwd()) -> list:
     """
     Get a list of all files in the directory tree starting at the given path.
     """
-    listOfFiles: list[str] = []
+    listOfFiles: list = []
     for (dirpath, dirnames, filenames) in os.walk(dirName):
         listOfFiles += [os.path.join(dirpath, file) for file in filenames]
     return listOfFiles

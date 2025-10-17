@@ -1,7 +1,6 @@
 from pathlib import Path
 import re
 import warnings
-from typing import Iterable, List, Tuple, Optional
 
 import numpy as np
 import imageio.v2 as imageio
@@ -17,8 +16,7 @@ def _natural_key(s: str):
             for tok in re.split(r"(\d+)", s)]
 
 
-def _sort_frames(paths: Iterable[str],
-                 warn_on_ambiguous: bool = True) -> List[str]:
+def _sort_frames(paths, warn_on_ambiguous: bool = True) -> list:
     """
     Sort paths naturally. Warn if keys collide or paths look unsortable.
     """
@@ -63,7 +61,7 @@ def _sort_frames(paths: Iterable[str],
 
 
 def _fit_to_canvas(img: Image.Image,
-                   target_size: Tuple[int, int],
+                   target_size: tuple,
                    bg_color=(255, 255, 255, 0),
                    resample=Image.LANCZOS) -> Image.Image:
     """
@@ -93,15 +91,15 @@ def _fit_to_canvas(img: Image.Image,
 
 def write_gif(
     gif_name: str,
-    frames: Iterable[str],
+    frames,
     fps: int = 30,
     *,
-    duration: Optional[float] = None,   # seconds per frame; overrides fps if provided
-    loop: int = 0,                      # 0 = forever
+    duration: float = None,   # seconds per frame; overrides fps if provided
+    loop: int = 0,            # 0 = forever
     sort_frames: bool = True,
     warn_on_ambiguous: bool = True,
     uniform_size: bool = True,          # make all frames the same size
-    target_size: Optional[Tuple[int, int]] = None,  # if None, use size of first frame
+    target_size: tuple = None,          # if None, use size of first frame
     bg_color=(255, 255, 255, 0),        # padding color if sizes differ (RGBA)
 ) -> None:
     """
