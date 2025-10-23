@@ -3,59 +3,44 @@ from pathlib import Path
 HOME_FIG_DIR = Path.home() / "yu_figures"
 FALLBACK_DIR = Path.cwd() / "yu_figures"
 
-def figpath(filename, fmt=None, clean_conflicts=True):
+# Known extensions that should be treated as real file types
+_KNOWN_EXTS = {
+    ".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp", ".gif",
+    ".svg", ".svgz", ".pdf", ".ps", ".eps",
+    ".mp4", ".mov", ".avi", ".mpeg", ".mpg", ".webm"
+}
+
+def figpath(filename):
     """
-    Return a target file path for `filename` inside ~/Figures (fallback ./figures).
+    Return a target file path for `filename` inside ~/yu_figures (fallback ./yu_figures).
 
-    Behavior
-    --------
-    - If `fmt` is None and `filename` has an extension, that extension is used.
-    - If `fmt` is None and `filename` has no extension, default to ".jpg".
-    - If `fmt` is provided, it overrides any extension in `filename`.
-
-    Parameters
-    ----------
-    filename : str or Path
-        Desired base name (directory part is ignored; file goes into the chosen fig dir).
-    fmt : str or None
-        Extension to use (with or without leading dot), e.g. ".png" or "png". Optional.
-    clean_conflicts : bool
-        If True, remove files in the chosen directory that share the same stem
-        but a different extension.
-
-    Returns
-    -------
-    str
-        Path to the target file as a string.
-
-    Raises
-    ------
-    RuntimeError
-        If neither ~/Figures nor ./figures can be created or accessed.
+    Rules:
+      - Directory parts in `filename` are ignored; only the base name is used.
+      - A trailing dot-segment is treated as an extension ONLY if it matches a known extension
+        (case-insensitive). Otherwise, the dot stays in the name and '.jpg' is appended.
+      - If no extension is present, default to '.jpg'.
     """
-    filename = Path(filename)
-    base_name = filename.stem
+    # Use only the base name; ignore any directories the caller passed
+    name = Path(filename).name
 
-    if fmt is None:
-        ext = filename.suffix if filename.suffix else ".jpg"
+    p = Path(name)
+    suffix = p.suffix  # last dot segment
+    suffix_lc = suffix.lower()
+
+    if suffix and suffix_lc in _KNOWN_EXTS:
+        base_name = p.stem  # remove that real extension
+        ext = suffix  # preserve caller's case
     else:
-        ext = fmt if str(fmt).startswith(".") else f".{fmt}"
+        base_name = name  # keep entire name (including any dots) as the stem
+        ext = ".jpg"
 
+    # Pick a writable directory
     for d in (HOME_FIG_DIR, FALLBACK_DIR):
         try:
             d.mkdir(parents=True, exist_ok=True)
             target = d / f"{base_name}{ext}"
-
-            if clean_conflicts:
-                for f in d.iterdir():
-                    if f.is_file() and f.stem == base_name and f.suffix != ext:
-                        try:
-                            f.unlink()
-                        except Exception:
-                            pass  # ignore failures cleaning unrelated files
-
             return str(target)
         except (OSError, PermissionError):
             continue
 
-    raise RuntimeError("Could not create or access a figure directory (~/Figures or ./figures).")
+    raise RuntimeError("Could not create or access a figure directory (~/yu_figures or ./yu_figures).")

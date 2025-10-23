@@ -67,14 +67,7 @@ def ssapy_prop(propkw=ssapy_kwargs()):
     # Accelerations - pass a body object or string of body name.
     moon = get_body("moon")
     sun = get_body("Sun")
-    Mercury = get_body("Mercury")
-    Venus = get_body("Venus")
     Earth = get_body("Earth", model="EGM2008")
-    Mars = get_body("Mars")
-    Jupiter = get_body("Jupiter")
-    Saturn = get_body("Saturn")
-    Uranus = get_body("Uranus")
-    Neptune = get_body("Neptune")
     aEarth = AccelKepler() + AccelHarmonic(Earth, 140, 140)
     aSun = AccelThirdBody(sun)
     aMoon = AccelThirdBody(moon) + AccelHarmonic(moon, 20, 20)
@@ -112,10 +105,7 @@ def ssapy_orbit(orbit=None, a=None, e=0, i=0, pa=0, raan=0, ta=0, r=None, v=None
 
     try:
         r, v = rv(orbit=orbit, time=t, propagator=prop)
-        if time_is_None:
-            return r, v, t
-        else:
-            return r, v
+        return r, v, t
     except (RuntimeError, ValueError) as err:
         print(err)
         return np.nan, np.nan, np.nan

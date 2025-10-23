@@ -37,6 +37,7 @@ dependencies = [
   "gitpython",
   "h5py",
   "imageio",
+  "imageio-ffmpeg",
   "ipykernel",
   "ipympl",
   "ipython",
