@@ -24,4 +24,4 @@ for peri in tqdm(np.linspace(10e3, EARTH_RADIUS, 10)):
     rs.append(r)
 
 
-orbit_plot_xy(rs, save_path=figpath("testing_ellipses.jpg"), pad=500, title='Point source Earth')
+orbit_plot_xy(rs, save_path=figpath("tests/testing_ellipses.jpg"), pad=500, title='Point source Earth')

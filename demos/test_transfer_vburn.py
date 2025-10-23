@@ -17,9 +17,9 @@ if __name__ == "__main__":
 
     print("Plotting negative v target")
     v_target = -400
-    transfer_velocity_continuous(r0, v0, v_target=v_target, plot=True, save_path=figpath("demo_velocity_burn_negative_v.jpg"))
+    transfer_velocity_continuous(r0, v0, v_target=v_target, plot=True, save_path=figpath("tests/demo_velocity_burn_negative_v.jpg"))
 
     print("Plotting negative v target lower accel")
     v_target = -400
     a_thrust = 0.05
-    transfer_velocity_continuous(r0, v0, v_target=v_target, a_thrust=a_thrust, max_time=3*3600, plot=True, save_path=figpath("demo_velocity_burn_negative_v_small_accel.jpg"))
+    transfer_velocity_continuous(r0, v0, v_target=v_target, a_thrust=a_thrust, max_time=3*3600, plot=True, save_path=figpath("tests/demo_velocity_burn_negative_v_small_accel.jpg"))

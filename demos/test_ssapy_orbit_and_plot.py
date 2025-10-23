@@ -1,3 +1,4 @@
+from yeager_utils import figpath
 from ssapy import *
 import numpy as np
 

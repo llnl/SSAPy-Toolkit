@@ -35,7 +35,7 @@ if __name__ == "__main__":
         plot_simple,
         x, y,
         label="damped wave",
-        save_path=figpath("test_chunks.gif"),
+        save_path=figpath("tests/test_chunks.gif"),
         array_arg_indices=(0, 1),
         mode="chunks",
         chunk_size=60,
@@ -59,7 +59,7 @@ if __name__ == "__main__":
     out2 = gifify(
         plot_returns_axes,
         x, y,
-        save_path=figpath("test_cumulative.gif"),
+        save_path=figpath("tests/test_cumulative.gif"),
         array_arg_indices=(0, 1),
         mode="cumulative",
         step=20,
@@ -80,7 +80,7 @@ if __name__ == "__main__":
     out3 = gifify(
         plot_with_ax,
         x, y,
-        save_path=figpath("test_sliding.gif"),
+        save_path=figpath("tests/test_sliding.gif"),
         array_arg_indices=(0, 1),
         mode="sliding",
         chunk_size=50,
@@ -103,7 +103,7 @@ if __name__ == "__main__":
     out4 = gifify(
         groundtrack_dashboard,
         r, t.gps,
-        save_path=figpath("test_groundtrack.gif"),
+        save_path=figpath("tests/test_groundtrack.gif"),
         array_arg_indices=(0, 1),
         mode="sliding",
         chunk_size=120,

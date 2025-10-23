@@ -203,7 +203,7 @@ def test_subsolar_points():
                     r_check,
                     t,
                     show=SHOW_FIGS,
-                    save_path=figpath(f"test_subsolar_{label.replace(' ', '_')}_"),
+                    save_path=figpath(f"tests/test_subsolar_{label.replace(' ', '_')}_"),
                 )
             except Exception as err:
                 print("  groundtrack_dashboard(subsolar) failed:", err)
@@ -227,7 +227,7 @@ def main():
     print("  Subsolar checks:", "OK" if ok3 else "FAIL")
 
     if SAVE_FIGS:
-        print("\nFigures saved under prefixes like:", figpath("test_subsolar_..."))
+        print("\nFigures saved under prefixes like:", figpath("tests/test_subsolar_..."))
 
 if __name__ == "__main__":
     main()

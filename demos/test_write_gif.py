@@ -84,7 +84,7 @@ def create_varying_frames(n, base_size=(320, 240), subdir="demo_frames_a"):
         h = int(bh * (0.75 + 0.5 * s))
         img = make_frame((max(40, w), max(40, h)), i, n)
 
-        p = Path(figpath("%s/frame_%d.png" % (subdir, i)))
+        p = Path(figpath("tests/%s/frame_%d.png" % (subdir, i)))
         p.parent.mkdir(parents=True, exist_ok=True)
         img.save(p)
         paths.append(str(p))
@@ -100,7 +100,7 @@ def create_constant_frames(n, size=(320, 240), subdir="demo_frames_b"):
     paths = []
     for i in range(n):
         img = make_frame(size, i, n)
-        p = Path(figpath("%s/frame_%02d.png" % (subdir, i)))
+        p = Path(figpath("tests/%s/frame_%02d.png" % (subdir, i)))
         p.parent.mkdir(parents=True, exist_ok=True)
         img.save(p)
         paths.append(str(p))
@@ -153,7 +153,7 @@ def main():
 
     # 1) Basic usage: natural sort on unpadded names; 10 fps; loop forever
     write_gif(
-        gif_name=str(figpath("out/gif_basic.gif")),
+        gif_name=str(figpath("tests/gif_basic.gif")),
         frames=paths_a,
         fps=10,
         sort_frames=True,
@@ -163,7 +163,7 @@ def main():
 
     # 2) Uniform canvas: normalize all frames to a fixed size with padding
     write_gif(
-        gif_name=str(figpath("out/gif_uniform_400x300.gif")),
+        gif_name=str(figpath("tests/gif_uniform_400x300.gif")),
         frames=paths_a,
         fps=12,
         sort_frames=True,
@@ -175,7 +175,7 @@ def main():
 
     # 3) Duration override: fixed 0.20 s per frame, loop once, use constant-size set
     write_gif(
-        gif_name=str(figpath("out/gif_duration_loop1.gif")),
+        gif_name=str(figpath("tests/gif_duration_loop1.gif")),
         frames=paths_b,
         duration=0.20,  # overrides fps
         loop=1,         # play twice total: initial + 1 repeat
@@ -193,7 +193,7 @@ def main():
         print("Warning: no frames found for gif_glob.gif under:", frames_b_dir)
     else:
         write_gif(
-            gif_name=str(figpath("out/gif_glob.gif")),
+            gif_name=str(figpath("tests/out/gif_glob.gif")),
             frames=(str(p) for p in frame_matches),
             fps=15,
             sort_frames=True,
@@ -204,7 +204,7 @@ def main():
     cleanup_frames(paths_a, paths_b)
 
     print("\nDone.")
-    print("Check the output GIFs under:", figpath("out/"))
+    print("Check the output GIFs under:", figpath("tests/"))
 
 
 if __name__ == "__main__":

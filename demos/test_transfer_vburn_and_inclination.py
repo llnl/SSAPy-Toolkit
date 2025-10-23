@@ -26,7 +26,7 @@ if __name__ == "__main__":
     delta_v = -800  # Target inclination change
     r2, v2, t2 = transfer_inclination_continuous(
         r1[-1], v1[-1], delta_v=delta_v, a_thrust=a_thrust,
-        plot=False, save_path=figpath("demo_combined_inclination_burn.jpg")
+        plot=False, save_path=figpath("tests/demo_combined_inclination_burn.jpg")
     )
     print(f"After inclination burn: r = {r2[-1]}, v = {v2[-1]}, t = {t2[-1]:.1f} s\n")
 

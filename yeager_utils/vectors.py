@@ -72,7 +72,7 @@ def norm(arr):
     return np.sqrt(np.einsum("...i,...i", arr, arr))
 
 
-def rotate_vector(v_unit, theta, phi, plot=False, save_idx=False):
+def rotate_vector(v_unit, theta, phi, save_path=False):
     v_unit = v_unit / np.linalg.norm(v_unit, axis=-1)
     if np.all(np.abs(v_unit) != np.max(np.abs(v_unit))):
         perp_vector = np.cross(v_unit, np.array([1, 0, 0]))
@@ -115,7 +115,7 @@ def rotate_vector(v_unit, theta, phi, plot=False, save_idx=False):
 
     v2 = np.dot(R2, v1)
 
-    if plot:
+    if save_path:
         plt.rcParams.update({'font.size': 9, 'figure.facecolor': 'black'})
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
@@ -134,11 +134,9 @@ def rotate_vector(v_unit, theta, phi, plot=False, save_idx=False):
         ax.set_ylim(-1, 1)
         ax.set_zlim(-1, 1)
         plt.grid(True)
-        if save_idx is not False:
-            from .Plots.misc_plotting import save_plot_to_png
-            from .Plots import figpath
-            ax.set_title(f'Vector Plot\ntheta: {np.degrees(theta):.0f}, phi: {np.degrees(phi):.0f}', color='white')
-            save_plot_to_png(fig, figpath(f'plots_gif/rotate_vector_frames/{save_idx}.png'))
+        from .Plots import save_plot
+        ax.set_title(f'Vector Plot\ntheta: {np.degrees(theta):.0f}, phi: {np.degrees(phi):.0f}', color='white')
+        save_plot(fig, save_path=save_path)
     return v2 / np.linalg.norm(v2, axis=-1)
 
 

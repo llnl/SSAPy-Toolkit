@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 def test_coordinate_transforms():
     t = get_times(duration=(1, 'days'), freq=(1, 'min'))
-    r_gcrf_orig, v = ssapy_orbit(a=2 * RGEO, e=0.3, t=t)
+    r_gcrf_orig, v, t_ssapy = ssapy_orbit(a=2 * RGEO, e=0.3, t=t)
 
     r_itrf = gcrf_to_itrf(r_gcrf_orig, t)
     print("Original GCRF:\n", r_gcrf_orig)

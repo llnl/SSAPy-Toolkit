@@ -1,4 +1,4 @@
-from yeager_utils import *
+from yeager_utils import figpath, Orbit, RGEO, Time, orbit_plot_xy, orbit_plot, rv
 import numpy as np
 from tqdm import tqdm
 
@@ -10,20 +10,21 @@ for trueAnomaly in np.arange(0, 360, 5):
     # r, v, t = quickint(orbit)
 
     rs.append(orbit.r)
-orbit_plot_xy(rs, show=True)
+orbit_plot_xy(rs, show=True, save_path=figpath("tests/ssapy_orbit_sampling_trueAnomaly"))
 
-print("Second part")
+print("Time sampling")
 rs = []
 for t in tqdm(np.arange(0, orbit.period, 600)):
     orbit_new = orbit.at(t)
 
     rs.append(orbit_new.r)
-orbit_plot(rs, show=True)
+
+orbit_plot(np.array(rs), show=True, save_path=figpath("tests/ssapy_orbit_sampling_time"))
 
 
 print("Full orbit sampled.")
 rs, v = rv(orbit, np.arange(0, orbit.period, 600))
-orbit_plot(rs, show=True)
+orbit_plot(rs, show=True, save_path=figpath("tests/ssapy_orbit_object"))
 
 
 print("Complete.")

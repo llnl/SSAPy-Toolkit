@@ -1,303 +1,139 @@
-from ..constants import RGEO, EARTH_RADIUS, MOON_RADIUS
-from ..Coordinates import gcrf_to_itrf, gcrf_to_lunar, gcrf_to_lunar_fixed
-from .plotutils import valid_orbits, save_plot
-from ..Compute import find_smallest_bounding_cube
-from ssapy import get_body
+#!/usr/bin/env python3
+"""
+Test: ellipse_fit time array + SSAPy forward/backward propagation (Time-normalized)
 
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
+Fix for VarType.MIXED_LIST:
+- Ensure that the 't' argument passed to orbit_plot is a list of the SAME type.
+- Here we standardize all times to yeager_utils.Time arrays.
+
+Outputs:
+- tests/testing_ellipse_fit_against_ssapy_gcrf.png
+- tests/testing_ellipse_fit_against_ssapy_lunar.png
+"""
+
+# ----------------------------------------------------------------------
+# Imports
+# ----------------------------------------------------------------------
 import numpy as np
+from ssapy.simple import ssapy_orbit
+from ssapy.plotUtils import orbit_plot
 
-
-def orbit_plot(r, t=None, title='', figsize=(7, 7), save_path=False, frame="gcrf", show=False, c='black', pad=1):
+# ----------------------------------------------------------------------
+# Helpers
+# ----------------------------------------------------------------------
+def times_as_Time(duration_s, n_samples):
     """
-    Plots the trajectory of an orbiting body in different reference frames.
-
-    The function generates four subplots:
-    1. XY plane projection
-    2. XZ plane projection
-    3. YZ plane projection
-    4. 3D representation of the orbit
-
-    Parameters:
-    -----------
-    r : numpy array or list of numpy arrays
-        Position vector(s) of the orbiting object(s).
-        If a single numpy array, it should have shape (N, 3) representing [x, y, z] positions.
-        If a list of numpy arrays, each element should have shape (Ni, 3) for multiple trajectories.
-
-    t : numpy array, list, or None, optional
-        Time array corresponding to `r`.
-        If `r` is a list of arrays, `t` should be a list of corresponding time arrays.
-
-    title : str, optional
-        Title of the plot.
-
-    figsize : tuple, optional
-        Figure size in inches. Default is (7, 7).
-
-    save_path : str or bool, optional
-        Path to save the figure. If False, the plot is not saved.
-
-    frame : str, optional
-        Reference frame for the plot. Options:
-        - "gcrf" (Geocentric Celestial Reference Frame)
-        - "itrf" (International Terrestrial Reference Frame)
-        - "lunar" (Lunar-centered frame)
-        - "lunar axis" (Moon on x-axis frame)
-
-    show : bool, optional
-        If True, displays the plot.
-
-    Returns:
-    --------
-    None
-
-    Author:
-    -------
-    Travis Yeager (yeager7@llnl.gov)
+    Build a Time array of length n_samples spanning 0..duration_s.
+    This avoids mixed types when plotting multiple trajectories.
     """
-    from ..Orbital_Mechanics import lagrange_points_lunar_frame, lagrange_points_lunar_fixed_frame
+    out = get_times(duration=(float(duration_s), "s"), freq=(int(n_samples), "s"))
+    # get_times may return (TimeArray, step_seconds, etc.) -> take the first item
+    return out[0] if isinstance(out, (list, tuple)) else out
 
-    r, t = valid_orbits(r, t)
+# ----------------------------------------------------------------------
+# Main
+# ----------------------------------------------------------------------
+if __name__ == "__main__":
+    # Two ECI points (meters)
+    P1 = np.array([RGEO, 0.0, 0.0])
+    P2 = np.array([-0.0 * RGEO, -1.1 * RGEO, 0.1 * RGEO])
 
-    if 'w' in c:
-        textcolor = 'black'
-        plotcolor = 'white'
-    elif 'b' in c:
-        textcolor = 'white'
-        plotcolor = 'black'
+    # --------------------------------------------------------------
+    # Run ellipse_fit (choose ccw=True by default)
+    # --------------------------------------------------------------
+    from yeager_utils import RGEO, get_times, pprint, figpath, ellipse_fit
+    res = ellipse_fit(
+        P1,
+        P2,
+        n_pts=400,
+        plot=False,
+        inc=0.0,
+        ccw=True,
+    )
+    pprint(res)
 
-    fig = plt.figure(dpi=100, figsize=figsize, facecolor=plotcolor)
-    ax1 = fig.add_subplot(2, 2, 1)
-    ax2 = fig.add_subplot(2, 2, 2)
-    ax3 = fig.add_subplot(2, 2, 3)
-    ax4 = fig.add_subplot(2, 2, 4, projection='3d')
+    # Unpack
+    r_arc   = res["r"]           # (N,3)
+    v_arc   = res["v"]           # (N,3)
+    t_rel   = np.asarray(res["t_rel"], dtype=float)  # seconds, increasing
+    r0, v0  = res["r0"], res["v0"]
+    r2, v2  = r_arc[-1], v_arc[-1]
 
-    bounds = {"lower": np.array([np.inf, np.inf, np.inf]), "upper": np.array([-np.inf, -np.inf, -np.inf])}
+    T_flight = float(t_rel[-1])
+    N_samps  = int(t_rel.shape[0])
 
-    if any(np.max(np.linalg.norm(xyz, axis=-1)) >= 0.95 * RGEO for xyz in r):
-        unit_conversion = RGEO
-        unit_label = 'GEO'
-    else:
-        unit_conversion = 1e3
-        unit_label = 'km'
+    # Build a Time array for the ellipse_fit arc: [t0 .. t0+T_flight]
+    t_fit = times_as_Time(T_flight, N_samps)  # Time array
 
-    for orbit_index in range(len(r)):
-        xyz = r[orbit_index]
-        t_current = t[orbit_index]
+    # --------------------------------------------------------------
+    # SSAPy forward: start from (r0,v0), propagate for T_flight
+    # --------------------------------------------------------------
+    r_fwd, v_fwd, t_fwd_raw = ssapy_orbit(
+        r=r0,
+        v=v0,
+        duration=(T_flight, "s"),
+        freq=(N_samps, "s"),
+    )
+    # Force times for plotting to be Time arrays (match t_fit exactly)
+    t_fwd = t_fit
 
-        r_moon = get_body("moon").position(t_current).T
-        r_earth = np.zeros(np.shape(r_moon))
+    # --------------------------------------------------------------
+    # SSAPy "backward": start from (r2,v2), integrate forward and reverse
+    # --------------------------------------------------------------
+    r_b_fwd, v_b_fwd, t_b_fwd_raw = ssapy_orbit(
+        r=r2,
+        v=v2,
+        duration=(T_flight, "s"),
+        freq=(N_samps, "s"),
+    )
+    r_back = r_b_fwd[::-1].copy()
+    # Descending Time array for the backward run (explicitly requested)
+    t_back = t_fit[::-1].copy()
 
-        # Dictionary of frame transformations and titles
-        def get_main_category(frame):
-            variant_mapping = {
-                "gcrf": "gcrf",
-                "gcrs": "gcrf",
-                "itrf": "itrf",
-                "itrs": "itrf",
-                "lunar": "lunar",
-                "lunar_fixed": "lunar",
-                "lunar fixed": "lunar",
-                "lunar_centered": "lunar",
-                "lunar centered": "lunar",
-                "lunarearthfixed": "lunar axis",
-                "lunarearth": "lunar axis",
-                "lunar axis": "lunar axis",
-                "lunar_axis": "lunar axis",
-                "lunaraxis": "lunar axis",
-            }
-            return variant_mapping.get(frame.lower())
+    # --------------------------------------------------------------
+    # Plot in GCRF and Lunar frames; ensure t is a list of Time arrays
+    # --------------------------------------------------------------
+    r_list = [r_arc, r_fwd, r_back]
+    t_list = [t_fit, t_fwd, t_back]  # all Time, no mixing
 
-        frame_transformations = {
-            "gcrf": ("GCRF", None),
-            "itrf": ("ITRF", gcrf_to_itrf),
-            "lunar": ("Lunar Frame", gcrf_to_lunar_fixed),
-            "lunar axis": ("Moon on x-axis Frame", gcrf_to_lunar),
-        }
+    save_gcrf = figpath("tests/testing_ellipse_fit_against_ssapy_gcrf.png")
+    orbit_plot(
+        r_list,
+        t=t_list,
+        title="Ellipse-fit arc vs SSAPy forward/backward (GCRF)",
+        frame="gcrf",
+        show=False,
+        save_path=save_gcrf,
+        c="black",
+        pad=1,
+    )
+    print(f"[saved] {save_gcrf}")
 
-        # Check if the frame is in the dictionary, and set central_dot accordingly
-        frame = get_main_category(frame)
-        if frame in frame_transformations:
-            title2, transform_func = frame_transformations[frame]
-            if transform_func:
-                xyz = transform_func(xyz, t_current)
-                r_moon = transform_func(r_moon, t_current)
-                r_earth = transform_func(r_earth, t_current)
-        else:
-            raise ValueError("Unknown plot type provided. Accepted: gcrf, itrf, lunar, lunar fixed")
+    save_lunar = figpath("tests/testing_ellipse_fit_against_ssapy_lunar.png")
+    orbit_plot(
+        r_list,
+        t=t_list,
+        title="Ellipse-fit arc vs SSAPy forward/backward (Lunar)",
+        frame="lunar",
+        show=False,
+        save_path=save_lunar,
+        c="black",
+        pad=1,
+    )
+    print(f"[saved] {save_lunar}")
 
-        xyz = xyz / unit_conversion
-        r_moon = r_moon / unit_conversion
-        r_earth = r_earth / unit_conversion
+    # --------------------------------------------------------------
+    # Endpoint sanity checks
+    # --------------------------------------------------------------
+    err_fwd_start = np.linalg.norm(r_fwd[0] - r0)
+    err_fwd_end   = np.linalg.norm(r_fwd[-1] - r2)
+    err_back_start = np.linalg.norm(r_back[0] - r2)
+    err_back_end   = np.linalg.norm(r_back[-1] - r0)
 
-        lower_bound_temp, upper_bound_temp = find_smallest_bounding_cube(xyz, pad=pad)
-        bounds["lower"] = np.minimum(bounds["lower"], lower_bound_temp)
-        bounds["upper"] = np.maximum(bounds["upper"], upper_bound_temp)
+    print("\nEndpoint checks [m]:")
+    print(f"  Forward start vs P1: {err_fwd_start:.6e}")
+    print(f"  Forward end   vs P2: {err_fwd_end:.6e}")
+    print(f"  Backward start vs P2: {err_back_start:.6e}")
+    print(f"  Backward end   vs P1: {err_back_end:.6e}")
 
-        if np.size(r_moon[:, 0]) > 1:
-            grey_colors = cm.Greys(np.linspace(0, .8, len(r_moon[:, 0])))[::-1]
-            blues = cm.Blues(np.linspace(.4, .9, len(r_moon[:, 0])))[::-1]
-        else:
-            grey_colors = "grey"
-            blues = 'Blue'
-        plot_settings = {
-            "gcrf": {
-                "primary_color": "blue",
-                "primary_size": (EARTH_RADIUS / unit_conversion),
-                "secondary_x": r_moon[:, 0],
-                "secondary_y": r_moon[:, 1],
-                "secondary_z": r_moon[:, 2],
-                "secondary_color": grey_colors,
-                "secondary_size": (MOON_RADIUS / unit_conversion)
-            },
-            "itrf": {
-                "primary_color": "blue",
-                "primary_size": (EARTH_RADIUS / unit_conversion),
-                "secondary_x": r_moon[:, 0],
-                "secondary_y": r_moon[:, 1],
-                "secondary_z": r_moon[:, 2],
-                "secondary_color": grey_colors,
-                "secondary_size": (MOON_RADIUS / unit_conversion)
-            },
-            "lunar": {
-                "primary_color": "grey",
-                "primary_size": (MOON_RADIUS / unit_conversion),
-                "secondary_x": r_earth[:, 0],
-                "secondary_y": r_earth[:, 1],
-                "secondary_z": r_earth[:, 2],
-                "secondary_color": blues,
-                "secondary_size": (EARTH_RADIUS / unit_conversion)
-            },
-            "lunar axis": {
-                "primary_color": "blue",
-                "primary_size": (EARTH_RADIUS / unit_conversion),
-                "secondary_x": r_moon[:, 0],
-                "secondary_y": r_moon[:, 1],
-                "secondary_z": r_moon[:, 2],
-                "secondary_color": grey_colors,
-                "secondary_size": (MOON_RADIUS / unit_conversion)
-            }
-        }
-        try:
-            stn = plot_settings[frame]
-        except KeyError:
-            raise ValueError("Unknown plot type provided. Accepted: 'gcrf', 'itrf', 'lunar', 'lunar fixed'")
-
-        if len(r) == 1:
-            scatter_dot_colors = cm.rainbow(np.linspace(0, 1, len(xyz[:, 0])))
-        else:
-            scatter_dot_colors = cm.rainbow(np.linspace(0, 1, len(r)))[orbit_index]
-
-        ax1.scatter(xyz[:, 0], xyz[:, 1], color=scatter_dot_colors, s=1)
-        ax1.add_patch(plt.Circle(xy=(0, 0), radius=1, color=textcolor, linestyle='dashed', fill=False))  # Circle marking GEO
-        ax1.add_patch(plt.Circle(xy=(0, 0), radius=stn['primary_size'], color=stn['primary_color'], linestyle='dashed', fill=False))  # Circle marking EARTH or MOON
-        if r_moon[:, 0] is not False:
-            ax1.scatter(stn['secondary_x'], stn['secondary_y'], color=stn['secondary_color'], s=stn['secondary_size'])
-        ax1.set_aspect('equal')
-        ax1.set_xlabel(f'x [{unit_label}]', color=textcolor)
-        ax1.set_ylabel(f'y [{unit_label}]', color=textcolor)
-        ax1.set_title(f'Frame: {title2}', color=textcolor)
-        if 'lunar' in frame:
-            lagrange_points = lagrange_points_lunar_frame().items()
-            if 'fixed' in frame:
-                lagrange_points = lagrange_points_lunar_fixed_frame().items()
-            for (point, pos) in lagrange_points:
-                pos = pos / unit_conversion
-                if bounds["lower"][0] <= pos[0] <= bounds["upper"][0] and bounds["lower"][1] <= pos[1] <= bounds["upper"][1]:
-                    ax1.scatter(pos[0], pos[1], color=textcolor, label=point, s=10)
-                    ax1.text(pos[0], pos[1], point, color=textcolor)
-
-        ax2.scatter(xyz[:, 0], xyz[:, 2], color=scatter_dot_colors, s=1)
-        ax2.add_patch(plt.Circle(xy=(0, 0), radius=1, color=textcolor, linestyle='dashed', fill=False))  # Circle marking GEO
-        ax2.add_patch(plt.Circle(xy=(0, 0), radius=stn['primary_size'], color=stn['primary_color'], linestyle='dashed', fill=False))  # Circle marking EARTH or MOON
-        if r_moon[:, 0] is not False:
-            ax2.scatter(stn['secondary_x'], stn['secondary_z'], color=stn['secondary_color'], s=stn['secondary_size'])
-        ax2.set_aspect('equal')
-        ax2.set_xlabel(f'x [{unit_label}]', color=textcolor)
-        ax2.set_ylabel(f'z [{unit_label}]', color=textcolor)
-        ax2.yaxis.tick_right()  # Move y-axis ticks to the right
-        ax2.yaxis.set_label_position("right")  # Move y-axis label to the right
-        ax2.set_title(f'{title}', color=textcolor)
-        if 'lunar' in frame:
-            lagrange_points = lagrange_points_lunar_frame().items()
-            if 'fixed' in frame:
-                lagrange_points = lagrange_points_lunar_fixed_frame().items()
-            for (point, pos) in lagrange_points:
-                pos = pos / unit_conversion
-                if bounds["lower"][0] <= pos[0] <= bounds["upper"][0] and bounds["lower"][2] <= pos[2] <= bounds["upper"][2]:
-                    ax2.scatter(pos[0], pos[2], color=textcolor, label=point, s=10)
-                    ax2.text(pos[0], pos[2], point, color=textcolor)
-
-        ax3.scatter(xyz[:, 1], xyz[:, 2], color=scatter_dot_colors, s=1)
-        ax3.add_patch(plt.Circle(xy=(0, 0), radius=1, color=textcolor, linestyle='dashed', fill=False))
-        ax3.add_patch(plt.Circle(xy=(0, 0), radius=stn['primary_size'], color=stn['primary_color'], linestyle='dashed', fill=False))  # Circle marking EARTH or MOON
-        if r_moon[:, 0] is not False:
-            ax1.scatter(stn['secondary_y'], stn['secondary_z'], color=stn['secondary_color'], s=stn['secondary_size'])
-        ax3.set_aspect('equal')
-        ax3.set_xlabel(f'y [{unit_label}]', color=textcolor)
-        ax3.set_ylabel(f'z [{unit_label}]', color=textcolor)
-        if 'lunar' in frame:
-            lagrange_points = lagrange_points_lunar_frame().items()
-            if 'fixed' in frame:
-                lagrange_points = lagrange_points_lunar_fixed_frame().items()
-            for (point, pos) in lagrange_points:
-                pos = pos / unit_conversion
-                if bounds["lower"][1] <= pos[1] <= bounds["upper"][1] and bounds["lower"][2] <= pos[2] <= bounds["upper"][2]:
-                    ax3.scatter(pos[1], pos[2], color=textcolor, label=point, s=10)
-                    ax3.text(pos[1], pos[2], point, color=textcolor)
-
-        # Create a 3d sphere of the Earth and Moon
-        u = np.linspace(0, 2 * np.pi, 180)
-        v = np.linspace(-np.pi / 2, np.pi / 2, 180)
-
-        ax4.scatter3D(xyz[:, 0], xyz[:, 1], xyz[:, 2], color=scatter_dot_colors, s=1)
-        mesh_x = np.outer(np.cos(u), np.cos(v)).T * stn['primary_size'] + 0
-        mesh_y = np.outer(np.sin(u), np.cos(v)).T * stn['primary_size'] + 0
-        mesh_z = np.outer(np.ones(np.size(u)), np.sin(v)).T * stn['primary_size'] + 0
-        ax4.plot_surface(mesh_x, mesh_y, mesh_z, color=stn['primary_color'], alpha=0.3, edgecolor='none')
-        if r_moon[:, 0] is not False:
-            ax4.scatter3D(stn['secondary_x'], stn['secondary_y'], stn['secondary_z'], color=stn['secondary_color'], s=stn['secondary_size'])
-
-        ax4.set_xlabel(f'x [{unit_label}]', color=textcolor)
-        ax4.set_ylabel(f'y [{unit_label}]', color=textcolor)
-        ax4.set_zlabel(f'z [{unit_label}]', color=textcolor)
-        if 'lunar' in frame:
-            lagrange_points = lagrange_points_lunar_frame().items()
-            if 'fixed' in frame:
-                lagrange_points = lagrange_points_lunar_fixed_frame().items()
-            for (point, pos) in lagrange_points:
-                pos = pos / unit_conversion
-                if bounds["lower"][0] <= pos[0] <= bounds["upper"][0] and bounds["lower"][1] <= pos[1] <= bounds["upper"][1] and bounds["lower"][2] <= pos[2] <= bounds["upper"][2]:
-                    ax4.scatter(pos[0], pos[1], pos[2], color=textcolor, label=point, s=10)
-                    ax4.text(pos[0], pos[1], pos[2], point, color=textcolor)
-
-    ax1.set_xlim(bounds["lower"][0], bounds["upper"][0])
-    ax1.set_ylim(bounds["lower"][1], bounds["upper"][1])
-
-    ax2.set_xlim(bounds["lower"][0], bounds["upper"][0])
-    ax2.set_ylim(bounds["lower"][2], bounds["upper"][2])
-
-    ax3.set_xlim(bounds["lower"][1], bounds["upper"][1])
-    ax3.set_ylim(bounds["lower"][2], bounds["upper"][2])
-
-    ax4.set_xlim(bounds["lower"][0], bounds["upper"][0])
-    ax4.set_ylim(bounds["lower"][1], bounds["upper"][1])
-    ax4.set_zlim(bounds["lower"][2], bounds["upper"][2])
-    ax4.set_box_aspect([1, 1, 1])
-
-    for ax in [ax1, ax2, ax3, ax4]:
-        ax.set_facecolor(plotcolor)
-        ax.tick_params(axis='both', colors=textcolor)
-        for label in ax.get_xticklabels() + ax.get_yticklabels():
-            label.set_color(textcolor)
-        for spine in ax.spines.values():
-            spine.set_edgecolor(textcolor)
-
-    if save_path:
-        save_plot(fig, save_path)
-    if show:
-        plt.show()
-    plt.close()
-    return fig, [ax1, ax2, ax3, ax4]
+    print("\nDONE!")

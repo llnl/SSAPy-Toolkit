@@ -37,7 +37,7 @@ for peri in perigees:
 # Plot orbits using orbit_plot_xy
 orbit_plot_xy(
     rs,
-    save_path=figpath("testing_ellipses_leapfrog.jpg"),
+    save_path=figpath("tests/testing_ellipses_leapfrog.jpg"),
     pad=500,
     title="Earth as an extended body",
     show=True
@@ -47,7 +47,7 @@ orbit_plot_xy(
 r, v = leapfrog(r0=[RGEO, 0, 0], v0=[0, VGEO, 0], t=np.arange(0, 3600 * 24))
 orbit_plot_xy(
     r,
-    save_path=figpath("testing_leapfrog_RGEO.jpg"),
+    save_path=figpath("tests/testing_leapfrog_RGEO.jpg"),
     pad=0.1,
     title="GEO",
     show=True
@@ -57,7 +57,7 @@ orbit_plot_xy(
 r, v = leapfrog(r0=[RGEO, 0, 0], v0=[0, VGEO, 0], t=np.arange(0, 3600 * 24), velocity=(0, 600, -1))
 orbit_plot_xy(
     r,
-    save_path=figpath("testing_leapfrog_RGEO_velocity_burn.jpg"),
+    save_path=figpath("tests/testing_leapfrog_RGEO_velocity_burn.jpg"),
     pad=0.1,
     title="GEO",
     show=True

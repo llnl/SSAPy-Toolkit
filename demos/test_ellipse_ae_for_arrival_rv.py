@@ -39,7 +39,7 @@ if __name__ == "__main__":
         plt.ylabel("y [m]")
         plt.title("rv_to_ellipse: XY projection")
 
-        outpath = Path(figpath("rv_to_ellipse_xy"))
+        outpath = Path(figpath("tests/rv_to_ellipse_xy"))
         if outpath.suffix == "":
             outpath = outpath.with_suffix(".png")
         outpath.parent.mkdir(parents=True, exist_ok=True)

@@ -65,7 +65,7 @@ if __name__ == "__main__":
         sv_recons.append((ccw, r_sv, t_sv))
 
     # Save the SV reconstruction figure
-    save_path_sv = figpath("testing_ellipse_fit_recons_sv.png")
+    save_path_sv = figpath("tests/testing_ellipse_fit_recons_sv.png")
     orbit_plot(
         [r for _, r, _ in sv_recons],
         t=[t for _, _, t in sv_recons],
@@ -96,7 +96,7 @@ if __name__ == "__main__":
         ke_recons.append((ccw, r_ke, t_ke))
 
     # Save the Kepler reconstruction figure
-    save_path_kepler = figpath("testing_ellipse_fit_recons_kepler.png")
+    save_path_kepler = figpath("tests/testing_ellipse_fit_recons_kepler.png")
     orbit_plot(
         [r for _, r, _ in ke_recons],
         t=[t for _, _, t in ke_recons],

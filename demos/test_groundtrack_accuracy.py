@@ -41,9 +41,9 @@ plt.ylabel("Position difference |Δr| [km]")
 plt.title("ellipse_fit transfer vs ssapy propagation: |Δr|(t)")
 
 # Save using yeager_utils.figpath
-out_path = figpath("test_transfer_vs_ssapy_diff.jpg")
+out_path = figpath("tests/test_transfer_vs_ssapy_diff.jpg")
 plt.savefig(out_path, dpi=150, bbox_inches="tight")
 print(f"Saved: {out_path}")
 
-groundtrack_plot(r=[r_ssa, r_tf], t=t_abs, save_path=figpath("test_transfer_vs_ssapy_diff_groundtrack.jpg"))
-groundtrack_video(r=[r_ssa, r_tf], t=t_abs, save_path=figpath("test_transfer_vs_ssapy_diff_groundtrack.mp4"))
+groundtrack_plot(r=[r_ssa, r_tf], t=t_abs, save_path=figpath("tests/test_transfer_vs_ssapy_diff_groundtrack.jpg"))
+groundtrack_video(r=[r_ssa, r_tf], t=t_abs, save_path=figpath("tests/test_transfer_vs_ssapy_diff_groundtrack.mp4"))

@@ -662,7 +662,7 @@ if __name__ == "__main__":
     tag = f"a{int(round(a_m/1000))}km_e{e:.2f}_i{int(round(i_deg))}deg_equatorial"
 
     fig_dash = groundtrack_dashboard_gamma_heading([r], [t], show=False, save_path=None, fontsize=FS_BASE)
-    out_dash = Path(figpath(f"dashboard_gamma_heading_{tag}")).with_suffix(".png")
+    out_dash = Path(figpath(f"tests/dashboard_gamma_heading_{tag}")).with_suffix(".png")
     out_dash.parent.mkdir(parents=True, exist_ok=True)
     fig_dash.savefig(out_dash, dpi=220, bbox_inches="tight")
     print("Saved dashboard:", out_dash)
@@ -686,7 +686,7 @@ if __name__ == "__main__":
         draw_radial_markers=DRAW_RADIAL_MARKERS,
         show_points=True,
     )
-    out_itrf_panel = Path(figpath("heading_gamma_panel_ITRF")).with_suffix(".png")
+    out_itrf_panel = Path(figpath("tests/heading_gamma_panel_ITRF")).with_suffix(".png")
     out_itrf_panel.parent.mkdir(parents=True, exist_ok=True)
     fig_itrf_panel.savefig(out_itrf_panel, dpi=240, bbox_inches="tight")
     print("Saved:", out_itrf_panel)
@@ -709,7 +709,7 @@ if __name__ == "__main__":
         draw_radial_markers=DRAW_RADIAL_MARKERS,
         show_points=True,
     )
-    out_gcrf_panel = Path(figpath("heading_gamma_panel_GCRF")).with_suffix(".png")
+    out_gcrf_panel = Path(figpath("tests/heading_gamma_panel_GCRF")).with_suffix(".png")
     fig_gcrf_panel.savefig(out_gcrf_panel, dpi=240, bbox_inches="tight")
     print("Saved:", out_gcrf_panel)
     plt.close(fig_gcrf_panel)
@@ -724,7 +724,7 @@ if __name__ == "__main__":
         arrow_len_km=ARROW_LEN_KM_3D,
         title=TITLE_3D,
     )
-    out3d = Path(figpath(f"arrows_3d_categories_{FRAME_FOR_3D}")).with_suffix(".png")
+    out3d = Path(figpath(f"tests/arrows_3d_categories_{FRAME_FOR_3D}")).with_suffix(".png")
     out3d.parent.mkdir(parents=True, exist_ok=True)
     fig3d.savefig(out3d, dpi=220, bbox_inches="tight")
     print("Saved:", out3d)
