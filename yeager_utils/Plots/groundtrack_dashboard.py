@@ -19,7 +19,18 @@ def clean_lonlat(lon, lat):
     return lon_nan, lat_nan
 
 
-def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, show_legend=True, t0=None, limit=None, fontsize=18):
+def groundtrack_dashboard(
+    r,
+    t,
+    save_path=None,
+    pad=500,
+    show=False,
+    show_legend=True,
+    t0=None,
+    limit=None,
+    fontsize=18,
+    labels=None,
+):
     """
     Visualizes multiple satellite ground tracks, altitude/velocity over time, and 3D trajectories.
 
@@ -35,8 +46,17 @@ def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, show_legend
         Padding (in meters) for the 3D plot's bounding cube. Defaults to 500 m.
     show : bool, optional
         If True, displays the figure.
-    limits : precomputed limits for the 3d plots.
-    fontsize : biggest fontsize on the plot. (scales all other fonts)
+    show_legend : bool, optional
+        If True, shows legends.
+    t0 : float or None, optional
+        Reference start time in GPS seconds for relative-time plots. If None, uses the min of first timestamps.
+    limit : float or None, optional
+        Fixed half-extent (in km) for 3D axes. If None, computed from data with padding.
+    fontsize : int, optional
+        Base fontsize. Other text scales relative to this.
+    labels : list of str or None, optional
+        Optional per-orbit labels. If None, defaults to ["Orbit 1", "Orbit 2", ...].
+
     Returns
     -------
     fig : matplotlib.figure.Figure
@@ -46,17 +66,25 @@ def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, show_legend
     """
 
     def force_title(ax, text, size, y=1.02):
-        # Clear any existing title so styles/layout do not fight us
         ax.set_title("")
-        # Use 2D text anchored to axes coordinates
-        if hasattr(ax, "text2D"):  # 3D axes also have text2D; either works
+        if hasattr(ax, "text2D"):
             ax.text2D(0.5, y, text, transform=ax.transAxes,
-                    ha="center", va="bottom", fontsize=size)
-        else:  # plain 2D axes
+                      ha="center", va="bottom", fontsize=size)
+        else:
             ax.text(0.5, y, text, transform=ax.transAxes,
                     ha="center", va="bottom", fontsize=size)
 
     r, t = valid_orbits(r, t)
+    n_orbits = len(r)
+
+    # Normalize labels
+    if labels is None:
+        labels_norm = [f"Orbit {i+1}" for i in range(n_orbits)]
+    else:
+        labels_arr = list(labels)
+        if len(labels_arr) < n_orbits:
+            labels_arr = labels_arr + [f"Orbit {i+1}" for i in range(len(labels_arr), n_orbits)]
+        labels_norm = labels_arr[:n_orbits]
 
     # Ensure times are converted to GPS and normalized
     t_gps = [to_gps(ti) for ti in t]
@@ -70,7 +98,7 @@ def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, show_legend
     # Process each orbit
     lons, lats, altitudes, velocities, x_gts, y_gts, z_gts = [], [], [], [], [], [], []
     for r_i, t_i in zip(r, t):
-        xyz = np.array(r_i)  # Ensure r_i is (n,3)
+        xyz = np.array(r_i)
         x_gt, y_gt, z_gt = groundTrack(xyz, t_i, format='cartesian')
         lon, lat, height = groundTrack(xyz, t_i, format='geodetic')
         # lon, lat, height = astropy_gcrf_to_llh(xyz, t_i)
@@ -116,25 +144,31 @@ def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, show_legend
     except Exception:
         pass
 
-    colors = plt.cm.tab10(np.linspace(0, 1, len(r)))
+    colors = plt.cm.tab10(np.linspace(0, 1, n_orbits))
+    ground_handles = []
     for i, (lon, lat) in enumerate(zip(lons, lats)):
         lon_c, lat_c = clean_lonlat(lon, lat)
-        ax_ground.plot(lon_c, lat_c, color=colors[i], linewidth=2.5)
+        h_line = ax_ground.plot(lon_c, lat_c, color=colors[i], linewidth=2.5, label=labels_norm[i])[0]
         ax_ground.plot(lon[0], lat[0], '*', color=colors[i], markersize=20)
         ax_ground.plot(lon[-1], lat[-1], 'x', color=colors[i], markersize=14)
+        ground_handles.append(h_line)
 
-    legend_elements = [
-        Line2D([0], [0], color='black', linewidth=2.5, label='Orbit Track'),
-        Line2D([0], [0], marker='*', color='black', linestyle='None', markersize=12, label='Orbit Start'),
-        Line2D([0], [0], marker='x', color='black', linestyle='None', markersize=10, label='Orbit End')
-    ]
-    ax_ground.legend(handles=legend_elements, loc='lower left', fontsize=fontsize)
+    # Legends on ground track
+    if show_legend:
+        legend_elements = [
+            Line2D([0], [0], color='black', linewidth=2.5, label='Orbit Track'),
+            Line2D([0], [0], marker='*', color='black', linestyle='None', markersize=12, label='Orbit Start'),
+            Line2D([0], [0], marker='x', color='black', linestyle='None', markersize=10, label='Orbit End')
+        ]
+        leg1 = ax_ground.legend(handles=legend_elements, loc='lower left', fontsize=fontsize)
+        ax_ground.add_artist(leg1)
+        ax_ground.legend(handles=ground_handles, loc='lower right', fontsize=fontsize-2, title="Orbits")
 
     # Altitude plot
     ax_alt = fig.add_subplot(gs[1, 0])
     altmax = 0
     for i, (ti, alt) in enumerate(zip(t_rel, altitudes)):
-        ax_alt.plot(ti / 60, alt / 1e3, color=colors[i], linewidth=2.5, label=f'Orbit {i+1}')
+        ax_alt.plot(ti / 60, alt / 1e3, color=colors[i], linewidth=2.5, label=labels_norm[i])
         altmax = max(altmax, np.max(alt))
     ax_alt.set_ylim(0, altmax / 1e3 * 1.1 if altmax > 0 else 1)
     ax_alt.set_xlabel('Time (minutes)', fontsize=fontsize)
@@ -143,7 +177,7 @@ def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, show_legend
     ax_alt.tick_params(axis='both', labelsize=fontsize)
     ax_alt.grid(True)
     if show_legend:
-        ax_alt.legend(fontsize=fontsize - 4)
+        ax_alt.legend(fontsize=fontsize - 4, title="Orbits")
 
     # Velocity plot
     ax_velocity = fig.add_subplot(gs[1, 1])
@@ -152,7 +186,7 @@ def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, show_legend
         if np.ndim(vel) > 0 and len(vel) > 3:
             ti = ti[1:-1]
             vel = vel[1:-1]
-        ax_velocity.plot(ti / 60, vel / 1e3, color=colors[i], linewidth=2.5)
+        ax_velocity.plot(ti / 60, vel / 1e3, color=colors[i], linewidth=2.5, label=labels_norm[i])
         vmax = max(vmax, np.max(vel) if np.size(vel) > 0 else 0)
     ax_velocity.set_ylim(0, vmax / 1e3 * 1.1 if vmax > 0 else 1)
     ax_velocity.set_xlabel('Time (minutes)', fontsize=fontsize)
@@ -160,6 +194,8 @@ def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, show_legend
     force_title(ax_velocity, "Velocity vs Time", fontsize)
     ax_velocity.tick_params(axis='both', labelsize=fontsize)
     ax_velocity.grid(True)
+    if show_legend:
+        ax_velocity.legend(fontsize=fontsize - 4, title="Orbits")
 
     # ITRF 3D plot
     ax_itrf = fig.add_subplot(gs[0, 2], projection='3d')
@@ -202,28 +238,25 @@ def groundtrack_dashboard(r, t, save_path=None, pad=500, show=False, show_legend
     ax_gcrf.set_ylim([-limit, limit])
     ax_gcrf.set_zlim([-limit, limit])
     ax_gcrf.set_xticks([-limit, 0, limit])
-    
-    ticks   = [-limit, 0, limit]
 
+    ticks = [-limit, 0, limit]
     for ax in (ax_itrf, ax_gcrf):
-        # limits already set above
         ax.xaxis.set_major_locator(FixedLocator(ticks))
         ax.yaxis.set_major_locator(FixedLocator(ticks))
         ax.zaxis.set_major_locator(FixedLocator(ticks))
-
-        # 🔒 freeze the *labels* to fixed strings (no autosci, no offset text)
-        ax.xaxis.set_major_formatter(FixedFormatter([f"", "0", f"{limit:.0f}"]))
-        ax.yaxis.set_major_formatter(FixedFormatter([f"", "0", f""]))
-        ax.zaxis.set_major_formatter(FixedFormatter([f"", "0", f"{limit:.0f}"]))
-
+        ax.xaxis.set_major_formatter(FixedFormatter(["", "0", f"{limit:.0f}"]))
+        ax.yaxis.set_major_formatter(FixedFormatter(["", "0", ""]))
+        ax.zaxis.set_major_formatter(FixedFormatter(["", "0", f"{limit:.0f}"]))
         ax.tick_params(pad=2)
+        try:
+            ax.set_box_aspect((1, 1, 1))
+        except Exception:
+            pass
+        try:
+            ax.set_proj_type('ortho')
+        except Exception:
+            pass
 
-        try: ax.set_box_aspect((1,1,1))
-        except Exception: pass
-        try: ax.set_proj_type('ortho')
-        except Exception: pass
-
-    
     if save_path:
         save_plot(fig, save_path)
     if show:
