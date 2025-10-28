@@ -59,4 +59,4 @@ ax.set_zlabel('Z (m)')
 ax.set_title('Path of Object in Free Fall Through Earth (Point Source)')
 plt.axis('equal')
 ax.legend()
-plt.show()
+

@@ -10,7 +10,7 @@ for trueAnomaly in np.arange(0, 360, 5):
     # r, v, t = quickint(orbit)
 
     rs.append(orbit.r)
-orbit_plot_xy(rs, show=True, save_path=figpath("tests/ssapy_orbit_sampling_trueAnomaly"))
+orbit_plot_xy(rs, show=False, save_path=figpath("tests/ssapy_orbit_sampling_trueAnomaly"))
 
 print("Time sampling")
 rs = []
@@ -19,12 +19,12 @@ for t in tqdm(np.arange(0, orbit.period, 600)):
 
     rs.append(orbit_new.r)
 
-orbit_plot(np.array(rs), show=True, save_path=figpath("tests/ssapy_orbit_sampling_time"))
+orbit_plot(np.array(rs), show=False, save_path=figpath("tests/ssapy_orbit_sampling_time"))
 
 
 print("Full orbit sampled.")
 rs, v = rv(orbit, np.arange(0, orbit.period, 600))
-orbit_plot(rs, show=True, save_path=figpath("tests/ssapy_orbit_object"))
+orbit_plot(rs, show=False, save_path=figpath("tests/ssapy_orbit_object"))
 
 
 print("Complete.")

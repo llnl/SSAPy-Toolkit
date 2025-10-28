@@ -60,4 +60,3 @@ ax.legend()
 # Equal aspect ratio
 ax.set_box_aspect([1, 1, 1])  # Ensures 3D plot is not distorted
 
-plt.show()

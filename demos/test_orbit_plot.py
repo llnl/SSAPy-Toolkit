@@ -42,7 +42,7 @@ globe_plot(r=[r, r3], t=[t, t3], save_path=figpath("tests/demo_globe_two_differe
 
 r, v, t = ssapy_orbit(a=RGEO, e=0.2, duration=(1, 'day'))
 # Call the dashboard
-fig = groundtrack_dashboard(r, t, show=True, save_path=figpath("tests/demo_ground_dashboard_test"))
-fig = groundtrack_dashboard(r=[r, r3], t=[t, t3], show=True, save_path=figpath("tests/demo_ground_dashboard_two_different_length_orbits"))
+fig = groundtrack_dashboard(r, t, show=False, save_path=figpath("tests/demo_ground_dashboard_test"))
+fig = groundtrack_dashboard(r=[r, r3], t=[t, t3], show=False, save_path=figpath("tests/demo_ground_dashboard_two_different_length_orbits"))
 
 print("PLOT DEMO DONE.")

@@ -17,7 +17,7 @@ from yeager_utils import (
 from ssapy import Orbit, rv
 
 
-def save_and_optionally_show(fig, name, show=True):
+def save_and_optionally_show(fig, name, show=False):
     """
     Save the provided Matplotlib figure using yeager_utils.figpath(name).
     If show is True, display the figure. Closes when not showing to avoid leaks.
@@ -36,7 +36,7 @@ def save_and_optionally_show(fig, name, show=True):
         print("Failed to save figure for", name, "with error:", e)
     finally:
         if show:
-            plt.show()
+            
         else:
             plt.close(fig)
 

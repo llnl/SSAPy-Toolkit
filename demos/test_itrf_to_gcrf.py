@@ -55,7 +55,7 @@ def test_coordinate_transforms():
     ax.view_init(elev=20, azim=45)
 
     plt.axis('equal')
-    plt.show()
+    
 
 
 if __name__ == "__main__":

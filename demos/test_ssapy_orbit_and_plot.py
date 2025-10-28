@@ -62,8 +62,8 @@ r, v = rv(orbit=orbit, time=times, propagator=prop)
 
 # Plot the output in a GCRF (star fixed frame)
 # and lunar (a non-interial Earth-Moon fixed frame)
-plotUtils.orbit_plot(r, times, frame="gcrf", show=True)
-plotUtils.orbit_plot(r, times, frame="lunar", show=True)
+plotUtils.orbit_plot(r, times, frame="gcrf", show=False)
+plotUtils.orbit_plot(r, times, frame="lunar", show=False)
 
 # Lets see a ground track of the orbit
 plotUtils.ground_track_plot(r, times)
@@ -98,4 +98,3 @@ plt.xlabel("Date")
 plt.ylabel("Lambertian Reflectance [Apparent Magnitude]")
 plt.xticks(xticks, xtick_labels, rotation=0)
 plt.tight_layout()
-plt.show()

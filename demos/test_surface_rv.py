@@ -56,4 +56,4 @@ ax.set_zlabel("z")
 ax.set_title(f"Surface positions at t0 = {t0.isot}")
 
 plt.tight_layout()
-plt.show()
+

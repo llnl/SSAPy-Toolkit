@@ -40,7 +40,7 @@ orbit_plot_xy(
     save_path=figpath("tests/testing_ellipses_leapfrog.jpg"),
     pad=500,
     title="Earth as an extended body",
-    show=True
+    show=False
 )
 
 # RGEO
@@ -50,7 +50,7 @@ orbit_plot_xy(
     save_path=figpath("tests/testing_leapfrog_RGEO.jpg"),
     pad=0.1,
     title="GEO",
-    show=True
+    show=False
 )
 
 # VELOCITY BURN
@@ -60,5 +60,5 @@ orbit_plot_xy(
     save_path=figpath("tests/testing_leapfrog_RGEO_velocity_burn.jpg"),
     pad=0.1,
     title="GEO",
-    show=True
+    show=False
 )
