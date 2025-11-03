@@ -22,6 +22,3 @@ print(f"Initial Δv magnitude: {result['|delta_v1|']:.3f} m/s")
 print(f"Final Δv magnitude: {result['|delta_v2|']:.3f} m/s")
 print(f"Time of flight: {result['tof'] / 60:.2f} minutes")
 print(f"Final position error: {result['error']:.3f} m")
-
-if 'fig' in result:
-    result['fig'].show()
