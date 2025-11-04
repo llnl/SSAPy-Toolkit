@@ -43,7 +43,7 @@ def main():
         pass
 
     fig.tight_layout()
-    yufig(fig, "tests/spheres_subplots.png", dpi=150, bbox_inches="tight")
+    yufig(fig, "tests/spheres_subplots.png")
 
 
 if __name__ == "__main__":
