@@ -332,6 +332,26 @@ def save_plot(figure, save_path, dpi=200):
         print(f"Error occurred while saving the figure: {e}")
 
 
+def yufig(figure, save_path, dpi=200):
+    """
+    Save a Matplotlib figure as JPG (or append to PDF if save_path ends with .pdf).
+    """
+    from .figpath import figpath
+    save_path = figpath(save_path)
+    if save_path.lower().endswith('.pdf'):
+        save_plot_to_pdf(figure, save_path)
+        return
+    try:
+        base_name, extension = os.path.splitext(save_path)
+        if extension.lower() != '.jpg':
+            save_path = base_name + '.jpg'
+        figure.savefig(save_path, dpi=dpi, bbox_inches=None)
+        plt.close(figure)
+        print(f"Figure saved at: {save_path}")
+    except Exception as e:
+        print(f"Error occurred while saving the figure: {e}")
+
+
 def display_figure(figname, display='IPython'):
     def open_image(filename):
         if display == 'IPython':

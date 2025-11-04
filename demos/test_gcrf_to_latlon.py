@@ -367,7 +367,7 @@ def make_groundtrack_image():
     plt.text(-178.0, -86.0, txt, fontsize=8,
              bbox=dict(boxstyle="round", facecolor="white", alpha=0.6, linewidth=0.5))
 
-    outpath = figpath("gcrf_to_lonlat_groundtrack_vs_benchmark.png")
+    outpath = figpath("tests/gcrf_to_lonlat_groundtrack_vs_benchmark.png")
     plt.tight_layout()
     plt.savefig(outpath, dpi=200)
     plt.close()
@@ -385,7 +385,7 @@ def make_groundtrack_image():
     # Put legend where it will not overlap plotted clusters (upper-right typically sparse here)
     plt.legend(loc="upper right", fontsize=9, framealpha=0.85)
 
-    outpath_err = figpath("gcrf_to_lonlat_groundtrack_errors.png")
+    outpath_err = figpath("tests/gcrf_to_lonlat_groundtrack_errors.png")
     plt.tight_layout()
     plt.savefig(outpath_err, dpi=200)
     plt.close()

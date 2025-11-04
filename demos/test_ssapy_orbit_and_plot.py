@@ -1,4 +1,4 @@
-from yeager_utils import figpath
+from yeager_utils import yufig
 from ssapy import *
 import numpy as np
 
@@ -92,9 +92,10 @@ def decimal_to_datetime_label(d):
 xticks = np.linspace(times.decimalyear[0], times.decimalyear[-1], 4)
 xtick_labels = [decimal_to_datetime_label(t) for t in xticks]
 
-plt.figure(dpi=300)
+fig = plt.figure(dpi=300)
 plt.plot(times.decimalyear, mv)
 plt.xlabel("Date")
 plt.ylabel("Lambertian Reflectance [Apparent Magnitude]")
 plt.xticks(xticks, xtick_labels, rotation=0)
 plt.tight_layout()
+yufig(fig, "tests/ssapy_lambertian_reflectance ")

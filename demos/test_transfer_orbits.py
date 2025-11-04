@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-import numpy as np
-import matplotlib.pyplot as plt
 
 from yeager_utils import (
     EARTH_RADIUS,
@@ -12,34 +10,9 @@ from yeager_utils import (
     RGEO,
     Time,
     hkoe,
-    figpath,
+    yufig,
 )
-from ssapy import Orbit, rv
-
-
-def save_and_optionally_show(fig, name, show=False):
-    """
-    Save the provided Matplotlib figure using yeager_utils.figpath(name).
-    If show is True, display the figure. Closes when not showing to avoid leaks.
-    """
-    try:
-        # Let figpath decide the full output location and extension policy
-        out = figpath(name)
-        # Use tight layout if available for cleaner output
-        try:
-            fig.tight_layout()
-        except Exception:
-            pass
-        fig.savefig(out, dpi=300, bbox_inches="tight")
-        print("Saved figure:", out)
-    except Exception as e:
-        print("Failed to save figure for", name, "with error:", e)
-    finally:
-        if show:
-            
-        else:
-            plt.close(fig)
-
+from ssapy import Orbit
 
 def main():
     SHOW = True  # Set to False if you want to save without popping windows
@@ -62,20 +35,20 @@ def main():
     print("Running Hohmann (orbit -> orbit)")
     result = transfer_hohmann(orbit1, orbit2, plot=True)
     fig = result["fig"]
-    save_and_optionally_show(fig, "tests/transfers_hohmann_orbit_to_orbit", SHOW)
+    yufig(fig, "tests/transfers_hohmann_orbit_to_orbit")
 
     # Hohmann: r1, v1, r2
     print("Running Hohmann (r1, v1, r2)")
     result = transfer_hohmann(orbit1.r, orbit1.v, orbit2.r, plot=True)
     fig = result["fig"]
-    save_and_optionally_show(fig, "tests/transfers_hohmann_rv", SHOW)
+    yufig(fig, "tests/transfers_hohmann_rv")
 
     # Lambertian: Orbit -> Orbit
     print("Running Lambertian (orbit -> orbit)")
     try:
         result = transfer_lambertian(orbit1, orbit2, plot=True)
         fig = result["fig"]
-        save_and_optionally_show(fig, "tests/transfers_lambertian_orbit_to_orbit", SHOW)
+        yufig(fig, "tests/transfers_lambertian_orbit_to_orbit")
     except Exception as err:
         print("Lambertian (orbit -> orbit) failed:", err)
 
@@ -84,7 +57,7 @@ def main():
     try:
         result = transfer_lambertian(orbit1.r, orbit1.v, orbit2.r, plot=True)
         fig = result["fig"]
-        save_and_optionally_show(fig, "tests/transfers_lambertian_rv", SHOW)
+        yufig(fig, "tests/transfers_lambertian_rv")
     except Exception as err:
         print("Lambertian (r1, v1, r2) failed:", err)
 
@@ -92,19 +65,19 @@ def main():
     print("Running shooter (orbit -> orbit)")
     result = transfer_shooter(orbit1, orbit2, plot=True, status=True)
     fig = result["fig"]
-    save_and_optionally_show(fig, "tests/transfers_shooter_orbit_to_orbit", SHOW)
+    yufig(fig, "tests/transfers_shooter_orbit_to_orbit")
 
     # Shooter: r1, v1, r2
     print("Running shooter (r1, v1, r2)")
     result = transfer_shooter(orbit1.r, orbit1.v, orbit2.r, plot=True, status=True)
     fig = result["fig"]
-    save_and_optionally_show(fig, "tests/transfers_shooter_rv", SHOW)
+    yufig(fig, "tests/transfers_shooter_rv")
 
     # Coplanar: Orbit -> Orbit
     print("Running coplanar (orbit -> orbit)")
     result = transfer_coplanar(orbit1, orbit2, plot=True, status=True)
     fig = result["fig"]
-    save_and_optionally_show(fig, "tests/transfers_coplanar_orbit_to_orbit", SHOW)
+    yufig(fig, "tests/transfers_coplanar_orbit_to_orbit")
 
 
 if __name__ == "__main__":
