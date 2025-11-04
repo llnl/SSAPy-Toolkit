@@ -16,10 +16,10 @@
 import numpy as np
 
 
-def generate_sphere_vectors(n, magnitude, seed=None):
+def generate_sphere_vectors(n, magnitude, seed=None, distribution="uniform"):
     """
-    Generate N three-dimensional vectors with identical magnitude that are
-    uniformly distributed in direction over the unit sphere.
+    Generate N three-dimensional vectors with identical magnitude whose directions
+    are area-uniform on the unit sphere.
 
     Parameters
     ----------
@@ -29,6 +29,10 @@ def generate_sphere_vectors(n, magnitude, seed=None):
         Desired magnitude for every vector.
     seed : int or None
         Optional seed for reproducibility.
+    distribution : {"uniform", "random"}
+        "uniform": normalize i.i.d. Gaussian vectors (isotropic -> area-uniform).
+        "random" : area-uniform using spherical coordinates with
+                   z ~ U[-1, 1], phi ~ U[0, 2*pi).
 
     Returns
     -------
@@ -40,13 +44,30 @@ def generate_sphere_vectors(n, magnitude, seed=None):
         return np.zeros((0, 3), dtype=float)
 
     rng = np.random.default_rng(seed)
-    V = rng.normal(size=(n, 3))
-    norms = np.linalg.norm(V, axis=1, keepdims=True)
+    dist = str(distribution).lower()
 
-    # Guard (vanishingly unlikely, but avoid division by zero):
-    norms = np.where(norms == 0.0, 1.0, norms)
+    if dist == "uniform":
+        # Isotropic Gaussian -> normalize -> uniform on S^2
+        V = rng.normal(size=(n, 3))
+        norms = np.linalg.norm(V, axis=1, keepdims=True)
+        # Guard against the (extremely unlikely) all-zero row to avoid divide-by-zero
+        norms = np.where(norms == 0.0, 1.0, norms)
+        U = V / norms
 
-    U = V / norms
+    elif dist == "random":
+        # Area-uniform using z ~ U[-1,1] and phi ~ U[0,2*pi)
+        z = rng.uniform(-1.0, 1.0, size=n)
+        phi = rng.uniform(0.0, 2.0 * np.pi, size=n)
+        # Clip very slightly to avoid rare negative inside sqrt from numerical noise
+        zz = np.clip(1.0 - z * z, 0.0, 1.0)
+        r = np.sqrt(zz)
+        x = r * np.cos(phi)
+        y = r * np.sin(phi)
+        U = np.column_stack((x, y, z))
+
+    else:
+        raise ValueError('distribution must be either "uniform" or "random"')
+
     return U * float(magnitude)
 
 
