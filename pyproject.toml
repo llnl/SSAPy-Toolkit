@@ -68,6 +68,7 @@ dependencies = [
   "seaborn",
   "sympy",
   "tqdm",
+  "spacetrack",
   "vg",
   "yapf",
 ]

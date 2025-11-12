@@ -54,6 +54,10 @@ def load_json(filename: str):
         return json.load(f, object_hook=decode)
 
 
+def read_json(filename: str):
+    return load_json(filename)
+
+
 def append_json(filename: str, new_data) -> None:
     """Append data into an existing JSON file.
     

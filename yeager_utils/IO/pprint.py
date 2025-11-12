@@ -1,11 +1,12 @@
 # my_utils/pretty.py
 # -----------------------------------------------------------------------------
-# Pretty-print helpers with HDF5 summary support.
+# Pretty-print helpers with HDF5 and dict summary support.
 #
 # - NumPy-aware pretty printer for general Python objects
 # - HDF5 "summary of everything" view: lists every group and dataset,
 #   showing group child counts and dataset shape/dtype, plus attribute keys,
 #   and a small head/tail preview of dataset values.
+# - Dict/mapping summary that previews values, arrays, and nested dicts.
 #
 # Usage
 # -----
@@ -212,7 +213,7 @@ def _summarize_attrs(obj) -> str:
     Return a one-line summary of attribute keys, if any.
     """
     try:
-        keys = list(obj.attrs.keys())
+        keys = sorted(list(obj.attrs.keys()), key=str)
     except Exception:
         keys = []
     if not keys:
@@ -279,6 +280,142 @@ def _print_hdf5_summary(obj):
                 pass
 
 
+from collections.abc import Mapping, Sequence
+
+# --------------------------- Dict summary helpers ----------------------------
+
+_dict_defaults = dict(
+    max_items=20,      # maximum keys shown per mapping
+    max_depth=2,       # recursive depth for nested dicts (logical levels)
+    key_sort=True,     # sort keys by str(key)
+    seq_head=3,        # preview count for sequence head
+    seq_tail=3,        # preview count for sequence tail
+    str_max=80,        # max characters for string previews
+)
+
+def _clip(s: str, n: int) -> str:
+    s = str(s)
+    if len(s) <= n:
+        return s
+    if n <= 3:
+        return s[:n]
+    return s[: n - 3] + "..."
+
+def _array_preview(a: np.ndarray, small_limit: int = 20) -> str:
+    """One-line ndarray preview with shape/dtype and head...tail values."""
+    a = np.asarray(a)
+    shape = "x".join(str(s) for s in a.shape) if a.shape else "scalar"
+    dtype = str(a.dtype)
+    # Scalar
+    if a.shape == ():
+        val = _array2string(a.reshape(1,))[1:-1]
+        return f"ndarray(shape={shape}, dtype={dtype}) value={val}"
+    flat = a.ravel()
+    if flat.size <= small_limit:
+        vals = _array2string(flat)[1:-1]
+        return f"ndarray(shape={shape}, dtype={dtype}) values=[{vals}]"
+    head = flat[: _dict_defaults["seq_head"]]
+    tail = flat[-_dict_defaults["seq_tail"] :] if _dict_defaults["seq_tail"] > 0 else np.array([], dtype=a.dtype)
+    head_s = _array2string(head)[1:-1]
+    tail_s = _array2string(tail)[1:-1] if tail.size else ""
+    if tail_s:
+        pv = f"{head_s}, ..., {tail_s}"
+    else:
+        pv = head_s
+    return f"ndarray(shape={shape}, dtype={dtype}) preview=[{pv}]"
+
+def _seq_preview(seq: Sequence) -> str:
+    """One-line preview for lists/tuples (but not str/bytes)."""
+    try:
+        n = len(seq)
+    except Exception:
+        return f"{type(seq).__name__}"
+    head_n = min(_dict_defaults["seq_head"], n)
+    tail_n = min(_dict_defaults["seq_tail"], max(n - head_n, 0))
+
+    # Use index access to avoid copying whole sequences
+    head_vals = [_short_value(seq[i]) for i in range(head_n)]
+    tail_vals = [_short_value(seq[n - tail_n + i]) for i in range(tail_n)] if tail_n else []
+
+    parts = head_vals + (["..."] if tail_vals else []) + tail_vals
+    inner = ", ".join(parts) if parts else ""
+    return f"{type(seq).__name__}(len={n}) [{inner}]"
+
+def _short_value(v) -> str:
+    """Compact single-line description for a value."""
+    if isinstance(v, str):
+        return '"' + _clip(v, _dict_defaults["str_max"]) + '"'
+    if isinstance(v, (bytes, bytearray)):
+        return f"bytes(len={len(v)})"
+    if isinstance(v, np.ndarray):
+        return _array_preview(v)
+    if isinstance(v, Mapping):
+        try:
+            n = len(v)
+        except Exception:
+            n = "?"
+        return f"dict({n} keys)"
+    if isinstance(v, Sequence) and not isinstance(v, (str, bytes, bytearray)):
+        return _seq_preview(v)
+    if v is None:
+        return "None"
+    # Numbers and numpy scalars
+    if isinstance(v, (np.number, int, float, complex, bool)):
+        return _array2string(np.array([v]))[1:-1]
+    # Fallback to type name
+    return f"{type(v).__name__}"
+
+def _indent(level: int) -> str:
+    return " " * (2 * level)
+
+def _print_dict_summary(d: Mapping, depth: int = 0, seen_ids=None):
+    """
+    Print a structured summary of a dictionary (recurses into nested dicts).
+    Shows up to max_items per level, sorted by key repr if key_sort is True.
+    depth is the logical indent level; each visual level indents by 2 spaces.
+    """
+    if seen_ids is None:
+        seen_ids = set()
+
+    try:
+        nkeys = len(d)
+    except Exception:
+        nkeys = "?"
+    print(_indent(depth) + f"dict ({nkeys} keys)")
+
+    # Prevent cycles
+    if id(d) in seen_ids:
+        print(_indent(depth) + "  <cycle>")
+        return
+    seen_ids.add(id(d))
+
+    # Stop if logical depth exceeded
+    if depth // 2 >= _dict_defaults["max_depth"]:
+        return
+
+    # Choose and order keys
+    try:
+        keys = list(d.keys())
+    except Exception:
+        keys = []
+    if _dict_defaults["key_sort"]:
+        try:
+            keys.sort(key=lambda k: str(k))
+        except Exception:
+            pass
+
+    limit = min(len(keys), _dict_defaults["max_items"])
+    for k in keys[:limit]:
+        v = d[k]
+        kstr = _clip(k, 40)
+        line = _indent(depth + 1) + f"[{kstr}] -> {_short_value(v)}"
+        print(line)
+        if isinstance(v, Mapping):
+            _print_dict_summary(v, depth + 2, seen_ids=seen_ids)
+
+    if len(keys) > limit:
+        print(_indent(depth + 1) + f"... {len(keys) - limit} more keys omitted")
+
 # ------------------------------ public pprint --------------------------------
 
 def pprint(obj):
@@ -286,21 +423,25 @@ def pprint(obj):
     Pretty-print any object.
 
     If 'obj' is (or points to) an HDF5 file | group | dataset:
-        Print a summary of all levels reachable from that node:
-        - For each group: the count of immediate subgroups and datasets
-        - For each dataset: shape and dtype, plus a head/tail preview
-        - For any object with attributes: list of attribute keys
+        Print a summary of all levels reachable from that node.
+    If 'obj' is a dict-like mapping:
+        Print a compact, recursive summary of keys and values.
     Otherwise:
         Fall back to NumPy-aware pretty printer for general Python objects.
     """
-    # Try HDF5 path/handle if h5py is available; otherwise fall back cleanly.
+    # HDF5 summary if available and applicable
     if h5py is not None:
         try:
             if isinstance(obj, (h5py.File, h5py.Group, h5py.Dataset)) or isinstance(obj, (str, pathlib.Path)):
                 _print_hdf5_summary(obj)
                 return
         except (TypeError, OSError, RuntimeError):
-            # Not an HDF5 handle/path or cannot open; fall through to numpy printer.
             pass
 
+    # Dict summary
+    if isinstance(obj, Mapping):
+        _print_dict_summary(obj)
+        return
+
+    # Default NumPy-aware pretty print
     _print_numpy(obj)

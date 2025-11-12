@@ -746,7 +746,7 @@ def get_sigmas(n=25, path=None):
     If `path` is provided, it is treated as an explicit file path and used as-is.
     """
     if path is None:
-        from .IO import datapath
+        from .IO import yudata
 
         # Prefer env-provided directory, then fallback to ~/.cache/yeager_utils
         env_dir = os.environ.get(ENV_VAR, "").strip()
@@ -756,7 +756,7 @@ def get_sigmas(n=25, path=None):
         dirs.append(Path.home() / ".cache" / "yeager_utils")
 
         # Use datapath to choose/create the first usable directory
-        path = Path(datapath(DEFAULT_FILE, dirs=dirs))
+        path = Path(yudata(DEFAULT_FILE, dirs=dirs))
     else:
         path = Path(path)
 
