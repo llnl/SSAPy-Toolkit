@@ -1,7 +1,8 @@
 import re
 import numpy as np
 import pandas as pd
-from ..constants import EARTH_MU, EARTH_RADIUS  # m^3/s^2, m
+from ..constants import EARTH_MU, EARTH_RADIUS, J2_wgs  # m^3/s^2, m, dimensionless
+from astropy.time import Time
 
 def read_3le(data_file, makedf=True, verbose=False):
     """
@@ -15,13 +16,13 @@ def read_3le(data_file, makedf=True, verbose=False):
       - a_m, p_m, rp_m, ra_m, hp_m, ha_m
       - inc_rad, raan_rad, argp_rad, M_rad
       - E_rad/deg, nu_rad/deg, u_rad/deg
-      - r_mag_m, v_mag_m_s
+      - ta_rad/deg, r_mag_m, v_mag_m_s
       - r_eci_m_[x,y,z], v_eci_m_s_[x,y,z] (two-body, at epoch)
+      - epoch_gps (float seconds)
+      - a_sgp4, e_sgp4, i_sgp4, pa_sgp4, raan_sgp4, ta_sgp4, M_sgp4, n_sgp4
     """
     DAY_S = 86400.0
     TWOPI = 2.0 * np.pi
-    DEG2RAD = np.pi / 180.0
-    RAD2DEG = 180.0 / np.pi
 
     def split_line(line):
         payload = re.findall(r'"[^"]+"|\'[^\']+\'|\S+', line)
@@ -54,6 +55,7 @@ def read_3le(data_file, makedf=True, verbose=False):
             t = text.strip()
             if not t or t.strip('0+-') == '':
                 return 0.0
+            # exponent is last two chars like '+5' or '-2'
             if len(t) < 3 or t[-2] not in '+-' or not t[-1].isdigit():
                 raise ValueError(f"Bad TLE exp field: {text!r}")
             sign = '-' if t[0] == '-' else ''
@@ -87,14 +89,12 @@ def read_3le(data_file, makedf=True, verbose=False):
             "drag",
             "elset_type",
             "elset#",
-            "catalog number",
             "inc_deg",
             "raan_deg",
             "ecc",
             "pa_deg",
             "mean_anomaly_deg",
-            "mean_motion_deg",          # NOTE: this is rev/day in TLE
-            "mean_motion_rev_day_deg",  # kept for compatibility
+            "mean_motion_rev_day",
             "epoch_rev",
             "check_sum",
         ]
@@ -114,7 +114,7 @@ def read_3le(data_file, makedf=True, verbose=False):
             vprint(splits)
 
             if key == "0":
-                data["name"].append(splits)
+                data["name"].append(rest.strip())
 
             elif key == "1":
                 if not splits:
@@ -127,7 +127,7 @@ def read_3le(data_file, makedf=True, verbose=False):
 
                 if has_intl:
                     data["intl_designator"].append(splits[1 + i])
-                    data["launch_year"].append(int(splits[1 + i][:2]))
+                    data["launch_year"].append(_century_year(splits[1 + i][:2]))
                     data["launch_number"].append(int(splits[1 + i][2:5]))
                     data["launch_piece"].append(splits[1 + i][5:])
                 else:
@@ -152,29 +152,24 @@ def read_3le(data_file, makedf=True, verbose=False):
                 data["elset#"].append(int(splits[7 + i]))
 
             elif key == "2":
-                if len(splits) < 6:
+                # Use fixed-width slices per TLE spec; token splits are brittle here.
+                if len(line) < 69:
                     continue
-                data["inc_deg"].append(float(splits[1]))
-                data["raan_deg"].append(float(splits[2]))
-                data["ecc"].append(parse_ecc(splits[3]))
-                data["pa_deg"].append(float(splits[4]))
-                data["mean_anomaly_deg"].append(float(splits[5]))
-                if len(splits) >= 7 and len(splits[6]) > 11:
-                    s6 = splits[6]
-                    data["mean_motion_deg"].append(float(s6[:11]))  # rev/day
-                    data["epoch_rev"].append(int(s6[11:15]))
-                    data["check_sum"].append(int(s6[15]))
-                else:
-                    data["mean_motion_deg"].append(np.nan)
-                    data["epoch_rev"].append(np.nan)
-                    data["check_sum"].append(np.nan)
+                data["inc_deg"].append(float(line[8:16]))
+                data["raan_deg"].append(float(line[17:25]))
+                data["ecc"].append(parse_ecc(line[26:33]))
+                data["pa_deg"].append(float(line[34:42]))
+                data["mean_anomaly_deg"].append(float(line[43:51]))
+                data["mean_motion_rev_day"].append(float(line[52:63]))
+                data["epoch_rev"].append(int(line[63:68]))
+                data["check_sum"].append(int(line[68]))
             else:
                 pass
 
     if not makedf:
         return data
 
-    # Align rows by line "1"
+    # ---------- Build DataFrame (align primarily on the count/order of line '1') ----------
     base_n = len(data["satellite#"])
 
     def _get(k, i, default=np.nan):
@@ -188,14 +183,22 @@ def read_3le(data_file, makedf=True, verbose=False):
 
     df = pd.DataFrame(rows, columns=cols)
 
+    # -------------------- Time convenience --------------------
+    dec = pd.to_numeric(df["decimal_year"], errors="coerce").to_numpy()
+    gps = np.full(dec.shape, np.nan)
+    mask = np.isfinite(dec)
+    if np.any(mask):
+        gps[mask] = Time(dec[mask], format="decimalyear", scale="utc").gps
+    df["epoch_gps"] = gps
+
     # -------------------- Orbital elements and derived quantities (SI) --------------------
-    # Mean motion: TLE "mean_motion_deg" is rev/day
-    df["mean_motion_rev_day"] = pd.to_numeric(df["mean_motion_deg"], errors="coerce")
+    # Mean motion: TLE "mean_motion_rev_day" is rev/day
+    df["mean_motion_rev_day"] = pd.to_numeric(df["mean_motion_rev_day"], errors="coerce")
     n_rad_s = df["mean_motion_rev_day"] * (TWOPI / DAY_S)
     df["n_rad_s"] = n_rad_s
     df["period_s"] = TWOPI / n_rad_s
 
-    # Semi-major axis (m) via Kepler
+    # Semi-major axis (m) via Kepler's 3rd law
     df["a_m"] = (EARTH_MU / (n_rad_s ** 2)) ** (1.0 / 3.0)
 
     # Eccentricity
@@ -209,10 +212,10 @@ def read_3le(data_file, makedf=True, verbose=False):
     df["ha_m"] = df["ra_m"] - EARTH_RADIUS
 
     # Angles in radians
-    df["inc_rad"]  = pd.to_numeric(df["inc_deg"], errors="coerce") * DEG2RAD
-    df["raan_rad"] = pd.to_numeric(df["raan_deg"], errors="coerce") * DEG2RAD
-    df["argp_rad"] = pd.to_numeric(df["pa_deg"], errors="coerce") * DEG2RAD
-    df["M_rad"]    = pd.to_numeric(df["mean_anomaly_deg"], errors="coerce") * DEG2RAD
+    df["inc_rad"]  = np.radians(pd.to_numeric(df["inc_deg"], errors="coerce"))
+    df["raan_rad"] = np.radians(pd.to_numeric(df["raan_deg"], errors="coerce"))
+    df["argp_rad"] = np.radians(pd.to_numeric(df["pa_deg"],   errors="coerce"))
+    df["M_rad"]    = np.radians(pd.to_numeric(df["mean_anomaly_deg"], errors="coerce"))
 
     # Solve Kepler's equation for E and true anomaly nu
     M = df["M_rad"].to_numpy(dtype=float)
@@ -238,18 +241,20 @@ def read_3le(data_file, makedf=True, verbose=False):
 
     E = solve_kepler_E(M, e_arr)
     df["E_rad"] = E
-    df["E_deg"] = E * RAD2DEG
+    df["E_deg"] = np.degrees(E)
 
     denom = (1.0 - e_arr * np.cos(E))
     sinv = np.sqrt(1.0 - e_arr**2) * np.sin(E) / denom
     cosv = (np.cos(E) - e_arr) / denom
     nu = np.arctan2(sinv, cosv)
     df["nu_rad"] = nu
-    df["nu_deg"] = nu * RAD2DEG
+    df["nu_deg"] = np.degrees(nu)
+    df["ta_rad"] = df["nu_rad"]
+    df["ta_deg"] = df["nu_deg"]
 
     # Argument of latitude
     df["u_rad"] = df["argp_rad"] + df["nu_rad"]
-    df["u_deg"] = df["u_rad"] * RAD2DEG
+    df["u_deg"] = np.degrees(df["u_rad"])
 
     # Magnitudes at epoch (two-body)
     r_mag = df["p_m"] / (1.0 + e * np.cos(nu))                       # m
@@ -257,11 +262,13 @@ def read_3le(data_file, makedf=True, verbose=False):
     df["r_mag_m"] = r_mag
     df["v_mag_m_s"] = v_mag
 
-    # Perifocal state (m, m/s)
+    # Perifocal state (m, m/s) with small-denominator guard
     cosv_arr, sinv_arr = np.cos(nu), np.sin(nu)
     p = df["p_m"].to_numpy(dtype=float)
-    r_pf_x = p * cosv_arr / (1.0 + e_arr * cosv_arr)
-    r_pf_y = p * sinv_arr / (1.0 + e_arr * cosv_arr)
+    denom_pf = 1.0 + e_arr * cosv_arr
+    denom_pf = np.where(np.abs(denom_pf) < 1e-15, np.sign(denom_pf) * 1e-15, denom_pf)
+    r_pf_x = p * cosv_arr / denom_pf
+    r_pf_y = p * sinv_arr / denom_pf
     r_pf_z = np.zeros_like(r_pf_x)
     sqrt_mu_p = np.sqrt(EARTH_MU / p)
     v_pf_x = -sqrt_mu_p * sinv_arr
@@ -291,5 +298,54 @@ def read_3le(data_file, makedf=True, verbose=False):
     df["v_eci_m_s_x"] = R11*v_pf_x + R12*v_pf_y + R13*v_pf_z
     df["v_eci_m_s_y"] = R21*v_pf_x + R22*v_pf_y + R23*v_pf_z
     df["v_eci_m_s_z"] = R31*v_pf_x + R32*v_pf_y + R33*v_pf_z
+
+    # -------------------- SGP4 recovery (un-Kozai) and SGP4-ready columns --------------------
+    # Inputs
+    e_ = pd.to_numeric(df["ecc"], errors="coerce").to_numpy()
+    i_ = df["inc_rad"].to_numpy()
+    # TLE mean motion: rev/day -> rad/min
+    n_tle_rad_min = (df["mean_motion_rev_day"].to_numpy() * 2.0*np.pi) / 1440.0
+
+    # SGP4 constants: xke = sqrt(mu)*60 / R_earth^(3/2) [1/min]
+    xke = np.sqrt(EARTH_MU) * 60.0 / (EARTH_RADIUS**1.5)
+    # SGP4 uses k2 = J2/2 in Earth-radii units; appear in compact form below
+    k2 = 0.5 * J2_wgs
+
+    cosi   = np.cos(i_)
+    theta2 = cosi*cosi
+    x3thm1 = 3.0*theta2 - 1.0
+    e2     = e_*e_
+    betao2 = 1.0 - e2
+    betao  = np.sqrt(betao2)
+
+    valid = np.isfinite(n_tle_rad_min) & (n_tle_rad_min > 0) & np.isfinite(e_) & (betao2 > 0)
+
+    a1   = np.full_like(n_tle_rad_min, np.nan)
+    ao   = np.full_like(n_tle_rad_min, np.nan)
+    n0   = np.full_like(n_tle_rad_min, np.nan)
+
+    if np.any(valid):
+        a1v  = (xke / n_tle_rad_min[valid])**(2.0/3.0)  # Earth-radii
+        del1 = 1.5 * k2 * x3thm1[valid] / (a1v*a1v * betao[valid]*betao2[valid])  # 0.75*J2/(a1^2*beta^3)
+        aov  = a1v * (1.0 - del1*(1.0/3.0 + del1*(1.0 + 134.0*del1/81.0)))
+        del0 = 1.5 * k2 * x3thm1[valid] / (aov*aov * betao[valid]*betao2[valid])
+        n0v  = n_tle_rad_min[valid] / (1.0 + del0)
+        a1[valid] = a1v
+        ao[valid] = aov
+        n0[valid] = n0v
+
+    a0_er = np.where(np.isfinite(n0), (xke / n0)**(2.0/3.0), np.nan)  # Earth-radii
+    a_sgp4 = a0_er * EARTH_RADIUS                                     # meters
+    n_sgp4 = n0 / 60.0                                                # rad/s
+
+    # Store SGP4-ready columns
+    df["a_sgp4"]    = a_sgp4
+    df["e_sgp4"]    = pd.to_numeric(df["ecc"], errors="coerce")
+    df["i_sgp4"]    = df["inc_rad"]
+    df["pa_sgp4"]   = df["argp_rad"]
+    df["raan_sgp4"] = df["raan_rad"]
+    df["M_sgp4"]    = df["M_rad"]      # what SGP4 expects
+    df["ta_sgp4"]   = df["nu_rad"]     # convenience; not used by SGP4
+    df["n_sgp4"]    = n_sgp4           # recovered mean motion (rad/s)
 
     return df

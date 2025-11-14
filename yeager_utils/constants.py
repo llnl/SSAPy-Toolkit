@@ -27,6 +27,7 @@ aupyr_to_mps = 4744
 
 c = 299792458  # speed of light m/s
 G = 6.67408e-11  # Gravitational constant m3 kg-1 s-2
+J2_wgs = 1.08262668e-3  # dimensionless (WGS-like)
 kb = 1.38064852e-23  # boltzmann constant m2 kg s-2 K-1
 pi = np.pi
 
