@@ -15,8 +15,8 @@ def globe_plot(
     c: str = "black",
     figsize: tuple[int, int] = (7, 8),
     save_path: str | None = None,
-    el: float = 30.0,
-    az: float = 0.0,
+    el: float = 5.0,
+    az: float = 5.0,
     scale: float = 1.0,
     fontsize: int = 18,
 ) -> tuple[plt.Figure, plt.Axes]:
