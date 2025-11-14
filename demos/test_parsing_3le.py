@@ -9,3 +9,6 @@ pprint(data)
 
 # data = read_3le_by_bit(data_file)
 # pprint(data)
+
+print(data.columns)
+print(data.head())
