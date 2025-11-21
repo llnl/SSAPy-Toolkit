@@ -860,4 +860,12 @@ def peri_apo_apsis_from_rv(r, v):
 def vcircular(r=au_to_m, mu_=1.32712440018e20 + 2.2032e13 + 3.24859e14):
     return np.sqrt(mu_ / r)
 
+def vis_viva(a, r, mu):
+    return np.sqrt(mu * (2.0/r - 1.0/a))
 
+def v_periapsis(a, rp, mu):
+    return np.sqrt(mu * (2.0/rp - 1.0/a))
+
+# (ellipse) optional extras
+def apapsis_from_a_rp(a, rp):
+    return 2.0*a - rp  # ra

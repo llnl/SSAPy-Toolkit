@@ -79,6 +79,7 @@ def globe_plot(
     ax = fig.add_subplot(111, projection="3d")
     fig.patch.set_facecolor(plotcolor)
     ax.set_facecolor(plotcolor)
+    ax.view_init(elev=float(el), azim=float(az))
     ax.tick_params(axis="both", colors=textcolor)
     ax.grid(True, color="grey", linestyle="--", linewidth=0.5)
 
@@ -101,20 +102,16 @@ def globe_plot(
     # ---------- Limits, ticks, labels ----------
     if limits is None:
         limits = (max_extent if max_extent > 0 else scale_fac) * 1.2
-
+    if limits > 1e5:
+        limits = limits / RGEO
     ax.set_xlim(-limits, limits)
     ax.set_ylim(-limits, limits)
     ax.set_zlim(-limits, limits)
 
-    if limits < 1.0:
-        xt = np.linspace(-limits, limits, 5)
-        yt = np.linspace(-limits, limits, 5)
-        zt = np.linspace(-limits, limits, 5)
-    else:
-        L = int(np.ceil(limits))
-        xt = [-L, 0, L]
-        yt = [-L, 0, L]
-        zt = [-L, 0, L]
+    L = int(limits)
+    xt = [-L, 0, L]
+    yt = [-L, 0, L]
+    zt = [-L, 0, L]
 
     ax.set_xticks(xt)
     ax.set_yticks(yt)
@@ -133,12 +130,6 @@ def globe_plot(
     ax.tick_params(axis="y", colors=textcolor, labelsize=fontsize)
     ax.tick_params(axis="z", colors=textcolor, labelsize=fontsize)
 
-    # Equal aspect for 3D
-    try:
-        ax.set_box_aspect((1, 1, 1))
-    except Exception:
-        pass
-
     # Apply theme helpers
     if c in ("black", "b"):
         fig, ax = make_black(fig, ax)
@@ -146,7 +137,6 @@ def globe_plot(
         fig, ax = make_white(fig, ax)
 
     # Final view and optional save
-    ax.view_init(elev=float(el), azim=float(az))
     if save_path:
         save_plot(fig, save_path)
 

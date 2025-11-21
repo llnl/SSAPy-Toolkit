@@ -7,7 +7,16 @@ FALLBACK_DIR = Path.cwd() / "yu_figures"
 _KNOWN_EXTS = {
     ".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp", ".gif",
     ".svg", ".svgz", ".pdf", ".ps", ".eps",
-    ".mp4", ".mov", ".avi", ".mpeg", ".mpg", ".webm"
+    ".mp4", ".mov", ".avi", ".mpeg", ".mpg", ".webm",
+    ".csv", ".tsv", ".txt", ".log",
+    ".json", ".jsonl", ".ndjson",
+    ".yaml", ".yml",
+    ".parquet", ".feather",
+    ".h5", ".hdf5", ".hdf",
+    ".npz", ".npy",
+    ".pkl", ".pickle",
+    ".xls", ".xlsx",
+    ".zip", ".gz", ".bz2", ".xz", ".zst", ".tar"
 }
 
 def _safe_rel_parts(p: Path):
