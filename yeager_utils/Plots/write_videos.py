@@ -1,3 +1,9 @@
+from .write_gifs import _sort_frames
+import numpy as np
+import warnings
+import cv2
+
+
 def write_video(
     video_name,
     frames,
@@ -32,8 +38,6 @@ def write_video(
     freeze_last_seconds : float
         Extra number of seconds to “freeze” the last frame by repeating it.
     """
-    import cv2
-
     paths = list(frames)
     if not paths:
         raise ValueError("frames list is empty")
@@ -62,7 +66,13 @@ def write_video(
         W, H = target_size
 
     fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
-    writer = cv2.VideoWriter(video_name, fourcc, fps, (W, H))
+    writer = cv2.VideoWriter(video_name, fourcc, float(fps), (W, H))
+
+    if not writer.isOpened():
+        raise RuntimeError(
+            f"Failed to open VideoWriter for '{video_name}'. "
+            "Your OpenCV/FFmpeg build may not support this codec/container."
+        )
 
     last_frame = None
 
