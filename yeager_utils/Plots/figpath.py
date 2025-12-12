@@ -3,7 +3,7 @@ from pathlib import Path
 HOME_FIG_DIR = Path.home() / "yu_figures"
 FALLBACK_DIR = Path.cwd() / "yu_figures"
 
-# Known extensions treated as real output formats (case-insensitive)
+# You can keep this around if you like, but it's no longer used for extension logic.
 _KNOWN_EXTS = {
     ".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp", ".gif",
     ".svg", ".svgz", ".pdf", ".ps", ".eps",
@@ -18,6 +18,7 @@ _KNOWN_EXTS = {
     ".xls", ".xlsx",
     ".zip", ".gz", ".bz2", ".xz", ".zst", ".tar"
 }
+
 
 def _safe_rel_parts(p: Path):
     """
@@ -40,6 +41,7 @@ def _safe_rel_parts(p: Path):
         parts.append(part)
     return parts
 
+
 def figpath(filename):
     """
     Build a path under yu_figures that *respects requested subfolders*.
@@ -47,17 +49,16 @@ def figpath(filename):
     Rules:
       - The path is always rooted under ~/yu_figures (fallback: ./yu_figures).
       - Subfolders in `filename` are preserved and created as needed.
-      - The final extension is honored only if it matches a known output type.
-        Otherwise, the name is treated as a stem and '.jpg' is appended.
+      - The basename is used exactly as given (no automatic extension added).
       - Absolute paths and '..' are normalized to stay under yu_figures.
 
     Examples
     --------
-    figpath("plot")                          -> ~/yu_figures/plot.jpg
-    figpath("tests/burn_to_dv")              -> ~/yu_figures/tests/burn_to_dv.jpg
+    figpath("plot")                          -> ~/yu_figures/plot
+    figpath("tests/burn_to_dv")              -> ~/yu_figures/tests/burn_to_dv
     figpath("tests/burn_to_dv.png")          -> ~/yu_figures/tests/burn_to_dv.png
     figpath("/abs/path/ignored/name.svg")    -> ~/yu_figures/name.svg
-    figpath("weird/name.foo")                -> ~/yu_figures/weird/name.foo.jpg
+    figpath("weird/name.foo")                -> ~/yu_figures/weird/name.foo
     """
     if not isinstance(filename, (str, Path)):
         raise TypeError("figpath(filename): filename must be str or pathlib.Path")
@@ -68,16 +69,9 @@ def figpath(filename):
     if not rel_parts:
         rel_parts = ["figure"]
 
-    # Determine basename + extension policy
+    # Use the basename exactly as provided (no auto extension)
     basename = rel_parts[-1]
-    suffix = Path(basename).suffix  # last dot segment on the filename
-    suffix_lc = suffix.lower()
-
-    if suffix and suffix_lc in _KNOWN_EXTS:
-        final_name = basename  # keep caller's extension (preserve case)
-    else:
-        # treat entire basename (including dots) as stem; append default
-        final_name = f"{basename}.jpg"
+    final_name = basename
 
     # Choose base directory (home first, then CWD)
     for base in (HOME_FIG_DIR, FALLBACK_DIR):

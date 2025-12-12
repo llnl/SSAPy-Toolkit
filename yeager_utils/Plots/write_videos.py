@@ -2,6 +2,8 @@ from .write_gifs import _sort_frames
 import numpy as np
 import warnings
 import cv2
+import glob
+from pathlib import Path
 
 
 def write_video(
@@ -11,59 +13,71 @@ def write_video(
     *,
     sort_frames: bool = True,
     warn_on_ambiguous: bool = True,
-    uniform_size: bool = True,
     target_size: tuple = None,         # (width, height); if None, use first frame
     freeze_last_seconds: float = 0.0,  # extra time to hold last frame
 ):
     """
-    Write frames to an MP4 video file, with optional natural sorting and
-    size normalization similar to write_gif.
+    Write frames to an MP4 video file, with natural sorting and uniform size.
 
     Parameters
     ----------
     video_name : str
         Output path ending with .mp4
-    frames : iterable of str
-        Paths to image files (readable by OpenCV).
+    frames : iterable of str, str, or Path
+        - Iterable of image file paths, OR
+        - Path to a folder (all files in it are used), OR
+        - Wildcard pattern string (e.g. 'frames_*.png', 'root/**/frame_*.png').
     fps : int
         Frame rate.
     sort_frames : bool
         If True, apply natural sort to the input paths.
     warn_on_ambiguous : bool
         Emit warnings when sorting is ambiguous.
-    uniform_size : bool
-        If True, resize all frames to a common size.
     target_size : (W, H) or None
-        If None and uniform_size is True, use the first frame's size.
+        Output frame size in pixels. If None, use the size of the first frame.
     freeze_last_seconds : float
         Extra number of seconds to “freeze” the last frame by repeating it.
     """
-    paths = list(frames)
+    # Normalize frames into a list of file paths
+    if isinstance(frames, (str, Path)):
+        pattern = str(frames)
+        p = Path(pattern)
+        if p.is_dir():
+            # All files directly under this directory
+            paths = [str(x) for x in p.iterdir() if x.is_file()]
+        else:
+            # Treat as a glob pattern (supports *, ?, **)
+            recursive = "**" in pattern
+            paths = glob.glob(pattern, recursive=recursive)
+    else:
+        paths = list(frames)
+
     if not paths:
-        raise ValueError("frames list is empty")
+        raise ValueError("frames list is empty (no files found)")
 
     if sort_frames:
         paths = _sort_frames(paths, warn_on_ambiguous=warn_on_ambiguous)
 
     print(f"Writing video: {video_name}")
 
-    # Read first frame for size
+    # Read first frame to determine output size
     first = cv2.imread(paths[0])
     if first is None:
         raise ValueError(f"Could not read first frame: {paths[0]}")
 
-    if uniform_size:
-        if target_size is None:
-            h, w = first.shape[:2]
-            target_size = (w, h)
-        W, H = target_size
-        # Make sure first frame matches target_size
-        if (first.shape[1], first.shape[0]) != (W, H):
-            first = cv2.resize(first, (W, H))
-    else:
+    if target_size is None:
         h, w = first.shape[:2]
-        target_size = (w, h)
-        W, H = target_size
+        W, H = int(w), int(h)
+    else:
+        W, H = int(target_size[0]), int(target_size[1])
+
+    # Resize first frame if needed
+    if (first.shape[1], first.shape[0]) != (W, H):
+        first = cv2.resize(first, (W, H))
+
+    # Ensure 3-channel BGR
+    if first.ndim == 2:
+        first = cv2.cvtColor(first, cv2.COLOR_GRAY2BGR)
 
     fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
     writer = cv2.VideoWriter(video_name, fourcc, float(fps), (W, H))
@@ -74,21 +88,21 @@ def write_video(
             "Your OpenCV/FFmpeg build may not support this codec/container."
         )
 
-    last_frame = None
-
-    # Write first frame
-    writer.write(first)
     last_frame = first
+    writer.write(first)
 
-    # Write the rest
-    for p in paths[1:]:
-        img = cv2.imread(p)
+    # Write remaining frames, always resizing to (W, H)
+    for pth in paths[1:]:
+        img = cv2.imread(pth)
         if img is None:
-            warnings.warn(f"Could not read frame: {p}; skipping.")
+            warnings.warn(f"Could not read frame: {pth}; skipping.")
             continue
 
-        if uniform_size and (img.shape[1], img.shape[0]) != (W, H):
+        if (img.shape[1], img.shape[0]) != (W, H):
             img = cv2.resize(img, (W, H))
+
+        if img.ndim == 2:
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
         writer.write(img)
         last_frame = img
