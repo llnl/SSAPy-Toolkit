@@ -334,17 +334,33 @@ def save_plot(figure, save_path, dpi=200):
 
 def yufig(figure, save_path, dpi=200):
     """
-    Save a Matplotlib figure as JPG (or append to PDF if save_path ends with .pdf).
+    Save a Matplotlib figure.
+
+    Behavior:
+      * If save_path has no extension -> save as JPG ('.jpg' is appended).
+      * If save_path ends with '.pdf' (case-insensitive) -> append/write to PDF
+        via save_plot_to_pdf.
+      * If save_path has any other extension -> use it directly with figure.savefig().
     """
     from .figpath import figpath
+
     save_path = figpath(save_path)
-    if save_path.lower().endswith('.pdf'):
+
+    # Split into base and extension
+    base_name, extension = os.path.splitext(save_path)
+
+    # If no extension was given, default to .jpg
+    if extension == "":
+        extension = ".jpg"
+        save_path = base_name + extension
+
+    # PDF: use custom handler
+    if extension.lower() == ".pdf":
         save_plot_to_pdf(figure, save_path)
         return
+
+    # All other extensions: save as-is
     try:
-        base_name, extension = os.path.splitext(save_path)
-        if extension.lower() != '.jpg':
-            save_path = base_name + '.jpg'
         figure.savefig(save_path, dpi=dpi, bbox_inches=None)
         plt.close(figure)
         print(f"Figure saved at: {save_path}")

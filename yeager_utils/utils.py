@@ -4,8 +4,6 @@ from ssapy.body import get_body
 import scipy
 from scipy import stats
 import numpy as np
-import random
-from timeit import default_timer as timer
 import os
 import sys
 import warnings
@@ -14,6 +12,8 @@ import re
 from astropy.time import Time
 from astropy import units as u
 from pathlib import Path
+from timeit import default_timer as timer
+
 
 @contextmanager
 def suppress_stdout():
@@ -54,7 +54,6 @@ def pd_flatten(data: list, factor: float = 1.0) -> list:
     return [float(x) / factor for x in cleaned_data if x.strip().replace('.', '', 1).isdigit()]
 
 
-
 def str_to_array(s: str) -> np.ndarray:
     """
     Converts a string of comma-separated values into a numpy array of floats.
@@ -82,26 +81,6 @@ def pdstr_to_arrays(df: DataFrame) -> np.ndarray:
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     return df.apply(str_to_array).to_numpy()
-
-
-def random_arr(low: float = 0, high: float = 1, size: tuple = (1, 10), dtype: str = 'float64') -> np.ndarray:
-    """
-    Generates a random array with specified bounds and size.
-
-    Parameters:
-        low (float): The lower bound for random values (default is 0).
-        high (float): The upper bound for random values (default is 1).
-        size (tuple): The size of the generated array (default is (1, 10)).
-        dtype (str): The data type for the array elements (default is 'float64').
-
-    Returns:
-        np.ndarray: The generated random array.
-    Author: Travis Yeager (yeager7@llnl.gov)
-    """
-    if 'int' in dtype:
-        return np.random.randint(low, high + 1, size, dtype=dtype)
-    else:
-        return np.random.uniform(low, high, size)
 
 
 def b2str(array_: np.ndarray) -> list:
@@ -161,6 +140,7 @@ def remove_np_nans(numpy_array: np.ndarray) -> np.ndarray:
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     return numpy_array[~np.isnan(numpy_array)]
+
 
 def remove_zeros(data: np.ndarray, axis: int = 0) -> np.ndarray:
     """
@@ -416,39 +396,6 @@ def find_nearest(array: np.ndarray, value: float = 0) -> tuple:
     return idx, array[idx] - value
 
 
-def sample(seq: list, n: int, replacement: bool = False) -> np.ndarray:
-    """
-    Randomly samples n elements from a sequence with or without replacement.
-
-    Parameters:
-        seq (list): The sequence to sample from.
-        n (int): Number of elements to sample.
-        replacement (bool): Whether sampling is done with replacement (default is False).
-
-    Returns:
-        np.ndarray: Randomly sampled elements.
-
-    Author: Travis Yeager (yeager7@llnl.gov)
-    """
-    return np.random.choice(seq, n, replacement)
-
-
-def rand_num(low: float = 0, high: float = 1) -> float:
-    """
-    Generates a random float between the specified bounds.
-
-    Parameters:
-        low (float): The lower bound (default is 0).
-        high (float): The upper bound (default is 1).
-
-    Returns:
-        float: Random number between the specified bounds.
-
-    Author: Travis Yeager (yeager7@llnl.gov)
-    """
-    return float(np.random.uniform(low, high, 1).astype('float64'))
-
-
 def isint(var_: object) -> bool:
     """
     Checks if a variable is an integer.
@@ -492,21 +439,6 @@ def isstr(var_: object) -> bool:
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     return isinstance(var_, str)
-
-
-def shuffle(x: list) -> None:
-    """
-    Shuffles the elements of a list in place.
-
-    Parameters:
-        x (list): The list to shuffle.
-
-    Returns:
-        None
-
-    Author: Travis Yeager (yeager7@llnl.gov)
-    """
-    return random.shuffle(x)
 
 
 def divby0(n: float, d: float, Δ: float = np.nan) -> float:
@@ -728,64 +660,3 @@ def contours_3d(points_3d: np.ndarray, plot: bool = False) -> scipy.spatial.Conv
         plt.legend()
         plt.show()
     return hull
-
-
-ENV_VAR = "YEAGER_UTILS_CACHE"
-DEFAULT_FILE = "covariance_sigmas.npy"
-
-
-def get_sigmas(n=25, path=None):
-    """
-    Returns an (n, 6) array of random sigma perturbations.
-    Cached to disk in a user-configurable directory.
-
-    Resolution order for cache *directory* (when path is None):
-      1) Env var YEAGER_UTILS_CACHE (file stored as covariance_sigmas.npy)
-      2) ~/.cache/yeager_utils/covariance_sigmas.npy
-
-    If `path` is provided, it is treated as an explicit file path and used as-is.
-    """
-    if path is None:
-        from .IO import yudata
-
-        # Prefer env-provided directory, then fallback to ~/.cache/yeager_utils
-        env_dir = os.environ.get(ENV_VAR, "").strip()
-        dirs = []
-        if env_dir:
-            dirs.append(Path(env_dir).expanduser())
-        dirs.append(Path.home() / ".cache" / "yeager_utils")
-
-        # Use datapath to choose/create the first usable directory
-        path = Path(yudata(DEFAULT_FILE, dirs=dirs))
-    else:
-        path = Path(path)
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    compute_new = True
-    if path.exists():
-        print("Loading sigmas.")
-        try:
-            sigmas = np.load(path)
-            compute_new = not (sigmas.ndim == 2 and sigmas.shape[0] == n and sigmas.shape[1] == 6)
-        except Exception:
-            # Corrupt or incompatible file -> recompute
-            compute_new = True
-
-    if compute_new:
-        print("Computing sigmas.")
-        sigmas = np.zeros((n, 6))
-        for i in range(n):
-            x_dist, v_dist = 10, 1
-            while True:
-                tmpx, tmpy, tmpz = np.random.uniform(-x_dist, x_dist, 3)
-                tmpvx, tmpvy, tmpvz = np.random.uniform(-v_dist, v_dist, 3)
-                if (
-                    np.sqrt(tmpx**2 + tmpy**2 + tmpz**2) <= x_dist
-                    and np.sqrt(tmpvx**2 + tmpvy**2 + tmpvz**2) <= v_dist
-                ):
-                    break
-            sigmas[i, :] = [tmpx, tmpy, tmpz, tmpvx, tmpvy, tmpvz]
-        np.save(path, sigmas)
-
-    return sigmas
