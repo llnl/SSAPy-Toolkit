@@ -11,6 +11,8 @@ from .Integrators import *
 from .IO import *
 from .Orbital_Mechanics import *
 from .Plots import *
+from .SSAPy_wrappers import *
+from .Rockets import *
 from .Time_Functions import *
 
 # Single Files
@@ -18,7 +20,6 @@ from .asteroids import *
 from .constants import *
 from .hpc import *
 from .orbit_initializer import *
-from .ssapy_wrapper import *
 from .utils import *
 from .vectors import *
 
