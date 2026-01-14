@@ -16,7 +16,7 @@ import numpy as np
 # From your utilities
 from yeager_utils import Time, get_times, gcrf_to_lonlat
 from yeager_utils.Coordinates.on_sky_distance import lonlat_distance
-from yeager_utils.ssapy_wrapper import keplerian_prop, best_prop
+from yeager_utils.SSAPy_wrappers import keplerian_prop, best_prop
 from ssapy import Orbit, rv
 
 # ---------------- Hardcoded Inputs ----------------

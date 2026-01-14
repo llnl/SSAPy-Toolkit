@@ -3,52 +3,32 @@ from PIL import Image as PILImage
 import numpy as np
 
 from ssapy.utils import find_file
-from .plotutils import make_black, make_white, save_plot, valid_orbits
+from .plotutils import make_black, make_white, save_plot
 from ..constants import RGEO, EARTH_RADIUS
+from .plotutils import valid_orbits  # adjust import path to where you place valid_orbits
 
 
 def globe_plot(
-    r: np.ndarray | list[np.ndarray],
-    t: np.ndarray | list[np.ndarray] | None = None,
-    limits: float | None = None,
-    title: str = "",
-    c: str = "black",
-    figsize: tuple[int, int] = (7, 8),
-    save_path: str | None = None,
-    el: float = 5.0,
-    az: float = 5.0,
-    scale: float = 1.0,
-    fontsize: int = 18,
-) -> tuple[plt.Figure, plt.Axes]:
+    r,
+    t=None,
+    limits=None,
+    title="",
+    c="black",
+    figsize=(7, 8),
+    save_path=None,
+    el=5.0,
+    az=5.0,
+    scale=1.0,
+    fontsize=18,
+):
     """
     Plot a textured Earth and scatter satellite positions in 3D.
-    r: (N,3) array or list of (Ni,3) arrays in meters (ECI/ECEF); internally scaled by RGEO.
-    t: optional time array(s); only used by valid_orbits(). If None, dummy indices are created.
+
+    This function relies on valid_orbits(r, t) to normalize inputs.
     """
 
-    # ---------- Normalize inputs and make time optional ----------
-    if isinstance(r, np.ndarray):
-        if r.ndim != 2 or r.shape[1] != 3:
-            raise ValueError("r must be (N,3) or list of (Ni,3) arrays")
-        r_list = [r]
-    elif isinstance(r, (list, tuple)):
-        r_list = [np.asarray(ri) for ri in r]
-        for ri in r_list:
-            if ri.ndim != 2 or ri.shape[1] != 3:
-                raise ValueError("Each track in r must be a (Ni,3) array")
-    else:
-        raise TypeError("r must be an ndarray or list/tuple of ndarrays")
-
-    if t is None:
-        t_list = [np.arange(ri.shape[0]) for ri in r_list]
-    elif isinstance(t, np.ndarray):
-        t_list = [t]
-    elif isinstance(t, (list, tuple)):
-        t_list = [np.asarray(ti) for ti in t]
-    else:
-        raise TypeError("t must be None, an ndarray, or list/tuple of ndarrays")
-
-    r_list, t_list = valid_orbits(r_list, t_list)
+    # ---- Normalize/validate inputs in one place ----
+    r_list, t_list = valid_orbits(r, t)  # t_list is not used directly here, but kept for consistency
 
     # ---------- Theme ----------
     if c in ("black", "b"):
@@ -59,10 +39,12 @@ def globe_plot(
         plotcolor, textcolor = "white", "black"
 
     # ---------- Earth texture ----------
-    scale = 1.0 if not np.isfinite(scale) or scale <= 0 else float(scale)
+    scale = 1.0 if (not np.isfinite(scale) or scale <= 0) else float(scale)
     tex_w = int(round(5400 / scale))
     tex_h = int(round(2700 / scale))
-    earth_png = PILImage.open(find_file("earth", ext=".png")).resize((tex_w, tex_h), resample=PILImage.BILINEAR)
+    earth_png = PILImage.open(find_file("earth", ext=".png")).resize(
+        (tex_w, tex_h), resample=PILImage.BILINEAR
+    )
     bm = np.asarray(earth_png, dtype=float) / 255.0  # (H, W, C)
 
     # ---------- Globe mesh (match texture resolution) ----------
@@ -104,18 +86,15 @@ def globe_plot(
         limits = (max_extent if max_extent > 0 else scale_fac) * 1.2
     if limits > 1e5:
         limits = limits / RGEO
+
     ax.set_xlim(-limits, limits)
     ax.set_ylim(-limits, limits)
     ax.set_zlim(-limits, limits)
 
     L = int(limits)
-    xt = [-L, 0, L]
-    yt = [-L, 0, L]
-    zt = [-L, 0, L]
-
-    ax.set_xticks(xt)
-    ax.set_yticks(yt)
-    ax.set_zticks(zt)
+    ax.set_xticks([-L, 0, L])
+    ax.set_yticks([-L, 0, L])
+    ax.set_zticks([-L, 0, L])
     ax.set_xticklabels([])
     ax.set_yticklabels([])
     ax.set_zticklabels([])
@@ -136,7 +115,6 @@ def globe_plot(
     elif c in ("white", "w"):
         fig, ax = make_white(fig, ax)
 
-    # Final view and optional save
     if save_path:
         save_plot(fig, save_path)
 

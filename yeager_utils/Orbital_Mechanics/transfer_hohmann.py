@@ -5,7 +5,7 @@ import warnings
 from ssapy import Orbit
 from ..constants import EARTH_MU, EARTH_RADIUS
 from ..Time_Functions import Time, to_gps
-from ..ssapy_wrapper import ssapy_orbit
+from ..SSAPy_wrappers import ssapy_orbit
 
 
 def velocity_to_ntw(r, v, v_target):

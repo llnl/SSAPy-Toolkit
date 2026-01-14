@@ -69,91 +69,163 @@ def check_type(var):
     return VarType.OTHER
 
 
+import numpy as np
+from astropy.time import Time
+
+
 def valid_orbits(r, t):
     """
-    Normalize r and t into parallel lists of shape-(n,3) arrays and Time objects.
+    Normalize r and t into parallel lists of shape-(n,3) ndarrays and astropy Time objects.
 
-    Parameters
-    ----------
-    r : ndarray, list of ndarrays, list, float, or int
-    t : ndarray, list of ndarrays, astropy.time.Time, list of Time, float, int, or None
+    Accepts:
+      r:
+        - (3,), (1,3), (N,3), (B,N,3) ndarray
+        - list/tuple of any of the above
+      t:
+        - None
+        - scalar (float/int) interpreted as GPS seconds (broadcast)
+        - ndarray of GPS seconds: (N,) or (B,N)
+        - astropy.time.Time (scalar or array)
+        - list/tuple of scalars/ndarrays/Time, matching number of tracks
 
-    Returns
-    -------
-    (list_of_arrays, list_of_Time)
+    Returns:
+      r_list: list[np.ndarray] where each is (Ni,3)
+      t_list: list[astropy.time.Time] where each has len Ni
     """
 
-    def to_array3(x):
-        """Convert input to shape-(n,3) ndarray."""
-        arr = np.asarray(x, dtype=float).squeeze()
+    def _to_track_list_r(r_in):
+        # returns list of (N,3) float arrays
+        if isinstance(r_in, (list, tuple)):
+            out = []
+            for item in r_in:
+                out.extend(_to_track_list_r(item))
+            return out
+
+        arr = np.asarray(r_in, dtype=float).squeeze()
+
+        # Single position vector
         if arr.ndim == 1 and arr.size == 3:
-            return arr.reshape(1, 3)
-        elif arr.ndim == 2 and arr.shape in [(3, 1), (1, 3)]:
-            return arr.reshape(1, 3)
-        elif arr.ndim == 2 and arr.shape[1] == 3:
-            return arr
-        raise ValueError(f"Cannot interpret r shape: {arr.shape}")
+            return [arr.reshape(1, 3)]
 
-    # ---- classify and normalize r ----
-    r_type = check_type(r)
-    if r_type in {VarType.ARRAY, VarType.LIST_LISTS, VarType.MIXED_LIST, VarType.OTHER}:
-        try:
-            r_list = [to_array3(r)]
-        except Exception:
-            raise ValueError("'r' must be convertible to shape-(n,3); got {}".format(type(r)))
-    elif r_type == VarType.LIST_ARRAYS:
-        r_list = [to_array3(ri) for ri in r]
-    else:
-        raise ValueError("'r' must be an ndarray or list of ndarrays; got {}".format(r_type))
+        # Row/col vector forms
+        if arr.ndim == 2 and arr.shape in [(1, 3), (3, 1)]:
+            return [arr.reshape(1, 3)]
 
-    # ---- classify t ----
-    t_type = check_type(t)
+        # Standard track
+        if arr.ndim == 2 and arr.shape[1] == 3:
+            return [arr]
 
-    # ---- build t_list ----
-    if t_type == VarType.NONE:
-        t_list = [Time(np.zeros(len(rr)), format="gps") for rr in r_list]
+        # Batched tracks
+        if arr.ndim == 3 and arr.shape[2] == 3:
+            return [arr[k] for k in range(arr.shape[0])]
 
-    elif t_type == VarType.ARRAY:
-        if not all(len(t) == len(rr) for rr in r_list):
-            raise ValueError("Single t-array length must match all r-array lengths")
-        t_list = [Time(t, format="gps") for _ in r_list]
+        raise ValueError(f"valid_orbits: cannot interpret r with shape {arr.shape}")
 
-    elif t_type == VarType.LIST_ARRAYS:
-        if len(t) != len(r_list):
-            raise ValueError("Number of t-arrays must equal number of r-arrays")
-        t_list = []
-        for rr, tt in zip(r_list, t):
-            if len(tt) != len(rr):
-                raise ValueError("Each t-array must match its corresponding r-array length")
-            t_list.append(Time(tt, format="gps"))
+    def _is_numeric_array(x):
+        return isinstance(x, np.ndarray) and np.issubdtype(x.dtype, np.number)
 
-    elif t_type == VarType.TIME:
-        if isinstance(t, Time):
-            if t.isscalar:
-                t_list = [Time(np.full(len(rr), t.value), format=t.format) for rr in r_list]
-            else:
-                if not all(len(t) == len(rr) for rr in r_list):
-                    raise ValueError("Single Time object length must match all r-array lengths")
-                t_list = [t for _ in r_list]
-        elif isinstance(t, list) and all(isinstance(tt, Time) for tt in t):
-            if len(t) != len(r_list):
-                raise ValueError("Number of Time objects must equal number of r-arrays")
-            if not all(len(tt) == len(rr) for tt, rr in zip(t, r_list)):
-                raise ValueError("Each Time object must match its corresponding r-array length")
-            t_list = t
-        else:
-            raise ValueError("Unsupported Time object input format.")
+    def _to_time_track_list(t_in, r_list):
+        """
+        Return list[Time] matching r_list length.
+        """
+        n_tracks = len(r_list)
 
-    elif isinstance(t, (int, float)):
-        t_list = [Time(np.full(len(rr), t), format="gps") for rr in r_list]
+        # None -> dummy gps time arrays (zeros)
+        if t_in is None:
+            return [Time(np.zeros(len(rr), dtype=float), format="gps") for rr in r_list]
 
-    else:
-        raise ValueError("'t' must be None, float, ndarray, list of ndarrays, or Time object(s); got {}".format(t_type))
+        # Single Time object -> broadcast if needed
+        if isinstance(t_in, Time):
+            if t_in.isscalar:
+                return [Time(np.full(len(rr), t_in.gps, dtype=float), format="gps") for rr in r_list]
+            # If array Time:
+            if n_tracks == 1:
+                if len(t_in) != len(r_list[0]):
+                    raise ValueError("valid_orbits: Time length must match r length")
+                return [t_in]
+            # Broadcast same Time array to all tracks (must match all)
+            if not all(len(t_in) == len(rr) for rr in r_list):
+                raise ValueError("valid_orbits: single Time array length must match all r tracks")
+            return [t_in for _ in r_list]
+
+        # Scalar numeric -> GPS seconds broadcast
+        if isinstance(t_in, (int, float, np.integer, np.floating)):
+            val = float(t_in)
+            return [Time(np.full(len(rr), val, dtype=float), format="gps") for rr in r_list]
+
+        # ndarray of gps seconds
+        if isinstance(t_in, np.ndarray):
+            arr = np.asarray(t_in)
+
+            # If it's not numeric, bail early
+            if not np.issubdtype(arr.dtype, np.number):
+                raise TypeError("valid_orbits: ndarray t must be numeric GPS seconds")
+
+            if arr.ndim == 0:
+                val = float(arr)
+                return [Time(np.full(len(rr), val, dtype=float), format="gps") for rr in r_list]
+
+            if arr.ndim == 1:
+                if n_tracks == 1:
+                    if arr.shape[0] != len(r_list[0]):
+                        raise ValueError("valid_orbits: t length must match r length")
+                    return [Time(arr.astype(float), format="gps")]
+
+                # Broadcast one time vector to all tracks if it matches all
+                if not all(arr.shape[0] == len(rr) for rr in r_list):
+                    raise ValueError("valid_orbits: single t-array length must match all r tracks")
+                tt = Time(arr.astype(float), format="gps")
+                return [tt for _ in r_list]
+
+            if arr.ndim == 2:
+                # Batched times: (B,N)
+                if arr.shape[0] != n_tracks:
+                    raise ValueError("valid_orbits: batched t must have same number of tracks as r")
+                out = []
+                for rr, row in zip(r_list, arr):
+                    if row.shape[0] != len(rr):
+                        raise ValueError("valid_orbits: each batched t row must match its r track length")
+                    out.append(Time(np.asarray(row, dtype=float), format="gps"))
+                return out
+
+            raise ValueError("valid_orbits: ndarray t must be 0D, 1D, or 2D")
+
+        # list/tuple: per-track specification, or a single element to broadcast
+        if isinstance(t_in, (list, tuple)):
+            if len(t_in) == 1 and n_tracks > 1:
+                # broadcast single element if possible
+                return _to_time_track_list(t_in[0], r_list)
+
+            if len(t_in) != n_tracks:
+                raise ValueError("valid_orbits: number of t entries must equal number of r tracks")
+
+            out = []
+            for rr, ti in zip(r_list, t_in):
+                # recurse per item but ensure it yields exactly 1 track
+                ti_list = _to_time_track_list(ti, [rr])
+                if len(ti_list) != 1:
+                    raise ValueError("valid_orbits: each per-track t entry must map to exactly one Time array")
+                out.append(ti_list[0])
+            return out
+
+        raise TypeError(f"valid_orbits: unsupported type for t: {type(t_in)}")
+
+    r_list = _to_track_list_r(r)
+    t_list = _to_time_track_list(t, r_list)
+
+    # Final length sanity
+    for rr, tt in zip(r_list, t_list):
+        if len(rr) != len(tt):
+            raise ValueError("valid_orbits: length mismatch after normalization")
 
     try:
-        print("Returning arrays shaped: {}, {}".format(np.shape(r_list), np.shape(t_list)))
+        # This prints (ntracks, N, 3) style shapes if tracks are uniform; otherwise it may error.
+        print(f"Returning arrays shaped: {np.shape(r_list)}, {np.shape(t_list)}")
     except Exception as e:
-        print("Returning arrays with varying shapes: type(r_list)={}, type(t_list)={}, error={}".format(type(r_list), type(t_list), e))
+        print(
+            "Returning arrays with varying shapes: "
+            f"type(r_list)={type(r_list)}, type(t_list)={type(t_list)}, error={e}"
+        )
 
     return r_list, t_list
 

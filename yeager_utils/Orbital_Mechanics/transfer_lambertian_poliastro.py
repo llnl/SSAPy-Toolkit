@@ -1,5 +1,5 @@
 from ..constants import EARTH_MU, EARTH_RADIUS
-from ..ssapy_wrapper import ssapy_orbit
+from ..SSAPy_wrappers import ssapy_orbit
 from ..Time_Functions import Time, to_gps
 import numpy as np
 from poliastro.iod import izzo

@@ -39,7 +39,7 @@ for theta in range(0, 181, theta_step):
 
 # ----------------------------- write the GIF -----------------------------
 # Build the exact list of frame paths we just saved, in numeric order.
-frames = [ut.figpath(f"tests/rotate_vector_frames/{j:06d}") for j in range(total)]
+frames = [ut.figpath(f"tests/rotate_vector_frames/{j:06d}.jpg") for j in range(total)]
 
 # Place the GIF itself under figpath('tests/'). Convert the default .jpg to .gif.
 gif_base_jpg_like = ut.figpath(f"tests/rotate_vectors_{v_unit[0]:.0f}_{v_unit[1]:.0f}_{v_unit[2]:.0f}")
