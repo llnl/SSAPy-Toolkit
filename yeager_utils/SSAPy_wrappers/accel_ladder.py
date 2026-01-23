@@ -1,18 +1,20 @@
-def ssapy_accel_ladder():
+def ssapy_accel_ladder(area=1.0, mass=250.0, CR=1.2, CD=2.2):
     """
     Returns a dict: name -> ssapy Accel object.
 
-    Ladder (add effects in typical strength order, then upgrade gravity fidelity):
-      1) kepler_earth_point_mass
-      2) kepler_earth_plus_moon
-      3) + earth_j2
-      4) + sun
-      5) + planets
-      6) upgrade earth gravity -> full earth harmonics (140x140)
-      7) add full lunar harmonics (20x20) on top of moon point-mass
-      8) full earth harmonics + (moon point + moon harmonics) + sun + planets
+    Ordering is least -> most complete:
+      1) Kepler Earth point mass
+      2) + Moon point mass
+      3) + Earth J2
+      4) + Sun
+      5) + Planets
+      6) Upgrade Earth gravity: J2 -> full harmonics (keep Moon/Sun/Planets)
+      7) + Moon harmonics
+      8) + SRP
+      9) + EarthRad
+     10) + Drag
     """
-    from ssapy.accel import AccelKepler
+    from ssapy.accel import AccelKepler, AccelSolRad, AccelEarthRad, AccelDrag
     from ssapy.body import get_body
     from ssapy.gravity import AccelHarmonic, AccelThirdBody
 
@@ -23,15 +25,12 @@ def ssapy_accel_ladder():
 
     a_kepler = AccelKepler()
 
-    # Earth gravity (non-central terms; Kepler provides the central term)
     a_earth_j2 = AccelHarmonic(earth, 2, 0)
     a_earth_full = AccelHarmonic(earth, 140, 140)
 
-    # Moon gravity: point-mass as third-body + optional non-central harmonics
     a_moon_point = AccelThirdBody(moon)
     a_moon_full = AccelHarmonic(moon, 20, 20)
 
-    # Sun + planets
     a_sun = AccelThirdBody(sun)
 
     a_planets = None
@@ -39,30 +38,49 @@ def ssapy_accel_ladder():
         term = AccelThirdBody(p)
         a_planets = term if a_planets is None else a_planets + term
 
+    a_solrad = AccelSolRad(area=float(area), mass=float(mass), CR=float(CR))
+    a_earthrad = AccelEarthRad(area=float(area), mass=float(mass), CR=float(CR))
+    a_drag = AccelDrag(area=float(area), mass=float(mass), CD=float(CD))
+
     suite = {}
 
-    suite["kepler_earth_point_mass"] = a_kepler
+    # 1) Kepler only
+    suite["Kep"] = a_kepler
 
-    kepler_moon = a_kepler + a_moon_point
-    suite["kepler_earth_plus_moon"] = kepler_moon
+    # 2) + Moon point mass
+    m2 = a_kepler + a_moon_point
+    suite["Kep+Moon"] = m2
 
-    kepler_moon_earthj2 = kepler_moon + a_earth_j2
-    suite["kepler_earth_plus_moon_plus_earth_j2"] = kepler_moon_earthj2
+    # 3) + Earth J2
+    m3 = m2 + a_earth_j2
+    suite["Kep+Moon+J2"] = m3
 
-    kepler_moon_earthj2_sun = kepler_moon_earthj2 + a_sun
-    suite["kepler_earth_plus_moon_plus_earth_j2_plus_sun"] = kepler_moon_earthj2_sun
+    # 4) + Sun
+    m4 = m3 + a_sun
+    suite["Kep+Moon+J2+Sun"] = m4
 
-    kepler_moon_earthj2_sun_planets = kepler_moon_earthj2_sun + a_planets
-    suite["kepler_earth_plus_moon_plus_earth_j2_plus_sun_plus_planets"] = kepler_moon_earthj2_sun_planets
+    # 5) + Planets (shortened)
+    m5 = m4 + a_planets
+    suite["Kep+Moon+J2+Sun+Pln"] = m5
 
-    earth_full_only = a_kepler + a_earth_full
-    suite["kepler_plus_earth_full_harmonics"] = earth_full_only
+    # 6) Upgrade Earth gravity: full harmonics, keep Moon/Sun/Planets (shortened)
+    m6 = a_kepler + a_earth_full + a_moon_point + a_sun + a_planets
+    suite["EH140+Moon+Sun+Pln"] = m6
 
-    earth_full_plus_moon_full = earth_full_only + a_moon_point + a_moon_full
-    suite["kepler_plus_earth_full_harmonics_plus_moon_full_harmonics"] = earth_full_plus_moon_full
+    # 7) + Moon harmonics
+    m7 = m6 + a_moon_full
+    suite["EH140+MH20+Sun+Pln"] = m7
 
-    suite["kepler_plus_earth_full_harmonics_plus_moon_full_harmonics_plus_sun_plus_planets"] = (
-        earth_full_plus_moon_full + a_sun + a_planets
-    )
+    # 8) + SRP
+    m8 = m7 + a_solrad
+    suite["EH140+MH20+Sun+Pln+SRP"] = m8
+
+    # 9) + Earth radiation pressure
+    m9 = m8 + a_earthrad
+    suite["EH140+MH20+Sun+Pln+SRP+ERad"] = m9
+
+    # 10) + Drag
+    m10 = m9 + a_drag
+    suite["EH140+MH20+Sun+Pln+SRP+ERad+Drag"] = m10
 
     return suite
