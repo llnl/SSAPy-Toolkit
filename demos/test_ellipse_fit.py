@@ -11,7 +11,13 @@ This script:
   5) Reconstructs with SSAPy:
        - from state vectors (r0,v0) at t = t_rel
        - from returned Keplerian elements at t = t_rel
-  6) Saves plots into tests/ via your figpath helper.
+  6) Saves plots into tests/ via your figpath helper, including:
+       - arcs
+       - SV recon overlay
+       - Kepler recon overlay
+       - position error vs time (SV + Kepler)
+       - radius vs time (fit vs ssapy)
+       - speed vs time (fit vs ssapy)
 
 No math module, no typing module.
 """
@@ -30,6 +36,7 @@ import numpy as np
 def _norm(x, axis=None):
     return np.linalg.norm(x, axis=axis)
 
+
 def _unit(x, eps=1e-15):
     x = np.asarray(x, float)
     n = np.linalg.norm(x)
@@ -37,16 +44,19 @@ def _unit(x, eps=1e-15):
         return None
     return x / n
 
+
 def _finite(x, name):
     x = np.asarray(x)
     if not np.all(np.isfinite(x)):
         bad = np.where(~np.isfinite(x))
         raise ValueError(f"Non-finite values in {name} at indices {bad}")
 
+
 def _assert_keys(d, keys):
     missing = [k for k in keys if k not in d]
     if missing:
         raise KeyError(f"Missing keys from ellipse_fit result: {missing}")
+
 
 def _endpoint_report(res, P1_m, P2_m, label=""):
     r_m = np.asarray(res["r"], float)
@@ -54,6 +64,7 @@ def _endpoint_report(res, P1_m, P2_m, label=""):
     d1_m = float(_norm(r_m[-1] - P2_m))
     print(f"{label}endpoint deltas: |r[0]-P1|={d0_m:.6e} m, |r[-1]-P2|={d1_m:.6e} m")
     return d0_m, d1_m
+
 
 def _invariant_report(res, label=""):
     mu_m3_s2 = float(res["mu"])
@@ -87,6 +98,7 @@ def _invariant_report(res, label=""):
 
     return metrics
 
+
 def _ssapy_pos_err(r_ref_m, r_test_m, label=""):
     r_ref_m = np.asarray(r_ref_m, float)
     r_test_m = np.asarray(r_test_m, float)
@@ -96,7 +108,8 @@ def _ssapy_pos_err(r_ref_m, r_test_m, label=""):
     rms_m = float(np.sqrt(np.mean(err_m**2)))
     max_m = float(np.max(err_m))
     print(f"{label}SSAPy position error: RMS={rms_m:.6e} m, max={max_m:.6e} m")
-    return rms_m, max_m
+    return rms_m, max_m, err_m
+
 
 def _compute_t_hat(P1_m, P2_m):
     """
@@ -121,6 +134,155 @@ def _compute_t_hat(P1_m, P2_m):
     if t_hat is None:
         raise ValueError("Could not form tangential unit vector at P1.")
     return t_hat
+
+
+def _plot_error_vs_time(results, recon_cache):
+    """
+    recon_cache[name] must contain:
+      - "sv": (r_sv_m, v_sv_m_s, t_sv_s)
+      - "ke": (r_ke_m, v_ke_m_s, t_ke_s)
+    Saves:
+      - testing_ellipse_fit_distance.jpg (Kepler error)
+      - testing_ellipse_fit_error_sv.png
+      - testing_ellipse_fit_error_kepler.png
+      - testing_ellipse_fit_error_both.png
+    """
+    import matplotlib.pyplot as plt
+
+    # --- Kepler error plot (historical filename requested) ---
+    save_path_dist = figpath("tests/testing_ellipse_fit_distance.jpg")
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    for name in ["A", "B"]:
+        res = results[name]
+        t_rel_s = np.asarray(res["t_rel"], float)
+        r_ke_m = np.asarray(recon_cache[name]["ke"][0], float)
+        err_m = _norm(np.asarray(res["r"], float) - r_ke_m, axis=1)
+        ax.plot(t_rel_s, err_m, label=f"Kepler err {name}")
+    ax.set_xlabel("t_rel [s]")
+    ax.set_ylabel("|r_fit - r_ssapy| [m]")
+    ax.set_title("ellipse_fit vs SSAPy position error (Kepler reconstruction)")
+    ax.grid(True)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(save_path_dist, dpi=200)
+    plt.close(fig)
+    print(f"[saved] {save_path_dist}")
+
+    # --- SV error plot ---
+    save_path_sv = figpath("tests/testing_ellipse_fit_error_sv.png")
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    for name in ["A", "B"]:
+        res = results[name]
+        t_rel_s = np.asarray(res["t_rel"], float)
+        r_sv_m = np.asarray(recon_cache[name]["sv"][0], float)
+        err_m = _norm(np.asarray(res["r"], float) - r_sv_m, axis=1)
+        ax.plot(t_rel_s, err_m, label=f"SV err {name}")
+    ax.set_xlabel("t_rel [s]")
+    ax.set_ylabel("|r_fit - r_ssapy| [m]")
+    ax.set_title("ellipse_fit vs SSAPy position error (SV reconstruction)")
+    ax.grid(True)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(save_path_sv, dpi=200)
+    plt.close(fig)
+    print(f"[saved] {save_path_sv}")
+
+    # --- Kepler error plot (png) ---
+    save_path_ke = figpath("tests/testing_ellipse_fit_error_kepler.png")
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    for name in ["A", "B"]:
+        res = results[name]
+        t_rel_s = np.asarray(res["t_rel"], float)
+        r_ke_m = np.asarray(recon_cache[name]["ke"][0], float)
+        err_m = _norm(np.asarray(res["r"], float) - r_ke_m, axis=1)
+        ax.plot(t_rel_s, err_m, label=f"Kepler err {name}")
+    ax.set_xlabel("t_rel [s]")
+    ax.set_ylabel("|r_fit - r_ssapy| [m]")
+    ax.set_title("ellipse_fit vs SSAPy position error (Kepler reconstruction)")
+    ax.grid(True)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(save_path_ke, dpi=200)
+    plt.close(fig)
+    print(f"[saved] {save_path_ke}")
+
+    # --- Combined error plot (SV + Kepler) ---
+    save_path_both = figpath("tests/testing_ellipse_fit_error_both.png")
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    for name in ["A", "B"]:
+        res = results[name]
+        t_rel_s = np.asarray(res["t_rel"], float)
+        r_sv_m = np.asarray(recon_cache[name]["sv"][0], float)
+        r_ke_m = np.asarray(recon_cache[name]["ke"][0], float)
+        err_sv_m = _norm(np.asarray(res["r"], float) - r_sv_m, axis=1)
+        err_ke_m = _norm(np.asarray(res["r"], float) - r_ke_m, axis=1)
+        ax.plot(t_rel_s, err_sv_m, label=f"SV err {name}")
+        ax.plot(t_rel_s, err_ke_m, label=f"Kepler err {name}")
+    ax.set_xlabel("t_rel [s]")
+    ax.set_ylabel("|r_fit - r_ssapy| [m]")
+    ax.set_title("ellipse_fit vs SSAPy position error (SV & Kepler)")
+    ax.grid(True)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(save_path_both, dpi=200)
+    plt.close(fig)
+    print(f"[saved] {save_path_both}")
+
+
+def _plot_radius_and_speed(results, recon_cache):
+    """
+    Saves:
+      - testing_ellipse_fit_radius.png
+      - testing_ellipse_fit_speed.png
+    Each compares ellipse_fit vs SSAPy (Kepler recon) for A and B.
+    """
+    import matplotlib.pyplot as plt
+
+    # radius
+    save_path_r = figpath("tests/testing_ellipse_fit_radius.png")
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    for name in ["A", "B"]:
+        res = results[name]
+        t_rel_s = np.asarray(res["t_rel"], float)
+        r_fit_m = np.asarray(res["r"], float)
+        r_ke_m = np.asarray(recon_cache[name]["ke"][0], float)
+        ax.plot(t_rel_s, _norm(r_fit_m, axis=1), label=f"|r| fit {name}")
+        ax.plot(t_rel_s, _norm(r_ke_m, axis=1), label=f"|r| ssapy {name}")
+    ax.set_xlabel("t_rel [s]")
+    ax.set_ylabel("|r| [m]")
+    ax.set_title("Radius vs time (ellipse_fit vs SSAPy)")
+    ax.grid(True)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(save_path_r, dpi=200)
+    plt.close(fig)
+    print(f"[saved] {save_path_r}")
+
+    # speed
+    save_path_v = figpath("tests/testing_ellipse_fit_speed.png")
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    for name in ["A", "B"]:
+        res = results[name]
+        t_rel_s = np.asarray(res["t_rel"], float)
+        v_fit_m_s = np.asarray(res["v"], float)
+        v_ke_m_s = np.asarray(recon_cache[name]["ke"][1], float)
+        ax.plot(t_rel_s, _norm(v_fit_m_s, axis=1), label=f"|v| fit {name}")
+        ax.plot(t_rel_s, _norm(v_ke_m_s, axis=1), label=f"|v| ssapy {name}")
+    ax.set_xlabel("t_rel [s]")
+    ax.set_ylabel("|v| [m/s]")
+    ax.set_title("Speed vs time (ellipse_fit vs SSAPy)")
+    ax.grid(True)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(save_path_v, dpi=200)
+    plt.close(fig)
+    print(f"[saved] {save_path_v}")
 
 
 # ----------------------------------------------------------------------
@@ -208,13 +370,13 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------
     # 1️⃣  Reconstruct using initial state vectors r0,v0 AT THE SAME t_rel GRID
     # ------------------------------------------------------------------
+    recon_cache = {"A": {}, "B": {}}
     sv_recons = []
     for name, res in results.items():
         r0_m = np.asarray(res["r0"], float)
         v0_m_s = np.asarray(res["v0"], float)
         t_rel_s = np.asarray(res["t_rel"], float)
 
-        # IMPORTANT: drive SSAPy with the exact t grid to match shapes
         r_sv_m, v_sv_m_s, t_sv_s = ssapy_orbit(
             r=r0_m,
             v=v0_m_s,
@@ -222,6 +384,7 @@ if __name__ == "__main__":
         )
 
         _ssapy_pos_err(res["r"], r_sv_m, label=f"SV RECON {name}: ")
+        recon_cache[name]["sv"] = (r_sv_m, v_sv_m_s, t_sv_s)
         sv_recons.append((name, r_sv_m, t_sv_s))
 
     save_path_sv = figpath("tests/testing_ellipse_fit_recons_sv.png")
@@ -252,6 +415,7 @@ if __name__ == "__main__":
         )
 
         _ssapy_pos_err(res["r"], r_ke_m, label=f"KEPLER RECON {name}: ")
+        recon_cache[name]["ke"] = (r_ke_m, v_ke_m_s, t_ke_s)
         ke_recons.append((name, r_ke_m, t_ke_s))
 
     save_path_ke = figpath("tests/testing_ellipse_fit_recons_kepler.png")
@@ -265,13 +429,34 @@ if __name__ == "__main__":
     print(f"[saved] {save_path_ke}")
 
     # ------------------------------------------------------------------
-    # 3️⃣  Compare the two solutions against each other (sanity)
+    # 3️⃣  Error/time + radius + speed plots (regression artifacts)
+    # ------------------------------------------------------------------
+    _plot_error_vs_time(results, recon_cache)
+    _plot_radius_and_speed(results, recon_cache)
+
+    # ------------------------------------------------------------------
+    # 4️⃣  Compare the two solutions against each other (sanity)
     # ------------------------------------------------------------------
     rA_m = np.asarray(results["A"]["r"], float)
     rB_m = np.asarray(results["B"]["r"], float)
     if rA_m.shape == rB_m.shape:
         sep_m = _norm(rA_m - rB_m, axis=1)
         print(f"\nA vs B separation: mean={float(np.mean(sep_m)):.6e} m, max={float(np.max(sep_m)):.6e} m")
+
+        # Optional plot: separation vs time
+        import matplotlib.pyplot as plt
+        save_path_sep = figpath("tests/testing_ellipse_fit_separation_AB.png")
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.plot(np.asarray(results["A"]["t_rel"], float), sep_m)
+        ax.set_xlabel("t_rel [s]")
+        ax.set_ylabel("|r_A - r_B| [m]")
+        ax.set_title("A vs B separation vs time")
+        ax.grid(True)
+        fig.tight_layout()
+        fig.savefig(save_path_sep, dpi=200)
+        plt.close(fig)
+        print(f"[saved] {save_path_sep}")
     else:
         print(f"\nA vs B: different sample counts (A={rA_m.shape[0]}, B={rB_m.shape[0]}), skipping pointwise separation.")
 
