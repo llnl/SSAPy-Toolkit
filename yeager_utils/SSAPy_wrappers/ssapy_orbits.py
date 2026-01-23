@@ -7,7 +7,7 @@ from ssapy.utils import get_times, points_on_circle
 from .sat_kwargs import ssapy_kwargs
 from .ssapy_props import ssapy_prop
 
-# Uses the current best propagator and acceleration models in ssapy
+
 def ssapy_orbit(
     orbit=None,
     a=None, e=0, i=0, pa=0, raan=0, ta=0,
@@ -17,51 +17,50 @@ def ssapy_orbit(
     t0="2025-01-01",
     t=None,
     prop=None,
-    # optional convenience: if you don't pass `prop`, we can build one
     propkw=None,
     integration_timestep=None,
-    # convenience object params (used only if we need to build propkw)
     mass=250.0, area=0.022, CD=2.3, CR=1.3,
 ):
     """
-    Returns (r, v, t) where r,v are arrays over times t.
+    Always returns (r_out, v_out, t_out).
+
+    - If `t` is provided, it is used directly and returned as t_out.
+    - If `t` is None, it is generated via get_times(duration,freq,t0) and returned.
 
     IMPORTANT: `prop` defaults to None (do not call ssapy_prop() in the signature).
     If `prop` is None, this function will call ssapy_prop(...) from your module.
     """
-    # Build time array
+    # ---- Build time array (always define t_out) ----
     if t is None:
         t0_time = t0 if isinstance(t0, Time) else Time(t0, scale="utc")
-        t = get_times(duration=duration, freq=freq, t0=t0_time)
-        t0_time = t[0]
+        t_out = get_times(duration=duration, freq=freq, t0=t0_time)
+        t0_time = t_out[0]
     else:
-        t0_time = t[0]
+        t_out = t
+        t0_time = t_out[0]
 
-    # Build propagator lazily if not provided
+    # ---- Build propagator lazily if not provided ----
     if prop is None:
         if propkw is None:
-            # expects you have ssapy_kwargs in the same module
             propkw = ssapy_kwargs(mass=mass, area=area, CD=CD, CR=CR)
 
         ode_kwargs = None
         if integration_timestep is not None:
-            # SciPy solve_ivp uses max_step (seconds)
             ode_kwargs = {"max_step": float(integration_timestep)}
 
-        # expects you have ssapy_prop in the same module
         prop = ssapy_prop(propkw=propkw, ode_kwargs=ode_kwargs)
 
-    # Initialize orbit
+    # ---- Initialize orbit ----
     if orbit is not None:
         print(
             f"ssapy_orbit: Initializing orbit with a pre-defined orbit object: {orbit}.\n"
-            f"Integrating: {t[0]} to {t[-1]}"
+            f"Integrating: {t_out[0]} to {t_out[-1]}"
         )
     elif a is not None:
         print(
             "ssapy_orbit: Initializing orbit with Keplerian elements: "
             f"a={a}, e={e}, i={i}, pa={pa}, raan={raan}, ta={ta}\n"
-            f"Integrating: {t[0]} to {t[-1]}"
+            f"Integrating: {t_out[0]} to {t_out[-1]}"
         )
         kElements = [a, e, i, pa, raan, ta]
         try:
@@ -75,7 +74,7 @@ def ssapy_orbit(
             "ssapy_orbit: Initializing orbit with position (r) and velocity (v) vectors:\n"
             f"r={r},\n"
             f"v={v}\n"
-            f"Integrating: {t[0]} to {t[-1]}"
+            f"Integrating: {t_out[0]} to {t_out[-1]}"
         )
         try:
             orbit = Orbit(r=r, v=v, t=t0_time, propkw=propkw)
@@ -87,16 +86,22 @@ def ssapy_orbit(
             "or position/velocity vectors (r,v)."
         )
 
-    # Propagate
+    # ---- Propagate ----
     try:
         try:
-            r_out, v_out = rv(orbit=orbit, time=t, propagator=prop)
+            r_out, v_out = rv(orbit=orbit, time=t_out, propagator=prop)
         except TypeError:
-            r_out, v_out = rv(orbit, t, prop)
-        return r_out, v_out, t
+            r_out, v_out = rv(orbit, t_out, prop)
+
+        return r_out, v_out, t_out
+
     except (RuntimeError, ValueError) as err:
         print(err)
-        return np.nan, np.nan, np.nan
+        # Always return (r, v, t). Preserve t_out if we have it.
+        n = len(t_out) if t_out is not None else 1
+        r_nan = np.full((n, 3), np.nan, dtype=float)
+        v_nan = np.full((n, 3), np.nan, dtype=float)
+        return r_nan, v_nan, t_out
 
 
 def ssapy_orbit_incremented(
@@ -114,17 +119,23 @@ def ssapy_orbit_incremented(
     plot=False,  # kept for API compatibility; not used here
 ):
     """
-    Incremental propagation (step-by-step): returns (r, v, t) if t was None else (r, v).
+    Incremental propagation (step-by-step).
+
+    Always returns (r_hist, v_hist, t_out).
+
+    - If `t` is provided, it is used directly and returned as t_out.
+    - If `t` is None, it is generated via get_times(duration,freq,t0) and returned.
     """
+    # ---- Build time array (always define t_out) ----
     if t is None:
         t0_time = t0 if isinstance(t0, Time) else Time(t0, scale="utc")
-        t = get_times(duration=duration, freq=freq, t0=t0_time)
-        t0_time = t[0]
-        time_is_None = True
+        t_out = get_times(duration=duration, freq=freq, t0=t0_time)
+        t0_time = t_out[0]
     else:
-        t0_time = t[0]
-        time_is_None = False
+        t_out = t
+        t0_time = t_out[0]
 
+    # ---- Build propagator lazily if not provided ----
     if prop is None:
         if propkw is None:
             propkw = ssapy_kwargs(mass=mass, area=area, CD=CD, CR=CR)
@@ -133,7 +144,7 @@ def ssapy_orbit_incremented(
             ode_kwargs = {"max_step": float(integration_timestep)}
         prop = ssapy_prop(propkw=propkw, ode_kwargs=ode_kwargs)
 
-    # Initialize orbit state
+    # ---- Initialize orbit state ----
     if orbit is not None:
         pass
     elif a is not None:
@@ -154,7 +165,7 @@ def ssapy_orbit_incremented(
             "Either an Orbit, Keplerian elements (a,e,i,pa,raan,ta), or (r,v) must be provided."
         )
 
-    num_steps = len(t)
+    num_steps = len(t_out)
     r_hist = np.full((num_steps, 3), np.nan, dtype=float)
     v_hist = np.full((num_steps, 3), np.nan, dtype=float)
 
@@ -163,25 +174,21 @@ def ssapy_orbit_incremented(
 
     try:
         for k in range(1, num_steps):
-            orbit_k = Orbit(r=r_hist[k - 1], v=v_hist[k - 1], t=t[k - 1], propkw=propkw)
+            orbit_k = Orbit(r=r_hist[k - 1], v=v_hist[k - 1], t=t_out[k - 1], propkw=propkw)
 
             try:
-                r_next, v_next = rv(orbit=orbit_k, time=t[k], propagator=prop)
+                r_next, v_next = rv(orbit=orbit_k, time=t_out[k], propagator=prop)
             except TypeError:
-                r_next, v_next = rv(orbit_k, t[k], prop)
+                r_next, v_next = rv(orbit_k, t_out[k], prop)
 
             r_hist[k] = np.asarray(r_next, dtype=float).reshape(-1, 3)[-1]
             v_hist[k] = np.asarray(v_next, dtype=float).reshape(-1, 3)[-1]
 
     except (RuntimeError, ValueError) as err:
-        print(f"Error at time step {k}, {t[k]}: {err}")
-        if time_is_None:
-            return r_hist[:k], v_hist[:k], t[:k]
-        return r_hist[:k], v_hist[:k]
+        print(f"Error at time step {k}, {t_out[k]}: {err}")
+        return r_hist[:k], v_hist[:k], t_out[:k]
 
-    if time_is_None:
-        return r_hist, v_hist, t
-    return r_hist, v_hist
+    return r_hist, v_hist, t_out
 
 
 def get_similar_orbits(
@@ -200,11 +207,12 @@ def get_similar_orbits(
     prop=None,
 ):
     """
-    Generate similar trajectories by perturbing the initial position on a circle (via ssapy.utils.points_on_circle).
+    Generate similar trajectories by perturbing the initial position on a circle
+    (via ssapy.utils.points_on_circle).
 
     Returns:
         trajectories: array of shape (n_times, 6, num_orbits) where [:,0:3,:]=r and [:,3:6,:]=v
-        t:            times (Astropy Time array)
+        t_out:         times (Astropy Time array)
     """
     r0 = np.asarray(r0, dtype=float).reshape(1, 3)
     v0 = np.asarray(v0, dtype=float).reshape(1, 3)

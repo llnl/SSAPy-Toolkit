@@ -1,109 +1,278 @@
 #!/usr/bin/env python3
-"""Example driver for the *new* `ellipse_fit` that now returns a single dict."""
+"""
+Full evaluation driver for the velocity-directed `ellipse_fit`.
+
+This script:
+  1) Runs ellipse_fit twice using velocity preference to pick direction
+  2) Validates shapes, finiteness, required keys
+  3) Checks endpoints: r[0]≈P1, r[-1]≈P2
+  4) Checks approximate invariants from returned r,v:
+       - |h| const, specific energy const, |e| const (numerical tolerance)
+  5) Reconstructs with SSAPy:
+       - from state vectors (r0,v0) at t = t_rel
+       - from returned Keplerian elements at t = t_rel
+  6) Saves plots into tests/ via your figpath helper.
+
+No math module, no typing module.
+"""
 
 # ----------------------------------------------------------------------
 # Imports
 # ----------------------------------------------------------------------
-from yeager_utils import RGEO, ellipse_fit, get_times, pprint, figpath  # type: ignore
-from ssapy.simple import ssapy_orbit                                    # type: ignore
-from ssapy.plotUtils import orbit_plot                                  # type: ignore
-from ssapy import Orbit                                                 # type: ignore
+from yeager_utils import RGEO, ellipse_fit, pprint, figpath, ssapy_orbit
+from ssapy.plotUtils import orbit_plot
 import numpy as np
+
+
+# ----------------------------------------------------------------------
+# Helpers
+# ----------------------------------------------------------------------
+def _norm(x, axis=None):
+    return np.linalg.norm(x, axis=axis)
+
+def _unit(x, eps=1e-15):
+    x = np.asarray(x, float)
+    n = np.linalg.norm(x)
+    if n < eps:
+        return None
+    return x / n
+
+def _finite(x, name):
+    x = np.asarray(x)
+    if not np.all(np.isfinite(x)):
+        bad = np.where(~np.isfinite(x))
+        raise ValueError(f"Non-finite values in {name} at indices {bad}")
+
+def _assert_keys(d, keys):
+    missing = [k for k in keys if k not in d]
+    if missing:
+        raise KeyError(f"Missing keys from ellipse_fit result: {missing}")
+
+def _endpoint_report(res, P1_m, P2_m, label=""):
+    r_m = np.asarray(res["r"], float)
+    d0_m = float(_norm(r_m[0] - P1_m))
+    d1_m = float(_norm(r_m[-1] - P2_m))
+    print(f"{label}endpoint deltas: |r[0]-P1|={d0_m:.6e} m, |r[-1]-P2|={d1_m:.6e} m")
+    return d0_m, d1_m
+
+def _invariant_report(res, label=""):
+    mu_m3_s2 = float(res["mu"])
+    r_m = np.asarray(res["r"], float)
+    v_m_s = np.asarray(res["v"], float)
+
+    h_vec_m2_s = np.cross(r_m, v_m_s)
+    h_mag_m2_s = _norm(h_vec_m2_s, axis=1)
+
+    energy_J_kg = 0.5 * _norm(v_m_s, axis=1) ** 2 - mu_m3_s2 / _norm(r_m, axis=1)
+
+    e_vec = (np.cross(v_m_s, h_vec_m2_s) / mu_m3_s2) - (r_m / _norm(r_m, axis=1)[:, None])
+    e_mag = _norm(e_vec, axis=1)
+
+    def _rel_std(x, eps=1e-30):
+        return float(np.std(x) / max(np.mean(np.abs(x)), eps))
+
+    metrics = {
+        "h_rel_std": _rel_std(h_mag_m2_s),
+        "E_rel_std": _rel_std(energy_J_kg),
+        "e_rel_std": _rel_std(e_mag),
+        "h_mean": float(np.mean(h_mag_m2_s)),
+        "E_mean": float(np.mean(energy_J_kg)),
+        "e_mean": float(np.mean(e_mag)),
+    }
+
+    print(f"{label}invariants:")
+    print(f"{label}  |h| mean={metrics['h_mean']:.6e}, rel std={metrics['h_rel_std']:.3e}")
+    print(f"{label}  E   mean={metrics['E_mean']:.6e}, rel std={metrics['E_rel_std']:.3e}")
+    print(f"{label}  e   mean={metrics['e_mean']:.6e}, rel std={metrics['e_rel_std']:.3e}")
+
+    return metrics
+
+def _ssapy_pos_err(r_ref_m, r_test_m, label=""):
+    r_ref_m = np.asarray(r_ref_m, float)
+    r_test_m = np.asarray(r_test_m, float)
+    if r_ref_m.shape != r_test_m.shape:
+        raise ValueError(f"{label} shape mismatch: {r_ref_m.shape} vs {r_test_m.shape}")
+    err_m = _norm(r_ref_m - r_test_m, axis=1)
+    rms_m = float(np.sqrt(np.mean(err_m**2)))
+    max_m = float(np.max(err_m))
+    print(f"{label}SSAPy position error: RMS={rms_m:.6e} m, max={max_m:.6e} m")
+    return rms_m, max_m
+
+def _compute_t_hat(P1_m, P2_m):
+    """
+    Approximate plane normal from P1×P2 and compute t_hat = (w_hat × r_hat) at P1.
+    This yields a reasonable tangential direction for building v_pref.
+    """
+    r_hat = _unit(P1_m)
+    if r_hat is None:
+        raise ValueError("P1 has near-zero norm.")
+
+    w_hat = _unit(np.cross(P1_m, P2_m))
+    if w_hat is None:
+        # colinear fallback
+        cand = np.array([0.0, 0.0, 1.0])
+        if abs(np.dot(r_hat, cand)) > 0.99:
+            cand = np.array([1.0, 0.0, 0.0])
+        w_hat = _unit(np.cross(r_hat, cand))
+        if w_hat is None:
+            raise ValueError("Could not form a stable plane normal.")
+
+    t_hat = _unit(np.cross(w_hat, r_hat))
+    if t_hat is None:
+        raise ValueError("Could not form tangential unit vector at P1.")
+    return t_hat
+
 
 # ----------------------------------------------------------------------
 # Main
 # ----------------------------------------------------------------------
 if __name__ == "__main__":
-    P1 = np.array([RGEO, 0.0, 0.0])
-    P2 = np.array([-0.0 * RGEO, -1.1 * RGEO, 0.1 * RGEO])
+    # ------------------------------------------------------------------
+    # Scenario setup
+    # ------------------------------------------------------------------
+    P1_m = np.array([RGEO, 0.0, 0.0], dtype=float)
+    P2_m = np.array([-0.0 * RGEO, -1.1 * RGEO, 0.1 * RGEO], dtype=float)
+
+    # Tangential directions used to define two opposite "preferred" velocities
+    t_hat = _compute_t_hat(P1_m, P2_m)
+    v_pref_A_m_s = 1.0 * t_hat
+    v_pref_B_m_s = -1.0 * t_hat
+
+    REQUIRED_KEYS = [
+        "r", "v", "t_rel", "t_abs",
+        "a", "e", "i", "raan", "pa", "ta", "L",
+        "rp", "ra", "rp_alt", "ra_alt", "b", "p",
+        "mean_motion", "eta", "period",
+        "h_vec", "h", "Energy", "e_vec", "n_vec",
+        "r0", "v0", "F2",
+        "plane_basis", "rot_dir",
+        "mu",
+    ]
 
     # ------------------------------------------------------------------
-    # Run ellipse_fit twice (CW and CCW) and collect results
+    # Run ellipse_fit twice and collect results
     # ------------------------------------------------------------------
     results = {}
-    for ccw in [False, True]:
-        print(f"\n===== CCW = {ccw} =====")
+    for name, v_pref_m_s in [("A", v_pref_A_m_s), ("B", v_pref_B_m_s)]:
+        print(f"\n===== RUN {name} (v_pref along {'+t_hat' if name=='A' else '-t_hat'}) =====")
 
         res = ellipse_fit(
-            P1,
-            P2,
+            P1_m,
+            P2_m,
             n_pts=400,
             plot=False,
-            inc=0.0,
-            ccw=ccw,
+            inc=0.0,                # radians
+            v_pref_m_s=v_pref_m_s,
         )
 
-        # Split out convenience aliases
-        arc   = res["r"]
-        vel   = res["v"]
-        times = res["t_rel"]
+        _assert_keys(res, REQUIRED_KEYS)
 
-        # Quick sanity print-out
+        r_m = np.asarray(res["r"], float)
+        v_m_s = np.asarray(res["v"], float)
+        t_rel_s = np.asarray(res["t_rel"], float)
+
+        # shape checks
+        if r_m.ndim != 2 or r_m.shape[1] != 3:
+            raise ValueError(f"RUN {name}: r must be (N,3), got {r_m.shape}")
+        if v_m_s.shape != r_m.shape:
+            raise ValueError(f"RUN {name}: v must match r shape, got {v_m_s.shape}")
+        if t_rel_s.ndim != 1 or t_rel_s.shape[0] != r_m.shape[0]:
+            raise ValueError(f"RUN {name}: t_rel must be (N,), got {t_rel_s.shape}")
+
+        _finite(r_m, f"r[{name}]")
+        _finite(v_m_s, f"v[{name}]")
+        _finite(t_rel_s, f"t_rel[{name}]")
+
+        if np.any(np.diff(t_rel_s) < -1e-9):
+            raise ValueError(f"RUN {name}: t_rel is not non-decreasing.")
+
+        _endpoint_report(res, P1_m, P2_m, label=f"RUN {name}: ")
+        _invariant_report(res, label=f"RUN {name}: ")
+
         pprint(res)
-
-        # Stash for later reconstruction tests
-        results[ccw] = res
+        results[name] = res
 
     # ------------------------------------------------------------------
-    # 1️⃣  Reconstruct using the initial state vector r0, v0
+    # Save figure: arcs from ellipse_fit
+    # ------------------------------------------------------------------
+    save_path_arcs = figpath("tests/testing_ellipse_fit_arcs.png")
+    orbit_plot(
+        [results["A"]["r"], results["B"]["r"]],
+        t=[results["A"]["t_rel"], results["B"]["t_rel"]],
+        title="ellipse_fit arcs (direction picked by v_pref)",
+        show=False,
+        save_path=save_path_arcs,
+    )
+    print(f"[saved] {save_path_arcs}")
+
+    # ------------------------------------------------------------------
+    # 1️⃣  Reconstruct using initial state vectors r0,v0 AT THE SAME t_rel GRID
     # ------------------------------------------------------------------
     sv_recons = []
-    for ccw, res in results.items():
-        r0, v0     = res["r0"], res["v0"]
-        T_flight   = res["t_rel"][-1]
+    for name, res in results.items():
+        r0_m = np.asarray(res["r0"], float)
+        v0_m_s = np.asarray(res["v0"], float)
+        t_rel_s = np.asarray(res["t_rel"], float)
 
-        # evenly-spaced epoch vector (not strictly needed for plotting)
-        _epochs = get_times(duration=(T_flight, "s"), freq=(len(res["t_rel"]), "s"))[0]
-
-        r_sv, v_sv, t_sv = ssapy_orbit(
-            r=r0,
-            v=v0,
-            duration=(T_flight, "s"),
-            freq=(len(res["t_rel"]), "s"),
+        # IMPORTANT: drive SSAPy with the exact t grid to match shapes
+        r_sv_m, v_sv_m_s, t_sv_s = ssapy_orbit(
+            r=r0_m,
+            v=v0_m_s,
+            t=t_rel_s,
         )
 
-        sv_recons.append((ccw, r_sv, t_sv))
+        _ssapy_pos_err(res["r"], r_sv_m, label=f"SV RECON {name}: ")
+        sv_recons.append((name, r_sv_m, t_sv_s))
 
-    # Save the SV reconstruction figure
     save_path_sv = figpath("tests/testing_ellipse_fit_recons_sv.png")
     orbit_plot(
         [r for _, r, _ in sv_recons],
         t=[t for _, _, t in sv_recons],
-        title="SSAPy reconstructions via state vectors",
+        title="SSAPy reconstructions via state vectors (t=t_rel)",
         show=False,
         save_path=save_path_sv,
     )
     print(f"[saved] {save_path_sv}")
 
     # ------------------------------------------------------------------
-    # 2️⃣  Reconstruct using the *Keplerian* elements returned by ellipse_fit
+    # 2️⃣  Reconstruct using Keplerian elements AT THE SAME t_rel GRID
     # ------------------------------------------------------------------
     ke_recons = []
-    for ccw, res in results.items():
-        T_flight = res["t_rel"][-1]
+    for name, res in results.items():
+        t_rel_s = np.asarray(res["t_rel"], float)
 
-        r_ke, v_ke, t_ke = ssapy_orbit(
-            a=res["a"],
-            e=res["e"],
-            i=res["i"],
-            raan=res["raan"],
-            pa=res["pa"],
-            ta=res["ta"],
-            duration=(T_flight, "s"),
-            freq=(len(res["t_rel"]), "s"),
+        r_ke_m, v_ke_m_s, t_ke_s = ssapy_orbit(
+            a=float(res["a"]),
+            e=float(res["e"]),
+            i=float(res["i"]),
+            raan=float(res["raan"]),
+            pa=float(res["pa"]),
+            ta=float(res["ta"]),
+            t=t_rel_s,
         )
 
-        ke_recons.append((ccw, r_ke, t_ke))
+        _ssapy_pos_err(res["r"], r_ke_m, label=f"KEPLER RECON {name}: ")
+        ke_recons.append((name, r_ke_m, t_ke_s))
 
-    # Save the Kepler reconstruction figure
-    save_path_kepler = figpath("tests/testing_ellipse_fit_recons_kepler.png")
+    save_path_ke = figpath("tests/testing_ellipse_fit_recons_kepler.png")
     orbit_plot(
         [r for _, r, _ in ke_recons],
         t=[t for _, _, t in ke_recons],
-        title="SSAPy reconstructions via Keplerian elements",
+        title="SSAPy reconstructions via Keplerian elements (t=t_rel)",
         show=False,
-        save_path=save_path_kepler,
+        save_path=save_path_ke,
     )
-    print(f"[saved] {save_path_kepler}")
+    print(f"[saved] {save_path_ke}")
 
-print("DONE!")
+    # ------------------------------------------------------------------
+    # 3️⃣  Compare the two solutions against each other (sanity)
+    # ------------------------------------------------------------------
+    rA_m = np.asarray(results["A"]["r"], float)
+    rB_m = np.asarray(results["B"]["r"], float)
+    if rA_m.shape == rB_m.shape:
+        sep_m = _norm(rA_m - rB_m, axis=1)
+        print(f"\nA vs B separation: mean={float(np.mean(sep_m)):.6e} m, max={float(np.max(sep_m)):.6e} m")
+    else:
+        print(f"\nA vs B: different sample counts (A={rA_m.shape[0]}, B={rB_m.shape[0]}), skipping pointwise separation.")
+
+    print("\nDONE!")

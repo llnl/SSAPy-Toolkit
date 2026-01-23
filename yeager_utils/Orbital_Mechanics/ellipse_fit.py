@@ -4,165 +4,144 @@ ellipse_fit.py  ─────────────────────�
 Generate sample points and analytic velocities along a Keplerian ellipse in ℝ³
 whose first focus is at the origin.
 
+Direction selection
+-------------------
+Instead of specifying CCW/CW, you can pass a preferred inertial velocity vector
+`v_pref_m_s` (3,) at P1. The function will consider BOTH motion directions in the
+same geometric plane (w_hat and -w_hat) and choose the one whose initial velocity
+direction best matches `v_pref_m_s` (max cosine similarity). If `v_pref_m_s` is None,
+the shorter time-of-flight direction is chosen.
+
+Sampling
+--------
+Primary path: compute r, v, t_rel using Kepler's equation (mean anomaly) so that
+a pure 2-body propagator should match closely.
+Fallback: if Kepler sampling fails for any reason, fall back to the previous
+polygon/angle-integral method.
+
+Inclination
+-----------
+- `inc` is interpreted in RADIANS.
+- For backward compatibility, you may pass `inc_deg=<degrees>` instead.
+
 Returns
 -------
 dict
-    {
-      # ───────── trajectory samples ─────────
-      "r"            : (N,3) ndarray   Cartesian positions                       [m],
-      "v"            : (N,3) ndarray   Inertial velocities                       [m s⁻¹],
-      "t_rel"        : (N,)  ndarray   Relative flight-time (starts at 0)        [s],
-      "t_abs"        : (N,)  ndarray   Absolute epochs (optional)                [s or datetime64],
-
-      # ───────── classical orbital elements ─────────
-      "a"            : float           Semi-major axis                           [m],
-      "e"            : float           Eccentricity                              [-],
-      "i"            : float           Inclination                               [rad],
-      "raan"         : float           Right ascension of ascending node         [rad],
-      "pa"           : float           Argument of periapsis                     [rad],
-      "ta"           : float           True anomaly at r₀                        [rad],
-      "L"            : float           Mean longitude                            [rad],
-
-      # ───────── handy orbit scalars ─────────
-      "rp"           : float           Periapsis radius                          [m],
-      "ra"           : float           Apoapsis radius                           [m],
-      "rp_alt"       : float           Periapsis altitude above Earth            [m],
-      "ra_alt"       : float           Apoapsis altitude above Earth             [m],
-      "b"            : float           Semi-minor axis                           [m],
-      "p"            : float           Semi-latus rectum                         [m],
-      "mean_motion"  : float           n = √(μ/a³)                               [rad s⁻¹],
-      "eta"          : float           η = √(1 - e²) (circularity factor)        [-],
-      "period"       : float           Keplerian orbital period                  [s],
-
-      # ───────── vectors / invariants ─────────
-      "h_vec"        : (3,) ndarray    Specific angular-momentum vector          [m² s⁻¹],
-      "h"            : float           |h_vec|                                   [m² s⁻¹],
-      "Energy"       : float           Specific mechanical energy                [J kg⁻¹],
-      "e_vec"        : (3,) ndarray    Eccentricity vector                       [-],
-      "n_vec"        : (3,) ndarray    Ascending-node vector                     [-],
-
-      # ───────── convenience state values ─────────
-      "r0"           : (3,) ndarray    Departure position (first sample)         [m],
-      "v0"           : (3,) ndarray    Departure velocity                        [m s⁻¹],
-      "F2"           : (3,) ndarray    Second focus position                     [m],
-
-      # ───────── plane / rotation info ─────────
-      "plane_basis"  : (u,v,w) tuple   Orthonormal frame: u & v in-plane, w ⟂,
-      "rot_dir"      : int            +1 = CCW, -1 = CW (viewed along +w),
-
-      # ───────── constant ─────────
-      "mu"           : float           Gravitational parameter (GM)              [m³ s⁻²],
-    }
+    (same keys as before)
 """
 
 from ..Plots import save_plot
 import numpy as np
 
 
-def ellipse_fit(P1, P2, *,
-                a=None, e=None, F2=None, inc: float = 0.0,
-                n_pts: int = 1000, tol=1e-10,
-                ccw: bool = True,
-                plot=False, save_path=False,
-                time_of_departure=None,
-                time_of_arrival=None):
+def ellipse_fit(
+    P1_m,
+    P2_m,
+    *,
+    a_m=None,
+    e=None,
+    F2_m=None,
+    inc: float = 0.0,
+    inc_deg=None,
+    n_pts: int = 1000,
+    tol=1e-10,
+    v_pref_m_s=None,  # preferred velocity direction at P1 (in inertial frame)
+    plot=False,
+    save_path=False,
+    time_of_departure=None,
+    time_of_arrival=None,
+):
+    from ..constants import EARTH_MU, EARTH_RADIUS  # [m³ s⁻²], [m]
 
-    from ..constants import EARTH_MU, EARTH_RADIUS  # [m³ s⁻²]
+    mu_m3_s2 = EARTH_MU
+    R_earth_m = EARTH_RADIUS
+
+    # interpret inclination
+    if inc_deg is not None:
+        incl_rad = np.deg2rad(float(inc_deg))
+    else:
+        incl_rad = float(inc)
 
     # ───────────────────────── internal helpers ──────────────────────────
-    def _plane_basis(p1, p2, *, incl: float = 0.0, eps: float = 1e-12):
-        """
-        Build an orthonormal basis (u, v, w) with u ∥ p1, v in the plane spanned
-        by {p1, p2} (or tilted by `incl` if colinear), and w = u × v (unit).
+    def _plane_basis(p1_m, p2_m, *, incl_rad: float = 0.0, eps: float = 1e-12):
+        p1_m = np.asarray(p1_m, float)
+        p2_m = np.asarray(p2_m, float)
+        if np.linalg.norm(p1_m) < eps or np.linalg.norm(p2_m) < eps:
+            raise ValueError("P1 and P2 must be non-zero vectors.")
 
-        Note: `incl` is interpreted in DEGREES to keep backward compatibility.
-        """
-        p1 = np.asarray(p1, float)
-        p2 = np.asarray(p2, float)
-        if np.linalg.norm(p1) < eps or np.linalg.norm(p2) < eps:
-            raise ValueError("P1 and P2 must be non-zero")
+        u_hat = p1_m / np.linalg.norm(p1_m)
+        v_tmp = p2_m - np.dot(p2_m, u_hat) * u_hat
 
-        u = p1 / np.linalg.norm(p1)
-        v = p2 - np.dot(p2, u) * u
-
-        if np.linalg.norm(v) < eps:
-            # P1 and P2 nearly colinear: pick any axis not parallel to u,
-            # construct a default v0, then rotate it by `incl` about an axis
-            # that keeps (u, v, w) orthonormal.
+        if np.linalg.norm(v_tmp) < eps:
             cand = np.array([0.0, 0.0, 1.0])
-            if abs(np.dot(u, cand)) > 1.0 - eps:
+            if abs(np.dot(u_hat, cand)) > 1.0 - eps:
                 cand = np.array([1.0, 0.0, 0.0])
-            v0 = np.cross(u, cand)
-            v0 /= np.linalg.norm(v0)
-            w0 = np.cross(u, v0)
-            w0 /= np.linalg.norm(w0)
 
-            theta = np.deg2rad(incl)  # keep API as degrees
-            v = np.cos(theta) * v0 + np.sin(theta) * w0
+            v0_hat = np.cross(u_hat, cand)
+            v0_hat /= np.linalg.norm(v0_hat)
 
-            # Re-orthonormalize so that w ⟂ (u,v) and has unit length.
-            w = np.cross(u, v)
-            w /= np.linalg.norm(w)
-            v = np.cross(w, u)
-            v /= np.linalg.norm(v)
+            w0_hat = np.cross(u_hat, v0_hat)
+            w0_hat /= np.linalg.norm(w0_hat)
+
+            theta_rad = incl_rad
+            v_hat = np.cos(theta_rad) * v0_hat + np.sin(theta_rad) * w0_hat
+
+            w_hat = np.cross(u_hat, v_hat)
+            w_hat /= np.linalg.norm(w_hat)
+            v_hat = np.cross(w_hat, u_hat)
+            v_hat /= np.linalg.norm(v_hat)
         else:
-            # Standard Gram-Schmidt to produce a tight orthonormal frame.
-            w = np.cross(u, v)
-            w /= np.linalg.norm(w)
-            v = np.cross(w, u)
-            v /= np.linalg.norm(v)
+            w_hat = np.cross(u_hat, v_tmp)
+            w_hat /= np.linalg.norm(w_hat)
+            v_hat = np.cross(w_hat, u_hat)
+            v_hat /= np.linalg.norm(v_hat)
 
-        return u, v, w
+        return u_hat, v_hat, w_hat
 
-    def _in_plane(vec3, u, v):
-        return np.array([np.dot(vec3, u), np.dot(vec3, v)])
+    def _in_plane_m(vec3_m, u_hat, v_hat):
+        return np.array([np.dot(vec3_m, u_hat), np.dot(vec3_m, v_hat)])
 
-    def _to_3d(xy, u, v):
-        return xy[0] * u + xy[1] * v
+    def _to_3d_m(xy_m, u_hat, v_hat):
+        return xy_m[0] * u_hat + xy_m[1] * v_hat
 
-    def _eccentricity(f2, a):
-        return np.linalg.norm(f2) / (2.0 * a)
+    def _eccentricity_from_focus(f2_m, a_m_):
+        return np.linalg.norm(f2_m) / (2.0 * a_m_)
 
-    def _a_for(f2, p):
-        return 0.5 * (np.linalg.norm(p) + np.linalg.norm(p - f2))
+    def _a_for_focus(f2_m, p_m):
+        return 0.5 * (np.linalg.norm(p_m) + np.linalg.norm(p_m - f2_m))
 
-    def _solve_focus(P1, P2, u, v, *, a=None, e=None, F2=None, tol=1e-10):
+    def _solve_focus(P1_m_, P2_m_, u_hat, v_hat, *, a_m=None, e=None, F2_m=None, tol=1e-10):
         from scipy.optimize import root, minimize, NonlinearConstraint, BFGS
 
-        p1_2d, p2_2d = _in_plane(P1, u, v), _in_plane(P2, u, v)
+        p1_2d_m = _in_plane_m(P1_m_, u_hat, v_hat)
+        p2_2d_m = _in_plane_m(P2_m_, u_hat, v_hat)
 
-        if F2 is not None:
-            if (a is not None) or (e is not None):
-                raise ValueError("Specify only one of a, e or F2")
-            F2 = np.asarray(F2, float)
-            a = _a_for(F2, P1)
-            e = _eccentricity(F2, a)
-            return F2, a, e
+        if F2_m is not None:
+            if (a_m is not None) or (e is not None):
+                raise ValueError("Specify only one of a_m, e or F2_m.")
+            F2_m = np.asarray(F2_m, float)
+            a_m_ = _a_for_focus(F2_m, P1_m_)
+            e_ = _eccentricity_from_focus(F2_m, a_m_)
+            return F2_m, a_m_, e_
 
-        if (a is None) and (e is None):
+        if (a_m is None) and (e is None):
 
-            def obj_min_e(xy):
-                F = _to_3d(xy, u, v)
-                return _eccentricity(F, _a_for(F, P1))
+            def obj_min_e(xy_m):
+                F_m = _to_3d_m(xy_m, u_hat, v_hat)
+                return _eccentricity_from_focus(F_m, _a_for_focus(F_m, P1_m_))
 
-            def equal_sum(xy):
-                F = _to_3d(xy, u, v)
+            def equal_sum(xy_m):
+                F_m = _to_3d_m(xy_m, u_hat, v_hat)
                 return (
-                    np.linalg.norm(P1)
-                    + np.linalg.norm(P1 - F)
-                    - np.linalg.norm(P2)
-                    - np.linalg.norm(P2 - F)
+                    np.linalg.norm(P1_m_) + np.linalg.norm(P1_m_ - F_m)
+                    - np.linalg.norm(P2_m_) - np.linalg.norm(P2_m_ - F_m)
                 )
 
             def try_minimize_with(method):
                 return minimize(
                     obj_min_e,
-                    0.5 * (p1_2d + p2_2d),
-                    constraints=[
-                        NonlinearConstraint(
-                            equal_sum, 0.0, 0.0, jac="2-point", hess=BFGS()
-                        )
-                    ],
+                    0.5 * (p1_2d_m + p2_2d_m),
+                    constraints=[NonlinearConstraint(equal_sum, 0.0, 0.0, jac="2-point", hess=BFGS())],
                     method=method,
                     tol=tol,
                 )
@@ -171,218 +150,473 @@ def ellipse_fit(P1, P2, *,
             if not sol.success:
                 sol = try_minimize_with("SLSQP")
             if not sol.success:
-                raise RuntimeError("Could not locate least-eccentric solution")
+                raise RuntimeError("Could not locate least-eccentric solution.")
 
-            F2 = _to_3d(sol.x, u, v)
-            a = _a_for(F2, P1)
-            e = _eccentricity(F2, a)
-            return F2, a, e
+            F2_m_ = _to_3d_m(sol.x, u_hat, v_hat)
+            a_m_ = _a_for_focus(F2_m_, P1_m_)
+            e_ = _eccentricity_from_focus(F2_m_, a_m_)
+            return F2_m_, a_m_, e_
 
-        if (a is None) == (e is None):
-            raise ValueError("Provide exactly one of {a, e, F2}")
+        if (a_m is None) == (e is None):
+            raise ValueError("Provide exactly one of {a_m, e, F2_m}.")
 
-        def residual(xy):
-            F = _to_3d(xy, u, v)
-            s1 = np.linalg.norm(P1) + np.linalg.norm(P1 - F)
-            s2 = np.linalg.norm(P2) + np.linalg.norm(P2 - F)
-            r1 = s1 - s2
-            r2 = s1 - (np.linalg.norm(F) / e if e is not None else 2.0 * a)
-            return np.array([r1, r2])
+        if e is not None and float(e) == 0.0:
+            raise ValueError("e=0 (circular) is not supported by the current focus solver path.")
 
-        sol = root(residual, 0.3 * p1_2d, tol=tol)
+        def residual(xy_m):
+            F_m = _to_3d_m(xy_m, u_hat, v_hat)
+            s1_m = np.linalg.norm(P1_m_) + np.linalg.norm(P1_m_ - F_m)
+            s2_m = np.linalg.norm(P2_m_) + np.linalg.norm(P2_m_ - F_m)
+            r1_m = s1_m - s2_m
+            target_m = (np.linalg.norm(F_m) / e) if (e is not None) else (2.0 * a_m)
+            r2_m = s1_m - target_m
+            return np.array([r1_m, r2_m])
+
+        sol = root(residual, 0.3 * p1_2d_m, tol=tol)
         if not sol.success:
-            raise RuntimeError("Could not satisfy the supplied (a, e)")
+            raise RuntimeError("Could not satisfy the supplied (a_m, e).")
 
-        F2 = _to_3d(sol.x, u, v)
+        F2_m_ = _to_3d_m(sol.x, u_hat, v_hat)
         if e is None:
-            e = _eccentricity(F2, a)
+            e_ = _eccentricity_from_focus(F2_m_, a_m)
+            a_m_ = a_m
         else:
-            a = np.linalg.norm(F2) / (2.0 * e)
-        return F2, a, e
+            e_ = float(e)
+            a_m_ = np.linalg.norm(F2_m_) / (2.0 * e_)
+        return F2_m_, a_m_, e_
 
-    def slice_arc_segments(full, i1, i2):
-        n = len(full)
+    def _unit(vec, eps=1e-15):
+        vec = np.asarray(vec, float)
+        nrm = np.linalg.norm(vec)
+        if nrm < eps:
+            return None
+        return vec / nrm
 
-        if i2 >= i1:
-            short_indices = np.arange(i1, i2 + 1)
+    def _wrap_0_2pi(x_rad):
+        x = np.asarray(x_rad, float)
+        y = np.mod(x, 2.0 * np.pi)
+        return y
+
+    def _f_from_r(r_m, p_hat, w_hat):
+        r_m = np.asarray(r_m, float)
+        r_hat = r_m / np.linalg.norm(r_m)
+        cos_f = float(np.dot(p_hat, r_hat))
+        sin_f = float(np.dot(w_hat, np.cross(p_hat, r_hat)))
+        return float(np.arctan2(sin_f, cos_f))
+
+    def _E_from_f(f_rad, e_):
+        # robust conversion true anomaly -> eccentric anomaly
+        # tan(E/2) = sqrt((1-e)/(1+e)) * tan(f/2)
+        beta = np.sqrt(max((1.0 - e_) / (1.0 + e_), 0.0))
+        t = np.tan(0.5 * f_rad)
+        E = 2.0 * np.arctan2(beta * t, 1.0)
+        return float(E)
+
+    def _M_from_E(E_rad, e_):
+        return float(E_rad - e_ * np.sin(E_rad))
+
+    def _solve_kepler_E(M_rad, e_, max_iter=50, tol=1e-12):
+        """
+        Vectorized Newton solve for E - e sinE = M.
+        Returns E with same shape as M_rad.
+        """
+        M = np.asarray(M_rad, float)
+
+        # initial guess
+        E = M.copy()
+        if e_ > 0.8:
+            # slightly better guess for high-e
+            E = np.pi * np.ones_like(M)
+            E = np.where(M < 0.0, -np.pi, E)
         else:
-            short_indices = np.concatenate((np.arange(i1, n), np.arange(0, i2 + 1)))
+            E = M + e_ * np.sin(M)
 
-        full_indices = np.arange(n)
-        mask = np.ones(n, dtype=bool)
-        mask[short_indices] = False
-        long_indices = full_indices[mask]
-        long_indices = np.concatenate((long_indices, [i1]))
+        for _ in range(int(max_iter)):
+            f = E - e_ * np.sin(E) - M
+            fp = 1.0 - e_ * np.cos(E)
+            dE = -f / fp
+            E = E + dE
+            if np.max(np.abs(dE)) < tol:
+                break
+        return E
 
-        short_arc = full[short_indices]
-        long_arc = full[long_indices]
-
-        return short_arc, long_arc
-
-    def direction(arc3d, u, v, w, eps=1e-12):
+    def _rv_from_M_grid(M_grid_rad, *, a_m, e_, mu_m3_s2, p_hat, w_hat):
         """
-        Orientation of the arc within its own plane:
-        +1 if CCW when viewed along +w, -1 if CW, 0 if indeterminate.
+        Build r,v in 3D from mean anomaly grid.
+
+        Uses p_hat (periapsis direction) and w_hat (orbit normal) to define
+        q_hat = w_hat × p_hat.
         """
-        if len(arc3d) < 2:
-            return 0
-        p0 = arc3d[0]
-        p1 = arc3d[min(10, len(arc3d) - 1)]  # robust if arc is short
-        s = np.dot(w, np.cross(p0, p1))
-        if abs(s) > eps:
-            return int(np.sign(s))
+        p_hat_u = _unit(p_hat)
+        w_hat_u = _unit(w_hat)
+        if p_hat_u is None or w_hat_u is None:
+            raise ValueError("Invalid p_hat or w_hat in _rv_from_M_grid.")
 
-        # Fallback: use 2D determinant in (u, v) plane if nearly colinear
-        p0_2d = np.array([np.dot(p0, u), np.dot(p0, v)])
-        p1_2d = np.array([np.dot(p1, u), np.dot(p1, v)])
-        det = p0_2d[0] * p1_2d[1] - p0_2d[1] * p1_2d[0]
-        if abs(det) < eps:
-            return 0
-        return int(np.sign(det))
+        q_hat = np.cross(w_hat_u, p_hat_u)
+        q_hat_u = _unit(q_hat)
+        if q_hat_u is None:
+            raise ValueError("Degenerate q_hat in _rv_from_M_grid.")
 
-    def angle_in_plane(p, u, v):
-        x = np.dot(p, u)
-        y = np.dot(p, v)
-        return np.arctan2(y, x)
+        n_rad_s = np.sqrt(mu_m3_s2 / (a_m ** 3))
 
+        E_rad = _solve_kepler_E(M_grid_rad, e_)
+        cosE = np.cos(E_rad)
+        sinE = np.sin(E_rad)
+
+        # position in PQW from eccentric anomaly
+        x_m = a_m * (cosE - e_)
+        y_m = a_m * (np.sqrt(max(1.0 - e_ ** 2, 0.0)) * sinE)
+        r_m = np.sqrt(x_m ** 2 + y_m ** 2)
+
+        # velocity in PQW
+        denom = (1.0 - e_ * cosE)
+        xdot_m_s = (-a_m * sinE) * (n_rad_s / denom)
+        ydot_m_s = (a_m * np.sqrt(max(1.0 - e_ ** 2, 0.0)) * cosE) * (n_rad_s / denom)
+
+        r3_m = (x_m[:, None] * p_hat_u[None, :]) + (y_m[:, None] * q_hat_u[None, :])
+        v3_m_s = (xdot_m_s[:, None] * p_hat_u[None, :]) + (ydot_m_s[:, None] * q_hat_u[None, :])
+
+        return r3_m, v3_m_s, E_rad
+
+    # ─────────────────────────── inputs / guards ──────────────────────────
     if (time_of_departure is not None) and (time_of_arrival is not None):
         raise ValueError("Specify either time_of_departure or time_of_arrival, not both.")
 
-    P1 = np.asarray(P1, float)
-    P2 = np.asarray(P2, float)
+    P1_m = np.asarray(P1_m, float)
+    P2_m = np.asarray(P2_m, float)
 
-    u, v, w = _plane_basis(P1, P2, incl=inc)
+    u_hat, v_hat, w_hat = _plane_basis(P1_m, P2_m, incl_rad=incl_rad)
 
-    F2, a, e = _solve_focus(P1, P2, u, v, a=a, e=e, F2=F2, tol=tol)
+    F2_m, a_m, e = _solve_focus(P1_m, P2_m, u_hat, v_hat, a_m=a_m, e=e, F2_m=F2_m, tol=tol)
 
-    f2_2d = _in_plane(F2, u, v)
-    C = 0.5 * f2_2d
-    c = 0.5 * np.linalg.norm(F2)
-    b = np.sqrt(max(a * a - c * c, 0.0))
+    # Secondary geometry scalars (still useful outputs)
+    c_m = 0.5 * np.linalg.norm(F2_m)
+    b_m = np.sqrt(max(a_m * a_m - c_m * c_m, 0.0))
 
-    phi = -np.arctan2(C[1], C[0])
-    R2D = np.array([[np.cos(phi), -np.sin(phi)], [np.sin(phi), np.cos(phi)]])
-
-    t_full = np.linspace(0, 2 * np.pi, n_pts, endpoint=False)
-    xy_full = np.vstack((a * np.cos(t_full), b * np.sin(t_full))).T
-    xy_full = (R2D.T @ xy_full.T).T + C
-    full3d = np.array([_to_3d(p, u, v) for p in xy_full])
-
-    i1 = np.argmin(np.linalg.norm(full3d - P1, axis=1))
-    i2 = np.argmin(np.linalg.norm(full3d - P2, axis=1))
-
-    arc_short, arc_long = slice_arc_segments(full3d, i1, i2)
-    arc_long = arc_long[::-1]  # start both arcs at P1 for consistent traversal
-
-    # Choose arc consistent with requested rotation direction; set velocity sign if needed
-    vel_mod = 1
-    if ccw:
-        if direction(arc_short, u, v, w) > 0:
-            arc3d = arc_short
-            arc3d_comp = arc_long
-        else:
-            arc3d = arc_long
-            arc3d_comp = arc_short
-            vel_mod = -1
+    # If F2≈0 (near-circular), pick periapsis direction as P1 direction
+    if np.linalg.norm(F2_m) < 1e-12:
+        p_hat = _unit(P1_m)
+        if p_hat is None:
+            p_hat = np.array([1.0, 0.0, 0.0])
     else:
-        if direction(arc_short, u, v, w) < 0:
-            arc3d = arc_short
-            arc3d_comp = arc_long
+        p_hat = -F2_m / np.linalg.norm(F2_m)  # points from focus to periapsis
+
+    # ───────────────────────── primary: Kepler sampling ───────────────────
+    # We'll try Kepler-based r,v,t_rel; if anything goes wrong, we fall back.
+    kepler_ok = True
+    kepler_error = None
+
+    try:
+        # Two candidate motion directions: w_hat and -w_hat
+        cand = []
+        for w_use in (w_hat, -w_hat):
+            w_use_u = _unit(w_use)
+            if w_use_u is None:
+                continue
+
+            f1_rad = _f_from_r(P1_m, p_hat, w_use_u)
+            f2_rad = _f_from_r(P2_m, p_hat, w_use_u)
+
+            # Forward-time in this convention corresponds to increasing f in [0,2pi)
+            delta_f_rad = float(_wrap_0_2pi(f2_rad - f1_rad))
+
+            # Convert endpoints to E, M; unwrap so M2 >= M1 along forward motion
+            E1_rad = _E_from_f(f1_rad, e)
+            E2_rad = _E_from_f(f2_rad, e)
+
+            M1_rad = _M_from_E(E1_rad, e)
+            M2_rad = _M_from_E(E2_rad, e)
+
+            # unwrap M2 forward if needed (since forward delta_f is in [0,2pi))
+            # For long arcs, M2 should be M2 + 2π if it otherwise lands behind.
+            if delta_f_rad > 1e-15:
+                if M2_rad <= M1_rad:
+                    M2_rad += 2.0 * np.pi
+            else:
+                # essentially same point; keep tiny positive span
+                if M2_rad <= M1_rad:
+                    M2_rad = M1_rad + 1e-15
+
+            n_rad_s = float(np.sqrt(mu_m3_s2 / (a_m ** 3)))
+            T_flight_s = float((M2_rad - M1_rad) / n_rad_s)
+
+            # Initial velocity direction for scoring (from the same convention)
+            # Build a tiny grid at M1 only
+            r0_try_m, v0_try_m_s, _ = _rv_from_M_grid(
+                np.array([M1_rad], dtype=float),
+                a_m=a_m, e_=e, mu_m3_s2=mu_m3_s2, p_hat=p_hat, w_hat=w_use_u
+            )
+            v0_try_m_s = v0_try_m_s[0]
+
+            score = 0.0
+            if v_pref_m_s is not None:
+                vph = _unit(v_pref_m_s)
+                v0h = _unit(v0_try_m_s)
+                if vph is None or v0h is None:
+                    score = -np.inf
+                else:
+                    score = float(np.dot(v0h, vph))
+
+            cand.append({
+                "w_use": w_use_u,
+                "f1_rad": f1_rad,
+                "f2_rad": f2_rad,
+                "delta_f_rad": delta_f_rad,
+                "E1_rad": E1_rad,
+                "E2_rad": E2_rad,
+                "M1_rad": M1_rad,
+                "M2_rad": M2_rad,
+                "T_flight_s": T_flight_s,
+                "score": score,
+                "v0_m_s": v0_try_m_s,
+            })
+
+        if len(cand) < 1:
+            raise RuntimeError("No valid motion-direction candidates for Kepler sampling.")
+
+        # choose candidate
+        if v_pref_m_s is None:
+            # choose shorter time-of-flight by default
+            chosen = min(cand, key=lambda d: d["T_flight_s"])
         else:
-            arc3d = arc_long
-            arc3d_comp = arc_short
-            vel_mod = -1
+            chosen = max(cand, key=lambda d: d["score"])
 
-    rot_dir = direction(arc3d, u, v, w)
+        w_use = chosen["w_use"]
+        M1_rad = chosen["M1_rad"]
+        M2_rad = chosen["M2_rad"]
+        T_flight_s = chosen["T_flight_s"]
 
-    xy_arc = np.array([_in_plane(p, u, v) for p in arc3d])
-    f = np.arctan2(xy_arc[:, 1], xy_arc[:, 0])
-    f = np.unwrap(f)
-    r_norm = np.linalg.norm(arc3d, axis=1)
-    h_scalar = np.sqrt(EARTH_MU * a * (1 - e ** 2))
-    df = np.diff(f)
-    dt_df_mid = 0.5 * (r_norm[:-1] ** 2 + r_norm[1:] ** 2) / h_scalar
-    dt = dt_df_mid * df
-    t_rel = np.zeros_like(f)
-    t_rel[1:] = np.cumsum(dt)
-    t_rel -= t_rel[0]
-    if np.sum(np.diff(f)) < 0:
-        t_rel = np.abs(t_rel)
+        # time grid (uniform in time)
+        N = int(max(2, int(n_pts)))
+        t_rel_s = np.linspace(0.0, T_flight_s, N)
 
-    if np.linalg.norm(F2) < 1e-12:
-        e_hat = arc3d[0] / np.linalg.norm(arc3d[0])
-    else:
-        e_hat = -F2 / np.linalg.norm(F2)
+        n_rad_s = float(np.sqrt(mu_m3_s2 / (a_m ** 3)))
+        M_grid_rad = M1_rad + n_rad_s * t_rel_s
 
-    vel3d = np.empty_like(arc3d)
+        # build r,v from Kepler
+        arc3d_m, vel3d_m_s, _E_grid = _rv_from_M_grid(
+            M_grid_rad,
+            a_m=a_m, e_=e, mu_m3_s2=mu_m3_s2, p_hat=p_hat, w_hat=w_use
+        )
 
-    for i, r_vec in enumerate(arc3d):
-        r = np.linalg.norm(r_vec)
-        r_hat = r_vec / r
-        cos_f = np.dot(e_hat, r_hat)
-        sin_f = np.dot(w, np.cross(e_hat, r_hat))
-        v_r = (EARTH_MU / h_scalar) * e * sin_f
-        v_t = (EARTH_MU / h_scalar) * (1 + e * cos_f)
+        # rot_dir: +1 if CCW seen along +w_hat; depends on whether we flipped w.
+        # We define rot_dir w.r.t. the *original* w_hat from plane_basis.
+        rot_dir = 1 if float(np.dot(w_use, w_hat)) >= 0.0 else -1
 
-        # Plane-agnostic transverse direction: always in-plane and ⟂ r̂
-        t_hat = np.cross(w, r_hat)
-        nt = np.linalg.norm(t_hat)
-        t_hat = t_hat / nt if nt > 1e-12 else np.zeros(3)
+        # For plotting companion arc, generate the opposite direction candidate if available
+        arc3d_comp_m = None
+        if len(cand) == 2:
+            other = cand[0] if cand[1] is chosen else cand[1]
+            w_other = other["w_use"]
+            M1o = other["M1_rad"]
+            M2o = other["M2_rad"]
+            To = other["T_flight_s"]
+            t_rel_o_s = np.linspace(0.0, To, N)
+            Mo = M1o + n_rad_s * t_rel_o_s
+            arc3d_comp_m, _, _ = _rv_from_M_grid(
+                Mo, a_m=a_m, e_=e, mu_m3_s2=mu_m3_s2, p_hat=p_hat, w_hat=w_other
+            )
 
-        vel3d[i] = (v_r * r_hat + v_t * t_hat) * vel_mod
+    except Exception as ex:
+        kepler_ok = False
+        kepler_error = ex
 
-    r0, v0 = arc3d[0], vel3d[0]
+    # ───────────────────────── fallback: previous method ──────────────────
+    if not kepler_ok:
+        # NOTE: we keep your previous sampling approach intact here.
+        # It is wrapped so that a Kepler failure does not break functionality.
+        # If you want to see why it fell back, uncomment the print.
+        # print(f"[ellipse_fit] Kepler sampling failed; falling back. Reason: {kepler_error}")
 
+        # ---- previous “polygon ellipse + dt/df” method ----
+        f2_2d_m = _in_plane_m(F2_m, u_hat, v_hat)
+        C_2d_m = 0.5 * f2_2d_m
+
+        phi_rad = -np.arctan2(C_2d_m[1], C_2d_m[0])
+        R2D = np.array([[np.cos(phi_rad), -np.sin(phi_rad)], [np.sin(phi_rad), np.cos(phi_rad)]])
+
+        t_full_rad = np.linspace(0.0, 2.0 * np.pi, int(max(4, n_pts)), endpoint=False)
+        xy_full_m = np.vstack((a_m * np.cos(t_full_rad), b_m * np.sin(t_full_rad))).T
+        xy_full_m = (R2D.T @ xy_full_m.T).T + C_2d_m
+        full3d_m = np.array([_to_3d_m(p_m, u_hat, v_hat) for p_m in xy_full_m])
+
+        i1 = int(np.argmin(np.linalg.norm(full3d_m - P1_m, axis=1)))
+        i2 = int(np.argmin(np.linalg.norm(full3d_m - P2_m, axis=1)))
+
+        def slice_arc_segments(full_m, i1, i2):
+            n = len(full_m)
+            if i2 >= i1:
+                short_idx = np.arange(i1, i2 + 1)
+            else:
+                short_idx = np.concatenate((np.arange(i1, n), np.arange(0, i2 + 1)))
+
+            all_idx = np.arange(n)
+            mask = np.ones(n, dtype=bool)
+            mask[short_idx] = False
+            long_idx = all_idx[mask]
+            long_idx = np.concatenate((long_idx, [i1]))
+
+            short_arc_m = full_m[short_idx]
+            long_arc_m = full_m[long_idx]
+            return short_arc_m, long_arc_m
+
+        def direction(arc_m, u_hat, v_hat, w_hat, eps=1e-12):
+            if len(arc_m) < 2:
+                return 0
+            p0_m = arc_m[0]
+            p1_m = arc_m[min(10, len(arc_m) - 1)]
+            s = np.dot(w_hat, np.cross(p0_m, p1_m))
+            if abs(s) > eps:
+                return int(np.sign(s))
+            p0_2d_m = np.array([np.dot(p0_m, u_hat), np.dot(p0_m, v_hat)])
+            p1_2d_m = np.array([np.dot(p1_m, u_hat), np.dot(p1_m, v_hat)])
+            det = p0_2d_m[0] * p1_2d_m[1] - p0_2d_m[1] * p1_2d_m[0]
+            if abs(det) < eps:
+                return 0
+            return int(np.sign(det))
+
+        def _v_at_r0_m_s(r0_m, F2_m, e, a_m, w_hat, *, vel_mod=1):
+            r0_m = np.asarray(r0_m, float)
+            r_m = np.linalg.norm(r0_m)
+            r_hat = r0_m / r_m
+
+            if np.linalg.norm(F2_m) < 1e-12:
+                e_hat = r_hat
+            else:
+                e_hat = -F2_m / np.linalg.norm(F2_m)
+
+            h_m2_s = np.sqrt(mu_m3_s2 * a_m * (1.0 - e**2))
+
+            cos_f = np.dot(e_hat, r_hat)
+            sin_f = np.dot(w_hat, np.cross(e_hat, r_hat))
+            v_r_m_s = (mu_m3_s2 / h_m2_s) * e * sin_f
+            v_t_m_s = (mu_m3_s2 / h_m2_s) * (1.0 + e * cos_f)
+
+            t_hat = np.cross(w_hat, r_hat)
+            t_hat_u = _unit(t_hat)
+            if t_hat_u is None:
+                t_hat_u = np.zeros(3)
+
+            return (v_r_m_s * r_hat + v_t_m_s * t_hat_u) * vel_mod
+
+        arc_short_m, arc_long_m = slice_arc_segments(full3d_m, i1, i2)
+        arc_long_m = arc_long_m[::-1]
+
+        def _score_arc(arc_m):
+            rot_dir_ = direction(arc_m, u_hat, v_hat, w_hat)
+            vel_mod_ = 1 if rot_dir_ >= 0 else -1
+            v0_m_s = _v_at_r0_m_s(arc_m[0], F2_m, e, a_m, w_hat, vel_mod=vel_mod_)
+
+            if v_pref_m_s is None:
+                return 0.0, rot_dir_, vel_mod_, v0_m_s
+
+            v_pref_hat = _unit(v_pref_m_s)
+            v0_hat = _unit(v0_m_s)
+            if (v_pref_hat is None) or (v0_hat is None):
+                return -np.inf, rot_dir_, vel_mod_, v0_m_s
+            return float(np.dot(v0_hat, v_pref_hat)), rot_dir_, vel_mod_, v0_m_s
+
+        score_s, rot_s, velmod_s, _v0_s = _score_arc(arc_short_m)
+        score_l, rot_l, velmod_l, _v0_l = _score_arc(arc_long_m)
+
+        if v_pref_m_s is None:
+            arc3d_m = arc_short_m
+            arc3d_comp_m = arc_long_m
+            rot_dir = rot_s
+            vel_mod = velmod_s
+        else:
+            if score_l > score_s:
+                arc3d_m = arc_long_m
+                arc3d_comp_m = arc_short_m
+                rot_dir = rot_l
+                vel_mod = velmod_l
+            else:
+                arc3d_m = arc_short_m
+                arc3d_comp_m = arc_long_m
+                rot_dir = rot_s
+                vel_mod = velmod_s
+
+        xy_arc_m = np.array([_in_plane_m(p_m, u_hat, v_hat) for p_m in arc3d_m])
+        f_rad = np.unwrap(np.arctan2(xy_arc_m[:, 1], xy_arc_m[:, 0]))
+
+        r_norm_m = np.linalg.norm(arc3d_m, axis=1)
+        h_scalar_m2_s = np.sqrt(mu_m3_s2 * a_m * (1.0 - e**2))
+
+        df_rad = np.diff(f_rad)
+        df_abs_rad = np.abs(df_rad)
+
+        dt_df_mid_s = 0.5 * (r_norm_m[:-1] ** 2 + r_norm_m[1:] ** 2) / h_scalar_m2_s
+        dt_s = dt_df_mid_s * df_abs_rad
+
+        t_rel_s = np.zeros_like(f_rad)
+        t_rel_s[1:] = np.cumsum(dt_s)
+        t_rel_s -= t_rel_s[0]
+
+        vel3d_m_s = np.empty_like(arc3d_m)
+        for k, r_vec_m in enumerate(arc3d_m):
+            vel3d_m_s[k] = _v_at_r0_m_s(r_vec_m, F2_m, e, a_m, w_hat, vel_mod=vel_mod)
+
+        # ensure companion exists for plotting
+        if arc3d_comp_m is None:
+            arc3d_comp_m = arc3d_m.copy()
+
+    # ───────────────────────── convenience state values ───────────────────
+    r0_m, v0_m_s = arc3d_m[0], vel3d_m_s[0]
+
+    # absolute times (optional)
     t_abs = None
     if time_of_departure is not None:
         from ..Time_Functions import to_gps
-        time_of_departure = to_gps(time_of_departure)
-        t_abs = np.asarray(time_of_departure) + t_rel
+        t0_abs_s = np.asarray(to_gps(time_of_departure))
+        t_abs = t0_abs_s + t_rel_s
     elif time_of_arrival is not None:
         from ..Time_Functions import to_gps
-        time_of_arrival = to_gps(time_of_arrival)
-        t_abs = np.asarray(time_of_arrival) - (t_rel[-1] - t_rel)
+        t1_abs_s = np.asarray(to_gps(time_of_arrival))
+        t_abs = t1_abs_s - (t_rel_s[-1] - t_rel_s)
 
-    mu = EARTH_MU
-    r = np.linalg.norm(r0)
-    h_vec = np.cross(r0, v0)
-    h = np.linalg.norm(h_vec)
-    n_vec = np.cross(np.array([0.0, 0.0, 1.0]), h_vec)
-    n = np.linalg.norm(n_vec)
-    e_vec = (np.cross(v0, h_vec) / mu) - r0 / r
-    e = np.linalg.norm(e_vec)
+    # ───────────────────────── elements / invariants ──────────────────────
+    r0_norm_m = np.linalg.norm(r0_m)
+    h_vec_m2_s = np.cross(r0_m, v0_m_s)
+    h_m2_s = np.linalg.norm(h_vec_m2_s)
 
-    i_rad = np.arccos(h_vec[2] / h)
-    if n != 0:
-        raan = np.arccos(n_vec[0] / n)
-        if n_vec[1] < 0:
-            raan = 2 * np.pi - raan
+    n_vec = np.cross(np.array([0.0, 0.0, 1.0]), h_vec_m2_s)
+    n_norm = np.linalg.norm(n_vec)
+
+    e_vec = (np.cross(v0_m_s, h_vec_m2_s) / mu_m3_s2) - (r0_m / r0_norm_m)
+    e = float(np.linalg.norm(e_vec))
+
+    i_rad = np.arccos(h_vec_m2_s[2] / h_m2_s)
+
+    if n_norm != 0.0:
+        raan_rad = np.arccos(n_vec[0] / n_norm)
+        if n_vec[1] < 0.0:
+            raan_rad = 2.0 * np.pi - raan_rad
     else:
-        raan = 0.0
+        raan_rad = 0.0
 
-    if n != 0:
-        pa = np.arccos(np.dot(n_vec, e_vec) / (n * e)) if e != 0 else 0.0
-        if e_vec[2] < 0:
-            pa = 2 * np.pi - pa
+    if n_norm != 0.0 and e != 0.0:
+        pa_rad = np.arccos(np.dot(n_vec, e_vec) / (n_norm * e))
+        if e_vec[2] < 0.0:
+            pa_rad = 2.0 * np.pi - pa_rad
     else:
-        pa = 0.0
+        pa_rad = 0.0
 
-    if e != 0:
-        ta = np.arccos(np.dot(e_vec, r0) / (e * r))
-        if np.dot(r0, v0) < 0:
-            ta = 2 * np.pi - ta
+    if e != 0.0:
+        ta_rad = np.arccos(np.dot(e_vec, r0_m) / (e * r0_norm_m))
+        if np.dot(r0_m, v0_m_s) < 0.0:
+            ta_rad = 2.0 * np.pi - ta_rad
     else:
-        ta = 0.0
+        ta_rad = 0.0
 
-    cosE = (e + np.cos(ta)) / (1 + e * np.cos(ta))
-    sinE = (np.sin(ta) * np.sqrt(1 - e ** 2)) / (1 + e * np.cos(ta))
-    E = np.arctan2(sinE, cosE)
-    if E < 0:
-        E += 2 * np.pi
-    M = E - e * np.sin(E)
-    L = (raan + pa + M) % (2 * np.pi)
+    cosE = (e + np.cos(ta_rad)) / (1.0 + e * np.cos(ta_rad))
+    sinE = (np.sin(ta_rad) * np.sqrt(1.0 - e**2)) / (1.0 + e * np.cos(ta_rad))
+    E_rad = np.arctan2(sinE, cosE)
+    if E_rad < 0.0:
+        E_rad += 2.0 * np.pi
+    M_rad = E_rad - e * np.sin(E_rad)
+    L_rad = (raan_rad + pa_rad + M_rad) % (2.0 * np.pi)
 
-    period = 2 * np.pi * np.sqrt(a ** 3 / mu)
+    period_s = 2.0 * np.pi * np.sqrt(a_m**3 / mu_m3_s2)
 
     # ─────────────────────────── plotting  ──────────────────────────────
     if plot or save_path:
@@ -391,113 +625,110 @@ def ellipse_fit(P1, P2, *,
         from matplotlib.gridspec import GridSpec
         from ssapy.simple import ssapy_orbit
 
-        # arc-sample timeline (minutes)
-        t_minutes = t_rel / 60.0
+        t_minutes = t_rel_s / 60.0
+        r_ss_m, v_ss_m_s, _t_ss = ssapy_orbit(r=r0_m, v=v0_m_s, t=t_rel_s)
 
-        # Propagate with ssapy at the same sample epochs for overlay
-        r_ss, v_ss = ssapy_orbit(
-            r=r0,
-            v=v0,
-            t=t_rel,
-        )
-
-        # set up figure / axes
         fig = plt.figure(figsize=(18, 6))
         gs = GridSpec(1, 3, figure=fig, width_ratios=[3, 2, 2])
-        ax3d   = fig.add_subplot(gs[0], projection="3d")
-        ax_dist  = fig.add_subplot(gs[1])
+        ax3d = fig.add_subplot(gs[0], projection="3d")
+        ax_dist = fig.add_subplot(gs[1])
         ax_speed = fig.add_subplot(gs[2])
 
-        # 3-D orbit view --------------------------------------------------
-        colors = cm.get_cmap("RdYlGn_r")(np.linspace(0, 1, len(arc3d)))
-        ax3d.scatter(arc3d_comp[:, 0] / 1e3, arc3d_comp[:, 1] / 1e3,
-                     arc3d_comp[:, 2] / 1e3, c="black", s=10)
-        ax3d.scatter(arc3d[:, 0] / 1e3, arc3d[:, 1] / 1e3,
-                     arc3d[:, 2] / 1e3, c=colors, s=10)
-        ax3d.plot(r_ss[:, 0] / 1e3, r_ss[:, 1] / 1e3,
-                  r_ss[:, 2] / 1e3, lw=2.5, color="gray", alpha=0.6,
-                  label="ssapy")
+        colors = cm.get_cmap("RdYlGn_r")(np.linspace(0, 1, len(arc3d_m)))
+
+        if arc3d_comp_m is not None:
+            ax3d.scatter(
+                arc3d_comp_m[:, 0] / 1e3,
+                arc3d_comp_m[:, 1] / 1e3,
+                arc3d_comp_m[:, 2] / 1e3,
+                c="black",
+                s=10,
+            )
+
+        ax3d.scatter(
+            arc3d_m[:, 0] / 1e3,
+            arc3d_m[:, 1] / 1e3,
+            arc3d_m[:, 2] / 1e3,
+            c=colors,
+            s=10,
+        )
+        ax3d.plot(
+            r_ss_m[:, 0] / 1e3,
+            r_ss_m[:, 1] / 1e3,
+            r_ss_m[:, 2] / 1e3,
+            lw=2.5,
+            color="gray",
+            alpha=0.6,
+            label="ssapy",
+        )
         ax3d.scatter(0, 0, 0, marker="x", s=80, color="black", label="Earth")
-        ax3d.scatter(*F2 / 1e3, marker="x", s=80, color="gray", alpha=0.5,
-                     label="focus")
-        ax3d.scatter(*P1 / 1e3, s=40, label="P1", color="green")
-        ax3d.scatter(*P2 / 1e3, s=40, label="P2", color="red")
+        ax3d.scatter(*(F2_m / 1e3), marker="x", s=80, color="gray", alpha=0.5, label="focus")
+        ax3d.scatter(*(P1_m / 1e3), s=40, label="P1", color="green")
+        ax3d.scatter(*(P2_m / 1e3), s=40, label="P2", color="red")
         ax3d.set_xlabel("X [km]")
         ax3d.set_ylabel("Y [km]")
         ax3d.set_zlabel("Z [km]")
-        Rmax = np.linalg.norm(arc3d, axis=1).max() / 1e3
-        ax3d.set_xlim((-Rmax, Rmax)); ax3d.set_ylim((-Rmax, Rmax))
-        ax3d.set_zlim((-Rmax, Rmax))
-        ax3d.set_title("Full ellipse with ssapy overlay")
+        Rmax_km = np.linalg.norm(arc3d_m, axis=1).max() / 1e3
+        ax3d.set_xlim((-Rmax_km, Rmax_km))
+        ax3d.set_ylim((-Rmax_km, Rmax_km))
+        ax3d.set_zlim((-Rmax_km, Rmax_km))
+        ax3d.set_title("Kepler-sampled ellipse with ssapy overlay")
         ax3d.legend()
 
-        # distance-from-origin plot --------------------------------------
-        ax_dist.plot(t_minutes,
-                     np.linalg.norm(arc3d, axis=1) / 1e3,
-                     lw=5, label="ellipse")
-        ax_dist.plot(t_minutes,
-                     np.linalg.norm(r_ss, axis=1) / 1e3,
-                     lw=5, ls="--", color="red", label="ssapy")
+        ax_dist.plot(t_minutes, np.linalg.norm(arc3d_m, axis=1) / 1e3, lw=5, label="ellipse")
+        ax_dist.plot(t_minutes, np.linalg.norm(r_ss_m, axis=1) / 1e3, lw=5, ls="--", color="red", label="ssapy")
         ax_dist.set_xlabel("Time from P1 [min]")
         ax_dist.set_ylabel("Distance [km]")
         ax_dist.set_title("Distance from origin")
-        ax_dist.grid(True); ax_dist.legend()
+        ax_dist.grid(True)
+        ax_dist.legend()
 
-        # speed plot ------------------------------------------------------
-        ax_speed.plot(t_minutes,
-                      np.linalg.norm(vel3d, axis=1) / 1e3,
-                      lw=5, label="ellipse")
-        ax_speed.plot(t_minutes,
-                      np.linalg.norm(v_ss, axis=1) / 1e3,
-                      lw=5, ls="--", color="red", label="ssapy")
+        ax_speed.plot(t_minutes, np.linalg.norm(vel3d_m_s, axis=1) / 1e3, lw=5, label="ellipse")
+        ax_speed.plot(t_minutes, np.linalg.norm(v_ss_m_s, axis=1) / 1e3, lw=5, ls="--", color="red", label="ssapy")
         ax_speed.set_xlabel("Time from P1 [min]")
         ax_speed.set_ylabel("Speed [km/s]")
         ax_speed.set_title("Speed over time")
-        ax_speed.grid(True); ax_speed.legend()
+        ax_speed.grid(True)
+        ax_speed.legend()
 
         plt.tight_layout()
         plt.show()
         if save_path:
             save_plot(fig, save_path)
 
+    # ───────────────────────── output dict (keys unchanged) ───────────────
     result = {
-        "r"           : arc3d,                          # (N, 3) Cartesian positions           [m]
-        "v"           : vel3d,                          # (N, 3) Inertial velocities           [m s⁻¹]
-        "t_rel"       : t_rel,                          # (N,)   Relative flight-time (0-based) [s]
-        "t_abs"       : t_abs,                          # (N,)   Absolute epochs (optional)     [s or datetime64]
-        "a"           : a,                              # Semi-major axis                      [m]
-        "e"           : e,                              # Eccentricity                        [–]
-        "i"           : i_rad,                          # Inclination                         [rad]
-        "raan"        : raan,                           # Right ascension of ascending node   [rad]
-        "pa"          : pa,                             # Argument of periapsis               [rad]
-        "ta"          : ta,                             # True anomaly at r₀                  [rad]
-        "L"           : L,                              # Mean longitude                      [rad]
-
-        "rp"          : a * (1 - e),                    # Periapsis radius                    [m]
-        "ra"          : a * (1 + e),                    # Apoapsis  radius                    [m]
-        "rp_alt"      : a * (1 - e) - EARTH_RADIUS,     # Periapsis altitude above Earth      [m]
-        "ra_alt"      : a * (1 + e) - EARTH_RADIUS,     # Apoapsis  altitude above Earth      [m]
-
-        "b"           : b,                              # Semi-minor axis                     [m]
-        "p"           : a * (1 - e**2),                 # Semi-latus rectum                   [m]
-        "mean_motion" : np.sqrt(mu / a**3),             # Mean motion                         [rad s⁻¹]
-        "eta"         : np.sqrt(1 - e**2),              # Circularity factor η ≡ √(1−e²)      [–]
-
-        "period"      : period,                         # Keplerian period                    [s]
-        "h_vec"       : h_vec,                          # Specific angular-momentum vector    [m² s⁻¹]
-        "h"           : h,                              # |h_vec|                             [m² s⁻¹]
-        "Energy"      : -EARTH_MU / (2 * a),            # Specific mechanical energy          [J kg⁻¹]
-
-        "e_vec"       : e_vec,                          # Eccentricity vector                 [–]
-        "n_vec"       : n_vec,                          # Ascending-node vector               [–]
-
-        "r0"          : r0,                             # Departure position                  [m]
-        "v0"          : v0,                             # Departure velocity                  [m s⁻¹]
-        "F2"          : F2,                             # Second focus position               [m]
-
-        "plane_basis" : (u, v, w),                      # Orthonormal frame (in-plane u,v; w⊥)
-        "rot_dir"     : rot_dir,                        # +1 = CCW, −1 = CW (viewed along +w)
-        "mu"          : EARTH_MU,                       # Gravitational parameter             [m³ s⁻²]
+        "r": arc3d_m,                         # (N,3) [m]
+        "v": vel3d_m_s,                       # (N,3) [m/s]
+        "t_rel": t_rel_s,                     # (N,)  [s]
+        "t_abs": t_abs,                       # (N,)  [s] (or other, depending on to_gps)
+        "a": a_m,                             # [m]
+        "e": e,                               # [-]
+        "i": i_rad,                           # [rad]
+        "raan": raan_rad,                     # [rad]
+        "pa": pa_rad,                         # [rad]
+        "ta": ta_rad,                         # [rad]
+        "L": L_rad,                           # [rad]
+        "rp": a_m * (1.0 - e),                # [m]
+        "ra": a_m * (1.0 + e),                # [m]
+        "rp_alt": a_m * (1.0 - e) - R_earth_m,# [m]
+        "ra_alt": a_m * (1.0 + e) - R_earth_m,# [m]
+        "b": b_m,                             # [m]
+        "p": a_m * (1.0 - e**2),              # [m]
+        "mean_motion": np.sqrt(mu_m3_s2 / a_m**3),  # [rad/s]
+        "eta": np.sqrt(1.0 - e**2),           # [-]
+        "period": period_s,                   # [s]
+        "h_vec": h_vec_m2_s,                  # [m^2/s]
+        "h": h_m2_s,                          # [m^2/s]
+        "Energy": -mu_m3_s2 / (2.0 * a_m),    # [J/kg]
+        "e_vec": e_vec,                       # [-]
+        "n_vec": n_vec,                       # [-]
+        "r0": r0_m,                           # [m]
+        "v0": v0_m_s,                         # [m/s]
+        "F2": F2_m,                           # [m]
+        "plane_basis": (u_hat, v_hat, w_hat),
+        "rot_dir": int(rot_dir),
+        "mu": mu_m3_s2,                       # [m^3/s^2]
     }
 
     return result
