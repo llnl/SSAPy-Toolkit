@@ -55,7 +55,6 @@ dependencies = [
   "pandas",
   "pickle4",
   "pillow",
-  "poliastro",
   "psutil",
   "pybind11",
   "pyerfa",
