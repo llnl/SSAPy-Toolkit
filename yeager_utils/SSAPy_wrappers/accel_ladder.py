@@ -12,9 +12,8 @@ def ssapy_accel_ladder(area=1.0, mass=250.0, CR=1.2, CD=2.2):
       7) + Moon harmonics
       8) + SRP
       9) + EarthRad
-     10) + Drag
     """
-    from ssapy.accel import AccelKepler, AccelSolRad, AccelEarthRad, AccelDrag
+    from ssapy.accel import AccelKepler, AccelSolRad, AccelEarthRad
     from ssapy.body import get_body
     from ssapy.gravity import AccelHarmonic, AccelThirdBody
 
@@ -40,7 +39,6 @@ def ssapy_accel_ladder(area=1.0, mass=250.0, CR=1.2, CD=2.2):
 
     a_solrad = AccelSolRad(area=float(area), mass=float(mass), CR=float(CR))
     a_earthrad = AccelEarthRad(area=float(area), mass=float(mass), CR=float(CR))
-    a_drag = AccelDrag(area=float(area), mass=float(mass), CD=float(CD))
 
     suite = {}
 
@@ -78,9 +76,5 @@ def ssapy_accel_ladder(area=1.0, mass=250.0, CR=1.2, CD=2.2):
     # 9) + Earth radiation pressure
     m9 = m8 + a_earthrad
     suite["EH140+MH20+Sun+Pln+SRP+ERad"] = m9
-
-    # 10) + Drag
-    m10 = m9 + a_drag
-    suite["EH140+MH20+Sun+Pln+SRP+ERad+Drag"] = m10
 
     return suite

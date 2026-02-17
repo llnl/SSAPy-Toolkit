@@ -1,13 +1,9 @@
-import numpy as np
-from ..constants import EARTH_RADIUS
-from ..Time_Functions import to_gps
-from .int_utils import (
-    accel_point_earth,   # GM / r² gravity
-    build_profile,       # thrust-profile helper
-    accel_radial,
-    accel_velocity,
-    accel_inclination,
-)
+from .int_utils import build_profile  # keep
+
+from ..Accelerations.accel_point_earth import accel_point_earth  # [64]
+from ..Accelerations.accel_radial import accel_radial            # [65]
+from ..Accelerations.accel_velocity import accel_velocity        # [68]
+from ..Accelerations.accel_inclination import accel_inclination  # [61]
 
 def leapfrog(
     r0,

@@ -66,6 +66,37 @@ def best_prop(kwargs=None, ode_kwargs=None):
     return SciPyPropagator(_accel_best_cache, ode_kwargs=ode_kwargs)
 
 
+_accel_best_cache = None
+def best_gravity_prop(kwargs=None, ode_kwargs=None):
+    """
+    "Best-like" force model: Earth(Kepler+EGM2008 140x140) + Moon(point+20x20) + Sun + planets + SRP+EarthRad+Drag
+    """
+    global _accel_best_cache
+
+    if kwargs is None:
+        kwargs = ssapy_kwargs()
+
+    if _accel_best_cache is None:
+        aEarth = AccelKepler() + AccelHarmonic(get_body("Earth", model="EGM2008"), 140, 140)
+
+        moon = get_body("moon")
+        aMoon = AccelThirdBody(moon) + AccelHarmonic(moon, 20, 20)
+
+        aSun = AccelThirdBody(get_body("Sun"))
+
+        planet_names = ("Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune")
+        planets = None
+        for name in planet_names:
+            term = AccelThirdBody(get_body(name))
+            planets = term if planets is None else planets + term
+
+        nonConservative = AccelSolRad(**kwargs) + AccelEarthRad(**kwargs)
+
+        _accel_best_cache = aEarth + aMoon + aSun + planets + nonConservative
+
+    return SciPyPropagator(_accel_best_cache, ode_kwargs=ode_kwargs)
+
+
 def ssapy_prop(propkw=None, ode_kwargs=None):
     """
     A lighter "ssapy_prop"-style model (no planets, no drag): Earth full + Moon full + Sun + SRP + EarthRad

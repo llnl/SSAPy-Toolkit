@@ -497,15 +497,15 @@ def make_accel_ladder_dashboard_figures(
     ax[0].set_ylabel("||dr|| vs ref (m)", fontsize=12)
     ax[0].grid(True, which="both", alpha=0.3)
     if show_legend:
-        ax[0].legend(fontsize=8, ncol=2)
+        ax[0].legend(fontsize=8, ncol=2, loc="upper left")
 
     if orbit_elements_text:
         ax[0].text(
-            0.01,
+            0.98,
             0.98,
             str(orbit_elements_text),
             transform=ax[0].transAxes,
-            ha="left",
+            ha="right",
             va="top",
             fontsize=11,
             bbox=oe_bbox,
@@ -518,8 +518,7 @@ def make_accel_ladder_dashboard_figures(
     ax[1].set_yscale("log")
     ax[1].set_ylabel("||dr_inc|| (m)", fontsize=12)
     ax[1].grid(True, which="both", alpha=0.3)
-    if show_legend:
-        ax[1].legend(fontsize=8, ncol=2)
+
 
     ax[2].set_title("Worst rung NTW components (worst = %s)" % labels[worst_idx], fontsize=13)
     ax[2].plot(t_rel_s, ntw_worst[:, 0], label="N")
@@ -529,7 +528,7 @@ def make_accel_ladder_dashboard_figures(
     ax[2].set_ylabel("NTW(dr) (m)", fontsize=12)
     ax[2].grid(True, alpha=0.3)
     if show_legend:
-        ax[2].legend(fontsize=10)
+        ax[2].legend(fontsize=10, loc="upper left")
 
     ax[0].tick_params(axis="x", labelbottom=False)
     ax[1].tick_params(axis="x", labelbottom=False)
