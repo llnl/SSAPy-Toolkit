@@ -5,7 +5,7 @@ def accel_equatorial(r, v, magnitude):
     """
     Acceleration vector always in the equatorial (east/west) direction,
     i.e. perpendicular to the Earth's spin axis and radial direction,
-    positive → counter‑clockwise (eastward), negative → clockwise.
+    positive -> counter-clockwise (eastward), negative -> clockwise.
 
     Parameters
     ----------
@@ -14,30 +14,28 @@ def accel_equatorial(r, v, magnitude):
     v : array_like, shape (3,)
         (Unused; kept for signature consistency.)
     magnitude : float
-        Desired magnitude of the equatorial‑plane acceleration in m/s^2.
-        Positive → ccw (eastward); negative → cw (westward).
+        Desired magnitude of the equatorial-plane acceleration in m/s^2.
 
     Returns
     -------
     a : ndarray, shape (3,)
-        Equatorial‑plane acceleration vector in m/s^2.
+        Equatorial-plane acceleration vector in m/s^2.
     """
-    r = np.asarray(r, dtype=float)
+    r = np.asarray(r, dtype=float).reshape(3)
+
+    if magnitude == 0:
+        return np.zeros(3, dtype=float)
+
     norm_r = np.linalg.norm(r)
-    if norm_r == 0 or magnitude == 0:
-        return np.zeros(3)
+    if norm_r == 0:
+        return np.zeros(3, dtype=float)
 
-    # Unit radial vector
     r_hat = r / norm_r
+    z_hat = np.array([0.0, 0.0, 1.0], dtype=float)
 
-    # Earth's spin axis
-    z_hat = np.array([0.0, 0.0, 1.0])
-
-    # Equatorial (eastward) direction via right‑hand rule
     equ_dir = np.cross(z_hat, r_hat)
     norm_eq = np.linalg.norm(equ_dir)
     if norm_eq == 0:
-        return np.zeros(3)
+        return np.zeros(3, dtype=float)
 
-    # Scale to desired magnitude
-    return magnitude * equ_dir / norm_eq
+    return float(magnitude) * equ_dir / norm_eq
