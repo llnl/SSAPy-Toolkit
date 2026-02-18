@@ -1,5 +1,3 @@
-import numpy as np
-
 from ssapy.accel import AccelKepler, AccelSolRad, AccelEarthRad, AccelDrag
 from ssapy.body import get_body
 from ssapy.gravity import AccelHarmonic, AccelThirdBody
@@ -16,6 +14,8 @@ def keplerian_prop(ode_kwargs=None):
 
 
 _accel_3_cache = None
+
+
 def threebody_prop(ode_kwargs=None):
     global _accel_3_cache
     if _accel_3_cache is None:
@@ -24,6 +24,8 @@ def threebody_prop(ode_kwargs=None):
 
 
 _accel_4_cache = None
+
+
 def fourbody_prop(ode_kwargs=None):
     global _accel_4_cache
     if _accel_4_cache is None:
@@ -36,6 +38,8 @@ def fourbody_prop(ode_kwargs=None):
 
 
 _accel_best_cache = None
+
+
 def best_prop(kwargs=None, ode_kwargs=None):
     """
     "Best-like" force model: Earth(Kepler+EGM2008 140x140) + Moon(point+20x20) + Sun + planets + SRP+EarthRad+Drag
@@ -67,6 +71,8 @@ def best_prop(kwargs=None, ode_kwargs=None):
 
 
 _accel_best_cache = None
+
+
 def best_gravity_prop(kwargs=None, ode_kwargs=None):
     """
     "Best-like" force model: Earth(Kepler+EGM2008 140x140) + Moon(point+20x20) + Sun + planets + SRP+EarthRad+Drag

@@ -3,15 +3,13 @@ import numpy as np
 from ..constants import EARTH_MU
 from ..Time_Functions import to_gps
 
-from ..Accelerations.accel_moon import accel_point_moon  # [62]
-from ..Accelerations.accel_sun import accel_point_sun    # [66]
+from ..Accelerations.accel_moon import accel_point_moon
+from ..Accelerations.accel_sun import accel_point_sun
+from ..Accelerations.accel_radial import accel_radial
+from ..Accelerations.accel_velocity import accel_velocity
+from ..Accelerations.accel_inclination import accel_inclination
 
-from .int_utils import (
-    build_profile,
-    accel_radial,
-    accel_velocity,
-    accel_inclination,
-)
+from .int_utils import build_profile
 
 
 def rk4(
@@ -27,8 +25,8 @@ def rk4(
     t_arr = t_arr - t_arr[0]
     n_steps = len(t_arr)
 
-    r_th = build_profile(radial,      t_arr)
-    v_th = build_profile(velocity,    t_arr)
+    r_th = build_profile(radial, t_arr)
+    v_th = build_profile(velocity, t_arr)
     i_th = build_profile(inclination, t_arr)
 
     r = np.empty((n_steps, 3))

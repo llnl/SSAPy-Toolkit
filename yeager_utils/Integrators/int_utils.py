@@ -5,18 +5,6 @@ from scipy.interpolate import interp1d
 
 from ..Time_Functions import to_gps
 
-# Canonical accel functions live in yeager_utils/Accelerations/
-from ..Accelerations.accel_point_earth import accel_point_earth  # [64]
-from ..Accelerations.accel_velocity import accel_velocity        # [68]
-from ..Accelerations.accel_radial import accel_radial            # [65]
-from ..Accelerations.accel_inclination import accel_inclination  # [61]
-
-# You said you will move these into Accelerations as individual scripts.
-# This file now only re-exports them for backward compatibility with integrators
-# that import from .int_utils (e.g., rk4.py) [106].
-from ..Accelerations.accel_moon import accel_moon                # (new file you’ll add)
-from ..Accelerations.accel_sun import accel_sun                  # (new file you’ll add)
-
 
 def precompute_third_body_positions(t, body_name):
     """

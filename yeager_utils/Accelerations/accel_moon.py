@@ -43,4 +43,4 @@ def accel_point_moon(r: np.ndarray, time) -> np.ndarray:
     if d == 0.0:
         return np.zeros(3, dtype=float)
 
-    return MOON_MU * delta / d**3  # [62]
+    return MOON_MU * delta / d**3
