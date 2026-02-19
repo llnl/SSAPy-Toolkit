@@ -1,7 +1,7 @@
 from ssapy.accel import AccelKepler, AccelSolRad, AccelEarthRad, AccelDrag
 from ssapy.body import get_body
 from ssapy.gravity import AccelHarmonic, AccelThirdBody
-from ssapy.propagator import SciPyPropagator
+from ssapy.propagator import SciPyPropagator, KeplerianPropagator
 
 
 def ssapy_kwargs(mass=250.0, area=0.022, CD=2.3, CR=1.3):
@@ -10,7 +10,11 @@ def ssapy_kwargs(mass=250.0, area=0.022, CD=2.3, CR=1.3):
 
 
 def keplerian_prop(ode_kwargs=None):
-    return SciPyPropagator(AccelKepler(), ode_kwargs=ode_kwargs)
+    return KeplerianPropagator()
+
+
+def keplerian_numerical_prop():
+    return SciPyPropagator(AccelKepler())
 
 
 _accel_3_cache = None
@@ -70,19 +74,19 @@ def best_prop(kwargs=None, ode_kwargs=None):
     return SciPyPropagator(_accel_best_cache, ode_kwargs=ode_kwargs)
 
 
-_accel_best_cache = None
+_accel_best_gravity_cache = None
 
 
 def best_gravity_prop(kwargs=None, ode_kwargs=None):
     """
     "Best-like" force model: Earth(Kepler+EGM2008 140x140) + Moon(point+20x20) + Sun + planets + SRP+EarthRad+Drag
     """
-    global _accel_best_cache
+    global _accel_best_gravity_cache
 
     if kwargs is None:
         kwargs = ssapy_kwargs()
 
-    if _accel_best_cache is None:
+    if _accel_best_gravity_cache is None:
         aEarth = AccelKepler() + AccelHarmonic(get_body("Earth", model="EGM2008"), 140, 140)
 
         moon = get_body("moon")
@@ -98,9 +102,9 @@ def best_gravity_prop(kwargs=None, ode_kwargs=None):
 
         nonConservative = AccelSolRad(**kwargs) + AccelEarthRad(**kwargs)
 
-        _accel_best_cache = aEarth + aMoon + aSun + planets + nonConservative
+        _accel_best_gravity_cache = aEarth + aMoon + aSun + planets + nonConservative
 
-    return SciPyPropagator(_accel_best_cache, ode_kwargs=ode_kwargs)
+    return SciPyPropagator(_accel_best_gravity_cache, ode_kwargs=ode_kwargs)
 
 
 def ssapy_prop(propkw=None, ode_kwargs=None):
