@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def divergence_plot(r_vectors, r_center=None, v_center=None):
+def divergence_plot(r_vectors, r_center=None, v_center=None, title='Position Errors Projected onto Velocity Plane'):
     """
     Plot position errors projected onto a plane defined by velocity vector.
     
@@ -14,6 +14,8 @@ def divergence_plot(r_vectors, r_center=None, v_center=None):
     v_center : np.ndarray, optional
         Reference velocity vector (3,) that defines the plane normal.
         If None, raises an error.
+    title : str, optional
+        Plot title
     """
     # Use median if r_center not provided
     if r_center is None:
@@ -26,60 +28,75 @@ def divergence_plot(r_vectors, r_center=None, v_center=None):
     if v_center is None:
         raise ValueError("v_center must be provided")
     
-    # Normalize the plane normal (velocity vector)
-    normal = v_center / np.linalg.norm(v_center)
+    # Compute NTW coordinate system basis vectors
+    t_hat = v_center / np.linalg.norm(v_center)
+    w_hat = np.cross(r_center, v_center)
+    w_hat = w_hat / np.linalg.norm(w_hat)
+    n_hat = np.cross(w_hat, t_hat)
     
-    # Project errors onto the plane (remove component along normal)
-    errors_projected = errors - np.outer(np.dot(errors, normal), normal)
+    # Project errors onto the plane perpendicular to velocity
+    errors_projected = errors - np.outer(np.dot(errors, t_hat), t_hat)
     
-    # Get two perpendicular basis vectors in the plane
-    if abs(normal[0]) < 0.9:
-        u = np.cross(normal, [1, 0, 0])
-    else:
-        u = np.cross(normal, [0, 1, 0])
-    u = u / np.linalg.norm(u)
-    v = np.cross(normal, u)
+    # Calculate tangential (along-track) component
+    t_component = np.dot(errors, t_hat)
     
-    # Convert 3D projected points to 2D coordinates in the plane
-    x_2d = np.dot(errors_projected, u)
-    y_2d = np.dot(errors_projected, v)
+    # Convert tangential error to timing difference
+    v_magnitude = np.linalg.norm(v_center)  # orbital velocity magnitude in m/s
+    timing_difference = t_component / v_magnitude  # timing difference in seconds
+    
+    # Convert 3D projected points to 2D coordinates using N and W basis
+    x_2d = np.dot(errors_projected, n_hat)
+    y_2d = np.dot(errors_projected, w_hat)
     
     # Calculate radial norms for statistics
     r_norm = np.sqrt(x_2d**2 + y_2d**2)
     print(f"\nProjected position offsets | "
-          f"mean radius = {np.mean(r_norm):.3f}, "
-          f"std radius  = {np.std(r_norm):.3f}, "
-          f"max radius  = {np.max(r_norm):.3f}")
+          f"mean radius = {np.mean(r_norm):.3f} m, "
+          f"std radius  = {np.std(r_norm):.3f} m, "
+          f"max radius  = {np.max(r_norm):.3f} m")
+    print(f"Tangential offsets | "
+          f"mean = {np.mean(t_component):.3f} m, "
+          f"std = {np.std(t_component):.3f} m, "
+          f"range = [{np.min(t_component):.3f}, {np.max(t_component):.3f}] m")
+    print(f"Timing differences | "
+          f"mean = {np.mean(timing_difference):.3f} s, "
+          f"std = {np.std(timing_difference):.3f} s, "
+          f"range = [{np.min(timing_difference):.3f}, {np.max(timing_difference):.3f}] s")
     
-    # Create bullseye plot
-    fig, ax = plt.subplots(figsize=(8, 8))
+    # Create scientific plot
+    fig, ax = plt.subplots(figsize=(10, 8))
     
-    # Define radii for concentric circles
-    max_error = max(np.max(np.abs(x_2d)), np.max(np.abs(y_2d)))
-    if max_error > 0:
-        radii = np.linspace(max_error/5, max_error, 5)
-    else:
-        radii = [1, 2, 3, 4, 5]  # Default if all points are at center
-    colors = ['red', 'white', 'blue', 'white', 'red']
+    # Use color mapping for timing difference
+    scatter = ax.scatter(x_2d, y_2d, c=timing_difference, s=80, 
+                        cmap='RdYlBu_r', zorder=100, 
+                        edgecolors='black', linewidths=0.8,
+                        alpha=0.8)
     
-    # Draw bullseye rings
-    theta = np.linspace(0, 2 * np.pi, 1000)
-    for i, radius in enumerate(radii):
-        x_circle = radius * np.cos(theta)
-        y_circle = radius * np.sin(theta)
-        ax.fill(x_circle, y_circle, color=colors[i], alpha=0.7, zorder=len(radii)-i)
-    
-    # Plot error points
-    ax.scatter(x_2d, y_2d, c='black', s=50, zorder=100, edgecolors='white', linewidths=0.5)
+    # Add colorbar with timing units
+    cbar = fig.colorbar(scatter, ax=ax, label='Timing difference [seconds]', 
+                       shrink=0.8, pad=0.02)
     
     # Plot center point
-    ax.scatter(0, 0, c='yellow', s=100, marker='x', zorder=101, linewidths=2)
+    ax.scatter(0, 0, c='red', s=150, marker='x', zorder=101, 
+              linewidths=3, label='Reference center')
+    
+    # Add circles for reference (not filled bullseye)
+    max_error = max(np.max(np.abs(x_2d)), np.max(np.abs(y_2d)))
+    if max_error > 0:
+        circle_radii = np.linspace(max_error/4, max_error, 4)
+        theta = np.linspace(0, 2 * np.pi, 100)
+        for radius in circle_radii:
+            x_circle = radius * np.cos(theta)
+            y_circle = radius * np.sin(theta)
+            ax.plot(x_circle, y_circle, 'k--', alpha=0.2, linewidth=0.8)
     
     ax.set_aspect('equal')
-    ax.grid(True, alpha=0.3)
-    ax.set_xlabel('In-plane error (m)')
-    ax.set_ylabel('In-plane error (m)')
-    ax.set_title('Position Errors Projected onto Velocity Plane')
+    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+    ax.set_xlabel('Normal (N) error [m]', fontsize=12)
+    ax.set_ylabel('Cross-track (W) error [m]', fontsize=12)
+    ax.set_title(title, fontsize=14, fontweight='bold')
+    ax.legend(loc='upper right', fontsize=10)
+    
     plt.tight_layout()
     plt.show()
     
