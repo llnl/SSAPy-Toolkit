@@ -1,7 +1,6 @@
 import numpy as np
 from astropy.time import Time
 from ssapy import Orbit
-from ssapy.utils import meanAnomaly2trueAnomaly
 from yeager_utils.constants import EARTH_MU
 
 
@@ -25,6 +24,7 @@ def all_orbital_quantities(
     
     Missing angular elements (inc, raan, aop, nu) default to 0 radians.
     Periapsis and apoapsis are measured from the center of the central body.
+    All inputs and outputs are in SI units.
     
     Parameters
     ----------
@@ -33,17 +33,17 @@ def all_orbital_quantities(
     v : array-like, optional
         Velocity vector [vx, vy, vz] in m/s
     a : float, optional
-        Semi-major axis in meters [1]
+        Semi-major axis in meters
     ecc : float, optional
-        Eccentricity (dimensionless) [1]
+        Eccentricity (dimensionless)
     inc : float, optional
-        Inclination in radians (defaults to 0) [1]
+        Inclination in radians (defaults to 0)
     raan : float, optional
-        Right ascension of ascending node in radians (defaults to 0) [1]
+        Right ascension of ascending node in radians (defaults to 0)
     aop : float, optional
-        Argument of periapsis in radians (defaults to 0) [2]
+        Argument of periapsis in radians (defaults to 0)
     nu : float, optional
-        True anomaly in radians (defaults to 0) [2]
+        True anomaly in radians (defaults to 0)
     M : float, optional
         Mean anomaly in radians
     periapsis : float, optional
@@ -53,20 +53,20 @@ def all_orbital_quantities(
     t : float, optional
         Time (GPS seconds). Defaults to current time.
     mu : float, optional
-        Gravitational parameter (m^3/s^2). Defaults to Earth's GM [2][3]
+        Gravitational parameter (m^3/s^2). Defaults to Earth's GM.
     
     Returns
     -------
     dict
-        Dictionary containing all computed orbital elements [1][2][3]:
+        Dictionary containing all computed orbital elements (all in SI units):
         - 'r': Position vector [m]
         - 'v': Velocity vector [m/s]
-        - 'a': Semi-major axis [m] [1]
-        - 'ecc': Eccentricity [1]
-        - 'inc': Inclination [rad] [1]
-        - 'raan': Right ascension of ascending node [rad] [2]
-        - 'aop': Argument of periapsis [rad] [2]
-        - 'nu': True anomaly [rad] [2]
+        - 'a': Semi-major axis [m]
+        - 'ecc': Eccentricity
+        - 'inc': Inclination [rad]
+        - 'raan': Right ascension of ascending node [rad]
+        - 'aop': Argument of periapsis [rad]
+        - 'nu': True anomaly [rad]
         - 'M': Mean anomaly [rad]
         - 'E': Eccentric anomaly [rad]
         - 'period': Orbital period [s]
@@ -76,11 +76,21 @@ def all_orbital_quantities(
         - 'periapsis_vector': Periapsis position vector [m]
         - 'apoapsis_vector': Apoapsis position vector [m]
     
+    Notes
+    -----
+    - Handles circular orbits (ecc=0) without issues
+    - For parabolic (ecc=1) and hyperbolic (ecc>1) orbits, some quantities
+      (period, apoapsis) may be infinite or undefined
+    - If conflicting inputs are provided, priority order is:
+      1. Position/velocity vectors (r, v)
+      2. Periapsis/apoapsis
+      3. Semi-major axis/eccentricity (a, ecc)
+    
     Examples
     --------
     # Minimal input with periapsis and apoapsis (all angles default to 0)
     >>> result = all_orbital_quantities(
-    ...     periapsis=6571000, 
+    ...     periapsis=6571000,
     ...     apoapsis=42164000
     ... )
     
@@ -99,8 +109,8 @@ def all_orbital_quantities(
     
     # Moon orbit (pass Moon's mu)
     >>> result = all_orbital_quantities(
-    ...     r=r_vec, 
-    ...     v=v_vec, 
+    ...     r=r_vec,
+    ...     v=v_vec,
     ...     mu=4.9028e12
     ... )
     """
@@ -108,7 +118,7 @@ def all_orbital_quantities(
     if t is None:
         t = Time.now().gps
     
-    # Case 1: Position and velocity vectors provided
+    # Case 1: Position and velocity vectors provided (highest priority)
     if r is not None and v is not None:
         r = np.array(r)
         v = np.array(v)
@@ -119,7 +129,7 @@ def all_orbital_quantities(
         
         result = _extract_all_elements(orbit)
         
-    # Case 2: Periapsis and apoapsis provided
+    # Case 2: Periapsis and apoapsis provided (second priority)
     elif periapsis is not None and apoapsis is not None:
         # Calculate semi-major axis and eccentricity
         a = (periapsis + apoapsis) / 2.0
@@ -141,7 +151,8 @@ def all_orbital_quantities(
                 a, ecc, inc, raan, aop, nu, t=t
             )
         else:  # M is not None
-            nu = meanAnomaly2trueAnomaly(M, ecc)
+            # Convert mean anomaly to true anomaly
+            nu = _mean_to_true_anomaly(M, ecc)
             orbit = Orbit.fromKeplerianElements(
                 a, ecc, inc, raan, aop, nu, t=t
             )
@@ -149,7 +160,7 @@ def all_orbital_quantities(
         orbit._setKeplerian()
         result = _extract_all_elements(orbit)
     
-    # Case 3: Semi-major axis and eccentricity provided
+    # Case 3: Semi-major axis and eccentricity provided (third priority)
     elif a is not None and ecc is not None:
         # Use default angles if not provided
         if inc is None:
@@ -167,7 +178,8 @@ def all_orbital_quantities(
                 a, ecc, inc, raan, aop, nu, t=t
             )
         else:  # M is not None
-            nu = meanAnomaly2trueAnomaly(M, ecc)
+            # Convert mean anomaly to true anomaly
+            nu = _mean_to_true_anomaly(M, ecc)
             orbit = Orbit.fromKeplerianElements(
                 a, ecc, inc, raan, aop, nu, t=t
             )
@@ -187,9 +199,98 @@ def all_orbital_quantities(
     return result
 
 
+def _solve_kepler_equation(M, ecc, tol=1e-8, max_iter=100):
+    """
+    Solve Kepler's equation M = E - e*sin(E) for eccentric anomaly E.
+    
+    Uses Newton-Raphson iteration [1].
+    
+    Parameters
+    ----------
+    M : float
+        Mean anomaly in radians
+    ecc : float
+        Eccentricity
+    tol : float, optional
+        Convergence tolerance (default: 1e-8)
+    max_iter : int, optional
+        Maximum number of iterations (default: 100)
+    
+    Returns
+    -------
+    float
+        Eccentric anomaly E in radians
+    """
+    # Initial guess for E
+    E = M if ecc < 0.8 else np.pi
+    
+    # Newton-Raphson iteration
+    for _ in range(max_iter):
+        f = E - ecc * np.sin(E) - M
+        df = 1 - ecc * np.cos(E)
+        dE = -f / df
+        E += dE
+        
+        if np.abs(dE) < tol:
+            break
+    
+    return E
+
+
+def _eccentric_to_true_anomaly(E, ecc):
+    """
+    Convert eccentric anomaly to true anomaly [1].
+    
+    Parameters
+    ----------
+    E : float
+        Eccentric anomaly in radians
+    ecc : float
+        Eccentricity
+    
+    Returns
+    -------
+    float
+        True anomaly in radians
+    """
+    nu = 2 * np.arctan2(
+        np.sqrt(1 + ecc) * np.sin(E / 2),
+        np.sqrt(1 - ecc) * np.cos(E / 2)
+    )
+    
+    return nu
+
+
+def _mean_to_true_anomaly(M, ecc):
+    """
+    Convert mean anomaly to true anomaly [1].
+    
+    Parameters
+    ----------
+    M : float
+        Mean anomaly in radians
+    ecc : float
+        Eccentricity
+    
+    Returns
+    -------
+    float
+        True anomaly in radians
+    """
+    # First solve Kepler's equation for E
+    E = _solve_kepler_equation(M, ecc)
+    
+    # Then convert E to true anomaly
+    nu = _eccentric_to_true_anomaly(E, ecc)
+    
+    return nu
+
+
 def _extract_all_elements(orbit):
     """
     Helper function to extract all orbital elements from an Orbit object.
+    
+    Uses SSAPy's internal Orbit properties [3].
     
     Parameters
     ----------
@@ -199,7 +300,7 @@ def _extract_all_elements(orbit):
     Returns
     -------
     dict
-        Dictionary containing all orbital elements
+        Dictionary containing all orbital elements in SI units
     """
     # Calculate periapsis and apoapsis distances (from center of body)
     periapsis_dist = np.linalg.norm(orbit.periapsis)
