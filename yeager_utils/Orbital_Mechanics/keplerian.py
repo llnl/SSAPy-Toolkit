@@ -16,24 +16,24 @@ from ..Coordinates import deg90to90, deg0to360
 from ..utils import nby3shape
 
 
-def hkoe(kElements_or_a, e=None, i=None, ap=None, raan=None, nu=None):
+def hkoe(kElements_or_a, e=None, i=None, pa=None, raan=None, nu=None):
     """
     Convert human-readable Keplerian Orbital Elements (KOE) to SSAPy format.
 
     Parameters
     ----------
     kElements_or_a : list, array, or float
-        If a 6-element iterable [a, e, i, ap, raan, nu], it's treated as the
+        If a 6-element iterable [a, e, i, pa, raan, nu], it's treated as the
         full set of elements. If a float, it's treated as the semimajor axis
         (a), followed by 5 more positional arguments.
         Elements are:
         - a: semimajor axis (meters)
         - e: eccentricity (unitless)
         - i: inclination (degrees)
-        - ap: argument of periapsis (degrees)
+        - pa: argument of periapsis (degrees)
         - raan: right ascension of ascending node (degrees)
         - nu: true anomaly (degrees)
-    e, i, ap, raan, nu : float, optional
+    e, i, pa, raan, nu : float, optional
         Remaining elements if 6 positional arguments are provided (degrees).
 
     Returns
@@ -57,22 +57,22 @@ def hkoe(kElements_or_a, e=None, i=None, ap=None, raan=None, nu=None):
             kElements_or_a, (str, bytes)):
         if len(kElements_or_a) != 6:
             raise ValueError("kElements must be a 6-element iterable")
-        a, e, i, ap, raan, nu = kElements_or_a
+        a, e, i, pa, raan, nu = kElements_or_a
     # Case 2: 6 positional arguments provided
-    elif (e is not None and i is not None and ap is not None and
+    elif (e is not None and i is not None and pa is not None and
           raan is not None and nu is not None):
         a = kElements_or_a  # First arg is a
     # Invalid case
     else:
         raise ValueError(
             "Must provide either a 6-element iterable or 6 positional "
-            "arguments (a, e, i, ap, raan, nu)")
+            "arguments (a, e, i, pa, raan, nu)")
 
     # Create array with converted angles
     result = np.array([
         a, e,
         np.radians(i),
-        np.radians(ap),
+        np.radians(pa),
         np.radians(raan),
         np.radians(nu)
     ])
@@ -386,7 +386,7 @@ def j2000_orbitals(planet='earth', Teph=2451545.0):
     }
 
 
-def kepler_to_state(a=1, e=0, i=0, ap=0, raan=0, nu=0, mu=EARTH_MU):
+def kepler_to_state(a=1, e=0, i=0, pa=0, raan=0, nu=0, mu=EARTH_MU):
     """
     Convert Keplerian orbital elements to state vectors using broadcasting.
 
@@ -404,7 +404,7 @@ def kepler_to_state(a=1, e=0, i=0, ap=0, raan=0, nu=0, mu=EARTH_MU):
         Inclination (rad). Must be in [0, π].
     raan : float or array-like
         Right ascension of the ascending node (rad). Must be in [0, 2π].
-    ap : float or array-like
+    pa : float or array-like
         Argument of perigee (rad). Must be in [0, 2π].
     nu : float or array-like
         True anomaly (rad). Must be in [0, 2π].
@@ -438,7 +438,7 @@ def kepler_to_state(a=1, e=0, i=0, ap=0, raan=0, nu=0, mu=EARTH_MU):
     e = np.atleast_1d(e)
     i = np.atleast_1d(i)
     raan = np.atleast_1d(raan)
-    ap = np.atleast_1d(ap)
+    pa = np.atleast_1d(pa)
     nu = np.atleast_1d(nu)
 
     # Validate inputs
@@ -458,8 +458,8 @@ def kepler_to_state(a=1, e=0, i=0, ap=0, raan=0, nu=0, mu=EARTH_MU):
     # Precompute trigonometric terms
     cos_raan = np.cos(raan)
     sin_raan = np.sin(raan)
-    cos_w = np.cos(ap)
-    sin_w = np.sin(ap)
+    cos_w = np.cos(pa)
+    sin_w = np.sin(pa)
     cos_i = np.cos(i)
     sin_i = np.sin(i)
 
@@ -513,7 +513,7 @@ def kepler_to_state(a=1, e=0, i=0, ap=0, raan=0, nu=0, mu=EARTH_MU):
     return r, v
 
 
-def kepler_to_state_loop(a=1, e=0, i=0, ap=0, raan=0, nu=0, mu=EARTH_MU):
+def kepler_to_state_loop(a=1, e=0, i=0, pa=0, raan=0, nu=0, mu=EARTH_MU):
     """
     Convert Keplerian orbital elements to state vectors using loop.
 
@@ -527,7 +527,7 @@ def kepler_to_state_loop(a=1, e=0, i=0, ap=0, raan=0, nu=0, mu=EARTH_MU):
         Inclination (rad).
     raan : float or array-like
         Right ascension of the ascending node (rad).
-    ap : float or array-like
+    pa : float or array-like
         Argument of perigee (rad).
     nu : float or array-like
         True anomaly (rad).
@@ -555,7 +555,7 @@ def kepler_to_state_loop(a=1, e=0, i=0, ap=0, raan=0, nu=0, mu=EARTH_MU):
         e = np.array([e])
         i = np.array([i])
         raan = np.array([raan])
-        ap = np.array([ap])
+        pa = np.array([pa])
         nu = np.array([nu])
 
     # Check validity of inputs
@@ -568,7 +568,7 @@ def kepler_to_state_loop(a=1, e=0, i=0, ap=0, raan=0, nu=0, mu=EARTH_MU):
     r_list = []
     v_list = []
 
-    for ai, ei, ii, raani, wi, nui in zip(a, e, i, raan, ap, nu):
+    for ai, ei, ii, raani, wi, nui in zip(a, e, i, raan, pa, nu):
         # Compute position vector in perifocal frame
         r_pf = (ai * (1 - ei**2) / (1 + ei * np.cos(nui)) *
                 np.array([np.cos(nui), np.sin(nui), 0]))
@@ -634,7 +634,7 @@ def state_to_kepler(r, v, mu=EARTH_MU):
         - a : float or ndarray - Semi-major axis (m).
         - e : float or ndarray - Eccentricity (dimensionless).
         - i : float or ndarray - Inclination (rad).
-        - ap : float or ndarray - Argument of perigee (rad).
+        - pa : float or ndarray - Argument of perigee (rad).
         - raan : float or ndarray - RAAN (rad).
         - nu : float or ndarray - True anomaly (rad).
 
@@ -669,9 +669,9 @@ def state_to_kepler(r, v, mu=EARTH_MU):
 
     # Compute argument of perigee
     if e_vec[2] >= 0:
-        ap = np.arccos(np.dot(h, e_vec) / (np.linalg.norm(h) * e))
+        pa = np.arccos(np.dot(h, e_vec) / (np.linalg.norm(h) * e))
     else:
-        ap = 2 * np.pi - np.arccos(np.dot(h, e_vec) / (np.linalg.norm(h) * e))
+        pa = 2 * np.pi - np.arccos(np.dot(h, e_vec) / (np.linalg.norm(h) * e))
 
     # Compute true anomaly
     if np.dot(r, v) >= 0:
@@ -679,10 +679,10 @@ def state_to_kepler(r, v, mu=EARTH_MU):
     else:
         nu = 2 * np.pi - np.arccos(np.dot(e_vec, r) / (e * np.linalg.norm(r)))
 
-    return a, e, i, ap, raan, nu
+    return a, e, i, pa, raan, nu
 
 
-def kepler_to_parametric(a, e, i, omega, ap, theta):
+def kepler_to_parametric(a, e, i, omega, pa, theta):
     """
     Convert Keplerian elements to parametric coordinates.
 
@@ -696,7 +696,7 @@ def kepler_to_parametric(a, e, i, omega, ap, theta):
         Inclination (degrees).
     omega : float
         Longitude of ascending node (degrees).
-    ap : float
+    pa : float
         Argument of periapsis (degrees).
     theta : float
         True anomaly (degrees).
@@ -713,7 +713,7 @@ def kepler_to_parametric(a, e, i, omega, ap, theta):
     # Convert to radians
     i = np.radians(i)
     omega = np.radians(omega)
-    ap = np.radians(ap)
+    pa = np.radians(pa)
     theta = np.radians(theta)
 
     # Compute the semi-major and semi-minor axes
@@ -735,7 +735,7 @@ def kepler_to_parametric(a, e, i, omega, ap, theta):
     z_prime_prime = z_prime
 
     # Translate the ellipse
-    x_final = x_prime_prime + ap
+    x_final = x_prime_prime + pa
     y_final = y_prime_prime
     z_final = z_prime_prime
 
@@ -765,7 +765,7 @@ def calculate_orbital_elements(r_, v_, mu_barycenter=EARTH_MU):
         - 'e' : ndarray - Eccentricity (dimensionless).
         - 'i' : ndarray - Inclination (rad).
         - 'tl' : ndarray - True longitude (rad).
-        - 'ap' : ndarray - Argument of periapsis (rad).
+        - 'pa' : ndarray - Argument of periapsis (rad).
         - 'raan' : ndarray - Longitude of ascending node (rad).
         - 'ta' : ndarray - True anomaly (rad).
         - 'L' : ndarray - Specific angular momentum magnitude (m^2/s).
@@ -838,7 +838,7 @@ def calculate_orbital_elements(r_, v_, mu_barycenter=EARTH_MU):
         'e': np.array(earr),
         'i': np.array(incarr),
         'tl': np.array(true_longitudearr),
-        'ap': np.array(argument_of_periapsisarr),
+        'pa': np.array(argument_of_periapsisarr),
         'raan': np.array(longitude_of_ascending_nodearr),
         'ta': np.array(true_anomalyarr),
         'L': np.array(hmagarr)
