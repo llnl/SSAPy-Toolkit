@@ -69,11 +69,7 @@ def check_type(var):
     return VarType.OTHER
 
 
-import numpy as np
-from astropy.time import Time
-
-
-def valid_orbits(r, t):
+def valid_orbits(r, t, drop_empty=True, warn=True):
     """
     Normalize r and t into parallel lists of shape-(n,3) ndarrays and astropy Time objects.
 
@@ -87,6 +83,12 @@ def valid_orbits(r, t):
         - ndarray of GPS seconds: (N,) or (B,N)
         - astropy.time.Time (scalar or array)
         - list/tuple of scalars/ndarrays/Time, matching number of tracks
+
+    Additionally (if drop_empty=True):
+      * removes empty r-tracks (Ni==0)
+      * if t is a per-track list/tuple with the same length as the original r_list,
+        removes the corresponding t entries too
+      * prints a warning when any are removed
 
     Returns:
       r_list: list[np.ndarray] where each is (Ni,3)
@@ -121,9 +123,6 @@ def valid_orbits(r, t):
 
         raise ValueError(f"valid_orbits: cannot interpret r with shape {arr.shape}")
 
-    def _is_numeric_array(x):
-        return isinstance(x, np.ndarray) and np.issubdtype(x.dtype, np.number)
-
     def _to_time_track_list(t_in, r_list):
         """
         Return list[Time] matching r_list length.
@@ -157,7 +156,6 @@ def valid_orbits(r, t):
         if isinstance(t_in, np.ndarray):
             arr = np.asarray(t_in)
 
-            # If it's not numeric, bail early
             if not np.issubdtype(arr.dtype, np.number):
                 raise TypeError("valid_orbits: ndarray t must be numeric GPS seconds")
 
@@ -210,16 +208,38 @@ def valid_orbits(r, t):
 
         raise TypeError(f"valid_orbits: unsupported type for t: {type(t_in)}")
 
+    # 1) normalize r
     r_list = _to_track_list_r(r)
+
+    # 2) optionally drop empty r tracks and corresponding per-track t entries
+    if drop_empty:
+        empty_idx = [i for i, rr in enumerate(r_list) if len(rr) == 0]
+        if empty_idx:
+            if warn:
+                print(f"valid_orbits warning: removed {len(empty_idx)} empty orbit track(s) at indices {empty_idx}")
+
+            # If t is per-track (same length as r_list), drop corresponding t entries too
+            if isinstance(t, (list, tuple)) and len(t) == len(r_list):
+                t = [ti for i, ti in enumerate(t) if i not in empty_idx]
+
+            r_list = [rr for i, rr in enumerate(r_list) if i not in empty_idx]
+
+    # If everything is empty, return early (avoids t-shape errors)
+    if len(r_list) == 0:
+        if warn:
+            print("valid_orbits warning: all orbit tracks were empty; returning empty lists.")
+        return [], []
+
+    # 3) normalize t against the filtered r_list
     t_list = _to_time_track_list(t, r_list)
 
-    # Final length sanity
+    # 4) final length sanity
     for rr, tt in zip(r_list, t_list):
         if len(rr) != len(tt):
             raise ValueError("valid_orbits: length mismatch after normalization")
 
+    # 5) shape print
     try:
-        # This prints (ntracks, N, 3) style shapes if tracks are uniform; otherwise it may error.
         print(f"Returning arrays shaped: {np.shape(r_list)}, {np.shape(t_list)}")
     except Exception as e:
         print(
@@ -228,8 +248,6 @@ def valid_orbits(r, t):
         )
 
     return r_list, t_list
-
-
 def load_earth_file():
     earth = PILImage.open(find_file("earth", ext=".png"))
     earth = earth.resize((5400 // 5, 2700 // 5))
