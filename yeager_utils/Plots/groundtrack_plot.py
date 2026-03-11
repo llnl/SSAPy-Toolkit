@@ -5,9 +5,11 @@ from ssapy import groundTrack
 from ..Time_Functions import Time
 from .plotutils import load_earth_file, save_plot
 
+
 def _as_list(x):
     """Ensure input is a list (without copying big arrays unnecessarily)."""
     return x if isinstance(x, (list, tuple)) else [x]
+
 
 def _broadcast_time_list(r_list, t):
     """Return a time list matching r_list length."""
@@ -18,6 +20,7 @@ def _broadcast_time_list(r_list, t):
     # single time array -> reuse for all
     return [t for _ in r_list]
 
+
 def _clean_lonlat_wrap(lon_deg, lat_deg, threshold=179.0):
     """Insert NaNs at 180° crossings so lines do not jump across the map."""
     jumps = np.where(np.abs(np.diff(lon_deg)) > threshold)[0]
@@ -26,6 +29,7 @@ def _clean_lonlat_wrap(lon_deg, lat_deg, threshold=179.0):
     lon_out = np.insert(lon_deg, jumps + 1, np.nan)
     lat_out = np.insert(lat_deg, jumps + 1, np.nan)
     return lon_out, lat_out
+
 
 def groundtrack_plot(
     r,
@@ -36,6 +40,9 @@ def groundtrack_plot(
     show_legend=True,
     fontsize=18,
     start_end_markers=True,
+    labels=None,          # NEW: per-orbit legend labels
+    orbit_colors=None,    # NEW: per-orbit colors
+    legend_kwargs=None,   # NEW: kwargs passed to ax.legend()
 ):
     """
     Pretty ground-track plot (styled like the dashboard subplot).
@@ -45,7 +52,7 @@ def groundtrack_plot(
     r : (n,3) array_like or list of (n,3)
         GCRF positions [m]. Single orbit or a list of orbits.
     t : (n,) array_like or list of (n,)
-        Absolute times matching r (e.g., gpstime/epoch seconds or Time objects supported by ssapy.groundTrack).
+        Absolute times matching r.
         If r is a list, either pass a matching list of time arrays or a single array reused for all.
     ground_stations : (k,2) array_like, optional
         (lat_deg, lon_deg) rows.
@@ -59,6 +66,13 @@ def groundtrack_plot(
         Base font size for labels/ticks.
     start_end_markers : bool, default True
         Draw star at start and 'x' at end for each orbit.
+    labels : list of str, optional
+        Per-orbit labels; must have same length as number of orbits if provided.
+    orbit_colors : list or array-like, optional
+        Per-orbit colors. If provided, length must match number of orbits.
+        Each can be any Matplotlib color spec.
+    legend_kwargs : dict, optional
+        Extra kwargs forwarded to ax.legend().
 
     Returns
     -------
@@ -67,6 +81,13 @@ def groundtrack_plot(
     # normalize inputs
     r_list = _as_list(r)
     t_list = _broadcast_time_list(r_list, t)
+    n_tracks = len(r_list)
+
+    # sanity checks for labels/colors
+    if labels is not None and len(labels) != n_tracks:
+        raise ValueError("labels must have same length as number of orbits (tracks)")
+    if orbit_colors is not None and len(orbit_colors) != n_tracks:
+        raise ValueError("orbit_colors must have same length as number of orbits (tracks)")
 
     # figure
     fig = plt.figure(figsize=(14, 8))
@@ -88,7 +109,13 @@ def groundtrack_plot(
     ax.set_title(title, fontsize=fontsize+4)
 
     # colors
-    colors = plt.cm.tab10(np.linspace(0, 1, max(1, len(r_list))))
+    if orbit_colors is not None:
+        colors = list(orbit_colors)
+    else:
+        colors = plt.cm.tab10(np.linspace(0, 1, max(1, n_tracks)))
+
+    # keep handles if you want legend entries per orbit
+    line_handles = []
 
     # plot each orbit
     for i, (ri, ti) in enumerate(zip(r_list, t_list)):
@@ -100,32 +127,51 @@ def groundtrack_plot(
         # clean wrap
         lon_plot, lat_plot = _clean_lonlat_wrap(lon_deg, lat_deg, threshold=179.0)
 
+        color = colors[i % len(colors)]
+        label = labels[i] if labels is not None else f"Orbit {i+1}"
+
         # line + start/end markers
-        label = f"Orbit {i+1}"
-        ax.plot(lon_plot, lat_plot, color=colors[i % len(colors)], linewidth=2.5, label=label)
+        line, = ax.plot(
+            lon_plot,
+            lat_plot,
+            color=color,
+            linewidth=2.5,
+            label=label,
+        )
+        line_handles.append(line)
+
         if start_end_markers and len(lon_deg) > 0:
-            ax.plot(lon_deg[0],  lat_deg[0],  marker='*', color=colors[i % len(colors)], markersize=12, linestyle='None')
-            ax.plot(lon_deg[-1], lat_deg[-1], marker='x', color=colors[i % len(colors)], markersize=9,  linestyle='None')
+            ax.plot(
+                lon_deg[0], lat_deg[0],
+                marker='*', color=color,
+                markersize=12, linestyle='None',
+            )
+            ax.plot(
+                lon_deg[-1], lat_deg[-1],
+                marker='x', color=color,
+                markersize=9, linestyle='None',
+            )
 
     # ground stations (lat, lon in deg)
+    gs_handle = None
     if ground_stations is not None:
         gs = np.asarray(ground_stations, dtype=float)
         if gs.ndim == 2 and gs.shape[1] == 2:
-            ax.scatter(gs[:, 1], gs[:, 0], s=50, color='red', label="Ground Station")
+            gs_handle = ax.scatter(
+                gs[:, 1], gs[:, 0],
+                s=50, color='red', label="Ground Station",
+            )
 
     # legend
     if show_legend:
-        # custom entries to match dashboard semantics
-        from matplotlib.lines import Line2D
-        base = [
-            Line2D([0], [0], color='black', linewidth=2.5, label='Orbit Track'),
-            Line2D([0], [0], marker='*', color='black', linestyle='None', markersize=12, label='Orbit Start'),
-            Line2D([0], [0], marker='x', color='black', linestyle='None', markersize=10, label='Orbit End')
-        ]
-        # add ground station handle only if provided
-        if ground_stations is not None:
-            base.append(Line2D([0], [0], marker='o', color='red', linestyle='None', markersize=8, label='Ground Station'))
-        ax.legend(handles=base, loc='lower left', fontsize=fontsize-2)
+        handles = list(line_handles)
+        if gs_handle is not None:
+            handles.append(gs_handle)
+
+        kw = dict(loc='lower left', fontsize=fontsize-2)
+        if legend_kwargs:
+            kw.update(legend_kwargs)
+        ax.legend(handles=handles, **kw)
 
     # finalize
     if save_path:
