@@ -1,8 +1,15 @@
+"""
+Utilities for saving/loading nested Python dictionaries to/from HDF5.
+
+Public API:
+    save_dict_to_hdf5(filename, data, ...)
+    load_dict_from_hdf5(filename)
+"""
+
 import os
-import sys
 import pickle
 import datetime as _dt
-from typing import Any, Mapping, Sequence, Union
+from typing import Any, Mapping, Union
 
 import h5py
 import numpy as np
@@ -16,9 +23,10 @@ except ImportError:
 
 # ---------- SAVE ----------
 
+
 def save_dict_to_hdf5(
+    filename: str,
     data: Mapping[str, Any],
-    filepath: str,
     mode: str = "w",
     *,
     pickle_objects: bool = True,
@@ -28,25 +36,36 @@ def save_dict_to_hdf5(
     """
     Save a (possibly nested) Python dictionary to an HDF5 file.
 
-    Supported types:
-      - dict -> HDF5 group
-      - list/tuple -> HDF5 group with numeric keys ("0", "1", ...)
-      - numpy arrays -> datasets
-      - scalars: int/float/bool, numpy scalar types -> scalar datasets
-      - str -> variable-length UTF-8 datasets
-      - bytes/bytearray/memoryview -> bytes datasets
-      - datetime.datetime, datetime.date, datetime.time -> stored as ISO strings
-      - astropy.time.Time -> stored as (mjd, scale, format, meta) so it can be reconstructed
-      - other objects -> pickled if pickle_objects=True
+    Signature:
+        save_dict_to_hdf5(filename, data, ...)
 
-    Args:
-        data: dict-like with string keys.
-        filepath: output HDF5 file path.
-        mode: HDF5 file mode ("w", "w-", "a", "r+").
-        pickle_objects: if True, unsupported objects are stored via pickle.
-        compression: HDF5 compression filter (e.g. "gzip", "lzf", or None).
-        compression_opts: compression options (e.g. level 0–9 for gzip).
+    Supported types:
+        - dict -> HDF5 group
+        - list/tuple -> HDF5 group with numeric keys ("0", "1", ...)
+        - numpy arrays -> datasets (with compression, if requested)
+        - scalars: int/float/bool, numpy scalar types -> scalar datasets (no compression)
+        - str -> variable-length UTF-8 datasets
+        - bytes/bytearray/memoryview -> bytes datasets
+        - datetime.datetime/date/time -> stored as ISO strings
+        - astropy.time.Time -> stored as (mjd, scale, format, meta)
+        - other objects -> pickled if pickle_objects=True
     """
+
+    def _store_string_with_type(
+        h5group: h5py.Group,
+        key: str,
+        value: str,
+        type_name: str,
+    ) -> None:
+        if key in h5group:
+            del h5group[key]
+        dt = h5py.string_dtype(encoding="utf-8")
+        ds = h5group.create_dataset(
+            key,
+            data=np.array(value, dtype=dt),
+            dtype=dt,
+        )
+        ds.attrs["__type__"] = type_name
 
     def _write_item(
         h5group: h5py.Group,
@@ -55,7 +74,14 @@ def save_dict_to_hdf5(
     ) -> None:
         # nested dict -> subgroup
         if isinstance(value, Mapping):
-            subgroup = h5group.require_group(key)
+            if key in h5group and isinstance(h5group[key], h5py.Group):
+                subgroup = h5group[key]
+                # clear any old sequence flag
+                subgroup.attrs["__is_sequence__"] = False
+            else:
+                subgroup = h5group.require_group(key)
+                subgroup.attrs["__is_sequence__"] = False
+
             for k, v in value.items():
                 if not isinstance(k, str):
                     raise TypeError(f"HDF5 requires string keys; got key={k!r}")
@@ -63,37 +89,36 @@ def save_dict_to_hdf5(
 
         # list/tuple -> group with numeric keys
         elif isinstance(value, (list, tuple)):
-            subgroup = h5group.require_group(key)
+            if key in h5group and isinstance(h5group[key], h5py.Group):
+                subgroup = h5group[key]
+                subgroup.attrs["__is_sequence__"] = True
+            else:
+                subgroup = h5group.require_group(key)
+                subgroup.attrs["__is_sequence__"] = True
+
+            # remove any existing children (in case of overwrite)
+            for child in list(subgroup.keys()):
+                del subgroup[child]
+
             for idx, v in enumerate(value):
                 _write_item(subgroup, str(idx), v)
 
         # astropy Time
         elif _HAS_ASTROPY and isinstance(value, AstroTime):
-            # We store as group: mjd (float array), scale, format, and meta as pickled bytes
             if key in h5group:
                 del h5group[key]
             t_group = h5group.create_group(key)
-            # flatten to MJD in float64
-            mjd = value.mjd
-            mjd_arr = np.array(mjd, dtype="float64")
-            t_group.create_dataset(
-                "mjd",
-                data=mjd_arr,
-                compression=compression,
-                compression_opts=compression_opts,
-            )
+            mjd_arr = np.array(value.mjd, dtype="float64")
+            t_group.create_dataset("mjd", data=mjd_arr)
             t_group.attrs["__type__"] = "astropy.time.Time"
             t_group.attrs["scale"] = value.scale
-            t_group.attrs["format"] = "mjd"  # we store in this normalized form
+            t_group.attrs["format"] = "mjd"
 
-            # Store meta as pickled bytes if present and non-empty
             if getattr(value, "meta", None):
                 meta_pickled = pickle.dumps(dict(value.meta), protocol=pickle.HIGHEST_PROTOCOL)
                 meta_ds = t_group.create_dataset(
                     "meta",
                     data=np.frombuffer(meta_pickled, dtype="uint8"),
-                    compression=compression,
-                    compression_opts=compression_opts,
                 )
                 meta_ds.attrs["pickled"] = True
 
@@ -109,23 +134,22 @@ def save_dict_to_hdf5(
         elif isinstance(value, np.ndarray):
             if key in h5group:
                 del h5group[key]
-            h5group.create_dataset(
-                key,
-                data=value,
-                compression=compression,
-                compression_opts=compression_opts,
-            )
+            if value.shape == ():
+                # scalar np.ndarray: no compression
+                h5group.create_dataset(key, data=value)
+            else:
+                h5group.create_dataset(
+                    key,
+                    data=value,
+                    compression=compression,
+                    compression_opts=compression_opts,
+                )
 
         # numeric scalars
         elif isinstance(value, (int, float, bool, np.integer, np.floating, np.bool_)):
             if key in h5group:
                 del h5group[key]
-            h5group.create_dataset(
-                key,
-                data=value,
-                compression=compression,
-                compression_opts=compression_opts,
-            )
+            h5group.create_dataset(key, data=value)
 
         # strings -> vlen UTF-8
         elif isinstance(value, str):
@@ -136,21 +160,14 @@ def save_dict_to_hdf5(
                 key,
                 data=np.array(value, dtype=dt),
                 dtype=dt,
-                compression=compression,
-                compression_opts=compression_opts,
             )
 
-        # bytes-like -> vlen bytes (uint8)
+        # bytes-like
         elif isinstance(value, (bytes, bytearray, memoryview)):
             if key in h5group:
                 del h5group[key]
             arr = np.frombuffer(bytes(value), dtype="uint8")
-            ds = h5group.create_dataset(
-                key,
-                data=arr,
-                compression=compression,
-                compression_opts=compression_opts,
-            )
+            ds = h5group.create_dataset(key, data=arr)
             ds.attrs["__bytes__"] = True
 
         # fallback: pickle
@@ -166,34 +183,14 @@ def save_dict_to_hdf5(
             ds = h5group.create_dataset(
                 key,
                 data=np.frombuffer(pickled, dtype="uint8"),
-                compression=compression,
-                compression_opts=compression_opts,
             )
             ds.attrs["pickled"] = True
             ds.attrs["python_type"] = str(type(value))
             ds.attrs["__type__"] = "pickle"
 
-    def _store_string_with_type(
-        h5group: h5py.Group,
-        key: str,
-        value: str,
-        type_name: str,
-    ) -> None:
-        if key in h5group:
-            del h5group[key]
-        dt = h5py.string_dtype(encoding="utf-8")
-        ds = h5group.create_dataset(
-            key,
-            data=np.array(value, dtype=dt),
-            dtype=dt,
-            compression=compression,
-            compression_opts=compression_opts,
-        )
-        ds.attrs["__type__"] = type_name
+    os.makedirs(os.path.dirname(os.path.abspath(filename)), exist_ok=True)
 
-    os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
-
-    with h5py.File(filepath, mode) as f:
+    with h5py.File(filename, mode) as f:
         for k, v in data.items():
             if not isinstance(k, str):
                 raise TypeError(f"HDF5 requires string keys; got key={k!r}")
@@ -202,21 +199,24 @@ def save_dict_to_hdf5(
 
 # ---------- LOAD ----------
 
-def load_dict_from_hdf5(filepath: str) -> dict:
-    """
-    Load a dictionary previously stored with save_dict_to_hdf5.
 
-    Reconstructs:
-      - nested dicts/lists/tuples
-      - numpy arrays/scalars
-      - strings/bytes
-      - datetime.datetime/date/time
-      - astropy.time.Time
-      - pickled objects (if present)
+def load_dict_from_hdf5(filename: str) -> dict:
+    """
+    Load a dictionary previously stored with save_dict_to_hdf5(filename, data, ...).
+
+    Behavior:
+        - Groups marked with __is_sequence__=True are reconstructed as lists,
+          even if empty.
+        - Groups marked with __is_sequence__=False are reconstructed as dicts,
+          even if empty.
+        - Groups without the attribute:
+            * if keys are 0..n-1 as strings, treated as lists
+            * otherwise, treated as dicts.
+        - Supported special types: astropy.time.Time, datetime.*, bytes, pickled objects.
     """
 
     def _read_item(obj: Union[h5py.Group, h5py.Dataset]) -> Any:
-        # If group, need to inspect children/attrs.
+        # Group
         if isinstance(obj, h5py.Group):
             # astropy Time group?
             if "__type__" in obj.attrs and obj.attrs["__type__"] == "astropy.time.Time":
@@ -226,10 +226,8 @@ def load_dict_from_hdf5(filepath: str) -> dict:
                     )
                 mjd = np.array(obj["mjd"][...], dtype="float64")
                 scale = obj.attrs["scale"]
-                # we stored normalized as mjd
                 t = AstroTime(mjd, format="mjd", scale=scale)
 
-                # restore meta if present
                 if "meta" in obj:
                     meta_ds = obj["meta"]
                     if meta_ds.attrs.get("pickled", False):
@@ -238,11 +236,28 @@ def load_dict_from_hdf5(filepath: str) -> dict:
                         t.meta.update(meta)
                 return t
 
-            # Otherwise treat as dict or list-like.
-            # If keys are all integers from 0..n-1, treat as list.
+            # Explicit sequence or mapping marker
+            if "__is_sequence__" in obj.attrs:
+                if obj.attrs["__is_sequence__"]:
+                    # list-like
+                    keys = list(obj.keys())
+                    if not keys:
+                        return []
+                    int_keys = sorted(int(k) for k in keys)
+                    return [_read_item(obj[str(i)]) for i in int_keys]
+                else:
+                    # dict-like
+                    out = {}
+                    for k in obj.keys():
+                        out[k] = _read_item(obj[k])
+                    return out
+
+            # No explicit marker: infer from keys
             keys = list(obj.keys())
             if not keys:
+                # no marker, no children: default to dict
                 return {}
+
             try:
                 int_keys = sorted(int(k) for k in keys)
                 is_seq = int_keys == list(range(len(keys)))
@@ -250,10 +265,7 @@ def load_dict_from_hdf5(filepath: str) -> dict:
                 is_seq = False
 
             if is_seq:
-                out = []
-                for i in range(len(keys)):
-                    out.append(_read_item(obj[str(i)]))
-                return out
+                return [_read_item(obj[str(i)]) for i in range(len(keys))]
             else:
                 out = {}
                 for k in keys:
@@ -262,9 +274,6 @@ def load_dict_from_hdf5(filepath: str) -> dict:
 
         # Dataset
         ds: h5py.Dataset = obj  # type: ignore[assignment]
-
-        # check for special markers
-        dtype_str = str(ds.dtype)
 
         # pickled object?
         if ds.attrs.get("__type__") == "pickle" or ds.attrs.get("pickled", False):
@@ -288,7 +297,6 @@ def load_dict_from_hdf5(filepath: str) -> dict:
                 return _dt.date.fromisoformat(value)
             elif tname == "datetime.time":
                 return _dt.time.fromisoformat(value)
-            # fall through for unknown types -> just return string
 
         # plain string dataset
         if h5py.check_string_dtype(ds.dtype) is not None:
@@ -296,12 +304,11 @@ def load_dict_from_hdf5(filepath: str) -> dict:
 
         # numeric / array dataset
         arr = ds[...]
-        # unwrap scalars
         if arr.shape == ():
-            return arr.item()
+            return arr[()]  # numpy scalar
         return arr
 
-    with h5py.File(filepath, "r") as f:
+    with h5py.File(filename, "r") as f:
         result = {}
         for k in f.keys():
             result[k] = _read_item(f[k])
