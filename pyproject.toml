@@ -65,6 +65,7 @@ dependencies = [
   "requests",
   "scikit-learn",
   "seaborn",
+  "selenium",
   "sympy",
   "tqdm",
   "spacetrack",

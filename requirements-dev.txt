@@ -1,5 +1,4 @@
 # Developer tools (install with: pip install -e .[dev])
 pytest
-pytest-mpi
 ipykernel
 ruff

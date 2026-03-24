@@ -16,7 +16,7 @@ import numpy as np
 ArrayLike = Union[Sequence[float], np.ndarray]
 
 
-def break_dateline(
+def break_plot_line(
     lon: ArrayLike,
     lat: ArrayLike,
     max_jump: float = 179.0,
