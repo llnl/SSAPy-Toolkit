@@ -1,4 +1,6 @@
 from pathlib import Path
+from os import PathLike
+from glob import glob
 import re
 import warnings
 
@@ -12,8 +14,10 @@ def _natural_key(s: str):
     Split a string into a list of ints and lowercased text to enable natural sorting.
     Example: 'frame_10.png' -> ['frame_', 10, '.png']
     """
-    return [int(tok) if tok.isdigit() else tok.lower()
-            for tok in re.split(r"(\d+)", s)]
+    return [
+        int(tok) if tok.isdigit() else tok.lower()
+        for tok in re.split(r"(\d+)", s)
+    ]
 
 
 def _sort_frames(paths, warn_on_ambiguous: bool = True) -> list:
@@ -28,8 +32,10 @@ def _sort_frames(paths, warn_on_ambiguous: bool = True) -> list:
         keys = [_natural_key(p) for p in paths]
     except Exception as e:
         if warn_on_ambiguous:
-            warnings.warn(f"Could not build natural sort keys: {e}. "
-                          f"Falling back to lexicographic ordering.")
+            warnings.warn(
+                f"Could not build natural sort keys: {e}. "
+                f"Falling back to lexicographic ordering."
+            )
         return sorted(paths)
 
     # Detect key collisions
@@ -40,30 +46,39 @@ def _sort_frames(paths, warn_on_ambiguous: bool = True) -> list:
 
     if warn_on_ambiguous and collisions:
         sample = collisions[0]
-        warnings.warn("Multiple files share the same natural sort key. "
-                      "Order may be ambiguous. Examples: "
-                      + ", ".join(sample[:3]) + (" ..." if len(sample) > 3 else ""))
+        warnings.warn(
+            "Multiple files share the same natural sort key. "
+            "Order may be ambiguous. Examples: "
+            + ", ".join(sample[:3])
+            + (" ..." if len(sample) > 3 else "")
+        )
 
     try:
         paths_sorted = [p for _, p in sorted(zip(keys, paths), key=lambda x: x[0])]
     except Exception:
         if warn_on_ambiguous:
-            warnings.warn("Natural sort failed. Falling back to lexicographic ordering.")
+            warnings.warn(
+                "Natural sort failed. Falling back to lexicographic ordering."
+            )
         paths_sorted = sorted(paths)
 
     # Heuristic: if lexicographic differs a lot from natural, hint to the user
     lex = sorted(paths)
     if warn_on_ambiguous and paths_sorted[:5] != lex[:5]:
-        warnings.warn("Natural sort order differs from lexicographic. "
-                      "If this is not intended, consider zero-padding numeric indices.")
+        warnings.warn(
+            "Natural sort order differs from lexicographic. "
+            "If this is not intended, consider zero-padding numeric indices."
+        )
 
     return paths_sorted
 
 
-def _fit_to_canvas(img: Image.Image,
-                   target_size: tuple,
-                   bg_color=(255, 255, 255, 0),
-                   resample=Image.LANCZOS) -> Image.Image:
+def _fit_to_canvas(
+    img: Image.Image,
+    target_size: tuple,
+    bg_color=(255, 255, 255, 0),
+    resample=Image.LANCZOS,
+) -> Image.Image:
     """
     Preserve aspect ratio: scale to fit within target_size, then pad to canvas.
     Always returns RGBA image with exact target_size.
@@ -89,6 +104,29 @@ def _fit_to_canvas(img: Image.Image,
     return canvas
 
 
+def _resolve_frames(frames):
+    """
+    Accept either:
+      - iterable of paths
+      - a glob pattern string/path like '/folder/frame_*.jpg'
+
+    Returns a list of file paths as strings.
+    Requires at least 2 frames.
+    """
+    if isinstance(frames, (str, PathLike)):
+        paths = glob(str(frames))
+    else:
+        paths = [str(p) for p in frames]
+
+    if not paths:
+        raise ValueError("No frames found.")
+
+    if len(paths) < 2:
+        raise ValueError("At least 2 frames are required to make a GIF.")
+
+    return paths
+
+
 def write_gif(
     gif_name: str,
     frames,
@@ -109,8 +147,11 @@ def write_gif(
     ----------
     gif_name : str
         Output path ending with .gif
-    frames : iterable of str
-        Paths to image files (readable by imageio/Pillow)
+    frames : iterable of str/Path or str/Path glob pattern
+        Either:
+          - a list/iterable of image file paths
+          - a glob pattern like '/folder/frame_*.png'
+        Must resolve to at least 2 frames.
     fps : int
         Frames per second (ignored if duration is provided)
     duration : float or None
@@ -133,9 +174,7 @@ def write_gif(
     if out.suffix.lower() != ".gif":
         raise ValueError("gif_name must end with .gif")
 
-    paths = list(frames)
-    if not paths:
-        raise ValueError("frames list is empty")
+    paths = _resolve_frames(frames)
 
     if sort_frames:
         paths = _sort_frames(paths, warn_on_ambiguous=warn_on_ambiguous)
@@ -152,25 +191,32 @@ def write_gif(
 
     # Determine target size
     if uniform_size and target_size is None:
-        # Use size of the first readable frame
-        first_img = Image.open(paths[0])
-        target_size = first_img.size
-        first_img.close()
+        with Image.open(paths[0]) as first_img:
+            target_size = first_img.size
 
     # Write GIF
     print(f"Writing gif: {out}")
     with imageio.get_writer(out, mode="I", duration=frame_duration, loop=loop) as writer:
         for p in paths:
-            # Read with imageio, but normalize via Pillow for sizing
-            arr = imageio.imread(p)  # ndarray
+            arr = imageio.imread(p)
             img = Image.fromarray(arr)
 
             if uniform_size:
                 if target_size is None:
                     target_size = img.size
                 img = _fit_to_canvas(img, target_size, bg_color=bg_color)
-                arr = np.array(img)  # back to ndarray for imageio
+                arr = np.array(img)
 
             writer.append_data(arr)
 
     print(f"Wrote {out}")
+
+
+if __name__ == "__main__":
+    # Example 1: wildcard pattern
+    # write_gif("output.gif", "/folder/frame_*.jpg", fps=10)
+
+    # Example 2: explicit list
+    # write_gif("output.gif", ["frame_1.jpg", "frame_2.jpg", "frame_10.jpg"], fps=10)
+
+    pass
