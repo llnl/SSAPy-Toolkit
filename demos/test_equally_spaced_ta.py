@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import ssapy
 
-from yeager_utils import equally_spaced_ta, yufig
+from yeager_utils import equally_spaced_ta, yufig, RGEO
 
 
 def main():
@@ -20,7 +20,7 @@ def main():
 
     # Request an even number of equal-arc-length samples
     n_samples = 16
-    ta = equally_spaced_ta(orbit=orbit, n_samples=n_samples, degrees=False)
+    ta = equally_spaced_ta(a=a, e=e, n_samples=n_samples, degrees=False)
 
     # Compute radius for each sampled true anomaly
     r = a * (1 - e**2) / (1 + e * np.cos(ta))
