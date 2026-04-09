@@ -40,9 +40,10 @@ def groundtrack_plot(
     show_legend=True,
     fontsize=18,
     start_end_markers=True,
-    labels=None,          # NEW: per-orbit legend labels
-    orbit_colors=None,    # NEW: per-orbit colors
-    legend_kwargs=None,   # NEW: kwargs passed to ax.legend()
+    labels=None,          # per-orbit legend labels
+    orbit_colors=None,    # per-orbit colors
+    linestyles=None,      # per-orbit line styles
+    legend_kwargs=None,   # kwargs passed to ax.legend()
 ):
     """
     Pretty ground-track plot (styled like the dashboard subplot).
@@ -71,6 +72,10 @@ def groundtrack_plot(
     orbit_colors : list or array-like, optional
         Per-orbit colors. If provided, length must match number of orbits.
         Each can be any Matplotlib color spec.
+    linestyles : list or array-like, optional
+        Per-orbit line styles. If provided, length must match number of orbits.
+        Each can be any Matplotlib linestyle spec, e.g. '-', '--', '-.', ':'
+        or tuple dash patterns accepted by Matplotlib.
     legend_kwargs : dict, optional
         Extra kwargs forwarded to ax.legend().
 
@@ -83,11 +88,13 @@ def groundtrack_plot(
     t_list = _broadcast_time_list(r_list, t)
     n_tracks = len(r_list)
 
-    # sanity checks for labels/colors
+    # sanity checks for labels/colors/styles
     if labels is not None and len(labels) != n_tracks:
         raise ValueError("labels must have same length as number of orbits (tracks)")
     if orbit_colors is not None and len(orbit_colors) != n_tracks:
         raise ValueError("orbit_colors must have same length as number of orbits (tracks)")
+    if linestyles is not None and len(linestyles) != n_tracks:
+        raise ValueError("linestyles must have same length as number of orbits (tracks)")
 
     # figure
     fig = plt.figure(figsize=(14, 8))
@@ -114,6 +121,12 @@ def groundtrack_plot(
     else:
         colors = plt.cm.tab10(np.linspace(0, 1, max(1, n_tracks)))
 
+    # line styles
+    if linestyles is not None:
+        styles = list(linestyles)
+    else:
+        styles = ['-'] * n_tracks
+
     # keep handles if you want legend entries per orbit
     line_handles = []
 
@@ -128,6 +141,7 @@ def groundtrack_plot(
         lon_plot, lat_plot = _clean_lonlat_wrap(lon_deg, lat_deg, threshold=179.0)
 
         color = colors[i % len(colors)]
+        linestyle = styles[i]
         label = labels[i] if labels is not None else f"Orbit {i+1}"
 
         # line + start/end markers
@@ -135,6 +149,7 @@ def groundtrack_plot(
             lon_plot,
             lat_plot,
             color=color,
+            linestyle=linestyle,
             linewidth=2.5,
             label=label,
         )
