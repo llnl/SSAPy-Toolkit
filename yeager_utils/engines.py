@@ -1,3 +1,5 @@
+"""Reference data for common launch vehicle engines and stages."""
+
 rockets = {
     "Falcon 9 Full Thrust": {
         "stages": [

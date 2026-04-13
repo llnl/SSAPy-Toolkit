@@ -1,5 +1,7 @@
-import os
+"""Time conversion and utility functions."""
+
 import importlib
+import os
 
 # Get the directory of the current file
 plots_dir = os.path.dirname(__file__)

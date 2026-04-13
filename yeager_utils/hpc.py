@@ -1,8 +1,30 @@
+"""Helpers for distributing work across CPUs or nodes.
+
+These utilities provide simple index-based partitioning that works with or
+without MPI.
+"""
+
 # from mpi4py import MPI
 import numpy as np
 
 
 def get_unique_id2(rank, run_number, cpus_per_node):
+    """Return a unique integer ID for a worker.
+
+    Parameters
+    ----------
+    rank : int
+        Rank or index for the worker on a node.
+    run_number : int
+        Index of the current run or batch.
+    cpus_per_node : int
+        Number of CPUs available per node.
+
+    Returns
+    -------
+    int
+        Unique ID derived from rank, run number, and CPUs per node.
+    """
     unique_id = int(np.arange(cpus_per_node * run_number, cpus_per_node * (run_number + 1))[rank])
     return unique_id
 
@@ -24,6 +46,23 @@ def get_unique_id(rank, run_number, cpus_per_node):
 
 
 def distribute_array_no_mpi(unique_id, total_jobs, array_size):
+    """Compute a contiguous slice of work for a given worker.
+
+    Parameters
+    ----------
+    unique_id : int
+        Unique worker identifier (e.g., from ``get_unique_id``).
+    total_jobs : int
+        Total number of workers sharing the work.
+    array_size : int
+        Length of the 1D array being partitioned.
+
+    Returns
+    -------
+    tuple[int | None, int | None]
+        ``(start_idx, end_idx)`` for the slice assigned to the worker,
+        or ``(None, None)`` if no work is assigned.
+    """
     # Calculate the base chunk size and remainder
     chunk_size = array_size // total_jobs
     remainder = array_size % total_jobs

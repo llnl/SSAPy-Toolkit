@@ -1,6 +1,8 @@
+"""Vector utilities and small helpers for geometry and plotting."""
+
 # flake8: noqa: E501
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 def unit_vector(vector):
@@ -9,6 +11,7 @@ def unit_vector(vector):
 
 
 def extend_vector(vector: np.ndarray, distance: float) -> np.ndarray:
+    """Extend a vector by a given distance along its direction."""
     norm = np.linalg.norm(vector)
     if norm == 0:
         raise ValueError("Cannot extend a zero vector.")
@@ -38,6 +41,7 @@ def getAngle(a: np.ndarray, b: np.ndarray, c: np.ndarray) -> np.ndarray:
 
 
 def angle_between_vectors(vector1, vector2):
+    """Return the angle between two vectors in radians."""
     return np.arccos(np.clip(np.dot(vector1, vector2) / (np.linalg.norm(vector1) * np.linalg.norm(vector2)), -1.0, 1.0))
 
 
@@ -57,6 +61,7 @@ def rotation_matrix_from_vectors(vec1, vec2):
 
 
 def normed(arr):
+    """Normalise an array of vectors along the last axis."""
     return arr / np.sqrt(np.einsum("...i,...i", arr, arr))[..., None]
 
 

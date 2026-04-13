@@ -1,5 +1,7 @@
-import os
+"""Generic computation and analysis utilities (sampling, FFTs, statistics)."""
+
 import importlib
+import os
 
 # Get the directory of the current file
 sub_dir = os.path.dirname(__file__)

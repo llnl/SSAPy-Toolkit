@@ -1,3 +1,5 @@
+"""Physical and astronomical constants used throughout Yeager Utilities."""
+
 import numpy as np
 W_rho = 19280  # kg/m^3 --> density of Tungsten
 LD = 384399000  # lunar semi-major axis in meters
