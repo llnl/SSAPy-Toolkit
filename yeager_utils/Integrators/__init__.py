@@ -1,5 +1,7 @@
-import os
+"""Numerical integrators and related helpers."""
+
 import importlib
+import os
 
 # Get the directory of the current file
 sub_dir = os.path.dirname(__file__)

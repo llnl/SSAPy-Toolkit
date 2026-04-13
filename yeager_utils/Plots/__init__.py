@@ -1,5 +1,7 @@
-import os
+"""Plotting helpers for orbits, ground tracks, dashboards, and more."""
+
 import importlib
+import os
 
 # Get the directory of the current file
 sub_dir = os.path.dirname(__file__)

@@ -3,9 +3,9 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "yeager_utils"
+name = "ssapy-toolkit"
 version = "1.0.0"
-description = "Helpful utilities for orbital mechanics, plotting, and data IO"
+description = "SSAPy Toolkit: extensions for orbital mechanics, plotting, and data IO"
 authors = [{ name = "Travis R. Yeager", email = "yeagerastro@gmail.com" }]
 readme = "README.md"
 requires-python = ">=3.8"
@@ -79,6 +79,8 @@ dev = [
   "pytest",
   "pytest-mpi",
   "ipykernel",
+  "sphinx",
+  "sphinx-rtd-theme",
   "ruff",
 ]
 

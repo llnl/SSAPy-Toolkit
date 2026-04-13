@@ -1,5 +1,7 @@
-import os
+"""Input/output helpers for CSV, HDF5, JSON, and more."""
+
 import importlib
+import os
 
 # Get the directory of the current file
 sub_dir = os.path.dirname(__file__)

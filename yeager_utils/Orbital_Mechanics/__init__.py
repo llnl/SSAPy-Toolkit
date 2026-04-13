@@ -1,5 +1,7 @@
-import os
+"""Core orbital mechanics utilities (Keplerian, transfers, and fits)."""
+
 import importlib
+import os
 
 # Get the directory of the current file
 sub_dir = os.path.dirname(__file__)
