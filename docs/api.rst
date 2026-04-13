@@ -1,8 +1,7 @@
 API Reference
 =============
 
-.. automodule:: yeager_utils
+.. automodule:: ssapy_toolkit
    :members:
    :undoc-members:
    :show-inheritance:
-

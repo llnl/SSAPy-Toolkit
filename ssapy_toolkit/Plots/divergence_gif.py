@@ -43,7 +43,7 @@ def divergence_gif(
     import os
     import tempfile
     import numpy as np
-    from yeager_utils import write_gif
+    from ssapy_toolkit import write_gif
     
     n_samples, n_snapshots, _ = r_histories.shape
     
@@ -179,7 +179,7 @@ def divergence_gif(
         if snap_idx % 10 == 0:
             print(f"  Generated frame {snap_idx+1}/{n_snapshots}")
     
-    # Use write_gif from yeager_utils [1][3]
+    # Use write_gif from ssapy_toolkit [1][3]
     output_path = os.path.expanduser(output_path)
     
     write_gif(

@@ -1,4 +1,4 @@
-from yeager_utils import yufig
+from ssapy_toolkit import yufig
 from ssapy import *
 import numpy as np
 

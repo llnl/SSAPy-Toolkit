@@ -5,7 +5,7 @@ import datetime as dt
 
 import numpy as np
 
-from yeager_utils.IO.dict_to_from_hdf5 import save_dict_to_hdf5, load_dict_from_hdf5
+from ssapy_toolkit.IO.dict_to_from_hdf5 import save_dict_to_hdf5, load_dict_from_hdf5
 
 try:
     from astropy.time import Time as AstroTime

@@ -89,4 +89,4 @@ Homepage = "https://github.com/yeager7/yeager-utils"
 Issues = "https://github.com/yeager7/yeager-utils/issues"
 
 [tool.setuptools]
-packages = { find = { where = ["."], include = ["yeager_utils*"] } }
+packages = { find = { where = ["."], include = ["ssapy_toolkit*"] } }

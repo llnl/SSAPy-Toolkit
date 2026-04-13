@@ -22,7 +22,7 @@ from ssapy.body import get_body
 from ssapy.utils import find_file
 import ssapy.compute as compute
 
-from yeager_utils.constants import EARTH_MU, EARTH_RADIUS, RGEO
+from ssapy_toolkit.constants import EARTH_MU, EARTH_RADIUS, RGEO
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 

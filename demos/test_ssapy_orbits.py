@@ -1,4 +1,4 @@
-from yeager_utils import figpath, Orbit, RGEO, Time, orbit_plot_xy, orbit_plot, rv
+from ssapy_toolkit import figpath, Orbit, RGEO, Time, orbit_plot_xy, orbit_plot, rv
 import numpy as np
 from tqdm import tqdm
 

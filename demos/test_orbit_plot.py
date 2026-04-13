@@ -1,4 +1,4 @@
-from yeager_utils import ssapy_orbit, orbit_plot, groundtrack_dashboard, cislunar_plot_3d, cislunar_plot, globe_plot, RGEO, get_lunar_rv, Time, figpath
+from ssapy_toolkit import ssapy_orbit, orbit_plot, groundtrack_dashboard, cislunar_plot_3d, cislunar_plot, globe_plot, RGEO, get_lunar_rv, Time, figpath
 import os
 import numpy as np
 

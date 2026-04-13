@@ -3,11 +3,11 @@
 #          sphere and all have the same magnitude. Returns a NumPy array (N, 3).
 #
 # Module use:
-#   from yeager_utils.compute import generate_sphere_vectors
+#   from ssapy_toolkit.compute import generate_sphere_vectors
 #   V = generate_sphere_vectors(1000, 13.0)  # example call
 #
 # Script use (hard-coded example at bottom):
-#   python3 -m yeager_utils.compute.generate_sphere_of_vectors
+#   python3 -m ssapy_toolkit.compute.generate_sphere_of_vectors
 #
 # Notes:
 #   - Uses NumPy only (no math, no typing).

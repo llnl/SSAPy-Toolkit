@@ -1,4 +1,4 @@
-# yeager_utils/Accelerations/accel_earth_harmonics.py
+# ssapy_toolkit/Accelerations/accel_earth_harmonics.py
 
 import numpy as np
 from ..constants import EARTH_MU, EARTH_RADIUS

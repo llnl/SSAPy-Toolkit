@@ -1,4 +1,4 @@
-# yeager_utils/Accelerations/accel_moon.py
+# ssapy_toolkit/Accelerations/accel_moon.py
 
 import numpy as np
 from astropy.time import Time

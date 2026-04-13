@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 
-from yeager_utils import (
+from ssapy_toolkit import (
     EARTH_RADIUS,
     transfer_shooter,
     transfer_hohmann,

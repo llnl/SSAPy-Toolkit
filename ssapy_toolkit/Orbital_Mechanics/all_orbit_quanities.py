@@ -1,10 +1,10 @@
-# yeager_utils/Orbital_Mechanics/all_orbit_quantities.py
+# ssapy_toolkit/Orbital_Mechanics/all_orbit_quantities.py
 
 import numpy as np
 from astropy.time import Time
 from ssapy import Orbit
-from yeager_utils.constants import EARTH_MU
-from yeager_utils.Orbital_Mechanics.keplerian import true_anomaly  # mean/eccentric -> true anomaly [3]
+from ssapy_toolkit.constants import EARTH_MU
+from ssapy_toolkit.Orbital_Mechanics.keplerian import true_anomaly  # mean/eccentric -> true anomaly [3]
 
 
 def all_orbital_quantities(
@@ -35,7 +35,7 @@ def all_orbital_quantities(
 
     Notes:
       - Angles default to 0 if not supplied (i, raan, pa, ta).
-      - If ma is provided without ta, we convert ma->ta using yeager_utils.keplerian.true_anomaly [3].
+      - If ma is provided without ta, we convert ma->ta using ssapy_toolkit.keplerian.true_anomaly [3].
       - We prefer SSAPy-computed attributes (period, meanMotion, anomalies, etc.) when available [6].
     """
     if t is None:

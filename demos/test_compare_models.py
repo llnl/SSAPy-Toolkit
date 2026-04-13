@@ -2,7 +2,7 @@
 Demo: run compare_models (SSAPy accel ladder) and save the two dashboard figures via yufig.
 
 Assumes:
-    from yeager_utils import compare_models
+    from ssapy_toolkit import compare_models
 
 and compare_models(...) returns:
     out["dashboard"]["figure_time_domain"]
@@ -20,8 +20,8 @@ def main():
     from astropy.time import Time
     import ssapy
 
-    from yeager_utils import compare_models
-    from yeager_utils.Plots.plotutils import yufig
+    from ssapy_toolkit import compare_models
+    from ssapy_toolkit.Plots.plotutils import yufig
 
     # Demo orbit (replace with real values as needed)
     t0 = Time("2026-01-21T00:00:00", scale="utc")

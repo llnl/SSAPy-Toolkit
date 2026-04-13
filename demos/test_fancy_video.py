@@ -1,4 +1,4 @@
-from yeager_utils import get_lunar_rv, Time, figpath
+from ssapy_toolkit import get_lunar_rv, Time, figpath
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, FFMpegWriter, PillowWriter

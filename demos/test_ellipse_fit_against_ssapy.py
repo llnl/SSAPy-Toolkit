@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Test: ellipse_fit vs multiple SSAPy propagations using yeager_utils props (no ssapy.simple)
+Test: ellipse_fit vs multiple SSAPy propagations using ssapy_toolkit props (no ssapy.simple)
 
 What this script does
 ---------------------
 1) Builds the ellipse_fit arc between P1->P2 and resamples it onto a uniform time grid.
-2) Runs SSAPy propagations from the same initial state (r0, v0) using yeager_utils props:
+2) Runs SSAPy propagations from the same initial state (r0, v0) using ssapy_toolkit props:
    - keplerian_prop(): 2-body Kepler-only
    - ssapy_prop():     nominal multi-accel model (Earth EGM2008 harm., Sun/Moon, SRP, Earth rad)
    - best_prop():      heavier model with planets + non-conservative forces
@@ -29,7 +29,7 @@ import numpy as np
 import inspect
 import matplotlib.pyplot as plt
 
-from yeager_utils import (
+from ssapy_toolkit import (
     RGEO,
     ellipse_fit,
     figpath,
@@ -37,7 +37,7 @@ from yeager_utils import (
     orbit_plot,
     groundtrack_dashboard,
     get_times,
-    # use these props from yeager_utils (ignore ssapy.simple)
+    # use these props from ssapy_toolkit (ignore ssapy.simple)
     ssapy_orbit,        # wrapper that takes a propagator via `prop=...`
     keplerian_prop,
     ssapy_prop,
@@ -147,7 +147,7 @@ if __name__ == "__main__":
     r_efit = resample_cartesian(t_rel, r_arc, t_grid)
 
     # ------------------------------------------------------------------
-    # Build propagators from yeager_utils (no ssapy.simple anywhere)
+    # Build propagators from ssapy_toolkit (no ssapy.simple anywhere)
     # ------------------------------------------------------------------
     prop_kep   = keplerian_prop()
     prop_nom   = ssapy_prop()     # nominal multi-accel

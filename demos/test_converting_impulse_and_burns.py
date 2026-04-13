@@ -4,7 +4,7 @@ from pathlib import Path
 from ssapy import Orbit, Time
 from ssapy.constants import RGEO
 from ssapy.utils import get_times
-from yeager_utils import to_gps, orbit_plot, burn_to_deltav, deltav_to_burn, figpath
+from ssapy_toolkit import to_gps, orbit_plot, burn_to_deltav, deltav_to_burn, figpath
 
 print("Modules imported.")
 

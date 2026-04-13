@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from yeager_utils.Coordinates import ntw_to_gcrf  # Adjust import based on your module structure
+from ssapy_toolkit.Coordinates import ntw_to_gcrf  # Adjust import based on your module structure
 
 # Define a simple circular orbit in GCRF (e.g., equatorial orbit)
 R_earth = 6378e3  # Earth radius in meters
@@ -59,4 +59,3 @@ ax.legend()
 
 # Equal aspect ratio
 ax.set_box_aspect([1, 1, 1])  # Ensures 3D plot is not distorted
-

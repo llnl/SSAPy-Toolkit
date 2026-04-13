@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from yeager_utils import yudata, read_3le, read_3le_by_bit, tle_iter_pairs, tle_prop_to_time, pprint
+from ssapy_toolkit import yudata, read_3le, read_3le_by_bit, tle_iter_pairs, tle_prop_to_time, pprint
 
 tle_path = yudata("full_catalog_3le.txt")
 print(f"DATA: {tle_path}")

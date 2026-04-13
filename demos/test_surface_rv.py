@@ -1,4 +1,4 @@
-from yeager_utils import surface_rv, Time, get_times, np
+from ssapy_toolkit import surface_rv, Time, get_times, np
 
 # ----------------------------------------------------------------------
 # Original single-site trajectory (2D plot, over 1 day)
@@ -56,4 +56,3 @@ ax.set_zlabel("z")
 ax.set_title(f"Surface positions at t0 = {t0.isot}")
 
 plt.tight_layout()
-

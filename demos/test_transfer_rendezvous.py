@@ -1,7 +1,7 @@
 import numpy as np
 import time
 from ssapy import Orbit
-from yeager_utils import transfer_rendezvous, Time, RGEO
+from ssapy_toolkit import transfer_rendezvous, Time, RGEO
 
 # Set same epoch for both orbits
 t = Time(0, format='gps')

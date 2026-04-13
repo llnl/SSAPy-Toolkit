@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from yeager_utils import generate_sphere_vectors, yufig
+from ssapy_toolkit import generate_sphere_vectors, yufig
 
 def main():
     # Match your earlier example

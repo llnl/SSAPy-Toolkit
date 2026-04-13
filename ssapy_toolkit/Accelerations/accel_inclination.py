@@ -1,4 +1,4 @@
-# yeager_utils/Accelerations/accel_inclination.py
+# ssapy_toolkit/Accelerations/accel_inclination.py
 
 import numpy as np
 

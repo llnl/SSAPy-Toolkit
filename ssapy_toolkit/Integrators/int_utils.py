@@ -1,4 +1,4 @@
-# yeager_utils/Integrators/int_utils.py
+# ssapy_toolkit/Integrators/int_utils.py
 
 import numpy as np
 from scipy.interpolate import interp1d

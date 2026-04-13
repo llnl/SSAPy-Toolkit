@@ -3,7 +3,7 @@
 if __name__ == "__main__":
     import numpy as np
 
-    from yeager_utils import *
+    from ssapy_toolkit import *
     from datetime import datetime
     
     # Test coordinates

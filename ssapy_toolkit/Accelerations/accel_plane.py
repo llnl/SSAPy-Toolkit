@@ -1,4 +1,4 @@
-# yeager_utils/Accelerations/accel_plane.py
+# ssapy_toolkit/Accelerations/accel_plane.py
 
 import numpy as np
 

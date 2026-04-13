@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Demo for write_gif() using yeager_utils.figpath for all file outputs.
+Demo for write_gif() using ssapy_toolkit.figpath for all file outputs.
 
 Requirements:
   - Pillow, imageio, numpy
-  - yeager_utils providing:
+  - ssapy_toolkit providing:
         figpath(name: str) -> str
         write_gif(...)
 
@@ -17,7 +17,7 @@ import math
 import random
 
 from PIL import Image, ImageDraw, ImageFont
-from yeager_utils import figpath, write_gif
+from ssapy_toolkit import figpath, write_gif
 
 
 def _measure_text(draw, text, font=None):

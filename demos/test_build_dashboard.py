@@ -1,5 +1,5 @@
 import numpy as np
-from yeager_utils import build_dashboard
+from ssapy_toolkit import build_dashboard
 
 
 def panel_altitude(ax, fig, t_min, alt_km):

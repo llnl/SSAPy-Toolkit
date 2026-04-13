@@ -15,9 +15,9 @@ Basic Example
 
 .. code-block:: python
 
-   import yeager_utils as yu
+   import ssapy_toolkit as st
 
-   from yeager_utils.Orbital_Mechanics import keplerian
+   from ssapy_toolkit.Orbital_Mechanics import keplerian
 
    # Use keplerian routines and plotting helpers here
 

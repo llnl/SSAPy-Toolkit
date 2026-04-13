@@ -36,10 +36,10 @@ This installs the package in editable mode along with development dependencies (
 Once installed, you can import the package in Python:
 
 ```python
-import yeager_utils as yu
+import ssapy_toolkit as st
 
-from yeager_utils.Orbital_Mechanics import keplerian
-from yeager_utils.Plots import orbit_plot
+from ssapy_toolkit.Orbital_Mechanics import keplerian
+from ssapy_toolkit.Plots import orbit_plot
 ```
 
 More detailed examples can be found in the `demos/` directory.

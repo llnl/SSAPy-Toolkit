@@ -1,5 +1,5 @@
 import numpy as np
-from yeager_utils import transfer_inclination_continuous, RGEO, VGEO, figpath
+from ssapy_toolkit import transfer_inclination_continuous, RGEO, VGEO, figpath
 
 
 def final_state(x):

@@ -11,7 +11,7 @@ import astropy.units as u
 # ---------------------------------------------------------------------
 # Project utilities from this codebase
 # ---------------------------------------------------------------------
-from yeager_utils import (
+from ssapy_toolkit import (
     ssapy_orbit,
     calc_gamma_and_heading,              # imported for optional use elsewhere
     figpath,

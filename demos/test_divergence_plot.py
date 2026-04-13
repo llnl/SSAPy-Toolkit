@@ -5,8 +5,8 @@ Uses SSAPy to propagate orbits forward in time and creates an animated GIF
 
 import numpy as np
 from astropy.time import Time
-from yeager_utils import yufig
-from yeager_utils.Plots.divergence_plot import divergence_plot
+from ssapy_toolkit import yufig
+from ssapy_toolkit.Plots.divergence_plot import divergence_plot
 
 # Import SSAPy components
 from ssapy import Orbit, compute
@@ -256,7 +256,7 @@ print("\n" + "="*70)
 print("TESTING NEW divergence_gif FUNCTION")
 print("="*70)
 
-from yeager_utils.Plots.divergence_gif import divergence_gif
+from ssapy_toolkit.Plots.divergence_gif import divergence_gif
 
 # Test 1: Using the function with explicit nominal trajectories
 print("\nTest 1: Creating GIF with explicit nominal trajectories...")

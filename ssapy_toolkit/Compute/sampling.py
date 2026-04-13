@@ -328,7 +328,7 @@ def get_sigmas(n: int = 25, path: Optional[str] = None) -> np.ndarray:
     Cache path resolution when `path` is None:
       1) Use directory from env var YEAGER_UTILS_CACHE
          (file name: covariance_sigmas.npy)
-      2) Fallback to ~/.cache/yeager_utils/covariance_sigmas.npy
+      2) Fallback to ~/.cache/ssapy_toolkit/covariance_sigmas.npy
 
     If `path` is provided, it is treated as an explicit file path.
 
@@ -347,12 +347,12 @@ def get_sigmas(n: int = 25, path: Optional[str] = None) -> np.ndarray:
     if path is None:
         from .IO import yudata  # type: ignore  # kept as in original
 
-        # Prefer env-provided directory, then fallback to ~/.cache/yeager_utils
+        # Prefer env-provided directory, then fallback to ~/.cache/ssapy_toolkit
         env_dir = os.environ.get(ENV_VAR, "").strip()
         dirs = []
         if env_dir:
             dirs.append(Path(env_dir).expanduser())
-        dirs.append(Path.home() / ".cache" / "yeager_utils")
+        dirs.append(Path.home() / ".cache" / "ssapy_toolkit")
 
         # Use datapath to choose/create the first usable directory
         path = Path(yudata(DEFAULT_FILE, dirs=dirs))

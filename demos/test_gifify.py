@@ -1,5 +1,5 @@
 if __name__ == "__main__":
-    from yeager_utils import gifify, figpath, groundtrack_dashboard, RGEO, ssapy_orbit
+    from ssapy_toolkit import gifify, figpath, groundtrack_dashboard, RGEO, ssapy_orbit
     import os
     import numpy as np
     import imageio.v2 as imageio

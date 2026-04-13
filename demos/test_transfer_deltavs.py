@@ -1,5 +1,5 @@
 import numpy as np
-from yeager_utils import EARTH_MU
+from ssapy_toolkit import EARTH_MU
 
 def delta_v_semi_major_change_circular(a_initial, a_final):
     """

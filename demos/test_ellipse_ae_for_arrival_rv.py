@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
-from yeager_utils import rv_to_ellipse, pprint, figpath
+from ssapy_toolkit import rv_to_ellipse, pprint, figpath
 
 # ---------- quick sanity check ----------
 if __name__ == "__main__":

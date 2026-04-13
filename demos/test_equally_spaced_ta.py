@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import ssapy
 
-from yeager_utils import equally_spaced_ta, yufig, RGEO
+from ssapy_toolkit import equally_spaced_ta, yufig, RGEO
 
 
 def main():

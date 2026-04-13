@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 # Purpose: generate a dense set of rotated unit-vector plots and stitch them
 # into a GIF. Frames are saved under figpath("tests/rotate_vector_frames/")
-# and the GIF is saved under figpath("tests/"), using only yeager_utils:
+# and the GIF is saved under figpath("tests/"), using only ssapy_toolkit:
 #   - ut.figpath(...) to resolve paths
 #   - ut.save_plot(...) to save each frame
 #   - ut.write_gif(...) to stitch the GIF
 #
 # Requirements honored:
 # - Use numpy (no math, no typing).
-# - Do not manually create directories; rely on yeager_utils.
+# - Do not manually create directories; rely on ssapy_toolkit.
 
 import numpy as np
 from IPython.display import clear_output
-import yeager_utils as ut
+import ssapy_toolkit as ut
 
 # -------------------------- configuration --------------------------
 v_unit = np.array([1, 0, 0])   # base unit vector to rotate (x-axis by default)

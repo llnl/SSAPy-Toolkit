@@ -1,6 +1,6 @@
 import numpy as np
 
-from yeager_utils import RGEO, Time, ellipse_fit, figpath, groundtrack_dashboard, groundtrack_plot, groundtrack_video
+from ssapy_toolkit import RGEO, Time, ellipse_fit, figpath, groundtrack_dashboard, groundtrack_plot, groundtrack_video
 
 from ssapy import Orbit, rv, AccelKepler
 from ssapy.propagator import KeplerianPropagator, RK78Propagator
@@ -40,7 +40,7 @@ plt.xlabel("Time since departure [hours]")
 plt.ylabel("Position difference |Δr| [km]")
 plt.title("ellipse_fit transfer vs ssapy propagation: |Δr|(t)")
 
-# Save using yeager_utils.figpath
+# Save using ssapy_toolkit.figpath
 out_path = figpath("tests/test_transfer_vs_ssapy_diff.jpg")
 plt.savefig(out_path, dpi=150, bbox_inches="tight")
 print(f"Saved: {out_path}")

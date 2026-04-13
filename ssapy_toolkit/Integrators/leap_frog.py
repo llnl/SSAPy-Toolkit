@@ -1,4 +1,4 @@
-# yeager_utils/Integrators/leap_frog.py
+# ssapy_toolkit/Integrators/leap_frog.py
 
 import numpy as np
 

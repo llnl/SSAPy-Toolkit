@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Demo for write_video() using yeager_utils.figpath for all file outputs.
+Demo for write_video() using ssapy_toolkit.figpath for all file outputs.
 
 Requirements:
   - Pillow, numpy, OpenCV (cv2)
-  - yeager_utils providing:
+  - ssapy_toolkit providing:
         figpath(name: str) -> str
         write_video(...)
 Run:
@@ -16,7 +16,7 @@ import random
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
-from yeager_utils import figpath, write_video
+from ssapy_toolkit import figpath, write_video
 
 
 def _measure_text(draw, text, font=None):

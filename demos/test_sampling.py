@@ -23,7 +23,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-from yeager_utils import perturb_state_3d, yufig  # adjust import path if needed
+from ssapy_toolkit import perturb_state_3d, yufig  # adjust import path if needed
 
 
 def demo_single_distribution(

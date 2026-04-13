@@ -2,7 +2,7 @@
 demo_orbit_stats_dashboard_si.py
 
 Demo script showing how to call:
-    from yeager_utils import orbit_stats_dashboard, synthetic_orbit_population
+    from ssapy_toolkit import orbit_stats_dashboard, synthetic_orbit_population
 
 All units are SI:
   r in meters (m)
@@ -21,7 +21,7 @@ This script:
 
 import numpy as np
 
-from yeager_utils import synthetic_orbit_population, orbit_stats_dashboard, yufig
+from ssapy_toolkit import synthetic_orbit_population, orbit_stats_dashboard, yufig
 
 
 def print_population_summary(out, *, top_k=8):

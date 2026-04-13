@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Hardcoded groundtrack validation using yeager_utils (+ssapy), no file I/O.
+Hardcoded groundtrack validation using ssapy_toolkit (+ssapy), no file I/O.
 
 Uses only your utilities:
-- yeager_utils.get_times, gcrf_to_lonlat
-- yeager_utils.ssapy_wrapper.{best_prop, keplerian_prop}
+- ssapy_toolkit.get_times, gcrf_to_lonlat
+- ssapy_toolkit.ssapy_wrapper.{best_prop, keplerian_prop}
 - ssapy.Orbit, ssapy.rv
-- yeager_utils.Coordinates.on_sky_distance.lonlat_distance  (returns METERS)
+- ssapy_toolkit.Coordinates.on_sky_distance.lonlat_distance  (returns METERS)
 
 Prints summary metrics + a short preview. No CSVs are written.
 """
@@ -14,9 +14,9 @@ Prints summary metrics + a short preview. No CSVs are written.
 import numpy as np
 
 # From your utilities
-from yeager_utils import Time, get_times, gcrf_to_lonlat
-from yeager_utils.Coordinates.on_sky_distance import lonlat_distance
-from yeager_utils.SSAPy_wrappers import keplerian_prop, best_prop
+from ssapy_toolkit import Time, get_times, gcrf_to_lonlat
+from ssapy_toolkit.Coordinates.on_sky_distance import lonlat_distance
+from ssapy_toolkit.SSAPy_wrappers import keplerian_prop, best_prop
 from ssapy import Orbit, rv
 
 # ---------------- Hardcoded Inputs ----------------

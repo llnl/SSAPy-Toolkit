@@ -1,6 +1,6 @@
 # demo_all_orbital_quantities.py
 """
-Demo for yeager_utils.Orbital_Mechanics.all_orbit_quantities.all_orbital_quantities
+Demo for ssapy_toolkit.Orbital_Mechanics.all_orbit_quantities.all_orbital_quantities
 
 Shows three usage modes:
   1) From Cartesian state (r, v)
@@ -11,8 +11,8 @@ Shows three usage modes:
 import numpy as np
 from astropy.time import Time
 
-from yeager_utils.constants import EARTH_MU
-from yeager_utils import all_orbital_quantities
+from ssapy_toolkit.constants import EARTH_MU
+from ssapy_toolkit import all_orbital_quantities
 
 
 def print_summary(tag, out):
@@ -84,7 +84,7 @@ def main():
         i=np.deg2rad(10.0),
         raan=np.deg2rad(80.0),
         pa=np.deg2rad(5.0),
-        ma=ma,          # ma provided, ta omitted -> uses yeager_utils.keplerian.true_anomaly [2]
+        ma=ma,          # ma provided, ta omitted -> uses ssapy_toolkit.keplerian.true_anomaly [2]
         t=t,
         mu=mu,
     )

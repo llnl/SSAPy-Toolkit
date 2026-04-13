@@ -14,7 +14,7 @@ from ssapy import groundTrack
 def _try_load_earth():
     try:
         # adjust if your helper lives elsewhere
-        from yeager_utils.Plots.plotutils import load_earth_file
+        from ssapy_toolkit.Plots.plotutils import load_earth_file
         return load_earth_file()
     except Exception:
         return None

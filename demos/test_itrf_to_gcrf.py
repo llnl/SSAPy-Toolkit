@@ -1,5 +1,5 @@
 import numpy as np
-from yeager_utils import gcrf_to_itrf, itrf_to_gcrf, get_times, ssapy_orbit, RGEO
+from ssapy_toolkit import gcrf_to_itrf, itrf_to_gcrf, get_times, ssapy_orbit, RGEO
 import matplotlib.pyplot as plt
 
 

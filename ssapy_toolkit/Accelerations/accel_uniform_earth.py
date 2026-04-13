@@ -1,4 +1,4 @@
-# yeager_utils/Accelerations/accel_uniform_earth.py
+# ssapy_toolkit/Accelerations/accel_uniform_earth.py
 
 import numpy as np
 from ..constants import EARTH_RADIUS, EARTH_MU

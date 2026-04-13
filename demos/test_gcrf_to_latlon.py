@@ -5,7 +5,7 @@
 # annotations, and converts all prints/comments to ASCII-only.
 # It also keeps the calibrated benchmark overlay from the previous step.
 
-from yeager_utils import gcrf_to_lonlat, EARTH_RADIUS, figpath
+from ssapy_toolkit import gcrf_to_lonlat, EARTH_RADIUS, figpath
 import numpy as np
 import matplotlib.pyplot as plt
 

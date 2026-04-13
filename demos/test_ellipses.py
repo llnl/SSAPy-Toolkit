@@ -1,4 +1,4 @@
-from yeager_utils import AccelKepler, SciPyPropagator, EARTH_RADIUS, Time, Orbit, get_times, orbit_plot_xy, rv, np, figpath
+from ssapy_toolkit import AccelKepler, SciPyPropagator, EARTH_RADIUS, Time, Orbit, get_times, orbit_plot_xy, rv, np, figpath
 from tqdm import tqdm
 print("Finished imports.")
 

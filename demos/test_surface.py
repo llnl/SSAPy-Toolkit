@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Reference-frame tests for yeager_utils:
+Reference-frame tests for ssapy_toolkit:
 - GCRF <-> ITRF <-> LLH round-trips for real times
 - Independent cross-check vs Astropy transforms
 - Subsolar point sanity checks at equinoxes/solstices
@@ -15,7 +15,7 @@ from astropy.time import Time
 from astropy.coordinates import GCRS, ITRS, CartesianRepresentation, EarthLocation, get_sun
 import astropy.units as u
 
-from yeager_utils import (
+from ssapy_toolkit import (
     llh_to_gcrf,
     gcrf_to_llh,
     astropy_surface_rv,

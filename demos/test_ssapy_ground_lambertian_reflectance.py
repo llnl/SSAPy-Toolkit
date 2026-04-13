@@ -4,7 +4,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from yeager_utils import figpath, save_plot
+from ssapy_toolkit import figpath, save_plot
 
 # Pull in ssapy pieces explicitly so the call signatures are unambiguous.
 from ssapy import Time

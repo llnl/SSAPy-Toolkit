@@ -1,8 +1,8 @@
 """
-Demo script for yeager_utils.groundtrack_plot
+Demo script for ssapy_toolkit.groundtrack_plot
 
 Saves each demo figure using:
-    from yeager_utils import yufig
+    from ssapy_toolkit import yufig
 
 Output paths:
     tests/demo_groundtrack_01_default
@@ -19,7 +19,7 @@ Usage:
 import numpy as np
 import matplotlib.pyplot as plt
 
-from yeager_utils import groundtrack_plot, yufig
+from ssapy_toolkit import groundtrack_plot, yufig
 
 
 def make_circular_orbit_track(

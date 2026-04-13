@@ -1,5 +1,5 @@
 import numpy as np
-from yeager_utils import transfer_velocity_continuous, EARTH_RADIUS, RGEO, VGEO, figpath
+from ssapy_toolkit import transfer_velocity_continuous, EARTH_RADIUS, RGEO, VGEO, figpath
 
 
 if __name__ == "__main__":

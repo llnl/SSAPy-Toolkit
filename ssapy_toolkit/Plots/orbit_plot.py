@@ -4,7 +4,7 @@ Test: ellipse_fit time array + SSAPy forward/backward propagation (Time-normaliz
 
 Fix for VarType.MIXED_LIST:
 - Ensure that the 't' argument passed to orbit_plot is a list of the SAME type.
-- Here we standardize all times to yeager_utils.Time arrays.
+- Here we standardize all times to ssapy_toolkit.Time arrays.
 
 Outputs:
 - tests/testing_ellipse_fit_against_ssapy_gcrf.png
@@ -41,7 +41,7 @@ if __name__ == "__main__":
     # --------------------------------------------------------------
     # Run ellipse_fit (choose ccw=True by default)
     # --------------------------------------------------------------
-    from yeager_utils import RGEO, get_times, pprint, figpath, ellipse_fit
+    from ssapy_toolkit import RGEO, get_times, pprint, figpath, ellipse_fit
     res = ellipse_fit(
         P1,
         P2,

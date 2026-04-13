@@ -31,7 +31,7 @@ Run:
   python3 demos/test_ellipse_fit.py
 """
 
-from yeager_utils import RGEO, ellipse_fit, ssapy_orbit, yufig
+from ssapy_toolkit import RGEO, ellipse_fit, ssapy_orbit, yufig
 import numpy as np
 
 from ssapy.propagator import KeplerianPropagator
