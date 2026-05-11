@@ -1,0 +1,90 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ssapy-toolkit"
+version = "1.0.1"
+description = "SSAPy Toolkit: extensions for orbital mechanics, plotting, and data IO"
+authors = [
+  { name = "Travis R. Yeager", email = "yeagerastro@gmail.com" }
+]
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+keywords = ["orbital-mechanics", "astrodynamics", "visualization", "utilities"]
+
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Operating System :: OS Independent",
+  "Topic :: Scientific/Engineering :: Astronomy",
+  "Topic :: Scientific/Engineering :: Visualization",
+]
+
+dependencies = [
+  "astropy",
+  "astroquery",
+  "corner",
+  "emcee",
+  "gitpython",
+  "h5py",
+  "imageio",
+  "imageio-ffmpeg",
+  "ipykernel",
+  "ipympl",
+  "ipython",
+  "ipytree",
+  "ipyvolume",
+  "jplephem",
+  "llnl-ssapy",
+  "lmfit",
+  "matplotlib",
+  "mpmath",
+  "nexusformat",
+  "npy-append-array",
+  "numpy",
+  "opencv-python",
+  "pandas",
+  "pillow",
+  "psutil",
+  "pyerfa",
+  "PyPDF2",
+  "rebound",
+  "regex",
+  "requests",
+  "scikit-learn",
+  "seaborn",
+  "selenium",
+  "sympy",
+  "tqdm",
+  "spacetrack",
+  "vg",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-mpi",
+  "sphinx",
+  "sphinx-rtd-theme",
+  "myst-parser<4.0.0",
+  "ruff",
+  "build",
+  "twine",
+]
+
+[project.urls]
+Homepage = "https://github.com/llnl/SSAPy-Toolkit"
+Repository = "https://github.com/llnl/SSAPy-Toolkit"
+Issues = "https://github.com/llnl/SSAPy-Toolkit/issues"
+Documentation = "https://ssapy-toolkit.readthedocs.io/"
+
+[tool.setuptools]
+packages = { find = { where = ["."], include = ["ssapy_toolkit*"] } }

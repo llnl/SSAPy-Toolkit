@@ -1,0 +1,52 @@
+stages:
+  - test
+
+# Reuseable template for Python test jobs
+.test-template:
+  stage: test
+  variables:
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+    PIP_DISABLE_PIP_VERSION_CHECK: "1"
+    PYTHONDONTWRITEBYTECODE: "1"
+  cache:
+    key: "${CI_COMMIT_REF_SLUG}-pip"
+    paths:
+      - .cache/pip
+  before_script:
+    - python --version
+    - pip install -U pip wheel
+    # Install your project + test deps. Pick one path below:
+    - |
+      if [ -f requirements.txt ]; then
+        pip install -r requirements.txt
+      elif [ -f pyproject.toml ]; then
+        pip install ".[test]" || pip install .
+      else
+        pip install .
+      fi
+    - pip install pytest pytest-cov
+  script:
+    - mkdir -p reports
+    - pytest -q --maxfail=1 --disable-warnings \
+        --junitxml=reports/junit.xml \
+        --cov=. --cov-report=xml:reports/coverage.xml --cov-report=term
+  artifacts:
+    when: always
+    paths:
+      - reports/
+    reports:
+      junit: reports/junit.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: reports/coverage.xml
+  coverage: '/^TOTAL\s+\d+\s+\d+\s+(\d+%)/'
+
+# Python 3.8 job
+test:py38:
+  image: python:3.8
+  extends: .test-template
+
+# Python 3.11 job
+test:py311:
+  image: python:3.11
+  extends: .test-template

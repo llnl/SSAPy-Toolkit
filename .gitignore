@@ -1,0 +1,98 @@
+##########################
+# SSAPy-specific ignores #
+##########################
+
+*.h5
+**/*.h5
+
+###########################
+# Python-specific ignores #
+###########################
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+dist/
+develop-eggs/
+downloads/
+wheels/
+site/
+
+# Python egg metadata
+*.egg-info/
+**/*.egg-info/
+*.egg
+**/*.egg
+.eggs/
+eggs/
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+pytest.xml
+pytest_session.txt
+cover/
+
+# Type checker / linter caches
+.mypy_cache/
+.ruff_cache/
+.pyre/
+
+# Sphinx documentation
+docs/_build/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+**/*-checkpoint.ipynb
+
+##################################
+# Visual Studio Code / IDE files #
+##################################
+
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+.history/
+
+##########################
+# OS-specific ignores    #
+##########################
+
+.DS_Store
+*~
