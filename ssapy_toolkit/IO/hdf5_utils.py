@@ -205,3 +205,56 @@ def combine_h5(filename: str, files: list, verbose: bool = False, overwrite: boo
                     print(f"[{idx}] Exists, skip: {key}")
         except Exception as e:
             print(f"Error processing file {src}: {e}")
+
+
+def verify_h5_file(filename: str, read_data: bool = True, verbose: bool = False) -> bool:
+    """
+    Verify that an HDF5 file is readable and not obviously corrupted.
+
+    Parameters
+    ----------
+    filename : str
+        Path to the HDF5 file.
+    read_data : bool
+        If True, attempt to fully read every dataset.
+        If False, only traverse the structure and inspect metadata.
+    verbose : bool
+        If True, print any errors encountered.
+
+    Returns
+    -------
+    bool
+        True if the file appears valid, False otherwise.
+    """
+    if not os.path.exists(filename):
+        if verbose:
+            print(f"File does not exist: {filename}")
+        return False
+
+    ok = True
+
+    try:
+        with h5py.File(filename, "r") as f:
+            def _check_item(name, obj):
+                nonlocal ok
+                try:
+                    if isinstance(obj, h5py.Dataset):
+                        _ = obj.shape
+                        _ = obj.dtype
+                        if read_data:
+                            _ = obj[()]
+                    elif isinstance(obj, h5py.Group):
+                        _ = list(obj.keys())
+                except Exception as e:
+                    ok = False
+                    if verbose:
+                        print(f"{name}: {type(e).__name__}: {e}")
+
+            f.visititems(_check_item)
+
+    except Exception as e:
+        if verbose:
+            print(f"Failed to open/read file: {type(e).__name__}: {e}")
+        return False
+
+    return ok
