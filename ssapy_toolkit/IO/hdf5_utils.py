@@ -207,54 +207,85 @@ def combine_h5(filename: str, files: list, verbose: bool = False, overwrite: boo
             print(f"Error processing file {src}: {e}")
 
 
-def verify_h5_file(filename: str, read_data: bool = True, verbose: bool = False) -> bool:
+def verify_h5_file(filename: str, mode: str = "structure", verbose: bool = False) -> bool:
     """
-    Verify that an HDF5 file is readable and not obviously corrupted.
+    Verify an HDF5 file with selectable depth of checking.
+
+    Modes
+    -----
+    open
+        Only verify the file exists and can be opened.
+        Fastest, but weakest check.
+
+    structure
+        Verify the file opens and every object in the hierarchy can be accessed.
+        Fast and usually sufficient for structural sanity checking.
+
+    full
+        Verify the file opens and every dataset can be fully read.
+        Slowest, but strongest check.
 
     Parameters
     ----------
     filename : str
         Path to the HDF5 file.
-    read_data : bool
-        If True, attempt to fully read every dataset.
-        If False, only traverse the structure and inspect metadata.
+    mode : str
+        One of {"open", "structure", "full"}.
     verbose : bool
         If True, print any errors encountered.
 
     Returns
     -------
     bool
-        True if the file appears valid, False otherwise.
+        True if the file passes the selected verification mode, otherwise False.
     """
+    if mode not in {"open", "structure", "full"}:
+        raise ValueError(f"Invalid mode '{mode}'. Expected one of: 'open', 'structure', 'full'.")
+
     if not os.path.exists(filename):
         if verbose:
             print(f"File does not exist: {filename}")
         return False
 
-    ok = True
-
     try:
         with h5py.File(filename, "r") as f:
-            def _check_item(name, obj):
-                nonlocal ok
-                try:
-                    if isinstance(obj, h5py.Dataset):
-                        _ = obj.shape
-                        _ = obj.dtype
-                        if read_data:
-                            _ = obj[()]
-                    elif isinstance(obj, h5py.Group):
-                        _ = list(obj.keys())
-                except Exception as e:
-                    ok = False
-                    if verbose:
-                        print(f"{name}: {type(e).__name__}: {e}")
+            if mode == "open":
+                return True
 
-            f.visititems(_check_item)
+            bad = False
+
+            if mode == "structure":
+                def _check(name):
+                    nonlocal bad
+                    if bad:
+                        return
+                    try:
+                        _ = f[name]
+                    except Exception as e:
+                        bad = True
+                        if verbose:
+                            print(f"{name}: {type(e).__name__}: {e}")
+
+                f.visit(_check)
+                return not bad
+
+            if mode == "full":
+                def _check(name, obj):
+                    nonlocal bad
+                    if bad:
+                        return
+                    try:
+                        if isinstance(obj, h5py.Dataset):
+                            _ = obj[()]
+                    except Exception as e:
+                        bad = True
+                        if verbose:
+                            print(f"{name}: {type(e).__name__}: {e}")
+
+                f.visititems(_check)
+                return not bad
 
     except Exception as e:
         if verbose:
             print(f"Failed to open/read file: {type(e).__name__}: {e}")
         return False
-
-    return ok
