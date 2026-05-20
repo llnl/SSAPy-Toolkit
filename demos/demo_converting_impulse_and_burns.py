@@ -7,13 +7,14 @@ import matplotlib.pyplot as plt
 
 from ssapy import Orbit, Time
 from ssapy.constants import RGEO
-from ssapy.utils import get_times
 
 from ssapy_toolkit.Time_Functions.convert_to_gps import to_gps
 from ssapy_toolkit.Plots.orbit_plot import orbit_plot
 from ssapy_toolkit.Orbital_Mechanics.burn_to_deltav import burn_to_deltav
 from ssapy_toolkit.Orbital_Mechanics.deltav_to_burn import deltav_to_burn
 from ssapy_toolkit.Plots.figpath import figpath
+from ssapy_toolkit.Time_Functions.get_times import get_times
+
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 

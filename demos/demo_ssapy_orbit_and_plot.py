@@ -4,14 +4,19 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import astropy.units as u
+from astropy.time import Time
 
-from ssapy import *
-from ssapy import constants, compute, plotUtils, utils
+from ssapy import Orbit, rv, get_body
+from ssapy import constants
 from ssapy.accel import AccelKepler, AccelEarthRad, AccelSolRad
 from ssapy.gravity import AccelHarmonic, AccelThirdBody
 from ssapy.propagator import SciPyPropagator
 
+from ssapy_toolkit.Plots.orbit_plot import orbit_plot
+from ssapy_toolkit.Plots.groundtrack_plot import groundtrack_plot
 from ssapy_toolkit.Plots.plotutils import yufig
+from ssapy_toolkit.Compute.lambertian_magnitude import M_v_lambertian
+from ssapy_toolkit.Time_Functions.get_times import get_times
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -33,45 +38,26 @@ def decimal_to_datetime_label(d):
 
 
 def main(make_figures=None, fast=None):
-    """
-    Run the SSAPy orbit/plot demo.
-
-    Parameters
-    ----------
-    make_figures : bool or None
-        If None, defaults to False under pytest and True otherwise.
-    fast : bool or None
-        If None, defaults to True under pytest and False otherwise.
-
-    Returns
-    -------
-    dict
-        Computed orbit states and Lambertian reflectance.
-    """
     if make_figures is None:
         make_figures = not UNDER_PYTEST
     if fast is None:
         fast = UNDER_PYTEST
 
-    # Set an initial astropy time object
     t0 = Time("2024-1-1")
     print(t0)
 
-    # Get the position of the Moon
     r_moon = get_body("moon").position(t0).T
     r_moon_minus = get_body("moon").position(t0 - 1 * u.s).T
     r_moon_plus = get_body("moon").position(t0 + 1 * u.s).T
     v_moon = (r_moon_plus - r_moon_minus) / 2.0
     print(r_moon, v_moon)
 
-    # Get a starting position and velocity (statevector) for an orbit.
     r0 = r_moon[0] + (1000e3 * r_moon[0] / np.linalg.norm(r_moon[0]))
     v0 = v_moon[0] + 100
     print(r0, v0)
 
     print("\nCalculating orbit.")
 
-    # Initialize an orbit object.
     a = constants.RGEO
     e = 0
     i = np.radians(45)
@@ -82,7 +68,6 @@ def main(make_figures=None, fast=None):
     kElements = [a, e, i, pa, raan, ta]
     orbit = Orbit.fromKeplerianElements(*kElements, t=t0)
 
-    # Set parameters of the satellite
     sat_kwargs = dict(
         mass=100,
         area=1,
@@ -90,17 +75,9 @@ def main(make_figures=None, fast=None):
         CR=1.3,
     )
 
-    # Build a propagator and set custom accelerations
     moon = get_body("moon")
     sun = get_body("Sun")
-    Mercury = get_body("Mercury")
-    Venus = get_body("Venus")
     Earth = get_body("Earth", model="EGM2008")
-    Mars = get_body("Mars")
-    Jupiter = get_body("Jupiter")
-    Saturn = get_body("Saturn")
-    Uranus = get_body("Uranus")
-    Neptune = get_body("Neptune")
 
     aEarth = AccelKepler() + AccelHarmonic(Earth, 140, 140)
     aSun = AccelThirdBody(sun)
@@ -110,22 +87,17 @@ def main(make_figures=None, fast=None):
     accel = aEarth + aMoon + aSun + aSolRad + aEarthRad
     prop = SciPyPropagator(accel)
 
-    # Build a time array to evaluate the orbit at
     duration = (6, "hour") if fast else (2, "day")
     freq = (10, "minute") if fast else (1, "minute")
-    times = utils.get_times(duration=duration, freq=freq, t0=t0)
+    times = get_times(duration=duration, freq=freq, t0=t0)
     r, v = rv(orbit=orbit, time=times, propagator=prop)
 
-    # Plot outputs only in demo mode
     if make_figures:
-        plotUtils.orbit_plot(r, times, frame="gcrf", show=False)
-        plotUtils.orbit_plot(r, times, frame="lunar", show=False)
+        orbit_plot(r, times, frame="gcrf", show=False)
+        orbit_plot(r, times, frame="lunar", show=False)
+        groundtrack_plot(r, times)
 
-        # Lets see a ground track of the orbit
-        plotUtils.ground_track_plot(r, times)
-
-    # Calculate the Lambertian Reflectance of the orbit
-    mv = compute.M_v_lambertian(r, times)
+    mv = M_v_lambertian(r, times)
 
     if make_figures:
         xticks = np.linspace(times.decimalyear[0], times.decimalyear[-1], 4)

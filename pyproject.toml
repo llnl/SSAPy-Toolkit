@@ -55,7 +55,7 @@ dependencies = [
   "pillow",
   "psutil",
   "pyerfa",
-  "PyPDF2",
+  "pypdf",
   "rebound",
   "regex",
   "requests",

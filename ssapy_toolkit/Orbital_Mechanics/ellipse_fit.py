@@ -623,7 +623,7 @@ def ellipse_fit(
         import matplotlib.pyplot as plt
         from matplotlib import cm
         from matplotlib.gridspec import GridSpec
-        from ssapy.simple import ssapy_orbit
+        from ssapy_toolkit.SSAPy_wrappers.ssapy_orbits import ssapy_orbit
 
         t_minutes = t_rel_s / 60.0
         r_ss_m, v_ss_m_s, _t_ss = ssapy_orbit(r=r0_m, v=v0_m_s, t=t_rel_s)

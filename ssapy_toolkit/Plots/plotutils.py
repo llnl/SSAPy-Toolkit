@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.colors import cnames, to_rgb, rgb2hex
 from PIL import Image as PILImage
-from PyPDF2 import PdfMerger
+from pypdf import PdfWriter, PdfReader
 from IPython.display import Image as IPythonImage, display as ipython_display
 from astropy.time import Time
 from erfa import gst94
@@ -388,7 +388,7 @@ def save_plot_to_pdf(figure, pdf_path):
 
     # Merge or move into place
     if os.path.exists(pdf_path):
-        merger = PdfMerger()
+        merger = PdfWriter()
         with open(pdf_path, "rb") as main_pdf, open(temp_pdf_path, "rb") as temp_pdf:
             merger.append(main_pdf)
             merger.append(temp_pdf)

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["main", "master"]
+    branches: ["main", "master", ssapy-changes]
   pull_request:
     branches: ["main", "master"]
 
@@ -32,3 +32,15 @@ jobs:
         run: |
           pytest tests
 
+      - name: Upload generated images
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-demo-images-py${{ matrix.python-version }}
+          path: |
+            tests/**/*.png
+            tests/**/*.gif
+            tests/**/*.jpg
+            tests/**/*.jpeg
+            tests/**/*.pdf
+          if-no-files-found: ignore

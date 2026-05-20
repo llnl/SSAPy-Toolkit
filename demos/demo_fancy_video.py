@@ -4,7 +4,7 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, FFMpegWriter, PillowWriter
-import ssapy
+from ssapy import rv, Orbit
 from ssapy.propagator import default_numerical
 from astropy.time import Time
 
@@ -53,14 +53,14 @@ def _propagate_with_fallback(orbit, t_frames):
     while k >= min_n:
         try:
             times = Time(t_frames[:k], format="gps")
-            r_sc_f, v_sc_f = ssapy.rv(orbit=orbit, time=times, propagator=prop)
+            r_sc_f, v_sc_f = rv(orbit=orbit, time=times, propagator=prop)
             r_sc_f = np.array(r_sc_f, dtype=float).reshape((-1, 3))
             return r_sc_f, t_frames[:k]
         except Exception:
             k = int(0.9 * k)
 
     times = Time(t_frames[:2], format="gps")
-    r_sc_f, v_sc_f = ssapy.rv(orbit=orbit, time=times, propagator=prop)
+    r_sc_f, v_sc_f = rv(orbit=orbit, time=times, propagator=prop)
     r_sc_f = np.array(r_sc_f, dtype=float).reshape((-1, 3))
     return r_sc_f, t_frames[:2]
 
@@ -129,7 +129,7 @@ def orbit_moon_video_demo(
     radial_nudge = 5.0
     v0 = vm0 + v_rel + radial_nudge * x_hat
 
-    orbit = ssapy.Orbit(r=r0, v=v0, t=t0_gps)
+    orbit = Orbit(r=r0, v=v0, t=t0_gps)
     r_sc_f, t_frames_ok = _propagate_with_fallback(orbit, t_frames)
 
     n_ok = len(t_frames_ok)

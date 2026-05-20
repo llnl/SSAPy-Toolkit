@@ -13,15 +13,17 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import astropy.units as u
+from astropy.time import Time
 
 from ssapy_toolkit.Plots.figpath import figpath
+from ssapy_toolkit.Plots.orbit_plot import orbit_plot
+from ssapy_toolkit.Plots.groundtrack_plot import groundtrack_plot
 from ssapy_toolkit.Plots.plotutils import save_plot
+from ssapy_toolkit.Compute.lambertian_magnitude import M_v_lambertian
+from ssapy_toolkit.Time_Functions.get_times import get_times
 
 # Pull in ssapy pieces explicitly so the call signatures are unambiguous.
-from ssapy import Time
-from ssapy import compute
 from ssapy import constants
-from ssapy import utils, plotUtils
 from ssapy import Orbit, rv, get_body
 from ssapy.accel import AccelKepler, AccelEarthRad, AccelSolRad
 from ssapy.gravity import AccelHarmonic, AccelThirdBody
@@ -130,7 +132,7 @@ def main(make_figures=None, fast=None):
     # ------------------------------------------------------------
     duration = (6, "hour") if fast else (2, "day")
     freq = (10, "minute") if fast else (1, "minute")
-    times = utils.get_times(duration=duration, freq=freq, t0=t0)
+    times = get_times(duration=duration, freq=freq, t0=t0)
 
     # ------------------------------------------------------------
     # Propagate
@@ -141,21 +143,21 @@ def main(make_figures=None, fast=None):
     # Plot: GCRF and lunar frames — save with figpath
     # ------------------------------------------------------------
     if make_figures:
-        fig, ax = plotUtils.orbit_plot(r, times, frame="gcrf")
+        fig, ax = orbit_plot(r, times, frame="gcrf")
         out_gcrf = figpath("tests/ssapy_orbit_gcrf")
         save_plot(fig, save_path=out_gcrf)
 
-        fig, ax = plotUtils.orbit_plot(r, times, frame="lunar")
+        fig, ax = orbit_plot(r, times, frame="lunar")
         out_lunar = figpath("tests/ssapy_orbit_lunar")
         save_plot(fig, save_path=out_lunar)
 
         # Ground track
-        plotUtils.ground_track_plot(r, times, save_path=figpath("tests/ssapy_ground_track"))
+        groundtrack_plot(r, times, save_path=figpath("tests/ssapy_ground_track"))
 
     # ------------------------------------------------------------
     # Lambertian reflectance (apparent magnitude)
     # ------------------------------------------------------------
-    mv = compute.M_v_lambertian(r, times)
+    mv = M_v_lambertian(r, times)
 
     if make_figures:
         xticks = np.linspace(times.decimalyear[0], times.decimalyear[-1], 4)

@@ -2,10 +2,12 @@ import numpy as np
 from astropy.time import Time
 
 from ssapy import Orbit, rv
-from ssapy.utils import get_times, points_on_circle
 
 from .sat_kwargs import ssapy_kwargs
 from .ssapy_props import ssapy_prop
+
+from ..Time_Functions import get_times
+from ..vectors import points_on_circle
 
 
 def ssapy_orbit(

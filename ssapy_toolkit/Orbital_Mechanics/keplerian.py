@@ -8,7 +8,6 @@ orbital parameters.
 
 import numpy as np
 import rebound
-from rebound import hash as h
 from astropy.time import Time
 
 from ..constants import au_to_m, EARTH_MU, MOON_RADIUS
@@ -265,7 +264,7 @@ def rebound_orbital_elements(planet='earth', time="2000-1-1", format='utc'):
         for i, planet_str in enumerate(['mercury', 'venus', 'earth', 'mars',
                                         'jupiter', 'saturn', 'uranus',
                                         'neptune']):
-            p = sim.particles[h(i + 1)]
+            p = sim.particles[hash(i + 1)]
             orbitals[planet_str] = {
                 'a': p.a,
                 'e': p.e,
@@ -291,7 +290,7 @@ def rebound_orbital_elements(planet='earth', time="2000-1-1", format='utc'):
     if index is None:
         raise ValueError(f"Unknown planet: {planet}")
 
-    p = sim.particles[h(index)]
+    p = sim.particles[hash(index)]
     return {
         'a': p.a,
         'e': p.e,

@@ -1,7 +1,7 @@
 """Helpers for constructing common SSAPy orbit initial conditions."""
 
 import numpy as np
-import ssapy
+from ssapy import Orbit, rv, get_body
 
 
 class OrbitInitialize:
@@ -28,7 +28,7 @@ class OrbitInitialize:
         ssapy.Orbit
             Initialized DRO orbit at the requested epoch.
         """
-        moon = ssapy.get_body("moon")
+        moon = get_body("moon")
 
         unit_vector_moon = moon.position(t) / np.linalg.norm(moon.position(t))
         moon_v = (moon.position(t.gps) - moon.position(t.gps - 1)) / 1
@@ -37,7 +37,7 @@ class OrbitInitialize:
         r = (np.linalg.norm(moon.position(t)) - delta_r) * unit_vector_moon
         v = (np.linalg.norm(moon_v) + delta_v) * unit_vector_moon_velocity
 
-        orbit = ssapy.Orbit(r=r, v=v, t=t)
+        orbit = Orbit(r=r, v=v, t=t)
         return orbit
 
     def Lunar_L4(t, delta_r=7.52064e7, delta_v=344):
@@ -57,7 +57,7 @@ class OrbitInitialize:
         ssapy.Orbit
             Initialized orbit near the L4 Lagrange point.
         """
-        moon = ssapy.get_body("moon")
+        moon = get_body("moon")
 
         unit_vector_moon = moon.position(t) / np.linalg.norm(moon.position(t))
         moon_v = (moon.position(t.gps) - moon.position(t.gps - 1)) / 1
@@ -66,7 +66,7 @@ class OrbitInitialize:
         r = (np.linalg.norm(moon.position(t)) - delta_r) * unit_vector_moon
         v = (np.linalg.norm(moon_v) + delta_v) * unit_vector_moon_velocity
 
-        orbit = ssapy.Orbit(r=r, v=v, t=t)
+        orbit = Orbit(r=r, v=v, t=t)
         return orbit
 # Usage example:
 # orbit = OrbitInitialize.DRO(t)

@@ -7,7 +7,6 @@ import ssapy
 
 from ssapy_toolkit.Orbital_Mechanics.equally_spaced_ta import equally_spaced_ta
 from ssapy_toolkit.Plots.plotutils import yufig
-from ssapy_toolkit.constants import RGEO
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
