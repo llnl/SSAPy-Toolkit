@@ -6,7 +6,7 @@ Uses only your utilities:
 - ssapy_toolkit.get_times, gcrf_to_lonlat
 - ssapy_toolkit.ssapy_wrapper.{best_prop, keplerian_prop}
 - ssapy.Orbit, ssapy.rv
-- ssapy_toolkit.Coordinates.on_sky_distance.lonlat_distance
+- ssapy_toolkit.coordinates.on_sky_distance.lonlat_distance
 """
 
 import os
@@ -16,10 +16,10 @@ import numpy as np
 from astropy.time import Time
 from ssapy import Orbit, rv
 
-from ssapy_toolkit.Time_Functions.get_times import get_times
-from ssapy_toolkit.Coordinates.gcrf_to_lonlat import gcrf_to_lonlat
-from ssapy_toolkit.Coordinates.on_sky_distance import lonlat_distance
-from ssapy_toolkit.SSAPy_wrappers.ssapy_props import keplerian_prop, best_prop
+from ssapy_toolkit.time_functions.get_times import get_times
+from ssapy_toolkit.coordinates.gcrf_to_lonlat import gcrf_to_lonlat
+from ssapy_toolkit.coordinates.on_sky_distance import lonlat_distance
+from ssapy_toolkit.ssapy_wrappers.ssapy_props import keplerian_prop, best_prop
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 

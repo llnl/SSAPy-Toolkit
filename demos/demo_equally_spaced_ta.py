@@ -5,8 +5,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import ssapy
 
-from ssapy_toolkit.Orbital_Mechanics.equally_spaced_ta import equally_spaced_ta
-from ssapy_toolkit.Plots.plotutils import yufig
+from ssapy_toolkit.orbital_mechanics.equally_spaced_ta import equally_spaced_ta
+from ssapy_toolkit.plots.plotutils import yufig
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 

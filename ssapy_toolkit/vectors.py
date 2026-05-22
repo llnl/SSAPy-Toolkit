@@ -139,7 +139,7 @@ def rotate_vector(v_unit, theta, phi, save_path=False):
         ax.set_ylim(-1, 1)
         ax.set_zlim(-1, 1)
         plt.grid(True)
-        from .Plots import save_plot
+        from .plots import save_plot
         ax.set_title(f'Vector Plot\ntheta: {np.degrees(theta):.0f}, phi: {np.degrees(phi):.0f}', color='white')
         save_plot(fig, save_path=save_path)
     return v2 / np.linalg.norm(v2, axis=-1)

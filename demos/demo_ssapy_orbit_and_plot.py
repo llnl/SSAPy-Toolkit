@@ -12,11 +12,11 @@ from ssapy.accel import AccelKepler, AccelEarthRad, AccelSolRad
 from ssapy.gravity import AccelHarmonic, AccelThirdBody
 from ssapy.propagator import SciPyPropagator
 
-from ssapy_toolkit.Plots.orbit_plot import orbit_plot
-from ssapy_toolkit.Plots.groundtrack_plot import groundtrack_plot
-from ssapy_toolkit.Plots.plotutils import yufig
-from ssapy_toolkit.Compute.lambertian_magnitude import M_v_lambertian
-from ssapy_toolkit.Time_Functions.get_times import get_times
+from ssapy_toolkit.plots.orbit_plot import orbit_plot
+from ssapy_toolkit.plots.groundtrack_plot import groundtrack_plot
+from ssapy_toolkit.plots.plotutils import yufig
+from ssapy_toolkit.compute.lambertian_magnitude import M_v_lambertian
+from ssapy_toolkit.time_functions.get_times import get_times
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 

@@ -88,3 +88,6 @@ Documentation = "https://ssapy-toolkit.readthedocs.io/"
 
 [tool.setuptools]
 packages = { find = { where = ["."], include = ["ssapy_toolkit*"] } }
+
+[project.scripts]
+ssapy-demo-gallery = "ssapy_toolkit.run_all_demos:main"

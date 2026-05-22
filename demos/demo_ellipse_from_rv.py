@@ -1,34 +1,35 @@
 #!/usr/bin/env python3
 """
-Demo: rigorous validation driver for ssapy_toolkit.ellipse_fit.
+Demo: rigorous validation driver for ssapy_toolkit ellipse fitting.
 
 Baseline:
   - Runs ellipse_fit twice (A/B) using v_pref to pick direction
   - Validates shapes, finiteness, required keys
   - Checks endpoints: r[0]≈P1, r[-1]≈P2
-  - Checks invariants from returned r,v:
-      |h| const, specific energy const, |e| const
+  - Checks invariants from returned r,v
   - Reconstructs with SSAPy (SV + Kepler) and checks internal consistency
-  - Saves regression plots via yufig(fig, "tests/<name>.png") when SAVE_PLOTS=True
+  - Saves plots when SAVE_PLOTS=True
 
 Inclination sweep:
-  - Start: equatorial GEO position (radius = 1*RGEO) at +X
-  - End: on the GEO sphere at radius = 2*RGEO, rotated out of equator
+  - Start: equatorial GEO position at +X
+  - End: point on a sphere of radius 2*RGEO
   - For each inclination:
       P2(inc) = R2 * [0, cos(inc), sin(inc)]
   - Computes transfer arcs for A/B at each inclination
   - Does not compare to SSAPy in the sweep
+  - Failing sweep cases are logged and skipped, not fatal
 """
 
 import os
 import sys
+import traceback
 import numpy as np
 
 from ssapy_toolkit.constants import RGEO
-from ssapy_toolkit.Orbital_Mechanics.ellipse_fit import ellipse_fit
-from ssapy_toolkit.SSAPy_wrappers.ssapy_orbits import ssapy_orbit
-from ssapy_toolkit.Plots.orbit_plot import orbit_plot
-from ssapy_toolkit.Plots.plotutils import yufig
+from ssapy_toolkit.orbital_mechanics.ellipse_fit import ellipse_fit
+from ssapy_toolkit.ssapy_wrappers.ssapy_orbits import ssapy_orbit
+from ssapy_toolkit.plots.orbit_plot import orbit_plot
+from ssapy_toolkit.plots.plotutils import yufig
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -191,6 +192,39 @@ R2_SWEEP = 2.0 * RGEO
 # -----------------------------------------------------------------------------
 # Plot helpers
 # -----------------------------------------------------------------------------
+def _cube_limits_from_points(pts3d, pad=0.05):
+    pts = np.asarray(pts3d, float)
+    if pts.ndim != 2 or pts.shape[1] != 3 or len(pts) == 0:
+        return None
+
+    mins = pts.min(axis=0)
+    maxs = pts.max(axis=0)
+    center = 0.5 * (mins + maxs)
+    spans = maxs - mins
+    half = 0.5 * float(np.max(spans))
+    if not np.isfinite(half) or half <= 0.0:
+        half = 1.0
+    half *= (1.0 + float(pad))
+    return center, half
+
+
+def _apply_cube_limits(ax, cube_limits):
+    if cube_limits is None:
+        return
+    center, half = cube_limits
+    ax.set_xlim(center[0] - half, center[0] + half)
+    ax.set_ylim(center[1] - half, center[1] + half)
+    ax.set_zlim(center[2] - half, center[2] + half)
+    try:
+        ax.set_box_aspect((1, 1, 1))
+    except Exception:
+        pass
+
+
+def _set_equal_3d_cube(ax, pts3d, pad=0.05):
+    _apply_cube_limits(ax, _cube_limits_from_points(pts3d, pad=pad))
+
+
 def _plot_error_vs_time(results, recon_cache, prefix):
     import matplotlib.pyplot as plt
 
@@ -265,16 +299,28 @@ def _plot_radius_and_speed(results, recon_cache, prefix):
     plt.close(fig)
 
 
-def _plot_arcs_3d(results, P1_m, P2_m, prefix, title="ellipse_fit arcs"):
+def _plot_arcs_3d(results, P1_m, P2_m, prefix, title="ellipse_fit arcs", cube_limits=None):
     import matplotlib.pyplot as plt
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
-    for name in ["A", "B"]:
+
+    all_pts = [np.asarray(P1_m, float), np.asarray(P2_m, float)]
+
+    for name in results:
         r = np.asarray(results[name]["r"], float)
         ax.plot(r[:, 0], r[:, 1], r[:, 2], label=f"fit {name}")
+        all_pts.append(r)
+
     ax.scatter([P1_m[0]], [P1_m[1]], [P1_m[2]], s=40, label="P1")
     ax.scatter([P2_m[0]], [P2_m[1]], [P2_m[2]], s=40, label="P2")
+
+    pts = np.vstack([p.reshape(-1, 3) for p in all_pts])
+    if cube_limits is None:
+        _set_equal_3d_cube(ax, pts, pad=0.08)
+    else:
+        _apply_cube_limits(ax, cube_limits)
+
     ax.set_xlabel("x [m]")
     ax.set_ylabel("y [m]")
     ax.set_zlabel("z [m]")
@@ -312,11 +358,15 @@ def _plot_recon_overlays(results, recon_cache, prefix):
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
+    all_pts = []
     for name in ["A", "B"]:
         r_fit = np.asarray(results[name]["r"], float)
         r_sv = np.asarray(recon_cache[name]["sv"][0], float)
         ax.plot(r_fit[:, 0], r_fit[:, 1], r_fit[:, 2], label=f"fit {name}")
         ax.plot(r_sv[:, 0], r_sv[:, 1], r_sv[:, 2], alpha=0.7, label=f"sv {name}")
+        all_pts.extend([r_fit, r_sv])
+    pts = np.vstack([p.reshape(-1, 3) for p in all_pts])
+    _set_equal_3d_cube(ax, pts, pad=0.08)
     ax.set_title("SSAPy reconstruction via state vectors")
     ax.legend()
     fig.tight_layout()
@@ -325,11 +375,15 @@ def _plot_recon_overlays(results, recon_cache, prefix):
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
+    all_pts = []
     for name in ["A", "B"]:
         r_fit = np.asarray(results[name]["r"], float)
         r_ke = np.asarray(recon_cache[name]["ke"][0], float)
         ax.plot(r_fit[:, 0], r_fit[:, 1], r_fit[:, 2], label=f"fit {name}")
         ax.plot(r_ke[:, 0], r_ke[:, 1], r_ke[:, 2], alpha=0.7, label=f"ke {name}")
+        all_pts.extend([r_fit, r_ke])
+    pts = np.vstack([p.reshape(-1, 3) for p in all_pts])
+    _set_equal_3d_cube(ax, pts, pad=0.08)
     ax.set_title("SSAPy reconstruction via Kepler elements")
     ax.legend()
     fig.tight_layout()
@@ -338,9 +392,6 @@ def _plot_recon_overlays(results, recon_cache, prefix):
 
 
 def _plot_incsweep_all_transfers_3d(sweep_store, P1_m, prefix):
-    """
-    One figure that shows all sweep transfer arcs.
-    """
     import matplotlib.pyplot as plt
 
     fig = plt.figure()
@@ -348,26 +399,35 @@ def _plot_incsweep_all_transfers_3d(sweep_store, P1_m, prefix):
 
     labeledA = False
     labeledB = False
+    all_pts = [np.asarray(P1_m, float)]
 
     for item in sweep_store:
-        rA = np.asarray(item["A"]["r"], float)
-        rB = np.asarray(item["B"]["r"], float)
+        all_pts.append(np.asarray(item["P2"], float))
 
-        if not labeledA:
-            ax.plot(rA[:, 0], rA[:, 1], rA[:, 2], alpha=0.25, linewidth=1.0, label="A (all inc)")
-            labeledA = True
-        else:
-            ax.plot(rA[:, 0], rA[:, 1], rA[:, 2], alpha=0.25, linewidth=1.0)
+        if item["A"] is not None:
+            rA = np.asarray(item["A"]["r"], float)
+            if not labeledA:
+                ax.plot(rA[:, 0], rA[:, 1], rA[:, 2], alpha=0.25, linewidth=1.0, label="A (all inc)")
+                labeledA = True
+            else:
+                ax.plot(rA[:, 0], rA[:, 1], rA[:, 2], alpha=0.25, linewidth=1.0)
+            all_pts.append(rA)
 
-        if not labeledB:
-            ax.plot(rB[:, 0], rB[:, 1], rB[:, 2], alpha=0.25, linewidth=1.0, label="B (all inc)")
-            labeledB = True
-        else:
-            ax.plot(rB[:, 0], rB[:, 1], rB[:, 2], alpha=0.25, linewidth=1.0)
+        if item["B"] is not None:
+            rB = np.asarray(item["B"]["r"], float)
+            if not labeledB:
+                ax.plot(rB[:, 0], rB[:, 1], rB[:, 2], alpha=0.25, linewidth=1.0, label="B (all inc)")
+                labeledB = True
+            else:
+                ax.plot(rB[:, 0], rB[:, 1], rB[:, 2], alpha=0.25, linewidth=1.0)
+            all_pts.append(rB)
 
     ax.scatter([P1_m[0]], [P1_m[1]], [P1_m[2]], s=45, label="P1 (start)")
     P2s = np.array([it["P2"] for it in sweep_store], float)
     ax.scatter(P2s[:, 0], P2s[:, 1], P2s[:, 2], s=18, alpha=0.9, label="P2 (ends)")
+
+    pts = np.vstack([p.reshape(-1, 3) for p in all_pts])
+    _set_equal_3d_cube(ax, pts, pad=0.08)
 
     ax.set_title("Inclination sweep transfers: 1*RGEO equatorial -> 2*RGEO sphere (0..90° step 15°)")
     ax.set_xlabel("x [m]")
@@ -485,7 +545,7 @@ def _run_one_case(P1_m, P2_m, inc_rad, v_pref_m_s, tag, dir_cos_min=DIR_COS_MIN,
 # Main
 # -----------------------------------------------------------------------------
 def main():
-    print("=== demo_ellipse_fit_rigorous.py ===")
+    print("=== demo_ellipse_from_rv.py ===")
     print(f"SAVE_PLOTS={SAVE_PLOTS}")
 
     # Baseline scenario
@@ -537,47 +597,89 @@ def main():
     P1s_m = np.array([R1_SWEEP, 0.0, 0.0], dtype=float)
 
     sweep_store = []
+    sweep_failures = []
+
     for inc_deg in INC_SWEEP_DEG:
         inc_rad = np.deg2rad(float(inc_deg))
 
-        # End point on the sphere of radius 2*RGEO
         P2s_m = np.array([0.0, R2_SWEEP * np.cos(inc_rad), R2_SWEEP * np.sin(inc_rad)], dtype=float)
 
         t_hat_s = _compute_t_hat(P1s_m, P2s_m)
         v_pref_s_A = 1.0 * t_hat_s
         v_pref_s_B = -1.0 * t_hat_s
 
+        resA = None
+        resB = None
+
         print(f"\n----- SWEEP inc={inc_deg:+.0f} deg (A) -----")
-        resA, _ = _run_one_case(
-            P1s_m,
-            P2s_m,
-            inc_rad,
-            v_pref_s_A,
-            tag=f"SWEEP inc={inc_deg:+.0f} A",
-            dir_cos_min=None,
-            compare_ssapy=False,
-        )
+        try:
+            resA, _ = _run_one_case(
+                P1s_m,
+                P2s_m,
+                inc_rad,
+                v_pref_s_A,
+                tag=f"SWEEP inc={inc_deg:+.0f} A",
+                dir_cos_min=None,
+                compare_ssapy=False,
+            )
+        except Exception as e:
+            err = traceback.format_exc()
+            print(f"SWEEP inc={inc_deg:+.0f} A FAILED: {e}")
+            sweep_failures.append(
+                {"inc_deg": float(inc_deg), "branch": "A", "error": str(e), "traceback": err}
+            )
 
         print(f"\n----- SWEEP inc={inc_deg:+.0f} deg (B) -----")
-        resB, _ = _run_one_case(
-            P1s_m,
-            P2s_m,
-            inc_rad,
-            v_pref_s_B,
-            tag=f"SWEEP inc={inc_deg:+.0f} B",
-            dir_cos_min=None,
-            compare_ssapy=False,
-        )
+        try:
+            resB, _ = _run_one_case(
+                P1s_m,
+                P2s_m,
+                inc_rad,
+                v_pref_s_B,
+                tag=f"SWEEP inc={inc_deg:+.0f} B",
+                dir_cos_min=None,
+                compare_ssapy=False,
+            )
+        except Exception as e:
+            err = traceback.format_exc()
+            print(f"SWEEP inc={inc_deg:+.0f} B FAILED: {e}")
+            sweep_failures.append(
+                {"inc_deg": float(inc_deg), "branch": "B", "error": str(e), "traceback": err}
+            )
 
         sweep_store.append({"inc_deg": float(inc_deg), "P2": P2s_m, "A": resA, "B": resB})
+
+    if sweep_failures:
+        print("\nSweep failures summary:")
+        for item in sweep_failures:
+            print(f"  inc={item['inc_deg']:+.0f} branch={item['branch']}: {item['error']}")
 
     if SAVE_PLOTS:
         prefix = "tests/testing_ellipse_fit_incsweep_geo2_polar15"
         _plot_incsweep_all_transfers_3d(sweep_store, P1s_m, prefix)
 
+        sweep_pts = [np.asarray(P1s_m, float)]
+        for item in sweep_store:
+            sweep_pts.append(np.asarray(item["P2"], float))
+            if item["A"] is not None:
+                sweep_pts.append(np.asarray(item["A"]["r"], float))
+            if item["B"] is not None:
+                sweep_pts.append(np.asarray(item["B"]["r"], float))
+        sweep_cube_limits = _cube_limits_from_points(
+            np.vstack([p.reshape(-1, 3) for p in sweep_pts]),
+            pad=0.08,
+        )
+
         for item in sweep_store:
             inc_deg = item["inc_deg"]
-            rdict = {"A": item["A"], "B": item["B"]}
+            rdict = {}
+            if item["A"] is not None:
+                rdict["A"] = item["A"]
+            if item["B"] is not None:
+                rdict["B"] = item["B"]
+            if not rdict:
+                continue
+
             P2s_m = item["P2"]
             pp = f"{prefix}_{inc_deg:+.0f}deg"
             _plot_arcs_3d(
@@ -586,10 +688,16 @@ def main():
                 P2s_m,
                 pp,
                 title=f"Transfer arcs to 2*RGEO sphere, inc={inc_deg:+.0f} deg",
+                cube_limits=sweep_cube_limits,
             )
 
-    print("\nDONE! (baseline checks passed; sweep transfers plotted)")
-    return {"baseline": results, "recon": recon_cache, "sweep": sweep_store}
+    print("\nDONE! (baseline checks passed; sweep processed)")
+    return {
+        "baseline": results,
+        "recon": recon_cache,
+        "sweep": sweep_store,
+        "sweep_failures": sweep_failures,
+    }
 
 
 if __name__ == "__main__":

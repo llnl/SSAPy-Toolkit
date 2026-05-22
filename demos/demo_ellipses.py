@@ -9,9 +9,9 @@ from ssapy.accel import AccelKepler
 from ssapy.propagator import SciPyPropagator
 
 from ssapy_toolkit.constants import EARTH_RADIUS  # [10]
-from ssapy_toolkit.Time_Functions.get_times import get_times  # [10]
-from ssapy_toolkit.Plots.orbit_plot_xy import orbit_plot_xy  # [10]
-from ssapy_toolkit.Plots.figpath import figpath  # [10]
+from ssapy_toolkit.time_functions.get_times import get_times  # [10]
+from ssapy_toolkit.plots.orbit_plot_xy import orbit_plot_xy  # [10]
+from ssapy_toolkit.plots.figpath import figpath  # [10]
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -44,7 +44,7 @@ def main(make_figures=None, fast=None):
     if make_figures:
         orbit_plot_xy(
             rs,
-            save_path=figpath("tests/testing_ellipses.jpg"),
+            save_path=figpath("figures/testing_ellipses.jpg"),
             pad=500,
             title="Point source Earth",
         )

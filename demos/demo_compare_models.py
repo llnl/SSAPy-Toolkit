@@ -19,8 +19,8 @@ def main(make_figures=None, fast=None):
     from astropy.time import Time
     import ssapy
 
-    from ssapy_toolkit.Orbital_Mechanics.orbital_accel_model_comparisons import compare_models  # [3]
-    from ssapy_toolkit.Plots.plotutils import yufig  # [3]
+    from ssapy_toolkit.orbital_mechanics.orbital_accel_model_comparisons import compare_models  # [3]
+    from ssapy_toolkit.plots.plotutils import yufig  # [3]
 
     t0 = Time("2026-01-21T00:00:00", scale="utc")
     r0_m = np.array([7000e3, 0.0, 0.0], dtype=float)

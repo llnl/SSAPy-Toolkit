@@ -1,8 +1,8 @@
 import numpy as np
 
-from ssapy_toolkit.Orbital_Mechanics.transfer_inclination_continuous import transfer_inclination_continuous
+from ssapy_toolkit.orbital_mechanics.transfer_inclination_continuous import transfer_inclination_continuous
 from ssapy_toolkit.constants import RGEO, VGEO
-from ssapy_toolkit.Plots.figpath import figpath  # [36]
+from ssapy_toolkit.plots.figpath import figpath  # [36]
 
 
 def run_case(name, r0, v0, a_thrust, i_target):
@@ -11,7 +11,8 @@ def run_case(name, r0, v0, a_thrust, i_target):
     print(f"\n=== {name} ===")
     print(f"Final position (m): {rf}")
     print(f"Final velocity (m/s): {vf}")
-    print(f"Time to reach inclination: {tf:.1f} s")
+    tf_scalar = float(np.asarray(tf).reshape(-1)[-1])
+    print(f"Time to reach inclination: {tf_scalar:.1f} s")
     return rf, vf, tf
 
 

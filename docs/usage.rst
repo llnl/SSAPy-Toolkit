@@ -17,7 +17,7 @@ Basic Example
 
    import ssapy_toolkit as st
 
-   from ssapy_toolkit.Orbital_Mechanics import keplerian
+   from ssapy_toolkit.orbital_mechanics import keplerian
 
    # Use keplerian routines and plotting helpers here
 

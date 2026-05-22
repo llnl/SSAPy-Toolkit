@@ -20,9 +20,9 @@ from ssapy.accel import AccelKepler
 from ssapy.body import get_body
 from ssapy.propagator import SciPyPropagator
 
-from ssapy_toolkit.Plots.divergence_plot import divergence_plot
-from ssapy_toolkit.Plots.divergence_gif import divergence_gif
-from ssapy_toolkit.Plots.plotutils import yufig
+from ssapy_toolkit.plots.divergence_plot import divergence_plot
+from ssapy_toolkit.plots.divergence_gif import divergence_gif
+from ssapy_toolkit.plots.plotutils import yufig
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 

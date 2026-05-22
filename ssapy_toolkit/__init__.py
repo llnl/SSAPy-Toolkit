@@ -1,7 +1,7 @@
 """SSAPy Toolkit.
 
 Utilities for orbital mechanics, plotting, coordinate transforms,
-integrators, IO helpers, and SSAPy-related workflows.
+integrators, io helpers, and SSAPy-related workflows.
 """
 
 __version__ = "1.0.2"
@@ -15,17 +15,17 @@ except Exception:
     pass
 
 # # Folders
-# from .Yastropy import *
-# from .Accelerations import *
-# from .Compute import *
-# from .Coordinates import *
-# from .Integrators import *
-# from .IO import *
-# from .Orbital_Mechanics import *
-# from .Plots import *
-# from .SSAPy_wrappers import *
-# from .Rockets import *
-# from .Time_Functions import *
+# from .yastropy import *
+# from .accelerations import *
+# from .compute import *
+# from .coordinates import *
+# from .integrators import *
+# from .io import *
+# from .orbital_mechanics import *
+# from .plots import *
+# from .ssapy_wrappers import *
+# from .rockets import *
+# from .time_functions import *
 
 # # Single Files
 # from .asteroids import *

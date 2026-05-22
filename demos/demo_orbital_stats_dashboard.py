@@ -6,9 +6,9 @@ import os
 import sys
 import numpy as np
 
-from ssapy_toolkit.Orbital_Mechanics.synthetic_orbit_population import synthetic_orbit_population
-from ssapy_toolkit.Orbital_Mechanics.orbital_comparison_stats import orbit_stats_dashboard
-from ssapy_toolkit.Plots.plotutils import yufig  # [23]
+from ssapy_toolkit.orbital_mechanics.synthetic_orbit_population import synthetic_orbit_population
+from ssapy_toolkit.orbital_mechanics.orbital_comparison_stats import orbit_stats_dashboard
+from ssapy_toolkit.plots.plotutils import yufig  # [23]
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 

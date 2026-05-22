@@ -15,17 +15,17 @@ Subpackages
    :toctree: generated/
    :recursive:
 
-   ssapy_toolkit.Accelerations
-   ssapy_toolkit.Compute
-   ssapy_toolkit.Coordinates
-   ssapy_toolkit.IO
-   ssapy_toolkit.Integrators
-   ssapy_toolkit.Orbital_Mechanics
-   ssapy_toolkit.Plots
-   ssapy_toolkit.Rockets
-   ssapy_toolkit.SSAPy_wrappers
-   ssapy_toolkit.Time_Functions
-   ssapy_toolkit.Yastropy
+   ssapy_toolkit.accelerations
+   ssapy_toolkit.compute
+   ssapy_toolkit.coordinates
+   ssapy_toolkit.io
+   ssapy_toolkit.integrators
+   ssapy_toolkit.orbital_mechanics
+   ssapy_toolkit.plots
+   ssapy_toolkit.rockets
+   ssapy_toolkit.ssapy_wrappers
+   ssapy_toolkit.time_functions
+   ssapy_toolkit.yastropy
 
 Top-level modules
 -----------------

@@ -4,7 +4,7 @@ import os
 import datetime as dt
 import numpy as np
 
-from ssapy_toolkit.IO.dict_to_from_hdf5 import save_dict_to_hdf5, load_dict_from_hdf5  # [34]
+from ssapy_toolkit.io.dict_to_from_hdf5 import save_dict_to_hdf5, load_dict_from_hdf5  # [34]
 
 try:
     from astropy.time import Time as AstroTime

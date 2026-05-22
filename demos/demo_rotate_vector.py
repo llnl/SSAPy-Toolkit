@@ -3,10 +3,10 @@
 Generate a dense set of rotated unit-vector plots and optionally stitch them
 into a GIF.
 
-Frames are saved under figpath("tests/rotate_vector_frames/")
-and the GIF is saved under figpath("tests/"), using only ssapy_toolkit:
-  - ut.figpath(...) to resolve paths
-  - ut.write_gif(...) to stitch the GIF
+The final GIF is saved under figpath("figures/").
+Intermediate frame images are created in a temporary directory and removed
+after the GIF is written, so they do not remain on disk or appear in the
+demo gallery.
 
 Pytest-safe behavior:
 - does not generate all frames by default under pytest
@@ -16,6 +16,9 @@ Pytest-safe behavior:
 
 import os
 import sys
+import tempfile
+from pathlib import Path
+
 import numpy as np
 
 try:
@@ -24,7 +27,9 @@ except Exception:
     def clear_output(wait=True):
         return None
 
-import ssapy_toolkit as ut
+from ssapy_toolkit.vectors import rotate_vector
+from ssapy_toolkit.plots.figpath import figpath
+from ssapy_toolkit.plots.write_gifs import write_gif
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -45,7 +50,7 @@ def main(make_figures=None, make_gif=None, fast=None):
     Returns
     -------
     dict
-        Frame paths and GIF path.
+        GIF path and run configuration metadata.
     """
     if make_figures is None:
         make_figures = not UNDER_PYTEST
@@ -54,7 +59,6 @@ def main(make_figures=None, make_gif=None, fast=None):
     if fast is None:
         fast = UNDER_PYTEST
 
-    # -------------------------- configuration --------------------------
     v_unit = np.array([1, 0, 0])
 
     if fast:
@@ -70,56 +74,63 @@ def main(make_figures=None, make_gif=None, fast=None):
     num_phi = int(360 / phi_step) + 1
     total = num_theta * num_phi
 
-    frames = []
-
-    # ----------------------------- generate frames -----------------------------
-    i = 0
-    for theta in range(0, 181, theta_step):
-        for phi in range(0, 361, phi_step):
-            clear_output(wait=True)
-
-            frame_base = ut.figpath(f"tests/rotate_vector_frames/{i:06d}")
-
-            if make_figures:
-                ut.rotate_vector(v_unit, theta, phi, save_path=frame_base)
-                if frame_base.lower().endswith(".jpg"):
-                    frame_path = frame_base
-                else:
-                    frame_path = frame_base + ".jpg"
-                frames.append(frame_path)
-            else:
-                # In pytest-safe mode, still touch the code path if possible
-                try:
-                    ut.rotate_vector(v_unit, theta, phi)
-                except TypeError:
-                    # Fallback if rotate_vector requires save_path in this install
-                    pass
-
-            i += 1
-            print(f"Rendered {i}/{total} frames")
-
-    # ----------------------------- write the GIF -----------------------------
     gif_path = None
-    if make_gif and frames:
-        gif_base_jpg_like = ut.figpath(
-            f"tests/rotate_vectors_{v_unit[0]:.0f}_{v_unit[1]:.0f}_{v_unit[2]:.0f}"
-        )
-        if gif_base_jpg_like.lower().endswith(".jpg"):
-            gif_path = gif_base_jpg_like[:-4] + ".gif"
-        else:
-            gif_path = gif_base_jpg_like + ".gif"
+    frame_count = 0
 
-        ut.write_gif(gif_name=gif_path, frames=frames, fps=fps)
+    if make_figures:
+        with tempfile.TemporaryDirectory(prefix="rotate_vector_frames_") as tmpdir:
+            tmpdir = Path(tmpdir)
+            frames = []
 
-        print("\nGIF written to:", gif_path)
-        print("First frame:", frames[0])
-        print("Last frame:", frames[-1])
-        print("Total frames:", len(frames))
+            i = 0
+            for theta in range(0, 181, theta_step):
+                for phi in range(0, 361, phi_step):
+                    clear_output(wait=True)
+
+                    frame_base = tmpdir / f"{i:06d}"
+                    rotate_vector(v_unit, theta, phi, save_path=str(frame_base))
+
+                    frame_path = str(frame_base)
+                    if not frame_path.lower().endswith(".jpg"):
+                        frame_path += ".jpg"
+
+                    frames.append(frame_path)
+                    i += 1
+                    print(f"Rendered {i}/{total} frames")
+
+            frame_count = len(frames)
+
+            if make_gif and frames:
+                gif_base_jpg_like = figpath(
+                    f"tests/rotate_vectors_{v_unit[0]:.0f}_{v_unit[1]:.0f}_{v_unit[2]:.0f}"
+                )
+                if gif_base_jpg_like.lower().endswith(".jpg"):
+                    gif_path = gif_base_jpg_like[:-4] + ".gif"
+                else:
+                    gif_path = gif_base_jpg_like + ".gif"
+
+                write_gif(gif_name=gif_path, frames=frames, fps=fps)
+
+                print("\nGIF written to:", gif_path)
+                print("Total frames:", len(frames))
+    else:
+        i = 0
+        for theta in range(0, 181, theta_step):
+            for phi in range(0, 361, phi_step):
+                clear_output(wait=True)
+                try:
+                    rotate_vector(v_unit, theta, phi)
+                except TypeError:
+                    pass
+                i += 1
+                print(f"Rendered {i}/{total} frames")
+        frame_count = i
 
     return {
-        "frames": frames,
+        "frames": [],
         "gif_path": gif_path,
         "total_frames": total,
+        "rendered_frames": frame_count,
         "theta_step": theta_step,
         "phi_step": phi_step,
     }

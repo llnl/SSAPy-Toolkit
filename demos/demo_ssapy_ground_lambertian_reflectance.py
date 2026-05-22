@@ -15,12 +15,12 @@ import matplotlib.pyplot as plt
 import astropy.units as u
 from astropy.time import Time
 
-from ssapy_toolkit.Plots.figpath import figpath
-from ssapy_toolkit.Plots.orbit_plot import orbit_plot
-from ssapy_toolkit.Plots.groundtrack_plot import groundtrack_plot
-from ssapy_toolkit.Plots.plotutils import save_plot
-from ssapy_toolkit.Compute.lambertian_magnitude import M_v_lambertian
-from ssapy_toolkit.Time_Functions.get_times import get_times
+from ssapy_toolkit.plots.figpath import figpath
+from ssapy_toolkit.plots.orbit_plot import orbit_plot
+from ssapy_toolkit.plots.groundtrack_plot import groundtrack_plot
+from ssapy_toolkit.plots.plotutils import save_plot
+from ssapy_toolkit.compute.lambertian_magnitude import M_v_lambertian
+from ssapy_toolkit.time_functions.get_times import get_times
 
 # Pull in ssapy pieces explicitly so the call signatures are unambiguous.
 from ssapy import constants
@@ -144,15 +144,15 @@ def main(make_figures=None, fast=None):
     # ------------------------------------------------------------
     if make_figures:
         fig, ax = orbit_plot(r, times, frame="gcrf")
-        out_gcrf = figpath("tests/ssapy_orbit_gcrf")
+        out_gcrf = figpath("figures/ssapy_orbit_gcrf")
         save_plot(fig, save_path=out_gcrf)
 
         fig, ax = orbit_plot(r, times, frame="lunar")
-        out_lunar = figpath("tests/ssapy_orbit_lunar")
+        out_lunar = figpath("figures/ssapy_orbit_lunar")
         save_plot(fig, save_path=out_lunar)
 
         # Ground track
-        groundtrack_plot(r, times, save_path=figpath("tests/ssapy_ground_track"))
+        groundtrack_plot(r, times, save_path=figpath("figures/ssapy_ground_track"))
 
     # ------------------------------------------------------------
     # Lambertian reflectance (apparent magnitude)
@@ -170,7 +170,7 @@ def main(make_figures=None, fast=None):
         plt.xticks(xticks, xtick_labels, rotation=0)
         plt.tight_layout()
 
-        out_mv = figpath("tests/lambertian_reflectance")
+        out_mv = figpath("figures/lambertian_reflectance")
         plt.savefig(out_mv, dpi=300, bbox_inches="tight")
         plt.close()
         print("Saved:", out_mv)

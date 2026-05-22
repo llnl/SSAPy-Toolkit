@@ -1,6 +1,6 @@
 # demo_all_orbital_quantities.py
 """
-Demo for ssapy_toolkit.Orbital_Mechanics.all_orbit_quanities.all_orbital_quantities
+Demo for ssapy_toolkit.orbital_mechanics.all_orbit_quanities.all_orbital_quantities
 
 Shows three usage modes:
   1) From Cartesian state (r, v)
@@ -15,7 +15,7 @@ import numpy as np
 from astropy.time import Time
 
 from ssapy_toolkit.constants import EARTH_MU
-from ssapy_toolkit.Orbital_Mechanics.all_orbit_quanities import all_orbital_quantities  # [1]
+from ssapy_toolkit.orbital_mechanics.all_orbit_quanities import all_orbital_quantities  # [1]
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 

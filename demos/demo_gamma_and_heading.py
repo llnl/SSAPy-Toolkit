@@ -11,11 +11,11 @@ from astropy.time import Time
 from astropy.coordinates import ITRS, GCRS, CartesianRepresentation
 import astropy.units as u
 
-from ssapy_toolkit.SSAPy_wrappers.ssapy_orbits import ssapy_orbit  # [13]
-from ssapy_toolkit.Orbital_Mechanics.gamma_and_heading import calc_gamma_and_heading  # [13]
-from ssapy_toolkit.Plots.figpath import figpath  # [13]
+from ssapy_toolkit.ssapy_wrappers.ssapy_orbits import ssapy_orbit  # [13]
+from ssapy_toolkit.orbital_mechanics.gamma_and_heading import calc_gamma_and_heading  # [13]
+from ssapy_toolkit.plots.figpath import figpath  # [13]
 from ssapy_toolkit.constants import EARTH_RADIUS  # [13]
-from ssapy_toolkit.Plots.groundtrack_dashboard_gamma_heading import groundtrack_dashboard_gamma_heading  # [13]
+from ssapy_toolkit.plots.groundtrack_dashboard_gamma_heading import groundtrack_dashboard_gamma_heading  # [13]
 
 try:
     from ssapy import groundTrack
@@ -243,7 +243,7 @@ def main(make_figures=None, fast=None):
 
     fig_panel = heading_gamma_panel(frame_label="ITRF")
     if make_figures:
-        out_itrf_panel = Path(figpath("tests/heading_gamma_panel_ITRF")).with_suffix(".png")
+        out_itrf_panel = Path(figpath("figures/heading_gamma_panel_ITRF")).with_suffix(".png")
         out_itrf_panel.parent.mkdir(parents=True, exist_ok=True)
         fig_panel.savefig(out_itrf_panel, dpi=240, bbox_inches="tight")
         print("Saved:", out_itrf_panel)

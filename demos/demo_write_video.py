@@ -5,8 +5,8 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 import numpy as np
 
-from ssapy_toolkit.Plots.figpath import figpath
-from ssapy_toolkit.Plots.write_videos import write_video  # inferred from repo structure [42]
+from ssapy_toolkit.plots.figpath import figpath
+from ssapy_toolkit.plots.write_videos import write_video  # inferred from repo structure [42]
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -81,7 +81,7 @@ def main(make_artifacts=None, fast=None):
     outputs = {}
     if make_artifacts:
         outputs["video"] = write_video(
-            video_name=str(figpath("tests/out/demo_video.mp4")),
+            video_name=str(figpath("figures/out/demo_video.mp4")),
             frames=paths_b,
             fps=10,
         )

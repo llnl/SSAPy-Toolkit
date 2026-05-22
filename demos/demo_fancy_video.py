@@ -8,8 +8,8 @@ from ssapy import rv, Orbit
 from ssapy.propagator import default_numerical
 from astropy.time import Time
 
-from ssapy_toolkit.Coordinates.lunar_position import get_lunar_rv
-from ssapy_toolkit.Plots.figpath import figpath
+from ssapy_toolkit.coordinates.lunar_position import get_lunar_rv
+from ssapy_toolkit.plots.figpath import figpath
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -65,16 +65,26 @@ def _propagate_with_fallback(orbit, t_frames):
     return r_sc_f, t_frames[:2]
 
 
+def _draw_sphere(ax, center, radius, color, alpha=1.0, resolution=30):
+    """Draw a filled sphere at `center` with given radius and color."""
+    u = np.linspace(0, 2 * np.pi, resolution)
+    v = np.linspace(0, np.pi, resolution)
+    x = center[0] + radius * np.outer(np.cos(u), np.sin(v))
+    y = center[1] + radius * np.outer(np.sin(u), np.sin(v))
+    z = center[2] + radius * np.outer(np.ones(np.size(u)), np.cos(v))
+    ax.plot_surface(x, y, z, color=color, alpha=alpha, linewidth=0, antialiased=True)
+
+
 def orbit_moon_video_demo(
     t0="2024-01-01",
-    duration_days=365.0,
-    fps=30,
-    seconds_per_frame=3 * 3600,
-    trail_len=200,
+    duration_days=60.0,
+    fps=12,
+    seconds_per_frame=6 * 3600,
+    trail_len=120,
     out_name="tests/demo_orbit_moon_video.mp4",
     save_gif=False,
-    make_figures=None,
-    fast=None,
+    make_figures=True,
+    fast=True,
 ):
     if make_figures is None:
         make_figures = not UNDER_PYTEST
@@ -140,23 +150,44 @@ def orbit_moon_video_demo(
     if not make_figures:
         return {"r_sc_f": r_sc_f, "r_moon": r_moon, "t_frames_ok": t_frames_ok}
 
+    # --- Colors ---
+    COLOR_MOON      = "#A0A0A8"   # moon-grey dot
+    COLOR_MOON_TRAIL = "#7A7A82"  # slightly darker grey trail
+    COLOR_SC        = "#FF8C00"   # orange satellite dot
+    COLOR_SC_TRAIL  = "#FF6A00"   # deeper orange trail
+    COLOR_EARTH     = "#1E6FD9"   # blue Earth sphere
+
+    # Earth radius in metres (visual scale — scaled up for visibility)
+    EARTH_RADIUS_VIS = 0.04 * lim
+
     fig = plt.figure(figsize=(10, 10), dpi=160)
     fig.patch.set_facecolor("black")
     fig.suptitle("Initialize L1 Lunar Orbit", color="white")
 
     ax = fig.add_subplot(111, projection="3d")
     ax.set_facecolor("black")
+
+    # Kill all panes, grid lines, and tick labels
+    ax.xaxis.pane.fill = False
+    ax.yaxis.pane.fill = False
+    ax.zaxis.pane.fill = False
+    ax.xaxis.pane.set_edgecolor("black")
+    ax.yaxis.pane.set_edgecolor("black")
+    ax.zaxis.pane.set_edgecolor("black")
     ax.grid(False)
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_zticks([])
 
-    moon_pt, = ax.plot([], [], [], marker="o", markersize=6, linewidth=0)
-    sc_pt, = ax.plot([], [], [], marker="o", markersize=4, linewidth=0)
-    moon_trail, = ax.plot([], [], [], linewidth=1.2, alpha=0.35)
-    sc_trail, = ax.plot([], [], [], linewidth=1.6, alpha=0.55)
-    title = ax.text2D(0.03, 0.92, "", transform=ax.transAxes)
-    title.set_color("white")
+    # Earth sphere at origin
+    _draw_sphere(ax, center=(0.0, 0.0, 0.0), radius=EARTH_RADIUS_VIS, color=COLOR_EARTH, alpha=1.0)
+
+    # Animated artists
+    moon_pt,   = ax.plot([], [], [], marker="o", markersize=7,  color=COLOR_MOON,       linewidth=0)
+    sc_pt,     = ax.plot([], [], [], marker="o", markersize=4,  color=COLOR_SC,         linewidth=0)
+    moon_trail,= ax.plot([], [], [], color=COLOR_MOON_TRAIL,    linewidth=1.2, alpha=0.45)
+    sc_trail,  = ax.plot([], [], [], color=COLOR_SC_TRAIL,      linewidth=1.6, alpha=0.65)
+    title      = ax.text2D(0.03, 0.92, "", transform=ax.transAxes, color="white")
 
     _set_axes_equal_3d(ax, lim)
 
@@ -218,12 +249,12 @@ def orbit_moon_video_demo(
 if __name__ == "__main__":
     orbit_moon_video_demo(
         t0="2024-01-01",
-        duration_days=365.0,
-        fps=30,
+        duration_days=60.0,
+        fps=12,
         seconds_per_frame=3 * 3600,
         trail_len=220,
         out_name="tests/demo_orbit_moon_video.mp4",
-        save_gif=True,
+        save_gif=False,
         make_figures=True,
         fast=False,
     )

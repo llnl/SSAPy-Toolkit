@@ -5,7 +5,7 @@ import numpy as np
 from ssapy import Orbit
 from astropy.time import Time
 
-from ssapy_toolkit.Orbital_Mechanics.transfer_rendezvous import transfer_rendezvous
+from ssapy_toolkit.orbital_mechanics.transfer_rendezvous import transfer_rendezvous
 from ssapy_toolkit.constants import RGEO  # [38]
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None

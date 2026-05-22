@@ -15,9 +15,9 @@ import numpy as np
 from ssapy.propagator import KeplerianPropagator
 
 from ssapy_toolkit.constants import RGEO  # [7]
-from ssapy_toolkit.Orbital_Mechanics.ellipse_fit import ellipse_fit  # [7]
-from ssapy_toolkit.SSAPy_wrappers.ssapy_orbits import ssapy_orbit  # [7]
-from ssapy_toolkit.Plots.plotutils import yufig  # [7]
+from ssapy_toolkit.orbital_mechanics.ellipse_fit import ellipse_fit  # [7]
+from ssapy_toolkit.ssapy_wrappers.ssapy_orbits import ssapy_orbit  # [7]
+from ssapy_toolkit.plots.plotutils import yufig  # [7]
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
