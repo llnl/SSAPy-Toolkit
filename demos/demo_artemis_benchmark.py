@@ -2,6 +2,7 @@
 import os
 import sys
 from pathlib import Path
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -10,42 +11,42 @@ from astropy.time import Time
 from ssapy import Orbit, rv, SciPyPropagator, AccelKepler
 
 from ssapy_toolkit.plots.figpath import figpath
+from ssapy_toolkit.io.yudata import yudata
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
 
 def _find_csv():
-    candidates = [
-        Path("artemis2_orion_state_vectors.csv"),
-        Path("data/artemis2_orion_state_vectors.csv"),
-        Path("demos/artemis2_orion_state_vectors.csv"),
-    ]
-    for p in candidates:
-        if p.exists():
-            return p
-    raise FileNotFoundError("Could not find artemis2_orion_state_vectors.csv")
+    p = Path(yudata("artemis2_orion_state_vectors.csv"))
+    if p.exists():
+        return p
+    raise FileNotFoundError(f"Could not find artemis2_orion_state_vectors.csv at {p}")
 
 
 def _load_orion_csv(csv_path: Path):
-    # file metadata indicates Time: TDB and units km / km/s [40]
     df = pd.read_csv(csv_path, comment="#")
     df.columns = [c.strip() for c in df.columns]
 
-    time_col = df.columns[0]
-    required = ["X_km", "Y_km", "Z_km", "VX_km_s", "VY_km_s", "VZ_km_s"]
+    required = [
+        "JDTDB",
+        "Calendar_Date_TDB",
+        "X_km", "Y_km", "Z_km",
+        "VX_km_s", "VY_km_s", "VZ_km_s",
+    ]
     missing = [c for c in required if c not in df.columns]
     if missing:
         raise ValueError(f"Missing required columns: {missing}")
 
-    t = Time(df[time_col].astype(str).tolist(), scale="tdb")
+    cal = df["Calendar_Date_TDB"].astype(str).str.replace("A.D. ", "", regex=False)
+    cal_dt = [datetime.strptime(x, "%Y-%b-%d %H:%M:%S.%f") for x in cal.tolist()]
+    t = Time(cal_dt, scale="tdb")
+
     r_m = df[["X_km", "Y_km", "Z_km"]].to_numpy(dtype=float) * 1e3
     v_m_s = df[["VX_km_s", "VY_km_s", "VZ_km_s"]].to_numpy(dtype=float) * 1e3
     return t, r_m, v_m_s
 
 
 def _make_high_fidelity_propagator():
-    # Placeholder: extend this with Earth/Moon/Sun-specific SSAPy accel model if desired.
-    # Using SciPyPropagator + AccelKepler as the conservative fallback.
     return SciPyPropagator(AccelKepler())
 
 
@@ -69,10 +70,9 @@ def main(make_figures=None, fast=None, verbose=None, sync_threshold_km=50.0):
     t_ref, r_ref, v_ref = _load_orion_csv(csv_path)
 
     if fast:
-        # downsample for quicker demo mode
-        t_ref = t_ref[::4]
-        r_ref = r_ref[::4]
-        v_ref = v_ref[::4]
+        t_ref = t_ref[::2]
+        r_ref = r_ref[::2]
+        v_ref = v_ref[::2]
 
     propagator = _make_high_fidelity_propagator()
     sync_threshold_m = float(sync_threshold_km) * 1e3
@@ -84,11 +84,8 @@ def main(make_figures=None, fast=None, verbose=None, sync_threshold_km=50.0):
     v_model[0] = v_ref[0]
 
     sync_indices = [0]
-    segment_start = 0
 
-    # propagate piecewise and auto-sync when mismatch exceeds threshold
-    i = 0
-    while i < n - 1:
+    for i in range(n - 1):
         r_seg, v_seg = _propagate_segment(
             r_ref[i],
             v_ref[i],
@@ -97,18 +94,15 @@ def main(make_figures=None, fast=None, verbose=None, sync_threshold_km=50.0):
             propagator,
         )
 
-        r_model[i+1] = r_seg[-1]
-        v_model[i+1] = v_seg[-1]
+        r_model[i + 1] = r_seg[-1]
+        v_model[i + 1] = v_seg[-1]
 
-        dr = np.linalg.norm(r_model[i+1] - r_ref[i+1])
+        dr = np.linalg.norm(r_model[i + 1] - r_ref[i + 1])
 
         if dr > sync_threshold_m:
-            # treat as maneuver/unmodeled event: resync to truth at i+1
-            r_model[i+1] = r_ref[i+1]
-            v_model[i+1] = v_ref[i+1]
+            r_model[i + 1] = r_ref[i + 1]
+            v_model[i + 1] = v_ref[i + 1]
             sync_indices.append(i + 1)
-
-        i += 1
 
     dr_vec = r_model - r_ref
     dv_vec = v_model - v_ref
@@ -124,7 +118,7 @@ def main(make_figures=None, fast=None, verbose=None, sync_threshold_km=50.0):
         "v_model": v_model,
         "dr_norm_m": dr_norm_m,
         "dv_norm_m_s": dv_norm_m_s,
-        "sync_indices": np.array(sync_indices, dtype=int),
+        "sync_indices": np.asarray(sync_indices, dtype=int),
         "sync_times": t_ref[sync_indices],
         "rms_position_error_m": float(np.sqrt(np.mean(dr_norm_m**2))),
         "max_position_error_m": float(np.max(dr_norm_m)),
@@ -138,15 +132,13 @@ def main(make_figures=None, fast=None, verbose=None, sync_threshold_km=50.0):
         print("Artemis / Orion benchmark")
         print(f"CSV: {csv_path}")
         print(f"Samples: {len(t_ref)}")
-        print(f"Time scale assumed: TDB")
+        print("Time scale assumed: TDB")
         print(f"Sync threshold [km]: {sync_threshold_km:.3f}")
         print(f"Number of sync events: {result['n_syncs']}")
         print(f"RMS position error [m]: {result['rms_position_error_m']:.3f}")
         print(f"Max position error [m]: {result['max_position_error_m']:.3f}")
         print(f"RMS velocity error [m/s]: {result['rms_velocity_error_m_s']:.6f}")
         print(f"Max velocity error [m/s]: {result['max_velocity_error_m_s']:.6f}")
-        if result["n_syncs"] > 0:
-            print("Sync indices:", sync_indices)
 
     if make_figures:
         hours = (t_ref.gps - t_ref[0].gps) / 3600.0
