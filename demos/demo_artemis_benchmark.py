@@ -12,6 +12,7 @@ from ssapy import Orbit, rv, SciPyPropagator, AccelKepler
 
 from ssapy_toolkit.plots.figpath import figpath
 from ssapy_toolkit.io.yudata import yudata
+from ssapy_toolkit.plots.cislunar_plot_3d import cislunar_plot_3d
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -177,8 +178,32 @@ def main(make_figures=None, fast=None, verbose=None, sync_threshold_km=50.0):
         fig.savefig(out2, dpi=200, bbox_inches="tight")
         plt.close(fig)
 
+        out3 = Path(figpath("demo_gallery/figures/artemis_benchmark_cislunar_context"))
+        if out3.suffix == "":
+            out3 = out3.with_suffix(".png")
+        out3.parent.mkdir(parents=True, exist_ok=True)
+
+        step = 4 if not fast else 2
+        r_truth_plot = r_ref[::step]
+        r_model_plot = r_model[::step]
+        t_plot = t_ref.gps[::step]
+
+        fig3d, ax3d = cislunar_plot_3d(
+            [r_truth_plot, r_model_plot],
+            t=[t_plot, t_plot],
+            figsize=(8, 8),
+            fontsize=12,
+            save_path=str(out3),
+            show=False,
+            legend=True,
+            title="Artemis benchmark: truth vs model",
+            c="white",
+        )
+        plt.close(fig3d)
+
         result["position_error_plot"] = str(out1)
         result["velocity_error_plot"] = str(out2)
+        result["cislunar_context_plot"] = str(out3)
 
     return result
 
