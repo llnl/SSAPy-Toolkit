@@ -63,7 +63,7 @@ def main(make_figures=None, fast=None):
 
     if make_figures:
         # Plot Part 1
-        out1 = Path(figpath("figures/burn_to_deltav_orbit_plot"))
+        out1 = Path(figpath("demo_gallery/figures/burn_to_deltav_orbit_plot"))
         if out1.suffix == "":
             out1 = out1.with_suffix(".png")
         out1.parent.mkdir(parents=True, exist_ok=True)
@@ -82,7 +82,7 @@ def main(make_figures=None, fast=None):
         plt.ylabel("y [km]")
         plt.legend()
         plt.title("burn_to_deltav: XY trajectories")
-        out2 = Path(figpath("figures/burn_to_deltav_xy"))
+        out2 = Path(figpath("demo_gallery/figures/burn_to_deltav_xy"))
         if out2.suffix == "":
             out2 = out2.with_suffix(".png")
         out2.parent.mkdir(parents=True, exist_ok=True)
@@ -96,7 +96,7 @@ def main(make_figures=None, fast=None):
         plt.xlabel("Seconds since burn start [s]")
         plt.ylabel("Distance between trajectories [km]")
         plt.title("burn_to_deltav: separation during burn window")
-        out3 = Path(figpath("figures/burn_to_deltav_separation"))
+        out3 = Path(figpath("demo_gallery/figures/burn_to_deltav_separation"))
         if out3.suffix == "":
             out3 = out3.with_suffix(".png")
         out3.parent.mkdir(parents=True, exist_ok=True)
@@ -105,7 +105,7 @@ def main(make_figures=None, fast=None):
         plt.close()
 
         # Plot Part 2
-        out4 = Path(figpath("figures/deltav_to_burn_orbit_plot"))
+        out4 = Path(figpath("demo_gallery/figures/deltav_to_burn_orbit_plot"))
         if out4.suffix == "":
             out4 = out4.with_suffix(".png")
         out4.parent.mkdir(parents=True, exist_ok=True)
@@ -124,7 +124,7 @@ def main(make_figures=None, fast=None):
         plt.ylabel("y [km]")
         plt.legend()
         plt.title("deltav_to_burn: XY trajectories")
-        out5 = Path(figpath("figures/deltav_to_burn_xy"))
+        out5 = Path(figpath("demo_gallery/figures/deltav_to_burn_xy"))
         if out5.suffix == "":
             out5 = out5.with_suffix(".png")
         out5.parent.mkdir(parents=True, exist_ok=True)
@@ -138,7 +138,7 @@ def main(make_figures=None, fast=None):
         plt.xlabel("Seconds since burn start [s]")
         plt.ylabel("Distance between trajectories [km]")
         plt.title("deltav_to_burn: separation during burn window")
-        out6 = Path(figpath("figures/deltav_to_burn_separation"))
+        out6 = Path(figpath("demo_gallery/figures/deltav_to_burn_separation"))
         if out6.suffix == "":
             out6 = out6.with_suffix(".png")
         out6.parent.mkdir(parents=True, exist_ok=True)

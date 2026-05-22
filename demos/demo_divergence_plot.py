@@ -99,15 +99,15 @@ def main(make_figures=None, fast=None):
     )
 
     if make_figures:
-        yufig(fig1, "tests/divergence_plot_final_median")
-        yufig(fig2, "tests/divergence_plot_final_explicit")
+        yufig(fig1, "demo_gallery/figures/divergence_plot_final_median")
+        yufig(fig2, "demo_gallery/figures/divergence_plot_final_explicit")
 
     gif_results = {}
     if make_figures:
         gif_results["explicit"] = divergence_gif(
             r_histories=r_histories,
             times_gps=times_gps,
-            output_path="~/yu_figures/tests/divergence_test_explicit.gif",
+            output_path="~/yu_figures/demo_gallery/figures/divergence_test_explicit.gif",
             r_nominal_hist=r_nominal_hist,
             v_nominal_hist=v_nominal_hist,
             duration=0.2,
@@ -117,7 +117,7 @@ def main(make_figures=None, fast=None):
         gif_results["median"] = divergence_gif(
             r_histories=r_histories,
             times_gps=times_gps,
-            output_path="~/yu_figures/tests/divergence_test_median.gif",
+            output_path="~/yu_figures/demo_gallery/figures/divergence_test_median.gif",
             fps=5,
         )
     else:

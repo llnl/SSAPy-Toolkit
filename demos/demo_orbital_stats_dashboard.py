@@ -68,7 +68,7 @@ def main(make_figures=None, fast=None):
 
     if make_figures:
         fig_pop = out_pop["figure"]
-        yufig(fig_pop, "tests/orbital_stats_dashboard_population.jpg")
+        yufig(fig_pop, "demo_gallery/figures/orbital_stats_dashboard_population.jpg")
         if fig_pop is not None:
             fig_pop.show()
 

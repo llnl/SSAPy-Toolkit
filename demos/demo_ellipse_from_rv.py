@@ -574,7 +574,7 @@ def main():
         recon_cache[name] = recon
 
     if SAVE_PLOTS:
-        prefix = "tests/testing_ellipse_fit"
+        prefix = "demo_gallery/figures/testing_ellipse_fit"
         _plot_arcs_3d(results, P1_m, P2_m, prefix, title="ellipse_fit arcs (baseline)")
         try:
             orbit_plot(
@@ -655,7 +655,7 @@ def main():
             print(f"  inc={item['inc_deg']:+.0f} branch={item['branch']}: {item['error']}")
 
     if SAVE_PLOTS:
-        prefix = "tests/testing_ellipse_fit_incsweep_geo2_polar15"
+        prefix = "demo_gallery/figures/testing_ellipse_fit_incsweep_geo2_polar15"
         _plot_incsweep_all_transfers_3d(sweep_store, P1s_m, prefix)
 
         sweep_pts = [np.asarray(P1s_m, float)]

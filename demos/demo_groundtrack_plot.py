@@ -38,7 +38,7 @@ def make_circular_orbit_track(alt_km=500.0, inc_deg=51.6, npts=1200, n_orbits=3.
 
 
 def save_demo(fig, name):
-    yufig(fig, f"tests/{name}")  # [18]
+    yufig(fig, f"demo_gallery/figures/{name}")  # [18]
 
 
 def main(make_figures=None, fast=None):

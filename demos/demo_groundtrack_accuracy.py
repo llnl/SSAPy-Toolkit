@@ -73,7 +73,7 @@ def main(make_figures=None, make_video=None, fast=None):
         plt.xlabel("Time since departure [hours]")
         plt.ylabel("Position difference |Δr| [km]")
         plt.title("ellipse_fit transfer vs ssapy propagation: |Δr|(t)")
-        out_path = figpath("figures/test_transfer_vs_ssapy_diff.jpg")
+        out_path = figpath("demo_gallery/figures/test_transfer_vs_ssapy_diff.jpg")
         plt.savefig(out_path, dpi=150, bbox_inches="tight")
         print(f"Saved: {out_path}")
         plt.close()
@@ -81,14 +81,14 @@ def main(make_figures=None, make_video=None, fast=None):
         groundtrack_plot(
             r=[r_ssa, r_tf],
             t=t_abs,
-            save_path=figpath("figures/test_transfer_vs_ssapy_diff_groundtrack.jpg"),
+            save_path=figpath("demo_gallery/figures/test_transfer_vs_ssapy_diff_groundtrack.jpg"),
         )
 
         try:
             groundtrack_dashboard(
                 r=[r_ssa, r_tf],
                 t=t_abs,
-                save_path=figpath("figures/test_transfer_vs_ssapy_diff_dashboard.jpg"),
+                save_path=figpath("demo_gallery/figures/test_transfer_vs_ssapy_diff_dashboard.jpg"),
                 show=False,
             )
         except Exception as err:
@@ -98,7 +98,7 @@ def main(make_figures=None, make_video=None, fast=None):
         groundtrack_video(
             r=[r_ssa, r_tf],
             t=t_abs,
-            save_path=figpath("figures/test_transfer_vs_ssapy_diff_groundtrack.mp4"),
+            save_path=figpath("demo_gallery/figures/test_transfer_vs_ssapy_diff_groundtrack.mp4"),
         )
 
     return {

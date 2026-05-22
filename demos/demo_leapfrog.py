@@ -26,14 +26,14 @@ def main(make_figures=None, fast=None):
     if make_figures:
         orbit_plot_xy(
             r1,
-            save_path=figpath("figures/testing_leapfrog_RGEO.jpg"),
+            save_path=figpath("demo_gallery/figures/testing_leapfrog_RGEO.jpg"),
             pad=0.1,
             title="GEO",
             show=False,
         )
         orbit_plot_xy(
             r2,
-            save_path=figpath("figures/testing_leapfrog_RGEO_velocity_burn.jpg"),
+            save_path=figpath("demo_gallery/figures/testing_leapfrog_RGEO_velocity_burn.jpg"),
             pad=0.1,
             title="GEO",
             show=False,

@@ -41,7 +41,7 @@ def make_groundtrack_image(make_figures=True):
     plt.text(-0.02, -0.02, txt, fontsize=8, bbox=dict(boxstyle="round", facecolor="white", alpha=0.6, linewidth=0.5))
 
     if make_figures:
-        outpath = figpath("figures/gcrf_to_lonlat_groundtrack_vs_benchmark.png")
+        outpath = figpath("demo_gallery/figures/gcrf_to_lonlat_groundtrack_vs_benchmark.png")
         plt.tight_layout()
         plt.savefig(outpath, dpi=200)
         print(f"ok: ground track image (with calibrated benchmark) saved -> {outpath}")

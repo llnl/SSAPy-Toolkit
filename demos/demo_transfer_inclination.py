@@ -23,7 +23,7 @@ def main():
 
     try:
         return run_case(
-            name="tests/transters_demo_inclination_negative_target",
+            name="demo_gallery/figures/transters_demo_inclination_negative_target",
             r0=r0,
             v0=v0,
             a_thrust=a_thrust,

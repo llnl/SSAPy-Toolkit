@@ -58,7 +58,7 @@ def main(make_figures=None, fast=None):
         raise RuntimeError("Expected dashboard figures not found in output.")
 
     if make_figures:
-        out_dir = "/tests"
+        out_dir = "/demo_gallery/figures"
         yufig(fig_time, out_dir + "/accel_ladder_time_domain.jpg", dpi=200)
         yufig(fig_rung, out_dir + "/accel_ladder_rung_summary.jpg", dpi=200)
         print("Saved (yufig root-normalized):")

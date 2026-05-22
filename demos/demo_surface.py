@@ -69,7 +69,7 @@ def main(make_figures=None):
     print("  Subsolar checks:", "OK" if ok3 else "FAIL")
 
     if make_figures:
-        print("\nFigures saved under prefixes like:", figpath("figures/test_subsolar_..."))
+        print("\nFigures saved under prefixes like:", figpath("demo_gallery/figures/test_subsolar_..."))
 
     return {"station_roundtrips": ok1, "astropy_crosscheck": ok2, "subsolar": ok3}
 

@@ -27,7 +27,7 @@ def create_varying_frames(n, base_size=(320, 240), subdir="demo_frames_a"):
         w = int(bw * (0.75 + s))
         h = int(bh * (0.75 + 0.5 * s))
         img = make_frame((max(40, w), max(40, h)), i, n)
-        p = Path(figpath("figures/%s/frame_%d.png" % (subdir, i)))
+        p = Path(figpath("demo_gallery/figures/%s/frame_%d.png" % (subdir, i)))
         p.parent.mkdir(parents=True, exist_ok=True)
         img.save(p)
         paths.append(str(p))
@@ -38,7 +38,7 @@ def create_constant_frames(n, size=(320, 240), subdir="demo_frames_b"):
     paths = []
     for i in range(n):
         img = make_frame(size, i, n)
-        p = Path(figpath("figures/%s/frame_%02d.png" % (subdir, i)))
+        p = Path(figpath("demo_gallery/figures/%s/frame_%02d.png" % (subdir, i)))
         p.parent.mkdir(parents=True, exist_ok=True)
         img.save(p)
         paths.append(str(p))
@@ -82,7 +82,7 @@ def main(make_artifacts=None, fast=None):
     if make_artifacts:
         frames_a_pattern = str(Path(paths_a[0]).parent / "frame_*.png")
         outputs["gif_glob"] = write_gif(
-            gif_name=str(figpath("figures/out/gif_glob_unpadded.gif")),
+            gif_name=str(figpath("demo_gallery/figures/out/gif_glob_unpadded.gif")),
             frames=frames_a_pattern,
             fps=10,
             sort_frames=True,

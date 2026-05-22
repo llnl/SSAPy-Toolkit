@@ -51,7 +51,7 @@ def main(make_figures=None, verbose=None):
         plt.ylabel("y [m]")
         plt.title("rv_to_ellipse: XY projection")
 
-        outpath = Path(figpath("figures/rv_to_ellipse_xy"))
+        outpath = Path(figpath("demo_gallery/figures/rv_to_ellipse_xy"))
         if outpath.suffix == "":
             outpath = outpath.with_suffix(".png")
         outpath.parent.mkdir(parents=True, exist_ok=True)

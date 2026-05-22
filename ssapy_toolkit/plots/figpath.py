@@ -55,8 +55,8 @@ def figpath(filename):
     Examples
     --------
     figpath("plot")                          -> ~/yu_figures/plot
-    figpath("figures/burn_to_dv")              -> ~/yu_figures/tests/burn_to_dv
-    figpath("figures/burn_to_dv.png")          -> ~/yu_figures/tests/burn_to_dv.png
+    figpath("demo_gallery/figures/burn_to_dv")              -> ~/yu_figures/demo_gallery/figures/burn_to_dv
+    figpath("demo_gallery/figures/burn_to_dv.png")          -> ~/yu_figures/demo_gallery/figures/burn_to_dv.png
     figpath("/abs/path/ignored/name.svg")    -> ~/yu_figures/name.svg
     figpath("weird/name.foo")                -> ~/yu_figures/weird/name.foo
     """

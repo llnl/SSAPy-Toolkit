@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 import os
 import sys
+import shutil
+import tempfile
 from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation, FFMpegWriter
+import imageio.v2 as imageio
 from astropy.time import Time
 from ssapy import Orbit, rv
 
-from ssapy_toolkit.constants import RGEO
+from ssapy_toolkit.constants import EARTH_RADIUS
 from ssapy_toolkit.plots.figpath import figpath
 from ssapy_toolkit.plots.globe_plot import globe_plot
 
@@ -26,30 +28,45 @@ def main(make_figures=None, make_video=None, fast=None):
 
     t0 = Time("2025-01-01T00:00:00", scale="utc")
 
+    # ISS-like LEO orbit
+    a_iss = EARTH_RADIUS + 420e3
     orbit1 = Orbit.fromKeplerianElements(
-        a=RGEO, e=0.15, i=np.radians(20.0),
-        pa=np.radians(20.0), raan=np.radians(15.0), trueAnomaly=0.0, t=t0
+        a=a_iss,
+        e=0.001,
+        i=np.radians(51.6),
+        pa=np.radians(40.0),
+        raan=np.radians(20.0),
+        trueAnomaly=0.0,
+        t=t0,
     )
+
+    # GPS-like MEO orbit
+    a_gps = EARTH_RADIUS + 20200e3
     orbit2 = Orbit.fromKeplerianElements(
-        a=1.5 * RGEO, e=0.35, i=np.radians(63.4),
-        pa=np.radians(120.0), raan=np.radians(210.0), trueAnomaly=np.radians(45.0), t=t0
+        a=a_gps,
+        e=0.01,
+        i=np.radians(55.0),
+        pa=np.radians(120.0),
+        raan=np.radians(240.0),
+        trueAnomaly=np.radians(45.0),
+        t=t0,
     )
 
     if fast:
-        duration_hr = 6.0
+        duration_hr = 4.0
         dt_s = 300.0
-        video_frames = 36
-        fps = 10
+        video_frames = 24
+        fps = 8
     else:
-        duration_hr = 24.0
-        dt_s = 120.0
-        video_frames = 120
-        fps = 20
+        duration_hr = 12.0
+        dt_s = 180.0
+        video_frames = 60
+        fps = 16
 
     times_gps = t0.gps + np.arange(0.0, duration_hr * 3600.0 + dt_s, dt_s)
 
-    r1, v1 = rv(orbit1, Time(times_gps, format="gps"))
-    r2, v2 = rv(orbit2, Time(times_gps, format="gps"))
+    r1, _ = rv(orbit1, Time(times_gps, format="gps"))
+    r2, _ = rv(orbit2, Time(times_gps, format="gps"))
     r1 = np.asarray(r1, dtype=float).reshape((-1, 3))
     r2 = np.asarray(r2, dtype=float).reshape((-1, 3))
 
@@ -60,7 +77,7 @@ def main(make_figures=None, make_video=None, fast=None):
     }
 
     if make_figures:
-        out_static = Path(figpath("figures/demo_globe_plot_two_orbits"))
+        out_static = Path(figpath("demo_gallery/figures/demo_globe_plot_two_orbits"))
         if out_static.suffix == "":
             out_static = out_static.with_suffix(".png")
         out_static.parent.mkdir(parents=True, exist_ok=True)
@@ -68,9 +85,9 @@ def main(make_figures=None, make_video=None, fast=None):
         fig, ax = globe_plot(
             [r1, r2],
             t=[times_gps, times_gps],
-            title="Globe Plot Demo: Two Orbits",
+            title="Globe Plot Demo: ISS-like LEO and GPS-like MEO",
             c="black",
-            labels=["Orbit 1", "Orbit 2"],
+            labels=["ISS-like LEO", "GPS-like MEO"],
             orbit_colors=["cyan", "magenta"],
             globe_time=Time(times_gps[0], format="gps"),
             save_path=str(out_static),
@@ -80,59 +97,44 @@ def main(make_figures=None, make_video=None, fast=None):
         outputs["static_plot"] = str(out_static)
 
     if make_video:
-        out_mp4 = Path(figpath("figures/demo_globe_plot_animation"))
+        out_mp4 = Path(figpath("demo_gallery/figures/demo_globe_plot_animation"))
         if out_mp4.suffix == "":
             out_mp4 = out_mp4.with_suffix(".mp4")
         out_mp4.parent.mkdir(parents=True, exist_ok=True)
 
         frame_idxs = np.linspace(0, len(times_gps) - 1, video_frames).astype(int)
 
-        fig = plt.figure(dpi=100, figsize=(8, 8))
-        ax = fig.add_subplot(111, projection="3d")
+        temp_dir = Path(tempfile.mkdtemp(prefix="demo_globe_plot_frames_"))
+        frame_files = []
 
-        def update(k):
-            ax.cla()
-            idx = frame_idxs[k]
-            globe_plot(
-                [r1[:idx + 1], r2[:idx + 1]],
-                t=[times_gps[:idx + 1], times_gps[:idx + 1]],
-                title=f"Globe Plot Demo: t + {(times_gps[idx] - times_gps[0]) / 3600.0:.1f} hr",
-                c="black",
-                labels=["Orbit 1", "Orbit 2"],
-                orbit_colors=["cyan", "magenta"],
-                globe_time=Time(times_gps[idx], format="gps"),
-            )
-            fig.axes[:] = [ax]
-            return ax,
+        try:
+            for k, idx in enumerate(frame_idxs):
+                fig, ax = globe_plot(
+                    [r1[:idx + 1], r2[:idx + 1]],
+                    t=[times_gps[:idx + 1], times_gps[:idx + 1]],
+                    title=f"Globe Plot Demo: t + {(times_gps[idx] - times_gps[0]) / 3600.0:.1f} hr",
+                    c="black",
+                    labels=["ISS-like LEO", "GPS-like MEO"],
+                    orbit_colors=["cyan", "magenta"],
+                    globe_time=Time(times_gps[idx], format="gps"),
+                )
 
-        plt.close(fig)
+                frame_path = temp_dir / f"frame_{k:04d}.png"
+                fig.savefig(frame_path, dpi=100, bbox_inches="tight")
+                plt.close(fig)
 
-        fig = plt.figure(dpi=100, figsize=(8, 8))
-        ani_ax = fig.add_subplot(111, projection="3d")
+                frame_files.append(frame_path)
+                print(f"Rendered frame {k+1}/{len(frame_idxs)}")
 
-        def update2(k):
-            ani_ax.cla()
-            idx = frame_idxs[k]
-            globe_plot(
-                [r1[:idx + 1], r2[:idx + 1]],
-                t=[times_gps[:idx + 1], times_gps[:idx + 1]],
-                title=f"Globe Plot Demo: t + {(times_gps[idx] - times_gps[0]) / 3600.0:.1f} hr",
-                c="black",
-                labels=["Orbit 1", "Orbit 2"],
-                orbit_colors=["cyan", "magenta"],
-                globe_time=Time(times_gps[idx], format="gps"),
-            )
-            # keep only latest axes visible
-            for extra_ax in fig.axes[:-1]:
-                extra_ax.remove()
-            return ani_ax,
+            with imageio.get_writer(out_mp4, fps=fps) as writer:
+                for frame_path in frame_files:
+                    writer.append_data(imageio.imread(frame_path))
 
-        ani = FuncAnimation(fig, update2, frames=len(frame_idxs), interval=1000 / fps, blit=False)
-        writer = FFMpegWriter(fps=fps, bitrate=4000)
-        ani.save(str(out_mp4), writer=writer)
-        plt.close(fig)
-        print("Saved:", out_mp4)
-        outputs["video"] = str(out_mp4)
+            print("Saved:", out_mp4)
+            outputs["video"] = str(out_mp4)
+
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
     return outputs
 

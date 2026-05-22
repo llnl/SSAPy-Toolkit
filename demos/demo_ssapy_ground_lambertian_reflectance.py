@@ -144,15 +144,15 @@ def main(make_figures=None, fast=None):
     # ------------------------------------------------------------
     if make_figures:
         fig, ax = orbit_plot(r, times, frame="gcrf")
-        out_gcrf = figpath("figures/ssapy_orbit_gcrf")
+        out_gcrf = figpath("demo_gallery/figures/ssapy_orbit_gcrf")
         save_plot(fig, save_path=out_gcrf)
 
         fig, ax = orbit_plot(r, times, frame="lunar")
-        out_lunar = figpath("figures/ssapy_orbit_lunar")
+        out_lunar = figpath("demo_gallery/figures/ssapy_orbit_lunar")
         save_plot(fig, save_path=out_lunar)
 
         # Ground track
-        groundtrack_plot(r, times, save_path=figpath("figures/ssapy_ground_track"))
+        groundtrack_plot(r, times, save_path=figpath("demo_gallery/figures/ssapy_ground_track"))
 
     # ------------------------------------------------------------
     # Lambertian reflectance (apparent magnitude)
@@ -170,7 +170,7 @@ def main(make_figures=None, fast=None):
         plt.xticks(xticks, xtick_labels, rotation=0)
         plt.tight_layout()
 
-        out_mv = figpath("figures/lambertian_reflectance")
+        out_mv = figpath("demo_gallery/figures/lambertian_reflectance")
         plt.savefig(out_mv, dpi=300, bbox_inches="tight")
         plt.close()
         print("Saved:", out_mv)

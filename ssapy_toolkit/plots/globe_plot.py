@@ -38,6 +38,45 @@ def _earth_lon0_from_time(t):
     return np.degrees(gst)
 
 
+
+def _view_unit_vector(el_deg, az_deg):
+    el = np.radians(float(el_deg))
+    az = np.radians(float(az_deg))
+    v = np.array([
+        np.cos(el) * np.cos(az),
+        np.cos(el) * np.sin(az),
+        np.sin(el),
+    ], dtype=float)
+    n = np.linalg.norm(v)
+    if n == 0.0:
+        return np.array([1.0, 0.0, 0.0], dtype=float)
+    return v / n
+
+
+def _earth_occultation_mask(r_scaled, earth_radius_scaled, el_deg, az_deg):
+    """
+    Return boolean mask where True means point is visible (not hidden behind Earth)
+    for the current camera direction defined by (el, az).
+    """
+    r_scaled = np.asarray(r_scaled, dtype=float)
+    if r_scaled.ndim != 2 or r_scaled.shape[1] != 3:
+        raise ValueError("r_scaled must be shape (N, 3)")
+
+    # Unit vector pointing from origin toward the viewer
+    v_hat = _view_unit_vector(el_deg, az_deg)
+
+    # Signed depth along viewing axis
+    depth = r_scaled @ v_hat
+
+    # Perpendicular distance from viewing axis
+    perp = r_scaled - np.outer(depth, v_hat)
+    rho = np.linalg.norm(perp, axis=1)
+
+    # Points are hidden if they are behind the planet center and project inside the Earth disk
+    hidden = (depth < 0.0) & (rho < float(earth_radius_scaled))
+    return ~hidden
+
+
 def globe_plot(
     r,
     t=None,
@@ -163,26 +202,38 @@ def globe_plot(
         if ri_scaled.size:
             max_extent = max(max_extent, float(np.nanmax(np.abs(ri_scaled))))
 
+        visible = _earth_occultation_mask(
+            ri_scaled,
+            earth_radius_scaled=scale_fac,
+            el_deg=el,
+            az_deg=az,
+        )
+        ri_vis = ri_scaled[visible]
+
+        if ri_vis.size == 0:
+            continue
+
         if n_tracks == 1:
             # Single orbit:
             if orbit_colors is not None:
                 color = orbit_colors[0]
                 ax.scatter(
-                    ri_scaled[:, 0], ri_scaled[:, 1], ri_scaled[:, 2],
+                    ri_vis[:, 0], ri_vis[:, 1], ri_vis[:, 2],
                     color=color, s=1,
                 )
             else:
                 # original: color by point
                 point_colors = plt.cm.rainbow(np.linspace(0.0, 1.0, ri_scaled.shape[0]))
+                point_colors = point_colors[visible]
                 ax.scatter(
-                    ri_scaled[:, 0], ri_scaled[:, 1], ri_scaled[:, 2],
+                    ri_vis[:, 0], ri_vis[:, 1], ri_vis[:, 2],
                     color=point_colors, s=1,
                 )
         else:
             # Multiple orbits: one color per orbit
             color = colors[i] if colors is not None else None
             ax.scatter(
-                ri_scaled[:, 0], ri_scaled[:, 1], ri_scaled[:, 2],
+                ri_vis[:, 0], ri_vis[:, 1], ri_vis[:, 2],
                 color=color, s=1,
             )
 

@@ -55,11 +55,11 @@ def main(make_figures=None, fast=None):
     print(f"Plotting orbit. {np.shape(r)} {np.shape(t)}")
 
     if make_figures:
-        orbit_plot(r=r, t=t, save_path=figpath("figures/demo_orbit_plot"))
-        cislunar_plot(r=r, t=t, save_path=figpath("figures/demo_cislunar_plot"))
-        cislunar_plot_3d(r=r, t=t, save_path=figpath("figures/demo_cislunar_plot_3d"))
-        globe_plot(r=r, t=t, save_path=figpath("figures/demo_globe_plot_black"), scale=5)
-        globe_plot(r=r, t=t, save_path=figpath("figures/demo_globe_plot_white"), scale=5, c="white")
+        orbit_plot(r=r, t=t, save_path=figpath("demo_gallery/figures/demo_orbit_plot"))
+        cislunar_plot(r=r, t=t, save_path=figpath("demo_gallery/figures/demo_cislunar_plot"))
+        cislunar_plot_3d(r=r, t=t, save_path=figpath("demo_gallery/figures/demo_cislunar_plot_3d"))
+        globe_plot(r=r, t=t, save_path=figpath("demo_gallery/figures/demo_globe_plot_black"), scale=5)
+        globe_plot(r=r, t=t, save_path=figpath("demo_gallery/figures/demo_globe_plot_white"), scale=5, c="white")
 
     # two same length orbits
     print("\nCalculating 2 orbit.")
@@ -73,9 +73,9 @@ def main(make_figures=None, fast=None):
     print(f"Plotting two orbits same length. {np.shape(r)} {np.shape(r2)} {np.shape(t)}")
 
     if make_figures:
-        orbit_plot(r=[r, r2], t=t, save_path=figpath("figures/demo_orbit_plot_two_orbits"))
-        cislunar_plot(r=[r, r2], t=t, save_path=figpath("figures/demo_cislunar_plot_two_orbits"))
-        globe_plot(r=[r, r2], t=t, save_path=figpath("figures/demo_globe_two_orbits"), scale=5, c="black")
+        orbit_plot(r=[r, r2], t=t, save_path=figpath("demo_gallery/figures/demo_orbit_plot_two_orbits"))
+        cislunar_plot(r=[r, r2], t=t, save_path=figpath("demo_gallery/figures/demo_cislunar_plot_two_orbits"))
+        globe_plot(r=[r, r2], t=t, save_path=figpath("demo_gallery/figures/demo_globe_two_orbits"), scale=5, c="black")
 
     # two orbits different lengths
     print("\nCalculating 2 different orbit.")
@@ -87,23 +87,23 @@ def main(make_figures=None, fast=None):
         orbit_plot(
             r=[r, r3],
             t=[t, t3],
-            save_path=figpath("figures/demo_orbit_plot_two_different_length_orbits"),
+            save_path=figpath("demo_gallery/figures/demo_orbit_plot_two_different_length_orbits"),
         )
         orbit_plot(
             r=[r, r3],
             t=[t, t3],
-            save_path=figpath("figures/demo_orbit_plot_two_different_length_orbits_itrf"),
+            save_path=figpath("demo_gallery/figures/demo_orbit_plot_two_different_length_orbits_itrf"),
             frame="itrf",
         )
         cislunar_plot(
             r=[r, r3],
             t=[t, t3],
-            save_path=figpath("figures/demo_cislunar_plot_two_different_length_orbits"),
+            save_path=figpath("demo_gallery/figures/demo_cislunar_plot_two_different_length_orbits"),
         )
         globe_plot(
             r=[r, r3],
             t=[t, t3],
-            save_path=figpath("figures/demo_globe_two_different_length_orbits"),
+            save_path=figpath("demo_gallery/figures/demo_globe_two_different_length_orbits"),
             scale=5,
             c="black",
         )
@@ -116,13 +116,13 @@ def main(make_figures=None, fast=None):
             r_dash,
             t_dash,
             show=False,
-            save_path=figpath("figures/demo_ground_dashboard_test"),
+            save_path=figpath("demo_gallery/figures/demo_ground_dashboard_test"),
         )
         groundtrack_dashboard(
             r=[r_dash, r3],
             t=[t_dash, t3],
             show=False,
-            save_path=figpath("figures/demo_ground_dashboard_two_different_length_orbits"),
+            save_path=figpath("demo_gallery/figures/demo_ground_dashboard_two_different_length_orbits"),
         )
 
     print("PLOT DEMO DONE.")

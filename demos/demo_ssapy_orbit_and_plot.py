@@ -109,7 +109,7 @@ def main(make_figures=None, fast=None):
         plt.ylabel("Lambertian Reflectance [Apparent Magnitude]")
         plt.xticks(xticks, xtick_labels, rotation=0)
         plt.tight_layout()
-        yufig(fig, "tests/ssapy_lambertian_reflectance")
+        yufig(fig, "demo_gallery/figures/ssapy_lambertian_reflectance")
         plt.close(fig)
 
     return {

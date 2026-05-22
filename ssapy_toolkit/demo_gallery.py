@@ -173,7 +173,7 @@ def _invoke_demo(module, path: Path, output_root: Path):
     env["SSAPY_DEMO_OUTPUT_DIR"] = str(output_root)
     return subprocess.run(
         [sys.executable, str(path.resolve())],
-        cwd=str(path.parent.resolve()),
+        cwd=str(path.parent.parent.resolve()),
         env=env,
         capture_output=True,
         text=True,
@@ -224,7 +224,7 @@ def run_demo_script(path: Path, output_root: Path) -> DemoResult:
         touched = changed_files(before, after)
         files = sorted({relpath_for_report(p, output_root) for p in touched})
 
-        log_dir = output_root / "tests" / "logs"
+        log_dir = output_root / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
         stdout_file = log_dir / f"{name}_stdout.txt"
         stderr_file = log_dir / f"{name}_stderr.txt"
@@ -249,12 +249,12 @@ def run_demo_script(path: Path, output_root: Path) -> DemoResult:
         )
     except Exception:
         err = traceback.format_exc()
-        log_dir = output_root / "tests" / "logs"
+        log_dir = output_root / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
         err_file = log_dir / f"{name}_ERROR.txt"
         err_file.write_text(err, encoding="utf-8")
 
-        log_dir = output_root / "tests" / "logs"
+        log_dir = output_root / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
         stdout_file = log_dir / f"{name}_stdout.txt"
         stderr_file = log_dir / f"{name}_stderr.txt"
@@ -575,4 +575,9 @@ def run_all_demos(demos_dir: Path, output_root: Path, clean: bool = True) -> lis
         results.append(result)
 
     build_html_report(results, output_root)
+
+    import shutil as _shutil
+    bundle_base = output_root.parent / output_root.name
+    _shutil.make_archive(str(bundle_base), "zip", root_dir=str(output_root))
+
     return results

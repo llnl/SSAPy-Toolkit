@@ -85,7 +85,7 @@ def main(make_figures=None, verbose=None, fast=None):
         ax.grid(True)
 
         plt.axis("equal")
-        yufig(fig, "tests/equally_spaced_ta.jpg")
+        yufig(fig, "demo_gallery/figures/equally_spaced_ta.jpg")
         plt.close(fig)
 
     if verbose:

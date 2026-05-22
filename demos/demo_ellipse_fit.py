@@ -256,7 +256,7 @@ def _plot_incsweep_all_transfers_3d(sweep_store, P1_m, make_figures=True):
     ax.set_zlabel("z [m]")
     ax.legend()
     fig.tight_layout()
-    yufig(fig, "tests/testing_ellipse_fit_incsweep_all_transfers.png")
+    yufig(fig, "demo_gallery/figures/testing_ellipse_fit_incsweep_all_transfers.png")
     plt.close(fig)
 
 

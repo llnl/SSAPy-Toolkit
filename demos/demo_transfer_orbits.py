@@ -31,7 +31,7 @@ def main(make_figures=None):
         result = transfer_shooter(orbit1.r, orbit1.v, orbit2.r, plot=make_figures, status=True)
         outputs["shooter"] = result
         if make_figures and "fig" in result:
-            yufig(result["fig"], "tests/transfers_shooter_rv")
+            yufig(result["fig"], "demo_gallery/figures/transfers_shooter_rv")
     except Exception as err:
         print("Shooter (r1, v1, r2) failed:", err)
         outputs["shooter_error"] = str(err)
@@ -41,7 +41,7 @@ def main(make_figures=None):
         result = transfer_lambertian(orbit1.r, orbit1.v, orbit2.r, plot=make_figures)
         outputs["lambertian"] = result
         if make_figures and "fig" in result:
-            yufig(result["fig"], "tests/transfers_lambertian_rv")
+            yufig(result["fig"], "demo_gallery/figures/transfers_lambertian_rv")
     except Exception as err:
         print("Lambertian (r1, v1, r2) failed:", err)
         outputs["lambertian_error"] = str(err)

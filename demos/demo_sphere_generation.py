@@ -55,7 +55,7 @@ def main(make_figures=None, fast=None):
             pass
 
         fig.tight_layout()
-        yufig(fig, "tests/spheres_subplots.png")
+        yufig(fig, "demo_gallery/figures/spheres_subplots.png")
 
     return {"uniform": A_uniform, "random": A_random}
 
