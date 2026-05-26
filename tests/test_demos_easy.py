@@ -12,6 +12,7 @@ from demos.demo_converting_impulse_and_burns import main as demo_converting_impu
 from demos.demo_ellipse_ae_for_arrival_rv import main as demo_ellipse_ae_for_arrival_rv
 from demos.demo_ellipses import main as demo_ellipses
 from demos.demo_gcrs_to_itrs_astropy import main as demo_gcrs_to_itrs_astropy
+from demos.demo_globe_plot import main as demo_globe_plot
 from demos.demo_groundtrack_accuracy import main as demo_groundtrack_accuracy
 from demos.demo_groundtrack_plot import main as demo_groundtrack_plot
 from demos.demo_kepler_vs_harmonics import main as demo_kepler_vs_harmonics
@@ -64,6 +65,11 @@ def test_demo_gcrs_to_itrs_astropy():
     out = demo_gcrs_to_itrs_astropy(verbose=False)
     assert "itrs_coords" in out
     assert "itrs_position" in out
+
+def test_demo_globe_plot():
+    out = demo_globe_plot(make_figures=False, make_video=False, fast=True)
+    assert "r1" in out
+    assert "r2" in out
 
 
 def test_demo_groundtrack_accuracy():

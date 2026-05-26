@@ -4,8 +4,8 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ssapy_toolkit.Compute.generate_sphere_of_vectors import generate_sphere_vectors
-from ssapy_toolkit.Plots.plotutils import yufig  # [27]
+from ssapy_toolkit.compute.generate_sphere_of_vectors import generate_sphere_vectors
+from ssapy_toolkit.plots.plotutils import yufig  # [27]
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -55,7 +55,7 @@ def main(make_figures=None, fast=None):
             pass
 
         fig.tight_layout()
-        yufig(fig, "tests/spheres_subplots.png")
+        yufig(fig, "demo_gallery/figures/spheres_subplots.png")
 
     return {"uniform": A_uniform, "random": A_random}
 

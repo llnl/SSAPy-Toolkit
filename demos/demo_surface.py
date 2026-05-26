@@ -15,12 +15,12 @@ from astropy.time import Time
 from astropy.coordinates import GCRS, ITRS, CartesianRepresentation, EarthLocation, get_sun
 import astropy.units as u
 
-from ssapy_toolkit.Coordinates.llh_to_gcrf import llh_to_gcrf
-from ssapy_toolkit.Coordinates.gcrf_to_llh import gcrf_to_llh
-from ssapy_toolkit.Yastropy.astropy_surface_rv import astropy_surface_rv
-from ssapy_toolkit.Plots.groundtrack_dashboard import groundtrack_dashboard
+from ssapy_toolkit.coordinates.llh_to_gcrf import llh_to_gcrf
+from ssapy_toolkit.coordinates.gcrf_to_llh import gcrf_to_llh
+from ssapy_toolkit.yastropy.astropy_surface_rv import astropy_surface_rv
+from ssapy_toolkit.plots.groundtrack_dashboard import groundtrack_dashboard
 from ssapy_toolkit.constants import EARTH_RADIUS
-from ssapy_toolkit.Plots.figpath import figpath  # [32]
+from ssapy_toolkit.plots.figpath import figpath  # [32]
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 SAVE_FIGS = not UNDER_PYTEST
@@ -40,7 +40,7 @@ def test_vs_astropy_random():
         lat = rng.uniform(-80, 80)
         lon = rng.uniform(-180, 180)
         h = rng.uniform(0, 1000)
-        r = llh_to_gcrf(lat, lon, h, t)
+        r, v = llh_to_gcrf(lon, lat, t, h)
         llh = gcrf_to_llh(r, t)
         ok &= np.all(np.isfinite(np.asarray(llh)))
     return bool(ok)
@@ -69,7 +69,7 @@ def main(make_figures=None):
     print("  Subsolar checks:", "OK" if ok3 else "FAIL")
 
     if make_figures:
-        print("\nFigures saved under prefixes like:", figpath("tests/test_subsolar_..."))
+        print("\nFigures saved under prefixes like:", figpath("demo_gallery/figures/test_subsolar_..."))
 
     return {"station_roundtrips": ok1, "astropy_crosscheck": ok2, "subsolar": ok3}
 

@@ -1,0 +1,115 @@
+name: Build Demo Gallery
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build-gallery:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Run tests to generate media
+        run: |
+          pytest tests
+
+      - name: Collect gallery assets
+        run: |
+          mkdir -p site/gallery
+          find tests -type f \( -name "*.png" -o -name "*.gif" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.pdf" \) -exec cp {} site/gallery/ \;
+
+      - name: Build gallery index
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          gallery = Path("site/gallery")
+          files = sorted(gallery.iterdir())
+
+          image_exts = {".png", ".gif", ".jpg", ".jpeg"}
+          pdf_exts = {".pdf"}
+
+          html = []
+          html.append("<!doctype html>")
+          html.append("<html lang='en'>")
+          html.append("<head>")
+          html.append("<meta charset='utf-8'>")
+          html.append("<meta name='viewport' content='width=device-width, initial-scale=1'>")
+          html.append("<title>SSAPy Toolkit Demo Gallery</title>")
+          html.append("""
+          <style>
+            body { font-family: Arial, sans-serif; margin: 2rem; background: #0b0f14; color: #e6edf3; }
+            h1, p { max-width: 1100px; margin-left: auto; margin-right: auto; }
+            .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; max-width: 1400px; margin: 2rem auto; }
+            .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+            .card img { width: 100%; height: auto; display: block; border-radius: 8px; background: white; }
+            .name { margin-top: 12px; font-size: 0.95rem; word-break: break-word; }
+            a { color: #58a6ff; text-decoration: none; }
+            a:hover { text-decoration: underline; }
+            .pdf { padding: 2rem 1rem; text-align: center; border: 1px dashed #444c56; border-radius: 8px; }
+          </style>
+          """)
+          html.append("</head>")
+          html.append("<body>")
+          html.append("<h1>SSAPy Toolkit Demo Gallery</h1>")
+          html.append("<p>Automatically generated from test/demo outputs on the latest successful workflow run.</p>")
+          html.append("<div class='grid'>")
+
+          for f in files:
+              rel = f"gallery/{f.name}"
+              suffix = f.suffix.lower()
+              html.append("<div class='card'>")
+              if suffix in image_exts:
+                  html.append(f"<a href='{rel}' target='_blank'><img src='{rel}' alt='{f.name}'></a>")
+              elif suffix in pdf_exts:
+                  html.append(f"<div class='pdf'><a href='{rel}' target='_blank'>Open PDF: {f.name}</a></div>")
+              else:
+                  html.append(f"<div><a href='{rel}' target='_blank'>{f.name}</a></div>")
+              html.append(f"<div class='name'><a href='{rel}' target='_blank'>{f.name}</a></div>")
+              html.append("</div>")
+
+          html.append("</div>")
+          html.append("</body>")
+          html.append("</html>")
+
+          Path("site/index.html").write_text("\n".join(html), encoding="utf-8")
+          PY
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build-gallery
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

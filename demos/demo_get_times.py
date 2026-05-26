@@ -1,6 +1,6 @@
 from astropy.time import Time
 
-from ssapy_toolkit.Time_Functions.get_times import get_times
+from ssapy_toolkit.time_functions.get_times import get_times
 
 
 def demo_get_times(verbose=True):

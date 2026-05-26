@@ -19,8 +19,8 @@ def main(make_figures=None, fast=None):
     from astropy.time import Time
     import ssapy
 
-    from ssapy_toolkit.Orbital_Mechanics.orbital_accel_model_comparisons import compare_models  # [3]
-    from ssapy_toolkit.Plots.plotutils import yufig  # [3]
+    from ssapy_toolkit.orbital_mechanics.orbital_accel_model_comparisons import compare_models  # [3]
+    from ssapy_toolkit.plots.plotutils import yufig  # [3]
 
     t0 = Time("2026-01-21T00:00:00", scale="utc")
     r0_m = np.array([7000e3, 0.0, 0.0], dtype=float)
@@ -58,7 +58,7 @@ def main(make_figures=None, fast=None):
         raise RuntimeError("Expected dashboard figures not found in output.")
 
     if make_figures:
-        out_dir = "/tests"
+        out_dir = "/demo_gallery/figures"
         yufig(fig_time, out_dir + "/accel_ladder_time_domain.jpg", dpi=200)
         yufig(fig_rung, out_dir + "/accel_ladder_rung_summary.jpg", dpi=200)
         print("Saved (yufig root-normalized):")

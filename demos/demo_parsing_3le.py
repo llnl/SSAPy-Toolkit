@@ -2,12 +2,12 @@
 
 from pathlib import Path
 
-from ssapy_toolkit.IO.yudata import yudata
-from ssapy_toolkit.IO.read_3le import read_3le
-from ssapy_toolkit.IO.read_3le_by_bit import read_3le_by_bit
-from ssapy_toolkit.IO.tle_iter_pairs import tle_iter_pairs
-from ssapy_toolkit.IO.tle_prop_to_time import tle_prop_to_time
-from ssapy_toolkit.IO.pprint_utils import pprint
+from ssapy_toolkit.io.yudata import yudata
+from ssapy_toolkit.io.read_3le import read_3le
+from ssapy_toolkit.io.read_3le_by_bit import read_3le_by_bit
+from ssapy_toolkit.io.tle_iter_pairs import tle_iter_pairs
+from ssapy_toolkit.io.tle_prop_to_time import tle_prop_to_time
+from ssapy_toolkit.io.pprint_utils import pprint
 
 
 def main(verbose=False, fast=False):
@@ -24,7 +24,7 @@ def main(verbose=False, fast=False):
 
     print(f"DATA: {tle_path}")
 
-    data = read_3le(tle_path, verbose=verbose)
+    data = read_3le(tle_path, verbose=False)
     if verbose:
         pprint(data)
 

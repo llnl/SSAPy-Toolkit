@@ -15,9 +15,9 @@ import numpy as np
 from ssapy.propagator import KeplerianPropagator
 
 from ssapy_toolkit.constants import RGEO  # [7]
-from ssapy_toolkit.Orbital_Mechanics.ellipse_fit import ellipse_fit  # [7]
-from ssapy_toolkit.SSAPy_wrappers.ssapy_orbits import ssapy_orbit  # [7]
-from ssapy_toolkit.Plots.plotutils import yufig  # [7]
+from ssapy_toolkit.orbital_mechanics.ellipse_fit import ellipse_fit  # [7]
+from ssapy_toolkit.ssapy_wrappers.ssapy_orbits import ssapy_orbit  # [7]
+from ssapy_toolkit.plots.plotutils import yufig  # [7]
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -256,7 +256,7 @@ def _plot_incsweep_all_transfers_3d(sweep_store, P1_m, make_figures=True):
     ax.set_zlabel("z [m]")
     ax.legend()
     fig.tight_layout()
-    yufig(fig, "tests/testing_ellipse_fit_incsweep_all_transfers.png")
+    yufig(fig, "demo_gallery/figures/testing_ellipse_fit_incsweep_all_transfers.png")
     plt.close(fig)
 
 

@@ -25,8 +25,8 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ssapy_toolkit.Compute.sampling import perturb_state_3d
-from ssapy_toolkit.Plots.plotutils import yufig
+from ssapy_toolkit.compute.sampling import perturb_state_3d
+from ssapy_toolkit.plots.plotutils import yufig
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -218,7 +218,7 @@ def main(make_figures=None, fast=None, verbose=None):
         if make_figures:
             fig = plot_offsets_2d(label, r_offsets, v_offsets, r_nom, v_nom)
             safe_label = label.replace(" ", "_")
-            yufig(fig, f"tests/sampling_tests_{safe_label}")
+            yufig(fig, f"demo_gallery/figures/sampling_tests_{safe_label}")
             plt.close(fig)
 
     return outputs

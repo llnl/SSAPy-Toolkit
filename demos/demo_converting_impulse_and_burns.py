@@ -7,13 +7,14 @@ import matplotlib.pyplot as plt
 
 from ssapy import Orbit, Time
 from ssapy.constants import RGEO
-from ssapy.utils import get_times
 
-from ssapy_toolkit.Time_Functions.convert_to_gps import to_gps
-from ssapy_toolkit.Plots.orbit_plot import orbit_plot
-from ssapy_toolkit.Orbital_Mechanics.burn_to_deltav import burn_to_deltav
-from ssapy_toolkit.Orbital_Mechanics.deltav_to_burn import deltav_to_burn
-from ssapy_toolkit.Plots.figpath import figpath
+from ssapy_toolkit.time_functions.convert_to_gps import to_gps
+from ssapy_toolkit.plots.orbit_plot import orbit_plot
+from ssapy_toolkit.orbital_mechanics.burn_to_deltav import burn_to_deltav
+from ssapy_toolkit.orbital_mechanics.deltav_to_burn import deltav_to_burn
+from ssapy_toolkit.plots.figpath import figpath
+from ssapy_toolkit.time_functions.get_times import get_times
+
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -62,15 +63,17 @@ def main(make_figures=None, fast=None):
 
     if make_figures:
         # Plot Part 1
-        plt.figure()
-        orbit_plot([res1["r_continuous"], res1["r_instantaneous"]], burn_times, show=False)
-        out1 = Path(figpath("tests/burn_to_deltav_orbit_plot"))
+        out1 = Path(figpath("demo_gallery/figures/burn_to_deltav_orbit_plot"))
         if out1.suffix == "":
             out1 = out1.with_suffix(".png")
         out1.parent.mkdir(parents=True, exist_ok=True)
-        plt.savefig(out1, dpi=200, bbox_inches="tight")
+        orbit_plot(
+            [res1["r_continuous"], res1["r_instantaneous"]],
+            burn_times,
+            show=False,
+            save_path=str(out1),
+        )
         print("Saved:", out1)
-        plt.close()
 
         plt.figure()
         plt.plot(res1["r_continuous"][:, 0] / 1e3, res1["r_continuous"][:, 1] / 1e3, label="Burn (continuous)")
@@ -79,7 +82,7 @@ def main(make_figures=None, fast=None):
         plt.ylabel("y [km]")
         plt.legend()
         plt.title("burn_to_deltav: XY trajectories")
-        out2 = Path(figpath("tests/burn_to_deltav_xy"))
+        out2 = Path(figpath("demo_gallery/figures/burn_to_deltav_xy"))
         if out2.suffix == "":
             out2 = out2.with_suffix(".png")
         out2.parent.mkdir(parents=True, exist_ok=True)
@@ -93,7 +96,7 @@ def main(make_figures=None, fast=None):
         plt.xlabel("Seconds since burn start [s]")
         plt.ylabel("Distance between trajectories [km]")
         plt.title("burn_to_deltav: separation during burn window")
-        out3 = Path(figpath("tests/burn_to_deltav_separation"))
+        out3 = Path(figpath("demo_gallery/figures/burn_to_deltav_separation"))
         if out3.suffix == "":
             out3 = out3.with_suffix(".png")
         out3.parent.mkdir(parents=True, exist_ok=True)
@@ -102,15 +105,17 @@ def main(make_figures=None, fast=None):
         plt.close()
 
         # Plot Part 2
-        plt.figure()
-        orbit_plot([res2["r_continuous"], res2["r_instantaneous"]], burn_times_uniform, show=False)
-        out4 = Path(figpath("tests/deltav_to_burn_orbit_plot"))
+        out4 = Path(figpath("demo_gallery/figures/deltav_to_burn_orbit_plot"))
         if out4.suffix == "":
             out4 = out4.with_suffix(".png")
         out4.parent.mkdir(parents=True, exist_ok=True)
-        plt.savefig(out4, dpi=200, bbox_inches="tight")
+        orbit_plot(
+            [res2["r_continuous"], res2["r_instantaneous"]],
+            burn_times_uniform,
+            show=False,
+            save_path=str(out4),
+        )
         print("Saved:", out4)
-        plt.close()
 
         plt.figure()
         plt.plot(res2["r_continuous"][:, 0] / 1e3, res2["r_continuous"][:, 1] / 1e3, label="Burn (continuous)")
@@ -119,7 +124,7 @@ def main(make_figures=None, fast=None):
         plt.ylabel("y [km]")
         plt.legend()
         plt.title("deltav_to_burn: XY trajectories")
-        out5 = Path(figpath("tests/deltav_to_burn_xy"))
+        out5 = Path(figpath("demo_gallery/figures/deltav_to_burn_xy"))
         if out5.suffix == "":
             out5 = out5.with_suffix(".png")
         out5.parent.mkdir(parents=True, exist_ok=True)
@@ -133,7 +138,7 @@ def main(make_figures=None, fast=None):
         plt.xlabel("Seconds since burn start [s]")
         plt.ylabel("Distance between trajectories [km]")
         plt.title("deltav_to_burn: separation during burn window")
-        out6 = Path(figpath("tests/deltav_to_burn_separation"))
+        out6 = Path(figpath("demo_gallery/figures/deltav_to_burn_separation"))
         if out6.suffix == "":
             out6 = out6.with_suffix(".png")
         out6.parent.mkdir(parents=True, exist_ok=True)

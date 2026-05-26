@@ -4,7 +4,7 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ssapy_toolkit.Coordinates.ntw_to_gcrf import ntw_to_gcrf
+from ssapy_toolkit.coordinates.ntw_to_gcrf import ntw_to_gcrf
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 

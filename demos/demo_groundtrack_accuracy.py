@@ -11,11 +11,11 @@ from ssapy import Orbit, rv, AccelKepler
 from ssapy.propagator import KeplerianPropagator, RK78Propagator
 
 from ssapy_toolkit.constants import RGEO
-from ssapy_toolkit.Orbital_Mechanics.ellipse_fit import ellipse_fit
-from ssapy_toolkit.Plots.figpath import figpath
-from ssapy_toolkit.Plots.groundtrack_dashboard import groundtrack_dashboard
-from ssapy_toolkit.Plots.groundtrack_plot import groundtrack_plot
-from ssapy_toolkit.Plots.groundtrack_video import groundtrack_video
+from ssapy_toolkit.orbital_mechanics.ellipse_fit import ellipse_fit
+from ssapy_toolkit.plots.figpath import figpath
+from ssapy_toolkit.plots.groundtrack_dashboard import groundtrack_dashboard
+from ssapy_toolkit.plots.groundtrack_plot import groundtrack_plot
+from ssapy_toolkit.plots.groundtrack_video import groundtrack_video
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -73,7 +73,7 @@ def main(make_figures=None, make_video=None, fast=None):
         plt.xlabel("Time since departure [hours]")
         plt.ylabel("Position difference |Δr| [km]")
         plt.title("ellipse_fit transfer vs ssapy propagation: |Δr|(t)")
-        out_path = figpath("tests/test_transfer_vs_ssapy_diff.jpg")
+        out_path = figpath("demo_gallery/figures/test_transfer_vs_ssapy_diff.jpg")
         plt.savefig(out_path, dpi=150, bbox_inches="tight")
         print(f"Saved: {out_path}")
         plt.close()
@@ -81,14 +81,14 @@ def main(make_figures=None, make_video=None, fast=None):
         groundtrack_plot(
             r=[r_ssa, r_tf],
             t=t_abs,
-            save_path=figpath("tests/test_transfer_vs_ssapy_diff_groundtrack.jpg"),
+            save_path=figpath("demo_gallery/figures/test_transfer_vs_ssapy_diff_groundtrack.jpg"),
         )
 
         try:
             groundtrack_dashboard(
                 r=[r_ssa, r_tf],
                 t=t_abs,
-                save_path=figpath("tests/test_transfer_vs_ssapy_diff_dashboard.jpg"),
+                save_path=figpath("demo_gallery/figures/test_transfer_vs_ssapy_diff_dashboard.jpg"),
                 show=False,
             )
         except Exception as err:
@@ -98,7 +98,7 @@ def main(make_figures=None, make_video=None, fast=None):
         groundtrack_video(
             r=[r_ssa, r_tf],
             t=t_abs,
-            save_path=figpath("tests/test_transfer_vs_ssapy_diff_groundtrack.mp4"),
+            save_path=figpath("demo_gallery/figures/test_transfer_vs_ssapy_diff_groundtrack.mp4"),
         )
 
     return {

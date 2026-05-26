@@ -4,10 +4,10 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ssapy_toolkit.Coordinates.gcrf_to_itrf import gcrf_to_itrf
-from ssapy_toolkit.Coordinates.itrf_to_gcrf import itrf_to_gcrf
-from ssapy_toolkit.Time_Functions.get_times import get_times
-from ssapy_toolkit.SSAPy_wrappers.ssapy_orbits import ssapy_orbit
+from ssapy_toolkit.coordinates.gcrf_to_itrf import gcrf_to_itrf
+from ssapy_toolkit.coordinates.itrf_to_gcrf import itrf_to_gcrf
+from ssapy_toolkit.time_functions.get_times import get_times
+from ssapy_toolkit.ssapy_wrappers.ssapy_orbits import ssapy_orbit
 from ssapy_toolkit.constants import RGEO  # [19]
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None

@@ -5,9 +5,9 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ssapy_toolkit.Orbital_Mechanics.rv_to_ellipse import rv_to_ellipse  # [6]
-from ssapy_toolkit.IO.pprint_utils import pprint  # [6]
-from ssapy_toolkit.Plots.figpath import figpath  # [6]
+from ssapy_toolkit.orbital_mechanics.rv_to_ellipse import rv_to_ellipse  # [6]
+from ssapy_toolkit.io.pprint_utils import pprint  # [6]
+from ssapy_toolkit.plots.figpath import figpath  # [6]
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -51,7 +51,7 @@ def main(make_figures=None, verbose=None):
         plt.ylabel("y [m]")
         plt.title("rv_to_ellipse: XY projection")
 
-        outpath = Path(figpath("tests/rv_to_ellipse_xy"))
+        outpath = Path(figpath("demo_gallery/figures/rv_to_ellipse_xy"))
         if outpath.suffix == "":
             outpath = outpath.with_suffix(".png")
         outpath.parent.mkdir(parents=True, exist_ok=True)

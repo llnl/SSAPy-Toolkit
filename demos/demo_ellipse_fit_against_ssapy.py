@@ -14,15 +14,14 @@ import inspect
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ssapy_toolkit.constants import RGEO  # [8]
-from ssapy_toolkit.Orbital_Mechanics.ellipse_fit import ellipse_fit  # [8]
-from ssapy_toolkit.Plots.figpath import figpath  # [8]
-from ssapy_toolkit.IO.pprint_utils import pprint  # [8]
-from ssapy_toolkit.Plots.orbit_plot import orbit_plot  # [8]
-from ssapy_toolkit.Plots.groundtrack_dashboard import groundtrack_dashboard  # [8]
-from ssapy_toolkit.Time_Functions.get_times import get_times  # [8]
-from ssapy_toolkit.SSAPy_wrappers.ssapy_orbits import ssapy_orbit  # [8]
-from ssapy_toolkit.SSAPy_wrappers.ssapy_props import keplerian_prop, ssapy_prop, best_prop  # [8]
+from ssapy_toolkit.constants import RGEO
+from ssapy_toolkit.orbital_mechanics.ellipse_fit import ellipse_fit
+from ssapy_toolkit.plots.figpath import figpath
+from ssapy_toolkit.io.pprint_utils import pprint
+from ssapy_toolkit.plots.orbit_plot import orbit_plot
+from ssapy_toolkit.plots.groundtrack_dashboard import groundtrack_dashboard
+from ssapy_toolkit.ssapy_wrappers.ssapy_orbits import ssapy_orbit
+from ssapy_toolkit.ssapy_wrappers.ssapy_props import keplerian_prop, ssapy_prop, best_prop
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -86,7 +85,10 @@ def main(make_figures=None, fast=None, verbose=None):
     P2 = np.array([0.0, -1.1 * RGEO, 0.1 * RGEO], dtype=float)
 
     n_pts = 120 if fast else 400
-    res = ellipse_fit(P1, P2, n_pts=n_pts, plot=False, inc=0.0, ccw=True)
+
+    # This installed ellipse_fit version does not accept ccw=...
+    res = ellipse_fit(P1, P2, n_pts=n_pts, plot=False, inc=0.0)
+
     if verbose:
         pprint(res)
 
@@ -94,8 +96,8 @@ def main(make_figures=None, fast=None, verbose=None):
     v_arc = np.asarray(res["v"], dtype=float)
     t_rel = np.asarray(res["t_rel"], dtype=float)
 
-    r0 = np.asarray(res["r0"], float)
-    v0 = np.asarray(res["v0"], float)
+    r0 = np.asarray(res["r0"], dtype=float)
+    v0 = np.asarray(res["v0"], dtype=float)
     r2 = r_arc[-1].copy()
     v2 = v_arc[-1].copy()
 
@@ -112,10 +114,6 @@ def main(make_figures=None, fast=None, verbose=None):
         t_grid = np.array([0.0], dtype=float)
         dt_s = 0.0
 
-    _times = get_times(duration=(T_flight, "s"), freq=((dt_s if dt_s > 0.0 else 0.0), "s"))
-    t_fit = _times[0] if isinstance(_times, (list, tuple)) else _times
-    t_fit_desc = t_fit[::-1].copy()
-
     r_efit = resample_cartesian(t_rel, r_arc, t_grid)
 
     prop_kep = keplerian_prop()
@@ -124,31 +122,42 @@ def main(make_figures=None, fast=None, verbose=None):
 
     def run_with_prop(prop):
         r, v, t = ssapy_orbit(
-            r=r0, v=v0,
+            r=r0,
+            v=v0,
             duration=(T_flight, "s"),
             freq=((dt_s, "s") if N_native > 1 else (0.0, "s")),
             prop=prop,
         )
-        return trim_or_pad_to(r, N_native)
+        return trim_or_pad_to(r, N_native), t
 
-    r_kep = run_with_prop(prop_kep)
-    r_nom = run_with_prop(prop_nom)
-    r_best = run_with_prop(prop_best)
+    r_kep, t_kep = run_with_prop(prop_kep)
+    r_nom, t_nom = run_with_prop(prop_nom)
+    r_best, t_best = run_with_prop(prop_best)
 
-    r_back, _, _ = ssapy_orbit(
-        r=r2, v=-v2,
+    r_back, _, t_back = ssapy_orbit(
+        r=r2,
+        v=-v2,
         duration=(T_flight, "s"),
         freq=((dt_s, "s") if N_native > 1 else (0.0, "s")),
         prop=prop_nom,
     )
     r_back = trim_or_pad_to(r_back, N_native)
 
+    t_fit = t_kep
+    t_fit_desc = t_back[::-1] if hasattr(t_back, "__getitem__") else t_fit
+
     r_list = [r_efit, r_kep, r_nom, r_best, r_back]
-    t_list = [t_fit, t_fit, t_fit, t_fit, t_fit_desc]
-    labels = ["ellipse_fit", "keplerian_prop", "ssapy_prop", "best_prop", "backward(ssapy_prop)"]
+    t_list = [t_fit, t_kep, t_nom, t_best, t_fit_desc]
+    labels = [
+        "ellipse_fit",
+        "keplerian_prop",
+        "ssapy_prop",
+        "best_prop",
+        "backward(ssapy_prop)",
+    ]
 
     if make_figures:
-        save_path = figpath("tests/testing_ellipse_fit_vs_ssapy.jpg")
+        save_path = figpath("demo_gallery/figures/testing_ellipse_fit_vs_ssapy.jpg")
         _call_with_optional_labels(
             orbit_plot,
             r_list,
@@ -159,7 +168,7 @@ def main(make_figures=None, fast=None, verbose=None):
             labels=labels,
         )
 
-        save_dash = figpath("tests/testing_ellipse_fit_vs_ssapy_dashboard.jpg")
+        save_dash = figpath("demo_gallery/figures/testing_ellipse_fit_vs_ssapy_dashboard.jpg")
         _call_with_optional_labels(
             groundtrack_dashboard,
             r_list,
@@ -179,7 +188,7 @@ def main(make_figures=None, fast=None, verbose=None):
             "keplerian_prop vs ellipse_fit",
             "ssapy_prop vs ellipse_fit",
             "best_prop vs ellipse_fit",
-            "backward(ssapy_prop) vs reverse(efit)",
+            "backward(ssapy_prop) vs reverse(ellipse_fit)",
         ]
 
         dash_styles = [
@@ -194,13 +203,14 @@ def main(make_figures=None, fast=None, verbose=None):
         for i, (d, n) in enumerate(zip(curves, names)):
             ls = dash_styles[i % len(dash_styles)]
             ax.plot(t_minutes, d, linewidth=2.5, linestyle=ls, label=n)
+
         ax.set_xlabel("Time since start (minutes)")
         ax.set_ylabel("Distance to reference (km)")
         ax.set_title("Distance to ellipse_fit (or reversed) vs time")
         ax.grid(True, alpha=0.3)
         ax.legend()
 
-        save_dist = figpath("tests/testing_ellipse_fit_distance.jpg")
+        save_dist = figpath("demo_gallery/figures/testing_ellipse_fit_distance.jpg")
         fig.savefig(save_dist, dpi=200, bbox_inches="tight")
         plt.close(fig)
 
@@ -210,6 +220,7 @@ def main(make_figures=None, fast=None, verbose=None):
         "ssapy_prop": r_nom,
         "best_prop": r_best,
         "backward": r_back,
+        "result": res,
     }
 
 

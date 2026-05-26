@@ -38,8 +38,8 @@ Once installed, you can import the package in Python:
 ```python
 import ssapy_toolkit as st
 
-from ssapy_toolkit.Orbital_Mechanics import keplerian
-from ssapy_toolkit.Plots import orbit_plot
+from ssapy_toolkit.orbital_mechanics import keplerian
+from ssapy_toolkit.plots import orbit_plot
 ```
 
 More detailed examples can be found in the `demos/` directory.

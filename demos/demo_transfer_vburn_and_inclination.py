@@ -3,12 +3,12 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ssapy_toolkit.Orbital_Mechanics.transfer_velocity_continuous import transfer_velocity_continuous
-from ssapy_toolkit.Orbital_Mechanics.transfer_inclination_continuous import transfer_inclination_continuous
+from ssapy_toolkit.orbital_mechanics.transfer_velocity_continuous import transfer_velocity_continuous
+from ssapy_toolkit.orbital_mechanics.transfer_inclination_continuous import transfer_inclination_continuous
 from ssapy_toolkit.constants import EARTH_RADIUS, RGEO, VGEO
-from ssapy_toolkit.Plots.figpath import figpath
-from ssapy_toolkit.Integrators.quick_int import quickint
-from ssapy_toolkit.Time_Functions.get_times import get_times  # [40]
+from ssapy_toolkit.plots.figpath import figpath
+from ssapy_toolkit.integrators.quick_int import quickint
+from ssapy_toolkit.time_functions.get_times import get_times  # [40]
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ssapy-toolkit"
-version = "1.0.1"
+version = "1.0.2"
 description = "SSAPy Toolkit: extensions for orbital mechanics, plotting, and data IO"
 authors = [
   { name = "Travis R. Yeager", email = "yeagerastro@gmail.com" }
@@ -55,7 +55,7 @@ dependencies = [
   "pillow",
   "psutil",
   "pyerfa",
-  "PyPDF2",
+  "pypdf",
   "rebound",
   "regex",
   "requests",
@@ -88,3 +88,6 @@ Documentation = "https://ssapy-toolkit.readthedocs.io/"
 
 [tool.setuptools]
 packages = { find = { where = ["."], include = ["ssapy_toolkit*"] } }
+
+[project.scripts]
+ssapy-demo-gallery = "ssapy_toolkit.run_all_demos:main"
