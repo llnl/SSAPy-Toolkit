@@ -3,13 +3,13 @@ Utilities for saving/loading nested Python dictionaries to/from HDF5.
 
 Public API:
     save_dict_to_hdf5(filename, data, ...)
-    load_dict_from_hdf5(filename)
+    load_dict_from_hdf5(filename, keys=None)
 """
 
 import os
 import pickle
 import datetime as _dt
-from typing import Any, Mapping, Union
+from typing import Any, Mapping, Optional, Set, Union
 
 import h5py
 import numpy as np
@@ -41,7 +41,8 @@ def save_dict_to_hdf5(
 
     Supported types:
         - dict -> HDF5 group
-        - list/tuple -> HDF5 group with numeric keys ("0", "1", ...)
+        - list/tuple of numeric scalars -> HDF5 dataset (auto-converted to numpy array)
+        - list/tuple of mixed/non-numeric -> HDF5 group with numeric keys ("0", "1", ...)
         - numpy arrays -> datasets (with compression, if requested)
         - scalars: int/float/bool, numpy scalar types -> scalar datasets (no compression)
         - str -> variable-length UTF-8 datasets
@@ -49,6 +50,11 @@ def save_dict_to_hdf5(
         - datetime.datetime/date/time -> stored as ISO strings
         - astropy.time.Time -> stored as (mjd, scale, format, meta)
         - other objects -> pickled if pickle_objects=True
+
+    Notes:
+        - Flat numeric lists/tuples are automatically converted to numpy arrays
+          to avoid the "thousands of groups" explosion that occurs when storing
+          large lists element-by-element.
     """
 
     def _store_string_with_type(
@@ -76,7 +82,6 @@ def save_dict_to_hdf5(
         if isinstance(value, Mapping):
             if key in h5group and isinstance(h5group[key], h5py.Group):
                 subgroup = h5group[key]
-                # clear any old sequence flag
                 subgroup.attrs["__is_sequence__"] = False
             else:
                 subgroup = h5group.require_group(key)
@@ -87,8 +92,29 @@ def save_dict_to_hdf5(
                     raise TypeError(f"HDF5 requires string keys; got key={k!r}")
                 _write_item(subgroup, k, v)
 
-        # list/tuple -> group with numeric keys
+        # list/tuple
         elif isinstance(value, (list, tuple)):
+            # Try to convert flat numeric lists to a numpy array to avoid
+            # storing thousands of individual scalar datasets as groups.
+            try:
+                arr = np.asarray(value)
+                if arr.dtype.kind in ('i', 'u', 'f', 'c') and arr.ndim >= 1:
+                    if key in h5group:
+                        del h5group[key]
+                    if arr.shape == ():
+                        h5group.create_dataset(key, data=arr)
+                    else:
+                        h5group.create_dataset(
+                            key,
+                            data=arr,
+                            compression=compression,
+                            compression_opts=compression_opts,
+                        )
+                    return
+            except (ValueError, TypeError):
+                pass
+
+            # Non-numeric or ragged list: fall back to group-per-element
             if key in h5group and isinstance(h5group[key], h5py.Group):
                 subgroup = h5group[key]
                 subgroup.attrs["__is_sequence__"] = True
@@ -96,7 +122,6 @@ def save_dict_to_hdf5(
                 subgroup = h5group.require_group(key)
                 subgroup.attrs["__is_sequence__"] = True
 
-            # remove any existing children (in case of overwrite)
             for child in list(subgroup.keys()):
                 del subgroup[child]
 
@@ -135,7 +160,6 @@ def save_dict_to_hdf5(
             if key in h5group:
                 del h5group[key]
             if value.shape == ():
-                # scalar np.ndarray: no compression
                 h5group.create_dataset(key, data=value)
             else:
                 h5group.create_dataset(
@@ -188,7 +212,10 @@ def save_dict_to_hdf5(
             ds.attrs["python_type"] = str(type(value))
             ds.attrs["__type__"] = "pickle"
 
-    os.makedirs(os.path.dirname(os.path.abspath(filename)), exist_ok=True)
+    # Fix: os.path.dirname returns "" for bare filenames, which causes makedirs to fail
+    parent = os.path.dirname(os.path.abspath(filename))
+    if parent:
+        os.makedirs(parent, exist_ok=True)
 
     with h5py.File(filename, mode) as f:
         for k, v in data.items():
@@ -200,9 +227,18 @@ def save_dict_to_hdf5(
 # ---------- LOAD ----------
 
 
-def load_dict_from_hdf5(filename: str) -> dict:
+def load_dict_from_hdf5(filename: str, keys: Optional[Set[str]] = None) -> dict:
     """
     Load a dictionary previously stored with save_dict_to_hdf5(filename, data, ...).
+
+    Parameters
+    ----------
+    filename : str
+        Path to the HDF5 file.
+    keys : set of str, optional
+        If provided, only the specified top-level keys are loaded from disk.
+        All other keys are ignored, avoiding unnecessary decompression of
+        large datasets. If None (default), all keys are loaded.
 
     Behavior:
         - Groups marked with __is_sequence__=True are reconstructed as lists,
@@ -240,10 +276,10 @@ def load_dict_from_hdf5(filename: str) -> dict:
             if "__is_sequence__" in obj.attrs:
                 if obj.attrs["__is_sequence__"]:
                     # list-like
-                    keys = list(obj.keys())
-                    if not keys:
+                    obj_keys = list(obj.keys())
+                    if not obj_keys:
                         return []
-                    int_keys = sorted(int(k) for k in keys)
+                    int_keys = sorted(int(k) for k in obj_keys)
                     return [_read_item(obj[str(i)]) for i in int_keys]
                 else:
                     # dict-like
@@ -253,22 +289,21 @@ def load_dict_from_hdf5(filename: str) -> dict:
                     return out
 
             # No explicit marker: infer from keys
-            keys = list(obj.keys())
-            if not keys:
-                # no marker, no children: default to dict
+            obj_keys = list(obj.keys())
+            if not obj_keys:
                 return {}
 
             try:
-                int_keys = sorted(int(k) for k in keys)
-                is_seq = int_keys == list(range(len(keys)))
+                int_keys = sorted(int(k) for k in obj_keys)
+                is_seq = int_keys == list(range(len(obj_keys)))
             except ValueError:
                 is_seq = False
 
             if is_seq:
-                return [_read_item(obj[str(i)]) for i in range(len(keys))]
+                return [_read_item(obj[str(i)]) for i in range(len(obj_keys))]
             else:
                 out = {}
-                for k in keys:
+                for k in obj_keys:
                     out[k] = _read_item(obj[k])
                 return out
 
@@ -311,5 +346,7 @@ def load_dict_from_hdf5(filename: str) -> dict:
     with h5py.File(filename, "r") as f:
         result = {}
         for k in f.keys():
+            if keys is not None and k not in keys:
+                continue
             result[k] = _read_item(f[k])
         return result
