@@ -54,6 +54,10 @@ To run the test suite:
 pytest demos
 ```
 
+or to build a visualization document of the full test suite:
+```bash
+ssapy-demo-gallery
+```
 Code formatting and linting are handled via `ruff` (see `pyproject.toml` for configuration).
 
 ---
