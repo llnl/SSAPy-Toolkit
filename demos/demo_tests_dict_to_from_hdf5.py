@@ -4,7 +4,7 @@ import os
 import datetime as dt
 import numpy as np
 
-from ssapy_toolkit.io.dict_to_from_hdf5 import save_dict_to_hdf5, load_dict_from_hdf5  # [34]
+from ssapy_toolkit.io.dict_to_from_hdf5 import save_dict_to_hdf5, load_dict_from_hdf5
 
 try:
     from astropy.time import Time as AstroTime
@@ -23,10 +23,16 @@ def build_test_dict():
         "now": dt.datetime.now(),
         "today": dt.date.today(),
         "time_only": dt.time(12, 34, 56, 789),
+        # Numeric lists — new behavior: stored and returned as numpy arrays
+        "numeric_list": np.array([1, 2, 3, 4, 5]),
+        "float_list": np.array([1.1, 2.2, 3.3]),
+        # Non-numeric / ragged lists — still stored as groups, returned as lists
         "nested_lists": [[1, 2, 3], [4, 5], [], [[10, 11], [12]]],
         "mixed": {
-            "list_of_lists": [[0, 1], [2, 3, 4]],
-            "list_of_scalars": [True, False, 1.23],
+            # Numeric sublists stored as arrays
+            "list_of_arrays": [np.array([0, 1]), np.array([2, 3, 4])],
+            # Mixed bool+float: store as array explicitly
+            "list_of_scalars": np.array([1.0, 0.0, 1.23]),
         },
     }
 
@@ -47,23 +53,53 @@ def main():
     save_dict_to_hdf5(filename, original, mode="w")
     loaded = load_dict_from_hdf5(filename)
 
-    assert loaded["nested_lists"] == original["nested_lists"]
-    assert loaded["mixed"]["list_of_lists"] == original["mixed"]["list_of_lists"]
-    assert np.array_equal(loaded["simple_array"], original["simple_array"])
-    assert loaded["today"] == original["today"]
-    assert loaded["now"] == original["now"]
-    assert loaded["time_only"] == original["time_only"]
+    # --- Numeric arrays ---
+    assert np.array_equal(loaded["simple_array"], original["simple_array"]), "simple_array mismatch"
+    assert np.array_equal(loaded["numeric_list"], original["numeric_list"]), "numeric_list mismatch"
+    assert np.array_equal(loaded["float_list"], original["float_list"]), "float_list mismatch"
 
+    # --- Scalars ---
+    assert loaded["scalar_int"] == original["scalar_int"], "scalar_int mismatch"
+    assert np.isclose(loaded["scalar_float"], original["scalar_float"]), "scalar_float mismatch"
+
+    # --- String / bytes ---
+    assert loaded["string"] == original["string"], "string mismatch"
+    assert loaded["bytes_val"] == original["bytes_val"], "bytes_val mismatch"
+
+    # --- Datetime ---
+    assert loaded["today"] == original["today"], "today mismatch"
+    assert loaded["now"] == original["now"], "now mismatch"
+    assert loaded["time_only"] == original["time_only"], "time_only mismatch"
+
+    # --- Nested ragged list: outer structure is preserved as a list of lists/arrays ---
+    assert len(loaded["nested_lists"]) == len(original["nested_lists"]), "nested_lists length mismatch"
+    assert np.array_equal(loaded["nested_lists"][0], [1, 2, 3]), "nested_lists[0] mismatch"
+    assert np.array_equal(loaded["nested_lists"][1], [4, 5]), "nested_lists[1] mismatch"
+    assert len(loaded["nested_lists"][2]) == 0, "nested_lists[2] mismatch"
+    assert np.array_equal(loaded["nested_lists"][3][0], [10, 11]), "nested_lists[3][0] mismatch"
+    assert np.array_equal(loaded["nested_lists"][3][1], [12]), "nested_lists[3][1] mismatch"
+
+    # --- Mixed nested dict ---
+    assert np.array_equal(loaded["mixed"]["list_of_arrays"][0], original["mixed"]["list_of_arrays"][0]), \
+        "mixed/list_of_arrays[0] mismatch"
+    assert np.array_equal(loaded["mixed"]["list_of_arrays"][1], original["mixed"]["list_of_arrays"][1]), \
+        "mixed/list_of_arrays[1] mismatch"
+    assert np.array_equal(loaded["mixed"]["list_of_scalars"], original["mixed"]["list_of_scalars"]), \
+        "mixed/list_of_scalars mismatch"
+
+    # --- Astropy Time ---
     if HAS_ASTROPY:
         o_scalar = original["astro_time_scalar"]
         l_scalar = loaded["astro_time_scalar"]
-        assert np.allclose(o_scalar.mjd, l_scalar.mjd)
-        assert o_scalar.scale == l_scalar.scale
+        assert np.isclose(o_scalar.mjd, l_scalar.mjd), "astro_time_scalar mjd mismatch"
+        assert o_scalar.scale == l_scalar.scale, "astro_time_scalar scale mismatch"
 
         o_arr = original["astro_time_array"]
         l_arr = loaded["astro_time_array"]
-        assert np.allclose(o_arr.mjd, l_arr.mjd)
-        assert o_arr.scale == l_arr.scale
+        assert np.allclose(o_arr.mjd, l_arr.mjd), "astro_time_array mjd mismatch"
+        assert o_arr.scale == l_arr.scale, "astro_time_array scale mismatch"
+
+    print("All assertions passed.")
 
     if os.path.exists(filename):
         os.remove(filename)
