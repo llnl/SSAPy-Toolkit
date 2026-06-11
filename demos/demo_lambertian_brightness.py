@@ -9,7 +9,7 @@ Two modes
             NO graphics are produced.
 * demo:     `python demo_lambertian_brightness.py`
             Same benchmarks AND benchmark figures, saved via
-            `ssapy_toolkit.plots.yufig` into tests/.
+            `ssapy_toolkit.plots.yufig` into demo_gallery/figures/.
 
 The model is imported from ssapy_toolkit.compute when available, falling
 back to the standalone lambertian_sphere_brightness.py next to this file.
@@ -274,7 +274,7 @@ def _demo_figures():
     ax2.set_ylabel("model - analytic [mag]")
     ax2.legend(fontsize=9)
     fig.tight_layout()
-    yufig(fig, "tests/demo_phase_curve_benchmark.jpg")
+    yufig(fig, "demo_gallery/figures/demo_phase_curve_benchmark.jpg")
     plt.close(fig)
 
     # ---- Figure 2: fractional-flux agreement (machine precision) ------
@@ -288,7 +288,7 @@ def _demo_figures():
                  "(identical Lambertian-sphere model -> machine precision)")
     ax.grid(alpha=0.3)
     fig.tight_layout()
-    yufig(fig, "tests/demo_fractional_flux_benchmark.jpg")
+    yufig(fig, "demo_gallery/figures/demo_fractional_flux_benchmark.jpg")
     plt.close(fig)
 
     # ---- Figure 3: airmass benchmark + multi-band magnitudes ----------
@@ -320,12 +320,12 @@ def _demo_figures():
                   "reflection-dominated VIS -> thermal-dominated LWIR")
     ax2.grid(alpha=0.3, axis="y")
     fig.tight_layout()
-    yufig(fig, "tests/demo_airmass_and_bands.jpg")
+    yufig(fig, "demo_gallery/figures/demo_airmass_and_bands.jpg")
     plt.close(fig)
 
-    print("Saved via yufig: tests/demo_phase_curve_benchmark.jpg")
-    print("Saved via yufig: tests/demo_fractional_flux_benchmark.jpg")
-    print("Saved via yufig: tests/demo_airmass_and_bands.jpg")
+    print("Saved via yufig: demo_gallery/figures/demo_phase_curve_benchmark.jpg")
+    print("Saved via yufig: demo_gallery/figures/demo_fractional_flux_benchmark.jpg")
+    print("Saved via yufig: demo_gallery/figures/demo_airmass_and_bands.jpg")
 
 
 if __name__ == "__main__":
