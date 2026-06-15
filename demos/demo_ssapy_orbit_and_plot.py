@@ -15,7 +15,7 @@ from ssapy.propagator import SciPyPropagator
 from ssapy_toolkit.plots.orbit_plot import orbit_plot
 from ssapy_toolkit.plots.groundtrack_plot import groundtrack_plot
 from ssapy_toolkit.plots.plotutils import yufig
-from ssapy_toolkit.compute.lambertian_magnitude import M_v_lambertian
+from ssapy_toolkit.compute.lambertian_magnitude import lambertian_reflection
 from ssapy_toolkit.time_functions.get_times import get_times
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
@@ -97,7 +97,9 @@ def main(make_figures=None, fast=None):
         orbit_plot(r, times, frame="lunar", show=False)
         groundtrack_plot(r, times)
 
-    mv = M_v_lambertian(r, times)
+    mv = lambertian_reflection(
+        r, time=times, lon=-156.26, lat=20.71, elevation=3055.0
+    )["ab_mag_observed"]
 
     if make_figures:
         xticks = np.linspace(times.decimalyear[0], times.decimalyear[-1], 4)

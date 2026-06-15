@@ -55,6 +55,7 @@ Author: generated with Claude.
 
 from __future__ import annotations
 
+import functools
 import numpy as np
 import astropy.units as u
 from astropy.time import Time
@@ -110,6 +111,41 @@ BANDS = {
     "LWIR":  (8.0e-6, 14.0e-6),
 }
 
+# ----------------------------------------------------------------------
+# (N,3)-position support: let the scalar brightness functions also accept
+# an array of GCRS positions (consistent with ssapy.rv output) plus a
+# Time array, looping internally and returning a dict of (N,) arrays.
+# `time` MUST be passed as a keyword -- positional arg 2 is `observer`.
+# ----------------------------------------------------------------------
+def _stack_dicts(dicts):
+    """Merge identically-structured result dicts; scalar leaves -> (N,) arrays."""
+    out = {}
+    for k, v in dicts[0].items():
+        out[k] = (_stack_dicts([d[k] for d in dicts]) if isinstance(v, dict)
+                  else np.array([d[k] for d in dicts]))
+    return out
+
+
+def _accept_position_array(func):
+    """Decorator: if obj_pos_gcrs_m is (N,3), loop the scalar core over rows
+    (broadcasting a scalar Time or indexing a Time array) and stack the
+    per-epoch result dicts into one dict of (N,) arrays. A single (3,)
+    position falls straight through to the original scalar path."""
+    @functools.wraps(func)
+    def wrapper(obj_pos_gcrs_m, *args, **kwargs):
+        pos = np.asarray(obj_pos_gcrs_m, dtype=float)
+        if pos.ndim < 2:                       # (3,) -> unchanged scalar path
+            return func(obj_pos_gcrs_m, *args, **kwargs)
+        time = kwargs.get("time", DEFAULT_TIME)
+        scalar_t = getattr(time, "isscalar", np.ndim(time) == 0)
+        results = []
+        for i in range(pos.shape[0]):
+            kw = dict(kwargs)
+            if not scalar_t:
+                kw["time"] = time[i]
+            results.append(func(pos[i], *args, **kw))
+        return _stack_dicts(results)
+    return wrapper
 
 # ----------------------------------------------------------------------
 # Small geometry helpers
@@ -326,6 +362,7 @@ def _package(g, comp_bolo, comp_band, angles, time, f_nu_ab_zero):
 # ======================================================================
 # 1) Reflected light only
 # ======================================================================
+@_accept_position_array
 def lambertian_reflection(
     obj_pos_gcrs_m,
     observer=None,
@@ -425,6 +462,7 @@ def lambertian_reflection(
 # ======================================================================
 # 2) Thermal self-emission only
 # ======================================================================
+@_accept_position_array
 def thermal_emission(
     obj_pos_gcrs_m,
     observer=None,
@@ -472,6 +510,7 @@ def thermal_emission(
 # ======================================================================
 # 3) Combined: reflection + emission
 # ======================================================================
+@_accept_position_array
 def lambertian_sphere_brightness(
     obj_pos_gcrs_m,
     observer=None,

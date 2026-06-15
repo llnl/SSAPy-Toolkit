@@ -19,7 +19,7 @@ from ssapy_toolkit.plots.figpath import figpath
 from ssapy_toolkit.plots.orbit_plot import orbit_plot
 from ssapy_toolkit.plots.groundtrack_plot import groundtrack_plot
 from ssapy_toolkit.plots.plotutils import save_plot
-from ssapy_toolkit.compute.lambertian_magnitude import M_v_lambertian
+from ssapy_toolkit.compute.lambertian_magnitude import lambertian_reflection
 from ssapy_toolkit.time_functions.get_times import get_times
 
 # Pull in ssapy pieces explicitly so the call signatures are unambiguous.
@@ -157,7 +157,9 @@ def main(make_figures=None, fast=None):
     # ------------------------------------------------------------
     # Lambertian reflectance (apparent magnitude)
     # ------------------------------------------------------------
-    mv = M_v_lambertian(r, times)
+    mv = lambertian_reflection(
+        r, time=times, lon=-156.26, lat=20.71, elevation=3055.0
+    )["ab_mag_observed"]
 
     if make_figures:
         xticks = np.linspace(times.decimalyear[0], times.decimalyear[-1], 4)
