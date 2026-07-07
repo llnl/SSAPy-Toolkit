@@ -72,6 +72,7 @@ cover/
 
 # Sphinx documentation
 docs/_build/
+docs/generated/
 
 # Jupyter Notebook
 .ipynb_checkpoints/
@@ -95,4 +96,4 @@ docs/_build/
 ##########################
 
 .DS_Store
-*~
+*~docs/generated/

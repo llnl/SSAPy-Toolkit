@@ -802,3 +802,127 @@ def ellipse_fit(
     }
 
     return result
+
+"""
+delta_v_transfer.py ─────────────────────────────────────────────────────────────
+Turn an `ellipse_fit` transfer arc plus the departure/arrival orbit velocities
+into the two impulsive burns (Δv) of a two-burn transfer.
+
+A Δv is the difference between the transfer-arc velocity at an endpoint and the
+velocity of the orbit the spacecraft is actually leaving (at P1) or joining
+(at P2):
+
+    Δv₁ = v_transfer(P1) − v_depart(P1)     # burn that injects onto the arc
+    Δv₂ = v_arrive(P2)   − v_transfer(P2)   # burn that matches the target orbit
+    Δv_total = |Δv₁| + |Δv₂|
+
+`ellipse_fit` already supplies the transfer-arc velocities (`fit["v"][0]` at P1
+and `fit["v"][-1]` at P2); this wrapper supplies the boundary-orbit velocities
+and does the differencing. There is no orbital mechanics here beyond the
+subtraction — all four vectors must already live in the SAME Earth-centered
+inertial frame (the frame `ellipse_fit` works in, with the focus at the origin).
+
+Boundary states may be passed as plain (3,) velocity arrays or as `ssapy.Orbit`
+objects. When an `Orbit` is passed, its `.v` is differenced and its `.r` is
+checked against the matching arc endpoint, so a mis-propagated or wrong-frame
+boundary state is caught loudly instead of silently producing a garbage burn.
+The `Orbit` must be propagated to the endpoint epoch first (i.e. a scalar-time
+state, not a trajectory) — see `fit["t_abs"]` for those epochs when `ellipse_fit`
+was called with a departure/arrival time.
+
+Sign convention: both `dv1` and `dv2` are the velocity *added* to the spacecraft
+(command burns), so dv1 = v_transfer − v_depart and dv2 = v_arrive − v_transfer.
+Magnitudes are direction-independent regardless.
+"""
+
+
+def delta_v_transfer(
+    fit,
+    depart,
+    arrive,
+    *,
+    pos_tol_m=1.0e3,
+    check_positions=True,
+):
+    # ───────────────────────── internal helpers ──────────────────────────
+    def _state_from(obj, name):
+        """
+        Return (v_m_s, r_m_or_None) from either a (3,) velocity array or an
+        ssapy.Orbit. r is None when only a bare velocity vector was supplied.
+        Duck-typed on .r/.v so ssapy is never hard-imported here.
+        """
+        r_attr = getattr(obj, "r", None)
+        v_attr = getattr(obj, "v", None)
+        if v_attr is not None and r_attr is not None:
+            v = np.asarray(v_attr, float).reshape(-1)
+            r = np.asarray(r_attr, float).reshape(-1)
+            if v.size != 3 or r.size != 3:
+                raise ValueError(
+                    f"{name}: Orbit must carry a single 3-vector state "
+                    f"(got r shape {np.shape(r_attr)}, v shape {np.shape(v_attr)}). "
+                    f"Propagate to the endpoint epoch and pass a scalar-time Orbit."
+                )
+            return v, r
+
+        v = np.asarray(obj, float).reshape(-1)
+        if v.size != 3:
+            raise ValueError(
+                f"{name}: expected a (3,) velocity vector (or ssapy.Orbit), "
+                f"got shape {np.shape(obj)}."
+            )
+        return v, None
+
+    # ───────────────────────── transfer endpoints ─────────────────────────
+    v_arc = np.asarray(fit["v"], float)
+    r_arc = np.asarray(fit["r"], float)
+    if v_arc.ndim != 2 or v_arc.shape[0] < 2:
+        raise ValueError("fit['v'] must be an (N>=2, 3) array from ellipse_fit.")
+
+    v_t1 = v_arc[0]    # transfer-arc velocity at P1 (== fit['v0'])
+    v_t2 = v_arc[-1]   # transfer-arc velocity at P2
+    r_p1 = r_arc[0]    # P1
+    r_p2 = r_arc[-1]   # P2
+
+    # ───────────────────────── boundary velocities ────────────────────────
+    v_dep, r_dep = _state_from(depart, "depart")
+    v_arr, r_arr = _state_from(arrive, "arrive")
+
+    # ───────────────────────── position consistency ───────────────────────
+    res_p1 = None if r_dep is None else float(np.linalg.norm(r_dep - r_p1))
+    res_p2 = None if r_arr is None else float(np.linalg.norm(r_arr - r_p2))
+
+    if check_positions:
+        if res_p1 is not None and res_p1 > pos_tol_m:
+            raise ValueError(
+                f"Departure state is {res_p1:.3e} m from the arc start P1 "
+                f"(tol {pos_tol_m:g} m). Propagate the departure orbit to the P1 "
+                f"epoch, confirm the frame matches ellipse_fit, or relax pos_tol_m."
+            )
+        if res_p2 is not None and res_p2 > pos_tol_m:
+            raise ValueError(
+                f"Arrival state is {res_p2:.3e} m from the arc end P2 "
+                f"(tol {pos_tol_m:g} m). Propagate the arrival orbit to the P2 "
+                f"epoch, confirm the frame matches ellipse_fit, or relax pos_tol_m."
+            )
+
+    # ─────────────────────────────── burns ────────────────────────────────
+    dv1 = v_t1 - v_dep
+    dv2 = v_arr - v_t2
+    dv1_mag = float(np.linalg.norm(dv1))
+    dv2_mag = float(np.linalg.norm(dv2))
+
+    # ───────────────────────── output dict ────────────────────────────────
+    return {
+        "dv1": dv1,                     # (3,) [m/s]  departure burn (v_transfer_P1 − v_depart)
+        "dv2": dv2,                     # (3,) [m/s]  arrival burn   (v_arrive − v_transfer_P2)
+        "dv1_mag": dv1_mag,             # [m/s]
+        "dv2_mag": dv2_mag,             # [m/s]
+        "dv_total": dv1_mag + dv2_mag,  # [m/s]
+        "v_t1": v_t1,                   # (3,) [m/s]  transfer velocity at P1
+        "v_t2": v_t2,                   # (3,) [m/s]  transfer velocity at P2
+        "v_depart": v_dep,              # (3,) [m/s]
+        "v_arrive": v_arr,              # (3,) [m/s]
+        "pos_residual_p1": res_p1,      # [m]  |r_depart − P1|, or None if no Orbit given
+        "pos_residual_p2": res_p2,      # [m]  |r_arrive − P2|, or None if no Orbit given
+    }
+
