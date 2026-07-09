@@ -82,7 +82,7 @@ def divergence_gif(
         t_hat = v_center / np.linalg.norm(v_center)
         w_hat = np.cross(r_center, v_center)
         w_hat = w_hat / np.linalg.norm(w_hat)
-        n_hat = np.cross(w_hat, t_hat)
+        n_hat = np.cross(t_hat, w_hat)
         
         # Project errors
         errors_projected = errors - np.outer(np.dot(errors, t_hat), t_hat)
@@ -120,7 +120,7 @@ def divergence_gif(
         t_hat = v_center / np.linalg.norm(v_center)
         w_hat = np.cross(r_center, v_center)
         w_hat = w_hat / np.linalg.norm(w_hat)
-        n_hat = np.cross(w_hat, t_hat)
+        n_hat = np.cross(t_hat, w_hat)
         
         # Project errors
         errors_projected = errors - np.outer(np.dot(errors, t_hat), t_hat)

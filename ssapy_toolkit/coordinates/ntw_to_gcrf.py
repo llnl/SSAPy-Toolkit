@@ -26,7 +26,7 @@ def ntw_to_gcrf_matrix(r, v):
     e_T = v / np.linalg.norm(v)          # Tangential (along velocity)
     h = np.cross(r, v)                   # Angular momentum
     e_W = h / np.linalg.norm(h)          # Out-of-plane
-    e_N = np.cross(e_W, e_T)             # Normal
+    e_N = np.cross(e_T, e_W)             # Normal: radially outward (N x T = W)
     return np.column_stack((e_N, e_T, e_W))
 
 
