@@ -14,8 +14,9 @@ def deltav_to_burn(orbit, times, delta_v_ntw):
     ----------
     orbit : ssapy.Orbit
     times : 1D array of seconds (monotonic)
-    delta_v_ntw : (3,) NTW delta-v [m/s],
-                  interpreted as [Normal(out-of-plane), Tangential, Radial].
+    delta_v_ntw : (3,) NTW delta-v [m/s], ordered [N, T, W]
+                  (canonical ssapy convention: N = T x W in-plane/radially
+                  outward, T = v_hat tangential, W = r x v out-of-plane).
 
     Returns
     -------
@@ -40,10 +41,12 @@ def deltav_to_burn(orbit, times, delta_v_ntw):
     delta_v_ntw = np.asarray(delta_v_ntw, float)
     a_ntw = delta_v_ntw / duration
 
-    # Map NTW -> leapfrog profiles
-    a_incl = a_ntw[0]   # out-of-plane
-    a_tan  = a_ntw[1]   # along-track
-    a_rad  = a_ntw[2]   # radial
+    # Map canonical NTW [N, T, W] -> leapfrog thrust channels (see burn_to_deltav
+    # for the exact/approximate caveats):
+    #   N -> radial (+r_hat), T -> tangential (+v_hat), W -> out-of-plane (north).
+    a_rad  = a_ntw[0]   # N -> radial (+r_hat)
+    a_tan  = a_ntw[1]   # T -> tangential (+v_hat)
+    a_incl = a_ntw[2]   # W -> out-of-plane (local north)
 
     radial_prof      = a_rad
     velocity_prof    = a_tan

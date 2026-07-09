@@ -34,11 +34,17 @@ UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") 
 
 
 def ntw_frame(r, v):
-    """Compute NTW basis vectors."""
-    t = r / np.linalg.norm(r)
+    """Compute NTW basis vectors (canonical ssapy convention).
+
+    N = T x W  in-plane, radially outward (equals r_hat for a circular
+               orbit; tilted off it by the flight-path angle otherwise)
+    T = v_hat  tangential / along-track
+    W = r x v  orbit normal / cross-track
+    """
+    t = v / np.linalg.norm(v)
     w = np.cross(r, v)
     w = w / np.linalg.norm(w)
-    n = np.cross(w, t)
+    n = np.cross(t, w)
     return n, t, w
 
 
@@ -179,9 +185,9 @@ def main(make_figures=None, fast=None, output_dir=None):
     sep_ntw = np.zeros((len(times_gps), 3))
     for i in range(len(times_gps)):
         n, t, w = ntw_frame(r_ref[i], v_ref[i])
-        sep_ntw[i, 0] = np.dot(dr[i], n)  # Along-track
-        sep_ntw[i, 1] = np.dot(dr[i], t)  # Radial
-        sep_ntw[i, 2] = np.dot(dr[i], w)  # Cross-track
+        sep_ntw[i, 0] = np.dot(dr[i], n)  # N: in-plane / near-radial
+        sep_ntw[i, 1] = np.dot(dr[i], t)  # T: along-track
+        sep_ntw[i, 2] = np.dot(dr[i], w)  # W: cross-track
 
     # ── Dashboard Plot ───────────────────────────────────────────────────────
     save_path = None
@@ -264,7 +270,7 @@ def main(make_figures=None, fast=None, output_dir=None):
         ax_w = fig.add_subplot(gs[2, 1], sharex=ax_n)
 
         axes_ntw = [ax_n, ax_t, ax_w]
-        labels_ntw = ["Along-track (N)", "Radial (T)", "Cross-track (W)"]
+        labels_ntw = ["Radial (N)", "Along-track (T)", "Cross-track (W)"]
         colors_ntw = ["#1f77b4", "#ff7f0e", "#2ca02c"]
 
         for i, (ax, label, color) in enumerate(zip(axes_ntw, labels_ntw, colors_ntw)):
@@ -336,8 +342,8 @@ def main(make_figures=None, fast=None, output_dir=None):
     print(f"Final velocity error: {vsep_mag[-1]*1e3:.3f} mm/s")
     print()
     print("NTW errors at end:")
-    print(f"  Along-track (N): {sep_ntw[-1, 0]:10.2f} m")
-    print(f"  Radial (T):      {sep_ntw[-1, 1]:10.2f} m")
+    print(f"  Radial (N):      {sep_ntw[-1, 0]:10.2f} m")
+    print(f"  Along-track (T): {sep_ntw[-1, 1]:10.2f} m")
     print(f"  Cross-track (W): {sep_ntw[-1, 2]:10.2f} m")
     print("=" * 70)
 

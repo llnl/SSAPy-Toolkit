@@ -14,8 +14,9 @@ def burn_to_deltav(orbit, times, burn_ntw):
     ----------
     orbit : ssapy.Orbit
     times : 1D array of seconds (monotonic)
-    burn_ntw : (3,) constant NTW acceleration [m/s^2],
-               interpreted as [Normal(out-of-plane), Tangential, Radial].
+    burn_ntw : (3,) constant NTW acceleration [m/s^2], ordered [N, T, W]
+               (canonical ssapy convention: N = T x W in-plane/radially outward,
+               T = v_hat tangential, W = r x v out-of-plane).
 
     Returns
     -------
@@ -33,11 +34,21 @@ def burn_to_deltav(orbit, times, burn_ntw):
     if not np.isclose(t[0], t0, atol=1e-6):
         t = t - (t[0] - t0)
 
-    # Map NTW -> leapfrog profiles
+    # Map canonical NTW [N, T, W] -> leapfrog thrust channels.
+    #   N -> radial       (+r_hat)      leapfrog 'radial'
+    #   T -> tangential   (+v_hat)      leapfrog 'velocity'
+    #   W -> out-of-plane               leapfrog 'inclination'
+    # This matches ntw_to_gcrf's [N, T, W] column order, so the continuous
+    # (leapfrog) and impulsive (ntw_to_gcrf) branches use the same frame.
+    # NOTE: leapfrog's radial channel is exactly +r_hat and its inclination
+    # channel is local north; these coincide with canonical N and W only for a
+    # circular, equatorial orbit. For inclined/eccentric orbits they differ by
+    # the flight-path angle / inclination (a small-angle approximation on the
+    # continuous branch; the impulsive branch via ntw_to_gcrf is exact).
     burn_ntw = np.asarray(burn_ntw, float)
-    a_incl = burn_ntw[0]   # along +h_hat  (out-of-plane)   <-- swap if your NTW order differs
-    a_tan  = burn_ntw[1]   # along +v_hat  (tangential)
-    a_rad  = burn_ntw[2]   # along +r_hat  (radial)
+    a_rad  = burn_ntw[0]   # N -> radial (+r_hat)
+    a_tan  = burn_ntw[1]   # T -> tangential (+v_hat)
+    a_incl = burn_ntw[2]   # W -> out-of-plane (local north)
 
     # Constant profiles across the window
     radial_prof      = a_rad
