@@ -96,3 +96,5 @@ docs/_build/
 
 .DS_Store
 *~
+_gui_cfg_orbit_full.py
+_gui_cfg_orbit_xy.py
