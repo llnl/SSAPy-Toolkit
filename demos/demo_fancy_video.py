@@ -10,7 +10,8 @@ from astropy.time import Time
 
 from ssapy_toolkit.coordinates.lunar_position import get_lunar_rv
 from ssapy_toolkit.plots.figpath import figpath
-
+sys.path.insert(0, os.path.expanduser("~/SSAPy-Toolkit"))
+sys.path.insert(0, os.path.expanduser("~/SSAPy"))
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
 
@@ -158,7 +159,7 @@ def orbit_moon_video_demo(
     COLOR_EARTH     = "#1E6FD9"   # blue Earth sphere
 
     # Earth radius in metres (visual scale — scaled up for visibility)
-    EARTH_RADIUS_VIS = 0.04 * lim
+    EARTH_RADIUS_VIS = 0.08 * lim
 
     fig = plt.figure(figsize=(10, 10), dpi=160)
     fig.patch.set_facecolor("black")
@@ -180,17 +181,27 @@ def orbit_moon_video_demo(
     ax.set_zticks([])
 
     # Earth sphere at origin
-    _draw_sphere(ax, center=(0.0, 0.0, 0.0), radius=EARTH_RADIUS_VIS, color=COLOR_EARTH, alpha=1.0)
+    # Textured Earth
+    from ssapy_toolkit.plots.orbit_plot_xy import _textured_sphere
+    import os
+    earth_img = os.path.expanduser("~/SSAPy/ssapy/data/earth.png")
+    drawn = _textured_sphere(ax, 0, 0, 0, EARTH_RADIUS_VIS, earth_img, n=32)
+    if not drawn:
+        _draw_sphere(ax, center=(0.0, 0.0, 0.0), radius=EARTH_RADIUS_VIS, color=COLOR_EARTH, alpha=1.0)
 
     # Animated artists
-    moon_pt,   = ax.plot([], [], [], marker="o", markersize=7,  color=COLOR_MOON,       linewidth=0)
+    moon_pt, = ax.plot([], [], [], marker="o", markersize=8, color=COLOR_MOON, linewidth=0, markeredgecolor='#666666', markeredgewidth=0.5)
     sc_pt,     = ax.plot([], [], [], marker="o", markersize=4,  color=COLOR_SC,         linewidth=0)
     moon_trail,= ax.plot([], [], [], color=COLOR_MOON_TRAIL,    linewidth=1.2, alpha=0.45)
     sc_trail,  = ax.plot([], [], [], color=COLOR_SC_TRAIL,      linewidth=1.6, alpha=0.65)
     title      = ax.text2D(0.03, 0.92, "", transform=ax.transAxes, color="white")
 
     _set_axes_equal_3d(ax, lim)
-
+# ── Static star background ────────────────────────────────────────────────
+    import sys
+    sys.path.insert(0, os.path.expanduser("~/SSAPy-Toolkit"))
+    from ssapy_toolkit.plots.starfield import add_starfield
+    add_starfield(ax, lim * 2, elev=ax.elev, azim=ax.azim, mag_limit=5.5)
     def init():
         moon_pt.set_data([], [])
         moon_pt.set_3d_properties([])

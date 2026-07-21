@@ -1,5 +1,5 @@
 from .plotutils import valid_orbits
-
+from .starfield import add_starfield
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.ticker import MaxNLocator
@@ -36,7 +36,7 @@ class GradientLineHandler(HandlerBase):
         return [lc]
 
 
-def cislunar_plot(r, t=None, figsize=(8, 8), fontsize=12, save_path=False, show=False, title=None, c='white'):
+def cislunar_plot(r, t=None, figsize=(8, 8), fontsize=12, save_path=False, show=False, title=None, c='black'):
     """
     Author: Travis Yeager (yeager7@llnl.gov)
     """
@@ -204,7 +204,20 @@ def cislunar_plot(r, t=None, figsize=(8, 8), fontsize=12, save_path=False, show=
 
     ax1.set_zorder(2)
     ax2.set_zorder(1)
-
+# ── Star background ───────────────────────────────────────────────────────
+    if 'w' not in c:
+        plot_range = max(
+            bounds_gcrf["upper"][0] - bounds_gcrf["lower"][0],
+            bounds_gcrf["upper"][1] - bounds_gcrf["lower"][1],
+            bounds_gcrf["upper"][2] - bounds_gcrf["lower"][2],
+        )
+        for ax in [ax1, ax2]:
+            for pane in [ax.xaxis.pane, ax.yaxis.pane, ax.zaxis.pane]:
+                pane.fill = False
+                pane.set_alpha(0)
+                pane.set_edgecolor('none')
+            ax.grid(False)
+            add_starfield(ax, plot_range, elev=ax.elev, azim=ax.azim)
     if save_path:
         save_plot(fig, save_path)
     if show:

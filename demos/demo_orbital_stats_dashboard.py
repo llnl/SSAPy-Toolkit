@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('Agg')
 """
 Demo script showing how to call synthetic_orbit_population and orbit_stats_dashboard.
 """

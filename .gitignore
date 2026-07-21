@@ -96,3 +96,20 @@ docs/_build/
 
 .DS_Store
 *~
+desktop.ini
+output/
+ssapy_toolkit/plots/output/
+ssapy_toolkit/debris/
+
+tle_credentials_local.py
+
+
+ssapy_full_catalog.json
+
+ssapy_toolkit/plots/van_allen_plot_3d.py
+ssapy_toolkit/plots/magfield_plot_3d.py
+demos/demo_van_allen.py
+demos/demo_magfield_plot.py
+
+ssapy_toolkit/plots/ssapy_satellites.json
+ssapy_toolkit/plots/tle_cache.json

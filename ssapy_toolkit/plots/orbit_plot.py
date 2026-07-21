@@ -6,6 +6,8 @@ from ssapy import get_body
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import numpy as np
+from .starfield import add_starfield
+
 
 def orbit_plot(r, t=None, title='', figsize=(7, 7), save_path=False, frame="gcrf", show=False, c='black', pad=1):
     from ..orbital_mechanics import lagrange_points_lunar_frame
@@ -228,6 +230,20 @@ def orbit_plot(r, t=None, title='', figsize=(7, 7), save_path=False, frame="gcrf
     ax4.set_ylim(bounds["lower"][1], bounds["upper"][1])
     ax4.set_zlim(bounds["lower"][2], bounds["upper"][2])
     ax4.set_box_aspect([1, 1, 1])
+
+    # ── Star background on 3D panel ───────────────────────────────────────────
+    if 'w' not in c:
+        plot_range = max(
+            bounds["upper"][0] - bounds["lower"][0],
+            bounds["upper"][1] - bounds["lower"][1],
+            bounds["upper"][2] - bounds["lower"][2],
+        )
+        for pane in [ax4.xaxis.pane, ax4.yaxis.pane, ax4.zaxis.pane]:
+            pane.fill = False
+            pane.set_alpha(0)
+            pane.set_edgecolor('none')
+        ax4.grid(False)
+        add_starfield(ax4, plot_range, elev=ax4.elev, azim=ax4.azim)
 
     for ax in [ax1, ax2, ax3, ax4]:
         ax.set_facecolor(plotcolor)
