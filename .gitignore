@@ -113,3 +113,5 @@ demos/demo_magfield_plot.py
 
 ssapy_toolkit/plots/ssapy_satellites.json
 ssapy_toolkit/plots/tle_cache.json
+
+_gui_cfg_*.py
