@@ -1,0 +1,43 @@
+name: Repository Policy
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  repository-policy:
+    name: repository-policy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check repository layout and artifacts
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            BASE_REF="$PR_BASE_SHA"
+            HEAD_REF="HEAD"
+          else
+            BASE_REF="$PUSH_BEFORE_SHA"
+            HEAD_REF="$GITHUB_SHA"
+            if [ "$BASE_REF" = "0000000000000000000000000000000000000000" ]; then
+              BASE_REF="$(git rev-list --max-parents=0 "$HEAD_REF")"
+            fi
+          fi
+
+          python scripts/check_repository_policy.py --base-ref "$BASE_REF" --head-ref "$HEAD_REF"

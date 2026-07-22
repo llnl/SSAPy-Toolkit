@@ -5,6 +5,53 @@
 *.h5
 **/*.h5
 
+# Local data products and generated analysis/demo outputs belong outside this
+# source repository. Persist reusable data in SSAPy-Data instead.
+data/
+outputs/
+demo_gallery_output/
+site/
+
+# Generated media and bulky artifacts should be created by demos/docs workflows,
+# not committed to the repository.
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.pdf
+*.mp4
+*.mov
+*.avi
+*.webm
+*.heic
+*.npy
+*.npz
+*.fits
+*.fit
+*.csv
+*.parquet
+*.feather
+*.dat
+*.bin
+*.egm
+*.cof
+*.bpc
+*.sqlite
+*.db
+*.7z
+*.zip
+*.tar
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tgz
+*.gz
+*.bz2
+*.xz
+*.pkl
+*.pickle
+
 ###########################
 # Python-specific ignores #
 ###########################
