@@ -12,7 +12,10 @@ from __future__ import annotations
 from contextlib import contextmanager
 from importlib.util import find_spec
 from importlib.resources import as_file, files
-from importlib.resources.abc import Traversable
+try:
+    from importlib.resources.abc import Traversable
+except ImportError:  # Python 3.10
+    from importlib.abc import Traversable
 from os import PathLike
 from pathlib import Path, PurePosixPath
 from typing import Iterator

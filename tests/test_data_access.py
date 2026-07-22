@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+import ssapy_toolkit.data as data_module
 from ssapy_toolkit.data import (
     DataPackageNotFoundError,
     DataResourceNotFoundError,
@@ -29,6 +30,10 @@ def _make_data_package(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, package:
     importlib.invalidate_caches()
     sys.modules.pop(package, None)
     return package
+
+
+def test_traversable_type_is_available_for_supported_python_versions():
+    assert data_module.Traversable is not None
 
 
 def test_data_resource_reads_from_installed_package(tmp_path, monkeypatch):
