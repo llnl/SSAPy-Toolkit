@@ -35,6 +35,7 @@ Top-level modules
 
    ssapy_toolkit.asteroids
    ssapy_toolkit.constants
+   ssapy_toolkit.data
    ssapy_toolkit.hpc
    ssapy_toolkit.launch_pads
    ssapy_toolkit.orbit_initializer
