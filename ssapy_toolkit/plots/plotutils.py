@@ -4,6 +4,7 @@ import os
 import re
 from enum import Enum, auto
 from numbers import Real
+from pathlib import Path
 
 # --- Third-party ---
 import numpy as np
@@ -11,7 +12,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.colors import cnames, to_rgb, rgb2hex
 from PIL import Image as PILImage
-from pypdf import PdfWriter, PdfReader
+from pypdf import PdfWriter
 from IPython.display import Image as IPythonImage, display as ipython_display
 from astropy.time import Time
 from erfa import gst94
@@ -248,6 +249,8 @@ def valid_orbits(r, t, drop_empty=True, warn=True):
         )
 
     return r_list, t_list
+
+
 def load_earth_file():
     earth = PILImage.open(find_file("earth", ext=".png"))
     earth = earth.resize((5400 // 5, 2700 // 5))
@@ -404,37 +407,38 @@ def save_plot_to_pdf(figure, pdf_path):
     print(f"Saved figure {save_plot_to_pdf_call_count} to {pdf_path}")
 
 
-def save_plot(figure, save_path, dpi=200):
-    """
-    Save a Matplotlib figure as JPG (or append to PDF if save_path ends with .pdf).
-    """
-    if save_path.lower().endswith('.pdf'):
-        save_plot_to_pdf(figure, save_path)
-        return
-    try:
-        base_name, extension = os.path.splitext(save_path)
-        if extension.lower() != '.jpg':
-            save_path = base_name + '.jpg'
-        figure.savefig(save_path, dpi=dpi, bbox_inches=None)
-        plt.close(figure)
-        print(f"Figure saved at: {save_path}")
-    except Exception as e:
-        print(f"Error occurred while saving the figure: {e}")
+def _figure_save_path(save_path=None, default_name="figure"):
+    if save_path is False:
+        return None
+    if save_path is None or save_path is True:
+        save_path = default_name
+
+    path = Path(save_path).expanduser()
+    if path.is_absolute():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return str(path)
+
+    from .figpath import figpath
+    return figpath(path)
 
 
-def yufig(figure, save_path, dpi=200):
+def figsave(figure, save_path=None, dpi=200, default_name="figure"):
     """
-    Save a Matplotlib figure.
+    Save a Matplotlib figure through the SSATK figure-output policy.
 
     Behavior:
+      * If save_path is None or True -> save under figpath(default_name).
+      * If save_path is False -> do not save and return None.
+      * Relative paths are rooted under ~/ssatk_figures via figpath().
+      * Absolute paths are treated as explicit user requests and used directly.
       * If save_path has no extension -> save as JPG ('.jpg' is appended).
       * If save_path ends with '.pdf' (case-insensitive) -> append/write to PDF
         via save_plot_to_pdf.
       * If save_path has any other extension -> use it directly with figure.savefig().
     """
-    from .figpath import figpath
-
-    save_path = figpath(save_path)
+    save_path = _figure_save_path(save_path, default_name=default_name)
+    if save_path is None:
+        return None
 
     # Split into base and extension
     base_name, extension = os.path.splitext(save_path)
@@ -447,15 +451,30 @@ def yufig(figure, save_path, dpi=200):
     # PDF: use custom handler
     if extension.lower() == ".pdf":
         save_plot_to_pdf(figure, save_path)
-        return
+        return save_path
 
     # All other extensions: save as-is
     try:
         figure.savefig(save_path, dpi=dpi, bbox_inches=None)
         plt.close(figure)
         print(f"Figure saved at: {save_path}")
+        return save_path
     except Exception as e:
         print(f"Error occurred while saving the figure: {e}")
+        return None
+
+
+fsave = figsave
+
+
+def save_plot(figure, save_path=None, dpi=200, default_name="figure"):
+    """Compatibility wrapper for :func:`figsave`."""
+    return figsave(figure, save_path=save_path, dpi=dpi, default_name=default_name)
+
+
+def yufig(figure, save_path=None, dpi=200):
+    """Backward-compatible alias for :func:`figsave`. Prefer ``figsave``."""
+    return figsave(figure, save_path=save_path, dpi=dpi)
 
 
 def display_figure(figname, display='IPython'):
@@ -648,6 +667,3 @@ def generate_rainbow_colors(num_iterations):
     cmap = plt.get_cmap('rainbow')
     colors = [rgb2hex(cmap(i / num_iterations)) for i in range(num_iterations)]
     return colors
-
-
-

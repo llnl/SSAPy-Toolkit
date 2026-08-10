@@ -11,14 +11,14 @@ from astropy.time import Time
 from ssapy import Orbit, rv, SciPyPropagator, AccelKepler
 
 from ssapy_toolkit.plots.figpath import figpath
-from ssapy_toolkit.io.yudata import yudata
+from ssapy_toolkit.io.datapath import datapath
 from ssapy_toolkit.plots.cislunar_plot_3d import cislunar_plot_3d
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
 
 def _find_csv():
-    p = Path(yudata("artemis2_orion_state_vectors.csv"))
+    p = Path(datapath("artemis2_orion_state_vectors.csv"))
     if p.exists():
         return p
     raise FileNotFoundError(f"Could not find artemis2_orion_state_vectors.csv at {p}")

@@ -1,23 +1,13 @@
 from pathlib import Path
 from os import PathLike
 from glob import glob
-import re
 import warnings
 
 import numpy as np
 import imageio.v2 as imageio
 from PIL import Image
 
-
-def _natural_key(s: str):
-    """
-    Split a string into a list of ints and lowercased text to enable natural sorting.
-    Example: 'frame_10.png' -> ['frame_', 10, '.png']
-    """
-    return [
-        int(tok) if tok.isdigit() else tok.lower()
-        for tok in re.split(r"(\d+)", s)
-    ]
+from ssapy_toolkit._sorting import natural_key
 
 
 def _sort_frames(paths, warn_on_ambiguous: bool = True) -> list:
@@ -29,7 +19,7 @@ def _sort_frames(paths, warn_on_ambiguous: bool = True) -> list:
         return []
 
     try:
-        keys = [_natural_key(p) for p in paths]
+        keys = [natural_key(p) for p in paths]
     except Exception as e:
         if warn_on_ambiguous:
             warnings.warn(

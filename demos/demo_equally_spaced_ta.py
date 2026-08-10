@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import ssapy
 
 from ssapy_toolkit.orbital_mechanics.equally_spaced_ta import equally_spaced_ta
-from ssapy_toolkit.plots.plotutils import yufig
+from ssapy_toolkit.plots.plotutils import figsave
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -85,7 +85,7 @@ def main(make_figures=None, verbose=None, fast=None):
         ax.grid(True)
 
         plt.axis("equal")
-        yufig(fig, "demo_gallery/figures/equally_spaced_ta.jpg")
+        figsave(fig, "demo_gallery/figures/equally_spaced_ta.jpg")
         plt.close(fig)
 
     if verbose:

@@ -1,11 +1,13 @@
 from ..constants import RGEO, EARTH_RADIUS, MOON_RADIUS
 from ..coordinates import gcrf_to_itrf, gcrf_to_lunar
 from .plotutils import valid_orbits, save_plot
+from ._frames import normalize_orbit_frame
 from ..compute import find_smallest_bounding_cube
 from ssapy import get_body
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import numpy as np
+
 
 def orbit_plot(r, t=None, title='', figsize=(7, 7), save_path=False, frame="gcrf", show=False, c='black', pad=1):
     from ..orbital_mechanics import lagrange_points_lunar_frame
@@ -37,33 +39,14 @@ def orbit_plot(r, t=None, title='', figsize=(7, 7), save_path=False, frame="gcrf
         unit_conversion = 1e3
         unit_label = 'km'
 
+    frame_key = normalize_orbit_frame(frame)
+
     for orbit_index in range(len(r)):
         xyz = r[orbit_index]
         t_current = t[orbit_index]
 
         r_moon = get_body("moon").position(t_current).T
         r_earth = np.zeros(np.shape(r_moon))
-
-        def get_main_category(frame_name):
-            variant_mapping = {
-                "gcrf": "gcrf",
-                "gcrs": "gcrf",
-                "itrf": "itrf",
-                "itrs": "itrf",
-                "lunar": "lunar",
-                "lunar_fixed": "lunar",
-                "lunar fixed": "lunar",
-                "lunar_centered": "lunar",
-                "lunar centered": "lunar",
-                "lunarearthfixed": "lunar axis",
-                "lunarearth": "lunar axis",
-                "lunar axis": "lunar axis",
-                "lunar_axis": "lunar axis",
-                "lunaraxis": "lunar axis",
-            }
-            return variant_mapping.get(frame_name.lower())
-
-        frame_key = get_main_category(frame)
 
         frame_transformations = {
             "gcrf": ("GCRF", None),

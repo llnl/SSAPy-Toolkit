@@ -60,7 +60,7 @@ def transfer_trajectory_plot(result, ax=None, three_d=False,
         Axes title; a default with total delta-v and arrival error is
         used when omitted.
     save_path : str, optional
-        If given, save the figure via ``ssapy_toolkit.plots.yufig`` and
+        If given, save the figure via ``ssapy_toolkit.plots.figsave`` and
         close it; otherwise the axes are returned for further styling.
 
     Returns
@@ -129,7 +129,8 @@ def transfer_trajectory_plot(result, ax=None, three_d=False,
     if three_d:
         ax.set_zlabel("z [km]")
         lim = np.max(np.abs(tr)) * 1.1
-        ax.set_xlim(-lim, lim); ax.set_ylim(-lim, lim)
+        ax.set_xlim(-lim, lim)
+        ax.set_ylim(-lim, lim)
         ax.set_zlim(-lim, lim)
     if title is None:
         title = (f"dv {transfer.dv_total:.1f} m/s | "
@@ -137,10 +138,10 @@ def transfer_trajectory_plot(result, ax=None, three_d=False,
     ax.set_title(title, fontsize=10)
 
     if save_path is not None:
-        from ssapy_toolkit.plots import yufig
+        from ssapy_toolkit.plots import figsave
         ax.legend(fontsize=8, loc="lower left")
         fig.tight_layout()
-        yufig(fig, save_path)
+        figsave(fig, save_path)
         plt.close(fig)
         return None
     return ax

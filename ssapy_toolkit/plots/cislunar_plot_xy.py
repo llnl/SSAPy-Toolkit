@@ -3,8 +3,6 @@ from .plotutils import valid_orbits
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.ticker import MultipleLocator
-from matplotlib.legend_handler import HandlerBase
-from matplotlib.collections import LineCollection
 from matplotlib.patches import Patch
 from matplotlib.lines import Line2D
 import matplotlib.font_manager as font_manager
@@ -14,24 +12,7 @@ from ..coordinates import gcrf_to_lunar_fixed
 from ..constants import RGEO, EARTH_RADIUS, MOON_RADIUS
 from ..compute import find_smallest_bounding_cube
 from .plotutils import save_plot
-
-
-class GradientLineHandler(HandlerBase):
-    def create_artists(self, legend, orig_handle, xdescent, ydescent, width, height, fontsize, trans):
-        # Number of segments for the gradient
-        num_segments = 10
-        # X-coordinates from the left (xdescent) to the right (xdescent + width)
-        x = np.linspace(xdescent, xdescent + width, num_segments + 1)
-        # Y-coordinate centered vertically in the legend box
-        y = ydescent + height / 2
-        # Create line segments: each segment is a tuple of ((x_start, y), (x_end, y))
-        segments = [((x[i], y), (x[i + 1], y)) for i in range(num_segments)]
-        # Assign rainbow colors to each segment
-        colors = cm.rainbow(np.linspace(0, 1, num_segments))
-        # Create a LineCollection with these segments and colors
-        lc = LineCollection(segments, colors=colors, linewidth=2)
-        lc.set_transform(trans)  # Apply the transformation for legend positioning
-        return [lc]
+from ._legend_handlers import GradientLineHandler
 
 
 def cislunar_plot_xy(r, t=None, figsize=(8, 8), fontsize=12, save_path=False, show=False, title=None, c='black'):

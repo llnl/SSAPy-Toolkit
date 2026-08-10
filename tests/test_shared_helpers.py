@@ -1,0 +1,107 @@
+from __future__ import annotations
+
+import importlib
+from pathlib import Path
+
+import numpy as np
+
+from ssapy_toolkit._paths import safe_relative_parts
+from ssapy_toolkit._sorting import natural_key
+from ssapy_toolkit.io.datapath import datapath, dpath
+from ssapy_toolkit.io.h5cache import h5cache, h5load
+from ssapy_toolkit.orbital_mechanics._two_body import _keplerian_two_body_rhs
+from ssapy_toolkit.plots.figpath import figpath, fpath
+from ssapy_toolkit.plots.plotutils import figsave, fsave
+
+data_path_module = importlib.import_module("ssapy_toolkit.io.datapath")
+fig_path_module = importlib.import_module("ssapy_toolkit.plots.figpath")
+
+
+def test_natural_key_sorts_embedded_numbers():
+    names = ["frame_10.png", "frame_2.png", "frame_1.png"]
+
+    assert sorted(names, key=natural_key) == [
+        "frame_1.png",
+        "frame_2.png",
+        "frame_10.png",
+    ]
+
+
+def test_safe_relative_parts_strips_roots_and_collapses_parent_segments():
+    assert safe_relative_parts("/absolute/path/../figure.png") == [
+        "absolute",
+        "figure.png",
+    ]
+    assert safe_relative_parts("../../data/catalog.csv") == ["data", "catalog.csv"]
+    assert safe_relative_parts("./nested/./file.txt") == ["nested", "file.txt"]
+
+
+def test_keplerian_two_body_rhs_returns_velocity_and_gravity():
+    mu = 4.0
+    state = np.array([2.0, 0.0, 0.0, 0.0, 3.0, 0.0])
+
+    rhs = _keplerian_two_body_rhs(123.0, state, mu)
+
+    np.testing.assert_allclose(rhs, [0.0, 3.0, 0.0, -1.0, 0.0, 0.0])
+
+
+def test_ssatk_short_helper_aliases_are_primary_exports():
+    assert fpath is figpath
+    assert fsave is figsave
+    assert dpath is datapath
+    assert callable(h5cache)
+    assert callable(h5load)
+
+
+def test_figpath_roots_relative_paths_under_home_output_dir(tmp_path, monkeypatch):
+    home_figs = tmp_path / "home_figs"
+    monkeypatch.setattr(fig_path_module, "HOME_FIG_DIR", home_figs)
+    monkeypatch.setattr(fig_path_module, "FALLBACK_DIR", tmp_path / "fallback_figs")
+
+    path = Path(fig_path_module.figpath("demo/../plots/example"))
+
+    assert path == home_figs / "plots" / "example"
+    assert path.parent.exists()
+
+
+def test_figsave_defaults_to_figpath_and_adds_jpg_extension(tmp_path, monkeypatch):
+    import matplotlib.pyplot as plt
+
+    monkeypatch.setattr(fig_path_module, "HOME_FIG_DIR", tmp_path / "figs")
+    monkeypatch.setattr(fig_path_module, "FALLBACK_DIR", tmp_path / "fallback_figs")
+
+    fig, ax = plt.subplots()
+    ax.plot([0, 1], [0, 1])
+
+    saved = Path(figsave(fig, "quicklook/test_plot"))
+
+    assert saved == tmp_path / "figs" / "quicklook" / "test_plot.jpg"
+    assert saved.exists()
+
+
+def test_figsave_without_path_uses_home_figure_default(tmp_path, monkeypatch):
+    import matplotlib.pyplot as plt
+
+    monkeypatch.setattr(fig_path_module, "HOME_FIG_DIR", tmp_path / "figs")
+    monkeypatch.setattr(fig_path_module, "FALLBACK_DIR", tmp_path / "fallback_figs")
+
+    fig, ax = plt.subplots()
+    ax.plot([0, 1], [1, 0])
+
+    saved = Path(figsave(fig))
+
+    assert saved == tmp_path / "figs" / "figure.jpg"
+    assert saved.exists()
+
+
+def test_datapath_uses_ssatk_data_dir_and_custom_dirs(tmp_path, monkeypatch):
+    monkeypatch.setattr(data_path_module, "HOME_DATA_DIR", tmp_path / "home_data")
+    monkeypatch.setattr(data_path_module, "FALLBACK_DATA_DIR", tmp_path / "fallback_data")
+
+    default_path = Path(data_path_module.datapath("catalogs/sample.txt"))
+    custom_path = Path(data_path_module.datapath("cache/sample.npy", dirs=[tmp_path / "custom_data"]))
+
+    assert default_path == tmp_path / "home_data" / "catalogs" / "sample.txt"
+    assert default_path.parent.exists()
+    assert custom_path == tmp_path / "custom_data" / "cache" / "sample.npy"
+    assert custom_path.parent.exists()

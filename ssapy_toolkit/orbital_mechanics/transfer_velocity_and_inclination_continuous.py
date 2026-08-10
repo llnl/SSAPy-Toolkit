@@ -2,10 +2,10 @@ import numpy as np
 from scipy.integrate import solve_ivp
 import warnings
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from ..accelerations import accel_velocity
 from ..plots.set_axes_equal import set_axes_equal
 from ..constants import EARTH_MU, EARTH_RADIUS
+from ._two_body import _keplerian_two_body_rhs
 
 
 def transfer_velocity_and_inclination_continuous(
@@ -111,13 +111,6 @@ def transfer_velocity_and_inclination_continuous(
 
 
 def _plot_transfer(r0, v0, r_full, v_full, t_full, t0, t_final, mu, body_radius):
-    def kepler_eq(t, y):
-        r = y[:3]
-        v = y[3:]
-        r_norm = np.linalg.norm(r)
-        a = -mu * r / r_norm**3
-        return np.concatenate((v, a))
-
     # Compute initial orbit parameters for plotting
     r0_mag = np.linalg.norm(r0)
     v0_mag = np.linalg.norm(v0)
@@ -134,20 +127,22 @@ def _plot_transfer(r0, v0, r_full, v_full, t_full, t0, t_final, mu, body_radius)
 
     # Propagate initial orbit for one period
     sol_initial = solve_ivp(
-        kepler_eq,
+        _keplerian_two_body_rhs,
         (t0, t0 + T0),
         np.concatenate((r0, v0)),
         t_eval=np.linspace(t0, t0 + T0, 200),
+        args=(mu,),
         rtol=1e-8,
         atol=1e-10,
     )
 
     # Propagate final orbit for one period
     sol_final = solve_ivp(
-        kepler_eq,
+        _keplerian_two_body_rhs,
         (t_final, t_final + Tf),
         np.concatenate((rf, vf)),
         t_eval=np.linspace(t_final, t_final + Tf, 200),
+        args=(mu,),
         rtol=1e-8,
         atol=1e-10,
     )

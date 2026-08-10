@@ -1,4 +1,4 @@
-"""Convenience wrappers that integrate SSAPy with Yeager Utilities."""
+"""Convenience wrappers that integrate SSAPy with SSATK."""
 
 import importlib
 import os

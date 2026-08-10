@@ -20,7 +20,7 @@ Run modes
   renders gallery figures (transfer-geometry gallery, 3-D plane-change
   view, delta-v budget by transfer type, Hohmann-optimum benchmark, and
   finite-burn refinement benchmark), saving each via
-  ``ssapy_toolkit.plots.yufig`` under ``demo_gallery/figures/``.
+  ``ssapy_toolkit.plots.figsave`` under ``demo_gallery/figures/``.
 """
 
 import numpy as np
@@ -486,7 +486,7 @@ def _demo_figures():
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from ssapy_toolkit.plots import yufig
+    from ssapy_toolkit.plots import figsave
 
     for name in CATALOG:
         _run_case(name)
@@ -504,7 +504,7 @@ def _demo_figures():
     fig.suptitle("transfer_ssapy catalog: propagated two-burn transfers "
                  "(x-y projection, km)", fontsize=13)
     fig.tight_layout()
-    yufig(fig, f"{FIGDIR}/demo_transfer_catalog_gallery.jpg")
+    figsave(fig, f"{FIGDIR}/demo_transfer_catalog_gallery.jpg")
     plt.close(fig)
 
     # ---- Figure 2: 3-D view of the combined plane change --------------
@@ -536,7 +536,7 @@ def _demo_figures():
     ax.legend(fontsize=9)
     ax.grid(alpha=0.3, axis="y", which="both")
     fig.tight_layout()
-    yufig(fig, f"{FIGDIR}/demo_transfer_dv_by_type.jpg")
+    figsave(fig, f"{FIGDIR}/demo_transfer_dv_by_type.jpg")
     plt.close(fig)
 
     # ---- Figure 4: benchmark vs the analytic Hohmann minimum ----------
@@ -562,7 +562,7 @@ def _demo_figures():
     ax.legend(fontsize=9)
     ax.grid(alpha=0.3)
     fig.tight_layout()
-    yufig(fig, f"{FIGDIR}/demo_transfer_hohmann_benchmark.jpg")
+    figsave(fig, f"{FIGDIR}/demo_transfer_hohmann_benchmark.jpg")
     plt.close(fig)
 
     # ---- Figure 5: finite-burn arrival error, raw vs refined ----------
@@ -591,7 +591,7 @@ def _demo_figures():
     ax.legend(fontsize=9)
     ax.grid(alpha=0.3, which="both")
     fig.tight_layout()
-    yufig(fig, f"{FIGDIR}/demo_transfer_refinement.jpg")
+    figsave(fig, f"{FIGDIR}/demo_transfer_refinement.jpg")
     plt.close(fig)
 
     # ---- Figure 6: burn timeline with strengths (engine model) --------
@@ -624,7 +624,7 @@ def _demo_figures():
                   "demo_transfer_burn_profile",
                   "demo_transfer_optimal_leo_designer_curves",
                   "demo_transfer_optimal_geo_designer_curves"]:
-        print(f"Saved via yufig: {FIGDIR}/{fname}.jpg")
+        print(f"Saved via figsave: {FIGDIR}/{fname}.jpg")
 
 
 if __name__ == "__main__":

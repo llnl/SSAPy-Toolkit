@@ -1,6 +1,7 @@
 from ..constants import RGEO, EARTH_RADIUS, MOON_RADIUS
 from ..coordinates import gcrf_to_itrf, gcrf_to_lunar, gcrf_to_lunar_fixed
 from .plotutils import valid_orbits, save_plot
+from ._frames import normalize_orbit_frame
 from ..compute import find_smallest_bounding_cube
 from ssapy import get_body
 
@@ -86,25 +87,6 @@ def orbit_plot_xy(r, t=None, title='', figsize=(7, 7), save_path=False, frame="g
         r_earth = np.zeros(np.shape(r_moon))
 
         # Dictionary of frame transformations and titles
-        def get_main_category(frame):
-            variant_mapping = {
-                "gcrf": "gcrf",
-                "gcrs": "gcrf",
-                "itrf": "itrf",
-                "itrs": "itrf",
-                "lunar": "lunar",
-                "lunar_fixed": "lunar",
-                "lunar fixed": "lunar",
-                "lunar_centered": "lunar",
-                "lunar centered": "lunar",
-                "lunarearthfixed": "lunar axis",
-                "lunarearth": "lunar axis",
-                "lunar axis": "lunar axis",
-                "lunar_axis": "lunar axis",
-                "lunaraxis": "lunar axis",
-            }
-            return variant_mapping.get(frame.lower())
-
         frame_transformations = {
             "gcrf": ("GCRF", None),
             "itrf": ("ITRF", gcrf_to_itrf),
@@ -113,7 +95,7 @@ def orbit_plot_xy(r, t=None, title='', figsize=(7, 7), save_path=False, frame="g
         }
 
         # Check if the frame is in the dictionary, and set central_dot accordingly
-        frame = get_main_category(frame)
+        frame = normalize_orbit_frame(frame)
         if frame in frame_transformations:
             title2, transform_func = frame_transformations[frame]
             if transform_func:

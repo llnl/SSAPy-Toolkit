@@ -94,12 +94,12 @@ def all_orbital_quantities(
 
 
 def _resolve_true_anomaly(*, ta, ma, e):
-    """Pick/compute true anomaly; default to 0. Uses yu keplerian.true_anomaly for ma->ta [3]."""
+    """Pick/compute true anomaly; default to 0. Uses SSATK keplerian.true_anomaly for ma->ta."""
     if ta is not None:
         return float(ta)
     if ma is None:
         return 0.0
-    # yu keplerian approximation supports eccentricity + mean anomaly [3]
+    # SSATK keplerian approximation supports eccentricity + mean anomaly.
     ta_val = true_anomaly(eccentricity=float(e), mean_anomaly=float(ma))
     if ta_val is None:
         raise ValueError("Could not compute true anomaly from mean anomaly with provided inputs.")

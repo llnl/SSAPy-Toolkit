@@ -1,4 +1,4 @@
-"""Physical and astronomical constants used throughout Yeager Utilities."""
+"""Physical and astronomical constants used throughout SSATK."""
 
 import numpy as np
 W_rho = 19280  # kg/m^3 --> density of Tungsten

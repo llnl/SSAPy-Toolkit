@@ -1,10 +1,9 @@
 import numpy as np
 from scipy.integrate import solve_ivp
-import warnings
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from ..plots import set_axes_equal, save_plot
 from ..constants import EARTH_MU, EARTH_RADIUS
+from ._two_body import _keplerian_two_body_rhs
 
 
 def transfer_inclination_continuous(
@@ -102,13 +101,6 @@ def transfer_inclination_continuous(
 def _plot_transfer(
     sol, r0, v0, r_final, v_final, t0, t_final, mu, body_radius, save_path
 ):
-    def kepler_eq(t, y):
-        r = y[:3]
-        v = y[3:]
-        r_norm = np.linalg.norm(r)
-        a = -mu * r / r_norm**3
-        return np.concatenate((v, a))
-
     r0_mag = np.linalg.norm(r0)
     v0_mag = np.linalg.norm(v0)
     a0 = 1 / (2 / r0_mag - v0_mag**2 / mu)
@@ -120,19 +112,21 @@ def _plot_transfer(
     Tf = 2 * np.pi * np.sqrt(abs(af) ** 3 / mu)
 
     sol_initial = solve_ivp(
-        kepler_eq,
+        _keplerian_two_body_rhs,
         (t0, t0 + T0),
         np.concatenate((r0, v0)),
         t_eval=np.linspace(t0, t0 + T0, 200),
+        args=(mu,),
         rtol=1e-8,
         atol=1e-10,
     )
 
     sol_final = solve_ivp(
-        kepler_eq,
+        _keplerian_two_body_rhs,
         (t_final, t_final + Tf),
         np.concatenate((r_final, v_final)),
         t_eval=np.linspace(t_final, t_final + Tf, 200),
+        args=(mu,),
         rtol=1e-8,
         atol=1e-10,
     )

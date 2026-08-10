@@ -1,4 +1,4 @@
-"""Astropy-based helpers that mirror Yeager Utilities behavior."""
+"""Astropy-based helpers that mirror SSATK behavior."""
 
 import importlib
 import os

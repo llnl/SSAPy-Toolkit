@@ -19,7 +19,7 @@ from ssapy import Orbit, rv
 from ssapy_toolkit.time_functions.get_times import get_times
 from ssapy_toolkit.coordinates.gcrf_to_lonlat import gcrf_to_lonlat
 from ssapy_toolkit.coordinates.on_sky_distance import lonlat_distance
-from ssapy_toolkit.ssapy_wrappers.ssapy_props import keplerian_prop, best_prop
+from ssapy_toolkit.ssapy_wrappers.ssapy_props import keplerian_prop, best_prop, threebody_prop
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -29,7 +29,7 @@ def main(fast=None):
         fast = UNDER_PYTEST
 
     t0 = Time("2025-01-01T00:00:00", scale="utc")
-    times = get_times(duration=(2 if fast else 24, "hour"), freq=(300 if fast else 60, "s"), t0=t0)
+    times = get_times(duration=(30 if fast else 24, "minute" if fast else "hour"), freq=(30 if fast else 60, "minute" if fast else "s"), t0=t0)
 
     orbit = Orbit.fromKeplerianElements(
         a=42164e3,
@@ -41,7 +41,8 @@ def main(fast=None):
         t=t0,
     )
 
-    r_ref, v_ref = rv(orbit, times, propagator=best_prop())
+    reference_prop = threebody_prop() if fast else best_prop()
+    r_ref, v_ref = rv(orbit, times, propagator=reference_prop)
     r_test, v_test = rv(orbit, times, propagator=keplerian_prop())
 
     # gcrf_to_lonlat returns 3 values

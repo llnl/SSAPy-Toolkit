@@ -19,19 +19,7 @@ def groundtrack_dashboard_gamma_heading(r, t, save_path=None, pad=500, show=Fals
     from ..time_functions import to_gps
     from ..orbital_mechanics.gamma_and_heading import calc_gamma_and_heading
     from .plotutils import save_plot, valid_orbits
-
-    def force_title(ax, text, size, y=1.02):
-        ax.set_title("")
-        if hasattr(ax, "text2D"):
-            ax.text2D(0.5, y, text, transform=ax.transAxes, ha="center", va="bottom", fontsize=size)
-        else:
-            ax.text(0.5, y, text, transform=ax.transAxes, ha="center", va="bottom", fontsize=size)
-
-    def clean_lonlat(lon, lat):
-        wraps = np.abs(np.diff(lon)) > 180
-        lon_nan = np.insert(lon, np.where(wraps)[0] + 1, np.nan)
-        lat_nan = np.insert(lat, np.where(wraps)[0] + 1, np.nan)
-        return lon_nan, lat_nan
+    from ._groundtrack_helpers import clean_lonlat, force_title
 
     r, t = valid_orbits(r, t)
 
@@ -74,8 +62,11 @@ def groundtrack_dashboard_gamma_heading(r, t, save_path=None, pad=500, show=Fals
         lats.append(np.degrees(lat))
         altitudes.append(height)
         velocities.append(vel)
-        x_gts.append(x_gt); y_gts.append(y_gt); z_gts.append(z_gt)
-        gammas.append(g_deg); headings.append(h_deg)
+        x_gts.append(x_gt)
+        y_gts.append(y_gt)
+        z_gts.append(z_gt)
+        gammas.append(g_deg)
+        headings.append(h_deg)
 
     # Earth surface for 3D plots
     phi_earth = np.linspace(0, np.pi, 50)
@@ -165,15 +156,19 @@ def groundtrack_dashboard_gamma_heading(r, t, save_path=None, pad=500, show=Fals
         ax.yaxis.set_major_formatter(FixedFormatter(["", "0", ""]))
         ax.zaxis.set_major_formatter(FixedFormatter(["", "0", f"{limit:.0f}"]))
         ax.tick_params(pad=2)
-        try: ax.set_box_aspect((1, 1, 1))
-        except Exception: pass
-        try: ax.set_proj_type("ortho")
-        except Exception: pass
+        try:
+            ax.set_box_aspect((1, 1, 1))
+        except Exception:
+            pass
+        try:
+            ax.set_proj_type("ortho")
+        except Exception:
+            pass
 
     # BOTTOM ROW: all time series (Gamma, Heading, Altitude, Velocity)
-    ax_gamma    = fig.add_subplot(gs[1, 0])
-    ax_heading  = fig.add_subplot(gs[1, 1])
-    ax_alt      = fig.add_subplot(gs[1, 2])
+    ax_gamma = fig.add_subplot(gs[1, 0])
+    ax_heading = fig.add_subplot(gs[1, 1])
+    ax_alt = fig.add_subplot(gs[1, 2])
     ax_velocity = fig.add_subplot(gs[1, 3])
 
     # Gamma vs Time
@@ -181,7 +176,7 @@ def groundtrack_dashboard_gamma_heading(r, t, save_path=None, pad=500, show=Fals
         n = min(len(ti), len(g))
         if n == 0:
             continue
-        ax_gamma.plot(ti[:n] / 60.0, g[:n], color=colors[i], linewidth=2.2, label=f"orbit {i+1}")
+        ax_gamma.plot(ti[:n] / 60.0, g[:n], color=colors[i], linewidth=2.2, label=f"orbit {i + 1}")
     ax_gamma.set_xlabel("Time (minutes)", fontsize=fontsize)
     ax_gamma.set_ylabel("Gamma (deg)", fontsize=fontsize)
     ax_gamma.set_ylim(-90, 90)
@@ -196,7 +191,7 @@ def groundtrack_dashboard_gamma_heading(r, t, save_path=None, pad=500, show=Fals
         n = min(len(ti), len(h))
         if n == 0:
             continue
-        ax_heading.plot(ti[:n] / 60.0, h[:n], color=colors[i], linewidth=2.2, label=f"orbit {i+1}")
+        ax_heading.plot(ti[:n] / 60.0, h[:n], color=colors[i], linewidth=2.2, label=f"orbit {i + 1}")
     ax_heading.set_xlabel("Time (minutes)", fontsize=fontsize)
     ax_heading.set_ylabel("Heading (deg)", fontsize=fontsize)
     ax_heading.set_ylim(0, 360)
@@ -209,7 +204,7 @@ def groundtrack_dashboard_gamma_heading(r, t, save_path=None, pad=500, show=Fals
     # Altitude vs Time
     altmax = 0.0
     for i, (ti, alt) in enumerate(zip(t_rel, altitudes)):
-        ax_alt.plot(ti / 60.0, alt / 1e3, color=colors[i], linewidth=2.5, label=f"orbit {i+1}")
+        ax_alt.plot(ti / 60.0, alt / 1e3, color=colors[i], linewidth=2.5, label=f"orbit {i + 1}")
         if np.size(alt) > 0:
             altmax = max(altmax, float(np.nanmax(alt)))
     ax_alt.set_ylim(0, altmax / 1e3 * 1.1 if altmax > 0 else 1)

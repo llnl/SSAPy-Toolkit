@@ -5,7 +5,21 @@ from ..time_functions import get_times, Time
 from ..plots import rendezvous_plot
 
 
-def transfer_rendezvous(orbit1, orbit2, tol=1000, max_iter=1000, plot=False, status=False):
+def transfer_rendezvous(
+    orbit1,
+    orbit2,
+    tol=1000,
+    max_iter=1000,
+    plot=False,
+    status=False,
+    time_step=1.0,
+    max_duration=48 * 3600,
+    final_duration=None,
+    bounds=None,
+    popsize=15,
+    polish=True,
+    seed=None,
+):
     """
     Finds the delta-v that leads to a transfer rendezvous with a moving target orbit.
     Uses a global gradient-free search to minimize rendezvous position error.
@@ -24,6 +38,23 @@ def transfer_rendezvous(orbit1, orbit2, tol=1000, max_iter=1000, plot=False, sta
         If True, plots the final transfer. Default is False.
     status : bool, optional
         If True, prints optimization info. Default is False.
+    time_step : float, optional
+        Propagation sample spacing in seconds. Default is 1 second.
+    max_duration : float, optional
+        Maximum search propagation duration in seconds. Default is 48 hours.
+    final_duration : float or None, optional
+        Maximum final propagation duration in seconds. If None, uses the
+        transfer period clipped by ``max_duration``.
+    bounds : sequence or None, optional
+        Differential-evolution bounds for ``delta_v`` components in m/s.
+        Default is ``[(-2000, 2000)] * 3``.
+    popsize : int, optional
+        Differential-evolution population size multiplier. Default matches
+        SciPy's default of 15.
+    polish : bool, optional
+        If True, polish the differential-evolution result. Default is True.
+    seed : int or None, optional
+        Random seed passed to differential evolution for reproducible tests.
 
     Returns
     -------
@@ -33,18 +64,23 @@ def transfer_rendezvous(orbit1, orbit2, tol=1000, max_iter=1000, plot=False, sta
     r1 = orbit1.r
     v1 = orbit1.v
     t0 = Time(orbit1.t, format='gps')
+    bounds = [(-2000, 2000)] * 3 if bounds is None else bounds
+
+    def bounded_period(orbit, max_period, fallback_duration):
+        try:
+            period = float(orbit.period)
+            if np.isinf(period) or period <= 0:
+                return fallback_duration
+            return min(period, max_period)
+        except OverflowError:
+            return fallback_duration
 
     def propagate(delta_v_in):
         v_transfer0 = v1 + delta_v_in
         orb_tr = Orbit(r=r1, v=v_transfer0, t=t0)
-        try:
-            period = orb_tr.period
-            if np.isinf(period) or period > 1e7:
-                period = 48 * 3600
-        except OverflowError:
-            period = 48 * 3600
+        period = bounded_period(orb_tr, max_duration, max_duration)
 
-        times = get_times(duration=(float(period), 'sec'), freq=(1, 'sec'), t0=t0)
+        times = get_times(duration=(float(period), 'sec'), freq=(time_step, 'sec'), t0=t0)
         try:
             r_traj, v_traj = rv(orb_tr, time=times)
         except RuntimeError:
@@ -59,14 +95,22 @@ def transfer_rendezvous(orbit1, orbit2, tol=1000, max_iter=1000, plot=False, sta
         idx_min = np.argmin(distances)
         return (r_traj[idx_min], v_traj[idx_min],
                 r2_traj[idx_min], v2_traj[idx_min],
-                times[idx_min], r_traj[:idx_min+1], v_traj[:idx_min+1])
+                times[idx_min], r_traj[:idx_min + 1], v_traj[:idx_min + 1])
 
     def error_func(delta_v_try):
         r_arr, _, r2_arr, _, _, *_ = propagate(delta_v_try)
         return np.linalg.norm(r_arr - r2_arr)
 
-    bounds = [(-2000, 2000)] * 3
-    result_opt = differential_evolution(error_func, bounds, tol=1e-3, maxiter=max_iter, disp=status)
+    result_opt = differential_evolution(
+        error_func,
+        bounds,
+        tol=1e-3,
+        maxiter=max_iter,
+        disp=status,
+        popsize=popsize,
+        polish=polish,
+        seed=seed,
+    )
     delta_v = result_opt.x
 
     # Final propagation using optimal delta_v
@@ -76,14 +120,12 @@ def transfer_rendezvous(orbit1, orbit2, tol=1000, max_iter=1000, plot=False, sta
     # Build final transfer orbit
     v_transfer0 = v1 + delta_v
     orb_tr = Orbit(r=r1, v=v_transfer0, t=t0)
-    try:
-        period = orb_tr.period
-        if np.isinf(period) or period > 1e7:
-            period = 2 * 3600
-    except OverflowError:
-        period = 2 * 3600
+    if final_duration is None:
+        period = bounded_period(orb_tr, max_duration, 2 * 3600)
+    else:
+        period = bounded_period(orb_tr, final_duration, final_duration)
 
-    times_full = get_times(duration=(float(period), 'sec'), freq=(1, 'sec'), t0=t0)
+    times_full = get_times(duration=(float(period), 'sec'), freq=(time_step, 'sec'), t0=t0)
     try:
         r_full, v_full = rv(orb_tr, time=times_full)
     except RuntimeError:
@@ -122,7 +164,7 @@ def transfer_rendezvous(orbit1, orbit2, tol=1000, max_iter=1000, plot=False, sta
     }
 
     if status:
-        print(f"Δv₁ = {delta_v1_mag:.6f} m/s, Δv₂ = {delta_v2_mag:.6f} m/s, TOF = {tof/60:.2f} min, Final error = {error:.3f} m")
+        print(f"Δv₁ = {delta_v1_mag:.6f} m/s, Δv₂ = {delta_v2_mag:.6f} m/s, TOF = {tof / 60:.2f} min, Final error = {error:.3f} m")
 
     if plot:
         fig = rendezvous_plot(
@@ -131,9 +173,9 @@ def transfer_rendezvous(orbit1, orbit2, tol=1000, max_iter=1000, plot=False, sta
             orbit2.r, orbit2.v,
             title=(
                 f"Transfer Rendezvous\n"
-                f"TOF: {tof/60:.1f} min | "
-                f"|Δv₁| = {delta_v1_mag/1e3:.3f} km/s, "
-                f"|Δv₂| = {delta_v2_mag/1e3:.3f} km/s"
+                f"TOF: {tof / 60:.1f} min | "
+                f"|Δv₁| = {delta_v1_mag / 1e3:.3f} km/s, "
+                f"|Δv₂| = {delta_v2_mag / 1e3:.3f} km/s"
             ),
         )
         result['fig'] = fig

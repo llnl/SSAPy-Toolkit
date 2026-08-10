@@ -11,7 +11,7 @@ from ssapy_toolkit.orbital_mechanics.transfer_shooter import transfer_shooter
 from ssapy_toolkit.orbital_mechanics.transfer_hohmann import transfer_hohmann
 from ssapy_toolkit.orbital_mechanics.transfer_lambertian import transfer_lambertian
 from ssapy_toolkit.orbital_mechanics.transfer_coplanar import transfer_coplanar
-from ssapy_toolkit.plots.plotutils import yufig  # [37]
+from ssapy_toolkit.plots.plotutils import figsave  # [37]
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -31,7 +31,7 @@ def main(make_figures=None):
         result = transfer_shooter(orbit1.r, orbit1.v, orbit2.r, plot=make_figures, status=True)
         outputs["shooter"] = result
         if make_figures and "fig" in result:
-            yufig(result["fig"], "demo_gallery/figures/transfers_shooter_rv")
+            figsave(result["fig"], "demo_gallery/figures/transfers_shooter_rv")
     except Exception as err:
         print("Shooter (r1, v1, r2) failed:", err)
         outputs["shooter_error"] = str(err)
@@ -41,7 +41,7 @@ def main(make_figures=None):
         result = transfer_lambertian(orbit1.r, orbit1.v, orbit2.r, plot=make_figures)
         outputs["lambertian"] = result
         if make_figures and "fig" in result:
-            yufig(result["fig"], "demo_gallery/figures/transfers_lambertian_rv")
+            figsave(result["fig"], "demo_gallery/figures/transfers_lambertian_rv")
     except Exception as err:
         print("Lambertian (r1, v1, r2) failed:", err)
         outputs["lambertian_error"] = str(err)

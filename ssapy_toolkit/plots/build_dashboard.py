@@ -1,6 +1,9 @@
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
 
+from .plotutils import figsave
+
+
 def build_dashboard(
     panels,
     *,
@@ -67,7 +70,7 @@ def build_dashboard(
         outputs.append(render(ax=ax, fig=fig, **rkwargs))
 
     if save_path:
-        fig.savefig(save_path, bbox_inches="tight")
+        figsave(fig, save_path)
     if show:
         plt.show()
 

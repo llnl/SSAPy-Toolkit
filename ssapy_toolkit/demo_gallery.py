@@ -49,12 +49,12 @@ NOISE_PATTERNS = [
 NOISE_REGEXES = [re.compile(p) for p in NOISE_PATTERNS]
 
 
-def get_yufig_root() -> Path:
+def get_figsave_root() -> Path:
     probe = Path(figpath("demo_gallery_probe.tmp")).expanduser().resolve()
     return probe.parent
 
 
-YUFIG_ROOT = get_yufig_root()
+FIGSAVE_ROOT = get_figsave_root()
 
 
 @dataclass
@@ -89,11 +89,11 @@ def import_module_from_path(path: Path):
     return module
 
 
-def snapshot_yufig_files() -> dict[Path, float]:
-    if not YUFIG_ROOT.exists():
+def snapshot_figsave_files() -> dict[Path, float]:
+    if not FIGSAVE_ROOT.exists():
         return {}
     out = {}
-    for p in YUFIG_ROOT.rglob("*"):
+    for p in FIGSAVE_ROOT.rglob("*"):
         if p.is_file():
             try:
                 out[p.resolve()] = p.stat().st_mtime
@@ -185,7 +185,7 @@ def run_demo_script(path: Path, output_root: Path) -> DemoResult:
     title = name.replace("_", " ").title()
     description = f"Demo from {path.name}"
     start = time.time()
-    before = snapshot_yufig_files()
+    before = snapshot_figsave_files()
     stdout_text = ""
     stderr_text = ""
 
@@ -220,7 +220,7 @@ def run_demo_script(path: Path, output_root: Path) -> DemoResult:
             title = str(result.get("title", title))
             description = str(result.get("description", description))
 
-        after = snapshot_yufig_files()
+        after = snapshot_figsave_files()
         touched = changed_files(before, after)
         files = sorted({relpath_for_report(p, output_root) for p in touched})
 
@@ -261,7 +261,7 @@ def run_demo_script(path: Path, output_root: Path) -> DemoResult:
         _write_text_if_nonempty(stdout_file, stdout_text)
         _write_text_if_nonempty(stderr_file, stderr_text)
 
-        after = snapshot_yufig_files()
+        after = snapshot_figsave_files()
         touched = changed_files(before, after)
         files = {relpath_for_report(p, output_root) for p in touched}
         files.add(relpath_for_report(err_file, output_root))

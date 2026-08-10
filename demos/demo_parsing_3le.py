@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ssapy_toolkit.io.yudata import yudata
+from ssapy_toolkit.io.datapath import datapath
 from ssapy_toolkit.io.read_3le import read_3le
 from ssapy_toolkit.io.read_3le_by_bit import read_3le_by_bit
 from ssapy_toolkit.io.tle_iter_pairs import tle_iter_pairs
@@ -11,7 +11,7 @@ from ssapy_toolkit.io.pprint_utils import pprint
 
 
 def main(verbose=False, fast=False):
-    tle_path = yudata("full_catalog_3le.txt")
+    tle_path = datapath("full_catalog_3le.txt")
 
     if not Path(tle_path).exists():
         print(f"Skipping demo_parsing_3le: missing data file {tle_path}")

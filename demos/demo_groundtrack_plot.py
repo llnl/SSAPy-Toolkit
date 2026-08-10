@@ -13,7 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from ssapy_toolkit.plots.groundtrack_plot import groundtrack_plot
-from ssapy_toolkit.plots.plotutils import yufig  # [18]
+from ssapy_toolkit.plots.plotutils import figsave  # [18]
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -38,7 +38,7 @@ def make_circular_orbit_track(alt_km=500.0, inc_deg=51.6, npts=1200, n_orbits=3.
 
 
 def save_demo(fig, name):
-    yufig(fig, f"demo_gallery/figures/{name}")  # [18]
+    figsave(fig, f"demo_gallery/figures/{name}")  # [18]
 
 
 def main(make_figures=None, fast=None):

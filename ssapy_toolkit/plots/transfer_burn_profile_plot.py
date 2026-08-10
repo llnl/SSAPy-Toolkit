@@ -11,8 +11,6 @@ Works with a ``TransferResult`` (from ``transfer_ssapy``) or an
 ``OptimalTransferResult`` (from ``transfer_optimal``).
 """
 
-import numpy as np
-
 
 def transfer_burn_profile_plot(result, title=None, save_path=None):
     """Plot acceleration-vs-time and cumulative delta-v for all burns.
@@ -22,7 +20,7 @@ def transfer_burn_profile_plot(result, title=None, save_path=None):
     result : TransferResult or OptimalTransferResult
     title : str, optional
     save_path : str, optional
-        If given, save via ``ssapy_toolkit.plots.yufig`` and close;
+        If given, save via ``ssapy_toolkit.plots.figsave`` and close;
         otherwise the figure is returned.
     """
     transfer = getattr(result, "transfer", result)
@@ -65,9 +63,11 @@ def transfer_burn_profile_plot(result, title=None, save_path=None):
     ax1.set_xlim(th(t0), th(t1))
     ax1.set_ylabel("commanded acceleration [m/s$^2$]")
     ax1.grid(alpha=0.3)
-    ax1.set_title(title or
-                  f"Burn timeline: total dv {transfer.dv_total:.1f} m/s "
-                  f"across {len(burns)} burn(s)")
+    default_title = (
+        f"Burn timeline: total dv {transfer.dv_total:.1f} m/s "
+        f"across {len(burns)} burn(s)"
+    )
+    ax1.set_title(title or default_title)
 
     # Cumulative delta-v: piecewise-linear ramps inside burn windows.
     ts = [t0]
@@ -86,8 +86,8 @@ def transfer_burn_profile_plot(result, title=None, save_path=None):
 
     fig.tight_layout()
     if save_path is not None:
-        from ssapy_toolkit.plots import yufig
-        yufig(fig, save_path)
+        from ssapy_toolkit.plots import figsave
+        figsave(fig, save_path)
         plt.close(fig)
         return None
     return fig

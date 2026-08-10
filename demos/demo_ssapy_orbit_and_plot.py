@@ -14,7 +14,7 @@ from ssapy.propagator import SciPyPropagator
 
 from ssapy_toolkit.plots.orbit_plot import orbit_plot
 from ssapy_toolkit.plots.groundtrack_plot import groundtrack_plot
-from ssapy_toolkit.plots.plotutils import yufig
+from ssapy_toolkit.plots.plotutils import figsave
 from ssapy_toolkit.compute.lambertian_magnitude import lambertian_reflection
 from ssapy_toolkit.time_functions.get_times import get_times
 
@@ -68,27 +68,30 @@ def main(make_figures=None, fast=None):
     kElements = [a, e, i, pa, raan, ta]
     orbit = Orbit.fromKeplerianElements(*kElements, t=t0)
 
-    sat_kwargs = dict(
-        mass=100,
-        area=1,
-        CD=2.3,
-        CR=1.3,
-    )
+    if fast:
+        accel = AccelKepler()
+    else:
+        sat_kwargs = dict(
+            mass=100,
+            area=1,
+            CD=2.3,
+            CR=1.3,
+        )
 
-    moon = get_body("moon")
-    sun = get_body("Sun")
-    Earth = get_body("Earth", model="EGM2008")
+        moon = get_body("moon")
+        sun = get_body("Sun")
+        Earth = get_body("Earth", model="EGM2008")
 
-    aEarth = AccelKepler() + AccelHarmonic(Earth, 140, 140)
-    aSun = AccelThirdBody(sun)
-    aMoon = AccelThirdBody(moon) + AccelHarmonic(moon, 20, 20)
-    aSolRad = AccelSolRad(**sat_kwargs)
-    aEarthRad = AccelEarthRad(**sat_kwargs)
-    accel = aEarth + aMoon + aSun + aSolRad + aEarthRad
+        aEarth = AccelKepler() + AccelHarmonic(Earth, 140, 140)
+        aSun = AccelThirdBody(sun)
+        aMoon = AccelThirdBody(moon) + AccelHarmonic(moon, 20, 20)
+        aSolRad = AccelSolRad(**sat_kwargs)
+        aEarthRad = AccelEarthRad(**sat_kwargs)
+        accel = aEarth + aMoon + aSun + aSolRad + aEarthRad
     prop = SciPyPropagator(accel)
 
-    duration = (6, "hour") if fast else (2, "day")
-    freq = (10, "minute") if fast else (1, "minute")
+    duration = (20, "minute") if fast else (2, "day")
+    freq = (20, "minute") if fast else (1, "minute")
     times = get_times(duration=duration, freq=freq, t0=t0)
     r, v = rv(orbit=orbit, time=times, propagator=prop)
 
@@ -111,7 +114,7 @@ def main(make_figures=None, fast=None):
         plt.ylabel("Lambertian Reflectance [Apparent Magnitude]")
         plt.xticks(xticks, xtick_labels, rotation=0)
         plt.tight_layout()
-        yufig(fig, "demo_gallery/figures/ssapy_lambertian_reflectance")
+        figsave(fig, "demo_gallery/figures/ssapy_lambertian_reflectance")
         plt.close(fig)
 
     return {

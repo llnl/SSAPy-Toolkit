@@ -3,8 +3,6 @@ from .plotutils import valid_orbits
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.ticker import MaxNLocator
-from matplotlib.legend_handler import HandlerBase
-from matplotlib.collections import LineCollection
 from matplotlib.patches import Patch
 from matplotlib.lines import Line2D
 import matplotlib.font_manager as font_manager
@@ -13,27 +11,10 @@ import numpy as np
 
 from ssapy import get_body
 from ..coordinates import gcrf_to_lunar_fixed
-from ..constants import RGEO, EARTH_RADIUS, MOON_RADIUS
+from ..constants import RGEO, MOON_RADIUS
 from ..compute import find_smallest_bounding_cube
 from .plotutils import save_plot
-
-
-class GradientLineHandler(HandlerBase):
-    def create_artists(self, legend, orig_handle, xdescent, ydescent, width, height, fontsize, trans):
-        # Number of segments for the gradient
-        num_segments = 10
-        # X-coordinates from the left (xdescent) to the right (xdescent + width)
-        x = np.linspace(xdescent, xdescent + width, num_segments + 1)
-        # Y-coordinate centered vertically in the legend box
-        y = ydescent + height / 2
-        # Create line segments: each segment is a tuple of ((x_start, y), (x_end, y))
-        segments = [((x[i], y), (x[i + 1], y)) for i in range(num_segments)]
-        # Assign rainbow colors to each segment
-        colors = cm.rainbow(np.linspace(0, 1, num_segments))
-        # Create a LineCollection with these segments and colors
-        lc = LineCollection(segments, colors=colors, linewidth=2)
-        lc.set_transform(trans)  # Apply the transformation for legend positioning
-        return [lc]
+from ._legend_handlers import GradientLineHandler
 
 
 def cislunar_plot_3d(r, t=None, figsize=(8, 8), fontsize=12, save_path=False, show=False, legend=True, title='', c='white'):
@@ -117,7 +98,6 @@ def cislunar_plot_3d(r, t=None, figsize=(8, 8), fontsize=12, save_path=False, sh
             if bounds_lunar["lower"][0] <= pos[0] <= bounds_lunar["upper"][0] and bounds_lunar["lower"][1] <= pos[1] <= bounds_lunar["upper"][1] and bounds_lunar["lower"][2] <= pos[2] <= bounds_lunar["upper"][2]:
                 ax.scatter(pos[0], pos[1], pos[2], color=textcolor, label=point, s=10)
                 ax.text(pos[0], pos[1], pos[2], point, color=textcolor)
-
 
     ax.set_xlim(bounds_lunar["lower"][0], bounds_lunar["upper"][0])
     ax.set_ylim(bounds_lunar["lower"][1], bounds_lunar["upper"][1])

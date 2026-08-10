@@ -345,7 +345,7 @@ def get_sigmas(n: int = 25, path: Optional[str] = None) -> np.ndarray:
         Array of shape (n, 6).
     """
     if path is None:
-        from .io import yudata  # type: ignore  # kept as in original
+        from ssapy_toolkit.io.datapath import datapath
 
         # Prefer env-provided directory, then fallback to ~/.cache/ssapy_toolkit
         env_dir = os.environ.get(ENV_VAR, "").strip()
@@ -355,7 +355,7 @@ def get_sigmas(n: int = 25, path: Optional[str] = None) -> np.ndarray:
         dirs.append(Path.home() / ".cache" / "ssapy_toolkit")
 
         # Use datapath to choose/create the first usable directory
-        path = Path(yudata(DEFAULT_FILE, dirs=dirs))
+        path = Path(datapath(DEFAULT_FILE, dirs=dirs))
     else:
         path = Path(path)
 

@@ -1,15 +1,7 @@
 import os
 import glob
-import re
 
-
-def _natural_key(s: str):
-    """
-    Split a string into a list of ints and lowercased text to enable natural sorting.
-    Example: 'frame_10.png' -> ['frame_', 10, '.png']
-    """
-    return [int(tok) if tok.isdigit() else tok.lower()
-            for tok in re.split(r"(\d+)", s)]
+from ssapy_toolkit._sorting import natural_key
 
 
 def list_files(
@@ -51,6 +43,6 @@ def list_files(
     files = list(dict.fromkeys(files))
 
     if sort and files:
-        files.sort(key=_natural_key)
+        files.sort(key=natural_key)
 
     return files

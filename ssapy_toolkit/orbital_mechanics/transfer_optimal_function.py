@@ -18,7 +18,7 @@ including single-burn intercept geometries via ``arrival_burn=False``.
 
 Set ``visualize=True`` for mission-designer curves (porkchop contour and
 delta-v vs time-of-flight Pareto front) saved via
-``ssapy_toolkit.plots.yufig``.
+``ssapy_toolkit.plots.figsave``.
 """
 
 import warnings
@@ -209,9 +209,9 @@ def transfer_optimal(
         the continuous variables.
     visualize : bool
         Save mission-designer curves (porkchop + delta-v/TOF Pareto
-        front) via ``ssapy_toolkit.plots.yufig`` under ``fig_prefix``.
+        front) via ``ssapy_toolkit.plots.figsave`` under ``fig_prefix``.
     fig_prefix : str
-        yufig path prefix for the visualization.
+        figsave path prefix for the visualization.
     burn_accel : float, optional
         Burn acceleration magnitude [m/s^2]: the simple alternative to
         ``thrust``/``mass`` (mutually exclusive with them) when the
@@ -432,8 +432,6 @@ def transfer_optimal(
             prograde=sense, arrival_burn=arrival_burn,
             dv_budget=dv_budget if objective == "min_dv" else None,
             **transfer_kwargs)
-
-
         if objective == "min_dv" or transfer.dv_total <= dv_budget:
             break
         budget_eff = budget_eff * dv_budget / transfer.dv_total

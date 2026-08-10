@@ -1,3 +1,4 @@
+from importlib import import_module
 import sys
 from pathlib import Path
 
@@ -7,14 +8,14 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from demos.demo_fancy_video import orbit_moon_video_demo
-from demos.demo_gifify import main as demo_gifify
-from demos.demo_write_gif import main as demo_write_gif
-from demos.demo_write_video import main as demo_write_video
+
+def demo_attr(module_name, attr_name="main"):
+    return getattr(import_module(f"demos.{module_name}"), attr_name)
 
 
 @pytest.mark.slow
 def test_demo_fancy_video_smoke():
+    orbit_moon_video_demo = demo_attr("demo_fancy_video", "orbit_moon_video_demo")
     out = orbit_moon_video_demo(
         duration_days=1.0,
         fps=4,
@@ -28,17 +29,20 @@ def test_demo_fancy_video_smoke():
 
 @pytest.mark.slow
 def test_demo_gifify_smoke():
+    demo_gifify = demo_attr("demo_gifify")
     out = demo_gifify(make_artifacts=False, fast=True, verbose=False)
     assert isinstance(out, dict)
 
 
 @pytest.mark.slow
 def test_demo_write_gif_smoke():
+    demo_write_gif = demo_attr("demo_write_gif")
     out = demo_write_gif(make_artifacts=False, fast=True)
     assert isinstance(out, dict)
 
 
 @pytest.mark.slow
 def test_demo_write_video_smoke():
+    demo_write_video = demo_attr("demo_write_video")
     out = demo_write_video(make_artifacts=False, fast=True)
     assert isinstance(out, dict)

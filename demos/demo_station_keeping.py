@@ -59,7 +59,7 @@ def main(make_figures=None, fast=None, output_dir=None):
     fast : bool or None
         If None, defaults to True under pytest and False otherwise.
     output_dir : str or None
-        Output directory for saved figures. If None, uses ~/yu_figures/tests.
+        Output directory for saved figures. If None, uses figpath("tests").
 
     Returns
     -------
@@ -71,7 +71,8 @@ def main(make_figures=None, fast=None, output_dir=None):
     if fast is None:
         fast = UNDER_PYTEST
     if output_dir is None:
-        output_dir = os.path.expanduser("~/yu_figures/tests")
+        from ssapy_toolkit.plots.figpath import figpath
+        output_dir = figpath("tests")
 
     # ── Configuration ─────────────────────────────────────────────────────────
     a_m = 1.0 * RGEO

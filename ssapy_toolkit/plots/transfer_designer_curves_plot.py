@@ -22,7 +22,7 @@ def transfer_designer_curves_plot(result, save_path=None):
     ----------
     result : OptimalTransferResult
     save_path : str, optional
-        If given, save via ``ssapy_toolkit.plots.yufig`` and close;
+        If given, save via ``ssapy_toolkit.plots.figsave`` and close;
         otherwise the figure is returned.
     """
     import matplotlib
@@ -80,8 +80,8 @@ def transfer_designer_curves_plot(result, save_path=None):
     fig.tight_layout()
 
     if save_path is not None:
-        from ssapy_toolkit.plots import yufig
-        yufig(fig, save_path)
+        from ssapy_toolkit.plots import figsave
+        figsave(fig, save_path)
         plt.close(fig)
         return None
     return fig

@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import imageio.v2 as imageio
 
+
 def gifify(
     plot_func,
     *fargs,
@@ -36,10 +37,8 @@ def gifify(
     """
     # ---------- defaults & validation ----------
     if save_path is None:
-        from pathlib import Path
-        d = Path.cwd() / "figures"
-        d.mkdir(parents=True, exist_ok=True)
-        save_path = str(d / "animation.gif")
+        from .figpath import figpath
+        save_path = figpath("animation.gif")
 
     if array_kw_keys is not None and len(array_kw_keys) != 2:
         raise ValueError("array_kw_keys must be a tuple of two names or None.")
@@ -148,7 +147,8 @@ def gifify(
             pos = ax.get_position().frozen()
             x0, y0, w, h = pos.x0, pos.y0, pos.width, pos.height
         except Exception:
-            x0 = y0 = 0.0; w = h = 1.0
+            x0 = y0 = 0.0
+            w = h = 1.0
         is3d = hasattr(ax, "get_zlim")
         return (round(x0, rnd), round(y0, rnd), round(w, rnd), round(h, rnd), "3d" if is3d else "2d")
 
@@ -190,11 +190,15 @@ def gifify(
             try:
                 # Limits
                 if ent["x"] is not None:
-                    if hasattr(ax, "set_xlim3d"): ax.set_xlim3d(ent["x"])
-                    else: ax.set_xlim(ent["x"])
+                    if hasattr(ax, "set_xlim3d"):
+                        ax.set_xlim3d(ent["x"])
+                    else:
+                        ax.set_xlim(ent["x"])
                 if ent["y"] is not None:
-                    if hasattr(ax, "set_ylim3d"): ax.set_ylim3d(ent["y"])
-                    else: ax.set_ylim(ent["y"])
+                    if hasattr(ax, "set_ylim3d"):
+                        ax.set_ylim3d(ent["y"])
+                    else:
+                        ax.set_ylim(ent["y"])
                 if ent["z"] is not None and hasattr(ax, "set_zlim3d"):
                     ax.set_zlim3d(ent["z"])
                 # Labels & title: keep them present every frame
@@ -209,8 +213,10 @@ def gifify(
                 # Optional: stabilize 3D geometry
                 if fix_box_aspect_3d and hasattr(ax, "set_box_aspect"):
                     ax.set_box_aspect((1, 1, 1))
-                try: ax.set_proj_type("ortho")
-                except Exception: pass
+                try:
+                    ax.set_proj_type("ortho")
+                except Exception:
+                    pass
             except Exception:
                 pass
 
@@ -237,7 +243,8 @@ def gifify(
             ret_probe = plot_func(*probe_args, **probe_kwargs)
             fig_probe = _resolve_fig(ret_probe)
             try:
-                fig_probe.canvas.draw_idle(); plt.pause(0.001)
+                fig_probe.canvas.draw_idle()
+                plt.pause(0.001)
             except Exception:
                 pass
 

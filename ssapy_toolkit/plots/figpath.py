@@ -1,7 +1,12 @@
 from pathlib import Path
 
-HOME_FIG_DIR = Path.home() / "yu_figures"
-FALLBACK_DIR = Path.cwd() / "yu_figures"
+from ssapy_toolkit._paths import safe_relative_parts
+
+DEFAULT_FIG_DIR_NAME = "ssatk_figures"
+HOME_FIG_DIR = Path.home() / DEFAULT_FIG_DIR_NAME
+FALLBACK_DIR = Path.cwd() / DEFAULT_FIG_DIR_NAME
+
+__all__ = ["figpath", "fpath"]
 
 # You can keep this around if you like, but it's no longer used for extension logic.
 _KNOWN_EXTS = {
@@ -20,52 +25,29 @@ _KNOWN_EXTS = {
 }
 
 
-def _safe_rel_parts(p: Path):
+def figpath(filename="figure"):
     """
-    Normalize a user path into a safe relative path:
-      - strip any drive / root / leading slashes,
-      - collapse '.' and '..' without allowing traversal outside the root,
-      - keep intermediate subfolders intact.
-    """
-    parts = []
-    for part in p.parts:
-        # Skip anchors/roots (e.g., 'C:\\', '/', '//server')
-        if part in (p.anchor, "/", "\\", ""):
-            continue
-        if part == ".":
-            continue
-        if part == "..":
-            if parts:
-                parts.pop()
-            continue
-        parts.append(part)
-    return parts
-
-
-def figpath(filename):
-    """
-    Build a path under yu_figures that *respects requested subfolders*.
+    Build a path under the SSATK figure directory.
 
     Rules:
-      - The path is always rooted under ~/yu_figures (fallback: ./yu_figures).
+      - The path is rooted under ~/ssatk_figures (fallback: ./ssatk_figures).
       - Subfolders in `filename` are preserved and created as needed.
       - The basename is used exactly as given (no automatic extension added).
-      - Absolute paths and '..' are normalized to stay under yu_figures.
+      - Absolute paths and '..' are normalized to stay under ssatk_figures.
 
     Examples
     --------
-    figpath("plot")                          -> ~/yu_figures/plot
-    figpath("demo_gallery/figures/burn_to_dv")              -> ~/yu_figures/demo_gallery/figures/burn_to_dv
-    figpath("demo_gallery/figures/burn_to_dv.png")          -> ~/yu_figures/demo_gallery/figures/burn_to_dv.png
-    figpath("/abs/path/ignored/name.svg")    -> ~/yu_figures/name.svg
-    figpath("weird/name.foo")                -> ~/yu_figures/weird/name.foo
+    figpath("plot")                          -> ~/ssatk_figures/plot
+    figpath("demo_gallery/figures/burn_to_dv")              -> ~/ssatk_figures/demo_gallery/figures/burn_to_dv
+    figpath("demo_gallery/figures/burn_to_dv.png")          -> ~/ssatk_figures/demo_gallery/figures/burn_to_dv.png
+    figpath("/abs/path/ignored/name.svg")    -> ~/ssatk_figures/abs/path/ignored/name.svg
+    figpath("weird/name.foo")                -> ~/ssatk_figures/weird/name.foo
     """
     if not isinstance(filename, (str, Path)):
         raise TypeError("figpath(filename): filename must be str or pathlib.Path")
 
     # Normalize to a safe relative path (no drive, no leading slash, no traversal)
-    user_p = Path(filename)
-    rel_parts = _safe_rel_parts(user_p)
+    rel_parts = safe_relative_parts(filename)
     if not rel_parts:
         rel_parts = ["figure"]
 
@@ -84,4 +66,7 @@ def figpath(filename):
         except (OSError, PermissionError):
             continue
 
-    raise RuntimeError("Could not create or access yu_figures in HOME or CWD.")
+    raise RuntimeError(f"Could not create or access {DEFAULT_FIG_DIR_NAME} in HOME or CWD.")
+
+
+fpath = figpath

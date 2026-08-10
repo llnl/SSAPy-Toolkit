@@ -99,7 +99,8 @@ def koe_plot(r: np.ndarray, v: np.ndarray, t=None,
 
     # Optionally save the plot
     if save_path:
-        fig.savefig(save_path)
+        from .plotutils import figsave
+        figsave(fig, save_path)
 
     return fig, ax1
 

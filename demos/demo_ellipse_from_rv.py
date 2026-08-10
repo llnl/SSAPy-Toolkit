@@ -29,7 +29,7 @@ from ssapy_toolkit.constants import RGEO
 from ssapy_toolkit.orbital_mechanics.ellipse_fit import ellipse_fit
 from ssapy_toolkit.ssapy_wrappers.ssapy_orbits import ssapy_orbit
 from ssapy_toolkit.plots.orbit_plot import orbit_plot
-from ssapy_toolkit.plots.plotutils import yufig
+from ssapy_toolkit.plots.plotutils import figsave
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -241,7 +241,7 @@ def _plot_error_vs_time(results, recon_cache, prefix):
     ax.grid(True)
     ax.legend()
     fig.tight_layout()
-    yufig(fig, f"{prefix}_error_kepler.png")
+    figsave(fig, f"{prefix}_error_kepler.png")
     plt.close(fig)
 
     fig = plt.figure()
@@ -257,7 +257,7 @@ def _plot_error_vs_time(results, recon_cache, prefix):
     ax.grid(True)
     ax.legend()
     fig.tight_layout()
-    yufig(fig, f"{prefix}_error_sv.png")
+    figsave(fig, f"{prefix}_error_sv.png")
     plt.close(fig)
 
 
@@ -278,7 +278,7 @@ def _plot_radius_and_speed(results, recon_cache, prefix):
     ax.grid(True)
     ax.legend()
     fig.tight_layout()
-    yufig(fig, f"{prefix}_radius.png")
+    figsave(fig, f"{prefix}_radius.png")
     plt.close(fig)
 
     fig = plt.figure()
@@ -295,7 +295,7 @@ def _plot_radius_and_speed(results, recon_cache, prefix):
     ax.grid(True)
     ax.legend()
     fig.tight_layout()
-    yufig(fig, f"{prefix}_speed.png")
+    figsave(fig, f"{prefix}_speed.png")
     plt.close(fig)
 
 
@@ -327,7 +327,7 @@ def _plot_arcs_3d(results, P1_m, P2_m, prefix, title="ellipse_fit arcs", cube_li
     ax.set_title(title)
     ax.legend()
     fig.tight_layout()
-    yufig(fig, f"{prefix}_arcs.png")
+    figsave(fig, f"{prefix}_arcs.png")
     plt.close(fig)
 
 
@@ -349,7 +349,7 @@ def _plot_sep_AB(results, prefix):
     ax.set_title("A vs B separation vs time")
     ax.grid(True)
     fig.tight_layout()
-    yufig(fig, f"{prefix}_separation_AB.png")
+    figsave(fig, f"{prefix}_separation_AB.png")
     plt.close(fig)
 
 
@@ -370,7 +370,7 @@ def _plot_recon_overlays(results, recon_cache, prefix):
     ax.set_title("SSAPy reconstruction via state vectors")
     ax.legend()
     fig.tight_layout()
-    yufig(fig, f"{prefix}_recons_sv.png")
+    figsave(fig, f"{prefix}_recons_sv.png")
     plt.close(fig)
 
     fig = plt.figure()
@@ -387,7 +387,7 @@ def _plot_recon_overlays(results, recon_cache, prefix):
     ax.set_title("SSAPy reconstruction via Kepler elements")
     ax.legend()
     fig.tight_layout()
-    yufig(fig, f"{prefix}_recons_kepler.png")
+    figsave(fig, f"{prefix}_recons_kepler.png")
     plt.close(fig)
 
 
@@ -435,7 +435,7 @@ def _plot_incsweep_all_transfers_3d(sweep_store, P1_m, prefix):
     ax.set_zlabel("z [m]")
     ax.legend()
     fig.tight_layout()
-    yufig(fig, f"{prefix}_all_transfers.png")
+    figsave(fig, f"{prefix}_all_transfers.png")
     plt.close(fig)
 
 

@@ -107,31 +107,34 @@ def main(make_figures=None, fast=None):
     # ------------------------------------------------------------
     # Spacecraft + force models
     # ------------------------------------------------------------
-    sat_kwargs = dict(
-        mass=100.0,
-        area=1.0,
-        CD=2.3,
-        CR=1.3,
-    )
+    if fast:
+        accel = AccelKepler()
+    else:
+        sat_kwargs = dict(
+            mass=100.0,
+            area=1.0,
+            CD=2.3,
+            CR=1.3,
+        )
 
-    moon = get_body("moon")
-    sun = get_body("sun")
-    Earth = get_body("earth", model="EGM2008")
+        moon = get_body("moon")
+        sun = get_body("sun")
+        Earth = get_body("earth", model="EGM2008")
 
-    aEarth = AccelKepler() + AccelHarmonic(Earth, 140, 140)
-    aSun = AccelThirdBody(sun)
-    aMoon = AccelThirdBody(moon) + AccelHarmonic(moon, 20, 20)
-    aSolRad = AccelSolRad(**sat_kwargs)
-    aEarthRad = AccelEarthRad(**sat_kwargs)
-    accel = aEarth + aMoon + aSun + aSolRad + aEarthRad
+        aEarth = AccelKepler() + AccelHarmonic(Earth, 140, 140)
+        aSun = AccelThirdBody(sun)
+        aMoon = AccelThirdBody(moon) + AccelHarmonic(moon, 20, 20)
+        aSolRad = AccelSolRad(**sat_kwargs)
+        aEarthRad = AccelEarthRad(**sat_kwargs)
+        accel = aEarth + aMoon + aSun + aSolRad + aEarthRad
 
     prop = SciPyPropagator(accel)
 
     # ------------------------------------------------------------
     # Time vector
     # ------------------------------------------------------------
-    duration = (6, "hour") if fast else (2, "day")
-    freq = (10, "minute") if fast else (1, "minute")
+    duration = (20, "minute") if fast else (2, "day")
+    freq = (20, "minute") if fast else (1, "minute")
     times = get_times(duration=duration, freq=freq, t0=t0)
 
     # ------------------------------------------------------------
