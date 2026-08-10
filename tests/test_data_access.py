@@ -36,6 +36,11 @@ def test_traversable_type_is_available_for_supported_python_versions():
     assert data_module.Traversable is not None
 
 
+def test_default_data_package_uses_installed_ssapy_data():
+    assert data_package_available()
+    assert "SSAPy Data Payload Directory" in read_data_text("README.md")
+
+
 def test_data_resource_reads_from_installed_package(tmp_path, monkeypatch):
     package = _make_data_package(tmp_path, monkeypatch)
 

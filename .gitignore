@@ -143,4 +143,8 @@ docs/generated/
 ##########################
 
 .DS_Store
-*~docs/generated/
+*~
+
+# Local Codex/agent instructions
+AGENTS.md
+agents.md

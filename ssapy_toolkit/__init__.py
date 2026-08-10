@@ -4,7 +4,7 @@ Utilities for orbital mechanics, plotting, coordinate transforms,
 integrators, io helpers, and SSAPy-related workflows.
 """
 
-__version__ = "1.0.2"
+__version__ = "1.0.5"
 
 try:
     from astropy.utils import iers

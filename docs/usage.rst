@@ -32,8 +32,8 @@ Packaged data
 
 SSAPy Toolkit should not commit reusable datasets, generated figures, or other
 binary artifacts. Toolkit functions that require reusable data should read it
-from an installed data package instead. The expected package import name is
-``ssapy_data`` with resources below ``ssapy_data/data``.
+from the installed ``llnl-ssapy-data`` dependency instead. The dependency exposes
+the ``ssapy_data`` import package with resources below ``ssapy_data/data``.
 
 Use :mod:`ssapy_toolkit.data` when a toolkit function needs a packaged data
 file:
@@ -49,5 +49,4 @@ file:
        print(catalog_path)
 
 This keeps ``SSAPy-Toolkit`` source-only while allowing users to get required
-data through normal ``pip`` installation once ``SSAPy-Data`` is published as a
-wheel dependency.
+data through normal ``pip`` installation.
