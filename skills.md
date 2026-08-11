@@ -111,6 +111,13 @@ Use `ssapy_toolkit.plots.figpath` / `ssapy_toolkit.plots.figsave` (`fpath` /
 do not add those outputs to the repository. Prefer `h5cache` / `h5load` for HDF5
 caches; legacy `yu*` names are compatibility-only.
 
+For plotting cleanup, keep public plot names as stable wrappers and place shared
+implementation in private core modules. Current examples are
+`ssapy_toolkit.plots._orbit_plot_core._orbit_plot_core` for `orbit_plot`,
+`orbit_plot_xy`, and `orbit_plot_xyxz`, and
+`ssapy_toolkit.plots._cislunar_plot_core._cislunar_plot_core` for `cislunar_plot`,
+`cislunar_plot_3d`, and `cislunar_plot_xy`.
+
 For new or changed public behavior:
 
 - Add or update a focused test under `tests/` when an adjacent test pattern exists.
