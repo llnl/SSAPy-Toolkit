@@ -124,7 +124,7 @@ def nan_array(size: int = 1) -> np.ndarray:
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     x = np.zeros(size)
-    x[:] = np.NaN
+    x[:] = np.nan
     return x
 
 
