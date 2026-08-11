@@ -46,10 +46,11 @@ def dd_to_dms(degree_decimal):
     __d = -__d if degree_decimal < 0 else __d
     _m, __m = np.trunc(__d * 60), __d * 60 - np.trunc(__d * 60)
     _s = round(__m * 60, 4)
-    _s = int(_s) if int(_s) == _s else _s
-    if _s == 60:
-        _m, _s = _m + 1, '00'
-    elif _s > 60:
+    if _s >= 60:
         _m, _s = _m + 1, _s - 60
+    if _m >= 60:
+        _d = _d - 1 if degree_decimal < 0 else _d + 1
+        _m = 0
+    _s = int(_s) if int(_s) == _s else _s
 
     return f'{int(_d)}:{int(_m)}:{_s}'

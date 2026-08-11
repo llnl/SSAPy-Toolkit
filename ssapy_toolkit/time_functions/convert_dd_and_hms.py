@@ -22,12 +22,11 @@ def hms_to_dd(hms):
     _type = type(hms)
     hms, out = [[hms] if _type == str else hms][0], []
     for i in hms:
-        if i[0] != '-':
-            hour, minute, sec = i.split(':')
-            hour, minute, sec = float(hour), float(minute), float(sec)
-            out.append(hour * 15 + (minute / 4) + (sec / 240))
-        else:
-            print('hms cannot be negative.')
+        if i[0] == '-':
+            raise ValueError('hms cannot be negative.')
+        hour, minute, sec = i.split(':')
+        hour, minute, sec = float(hour), float(minute), float(sec)
+        out.append(hour * 15 + (minute / 4) + (sec / 240))
 
     return out[0] if _type == str or len(hms) == 1 else out
 
@@ -58,10 +57,10 @@ def dd_to_hms(degree_decimal):
     _h, __h = np.trunc(_dd), _dd - np.trunc(_dd)
     _m, __m = np.trunc(__h * 60), __h * 60 - np.trunc(__h * 60)
     _s = round(__m * 60, 4)
-    _s = int(_s) if int(_s) == _s else _s
-    if _s == 60:
-        _m, _s = _m + 1, '00'
-    elif _s > 60:
+    if _s >= 60:
         _m, _s = _m + 1, _s - 60
+    if _m >= 60:
+        _h, _m = _h + 1, 0
+    _s = int(_s) if int(_s) == _s else _s
 
     return f'{int(_h)}:{int(_m)}:{_s}'
