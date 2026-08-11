@@ -13,6 +13,9 @@ except ImportError:
     HAS_ASTROPY = False
 
 
+
+# Smoke/validation module: exercised by pytest, not rendered in the demo gallery.
+GALLERY_INCLUDE = False
 def build_test_dict():
     data = {
         "simple_array": np.arange(10),

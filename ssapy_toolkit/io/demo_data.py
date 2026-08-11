@@ -33,7 +33,7 @@ def ensure_demo_data_file(
     """Return a local optional-demo data file, fetching it when available.
 
     The lookup order is:
-    1. ``datapath(filename)`` (normally ``~/ssatk_data``).
+    1. ``datapath(filename)`` (normally ``~/ssatk_data`` or ``SSATK_DATA_DIR``).
     2. Nearby ``ssatk_data`` folders, including the current directory and its
        parent, for local development checkouts.
     3. A known public source for the requested demo file, when

@@ -89,7 +89,10 @@ Issues = "https://github.com/llnl/SSAPy-Toolkit/issues"
 Documentation = "https://ssapy-toolkit.readthedocs.io/"
 
 [tool.setuptools]
-packages = { find = { where = ["."], include = ["ssapy_toolkit*"] } }
+packages = { find = { where = ["."], include = ["ssapy_toolkit*", "demos*"] } }
+
+[tool.setuptools.package-data]
+demos = ["README.md"]
 
 [tool.pytest.ini_options]
 markers = [

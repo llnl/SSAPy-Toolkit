@@ -15,6 +15,9 @@ from ssapy_toolkit.plots.plotutils import figsave  # [37]
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
+# Smoke/validation module: exercised by pytest, not rendered in the demo gallery.
+GALLERY_INCLUDE = False
+
 
 def main(make_figures=None):
     if make_figures is None:
@@ -36,14 +39,16 @@ def main(make_figures=None):
         print("Shooter (r1, v1, r2) failed:", err)
         outputs["shooter_error"] = str(err)
 
-    print("Running Lambertian (r1, v1, r2)")
+    print("Running Lambert transfer (r1, v1, r2)")
     try:
         result = transfer_lambertian(orbit1.r, orbit1.v, orbit2.r, plot=make_figures)
+        outputs["lambert_transfer"] = result
         outputs["lambertian"] = result
         if make_figures and "fig" in result:
             figsave(result["fig"], "demo_gallery/figures/transfers_lambertian_rv")
     except Exception as err:
-        print("Lambertian (r1, v1, r2) failed:", err)
+        print("Lambert transfer (r1, v1, r2) failed:", err)
+        outputs["lambert_transfer_error"] = str(err)
         outputs["lambertian_error"] = str(err)
 
     return outputs

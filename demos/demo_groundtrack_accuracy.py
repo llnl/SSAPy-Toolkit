@@ -24,7 +24,7 @@ def main(make_figures=None, make_video=None, fast=None):
     if make_figures is None:
         make_figures = not UNDER_PYTEST
     if make_video is None:
-        make_video = not UNDER_PYTEST
+        make_video = False
     if fast is None:
         fast = UNDER_PYTEST
 

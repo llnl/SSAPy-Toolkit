@@ -3,6 +3,9 @@ from astropy.time import Time
 from ssapy_toolkit.time_functions.get_times import get_times
 
 
+
+# Smoke/validation module: exercised by pytest, not rendered in the demo gallery.
+GALLERY_INCLUDE = False
 def demo_get_times(verbose=True):
     results = {}
 

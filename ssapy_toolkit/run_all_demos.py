@@ -1,27 +1,58 @@
 from __future__ import annotations
 import argparse
+from importlib.metadata import PackageNotFoundError, distribution
 import webbrowser
 from pathlib import Path
 from ssapy_toolkit.plots.figpath import figpath
 from .demo_gallery import run_all_demos
 
+
 def default_output_dir() -> Path:
     return Path(figpath("demo_gallery/index.html")).expanduser().resolve().parent
 
-def main() -> int:
+
+def _looks_like_demos_dir(path: Path) -> bool:
+    return path.is_dir() and any(path.glob("demo_*.py"))
+
+
+def find_default_demos_dir() -> Path | None:
+    """Find the demo scripts for source-tree and installed-package use."""
+    candidates = [
+        Path.cwd() / "demos",
+        Path(__file__).resolve().parents[1] / "demos",
+    ]
+    for candidate in candidates:
+        if _looks_like_demos_dir(candidate):
+            return candidate.resolve()
+
+    try:
+        dist = distribution("ssapy-toolkit")
+    except PackageNotFoundError:
+        return None
+
+    for file in dist.files or []:
+        if str(file).replace("\\", "/") == "demos/__init__.py":
+            candidate = Path(dist.locate_file(file)).parent
+            if _looks_like_demos_dir(candidate):
+                return candidate.resolve()
+
+    return None
+
+
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Run all SSAPy demos and build a local gallery report."
     )
     parser.add_argument(
         "--demos-dir",
-        default="demos",
-        help="Directory containing demo scripts (default: ./demos)",
+        default=None,
+        help="Directory containing demo scripts (default: auto-detect repo or installed demos)",
     )
     parser.add_argument(
         "--output",
         default=str(default_output_dir()),
         help="Output directory for generated demo artifacts and report "
-             "(default: whatever figpath uses for demo_errors)",
+             "(default: ~/ssatk_figures/demo_gallery)",
     )
     parser.add_argument(
         "--open",
@@ -29,16 +60,29 @@ def main() -> int:
         help="Open the generated HTML report in a browser after it is written",
     )
     parser.add_argument(
+        "--no-open",
+        action="store_true",
+        help="Deprecated no-op; reports are not opened unless --open is provided",
+    )
+    parser.add_argument(
         "--no-clean",
         action="store_true",
         help="Do not delete the existing output directory before running",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
-    demos_dir = Path(args.demos_dir).expanduser().resolve()
+    if args.demos_dir is None:
+        demos_dir = find_default_demos_dir()
+        if demos_dir is None:
+            raise SystemExit(
+                "Demo directory not found. Run from a source checkout, install a "
+                "wheel that includes demos, or pass --demos-dir PATH."
+            )
+    else:
+        demos_dir = Path(args.demos_dir).expanduser().resolve()
     output_root = Path(args.output).expanduser().resolve()
 
-    if not demos_dir.exists():
+    if not _looks_like_demos_dir(demos_dir):
         raise SystemExit(f"Demo directory not found: {demos_dir}")
 
     results = run_all_demos(

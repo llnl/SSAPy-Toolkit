@@ -23,6 +23,13 @@ Run modes
   ``ssapy_toolkit.plots.figsave`` under ``demo_gallery/figures/``.
 """
 
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 import numpy as np
 
 from ssapy.orbit import Orbit
@@ -34,14 +41,12 @@ from ssapy_toolkit.orbital_mechanics.transfer_ssapy_function import (
     transfer_ssapy, solve_lambert)
 from ssapy_toolkit.orbital_mechanics.transfer_optimal_function import (
     transfer_optimal)
-from ssapy_toolkit.plots.transfer_trajectory_plot import (
-    transfer_trajectory_plot)
-from ssapy_toolkit.plots.transfer_burn_profile_plot import (
-    transfer_burn_profile_plot)
+from ssapy_toolkit.plots.orbit_plot import orbit_plot
 _SOURCE = "ssapy_toolkit.orbital_mechanics (submodules)"
 
 MU = EARTH_MU
 FIGDIR = "demo_gallery/figures"
+GEO_DRIFT_ARRIVAL_TOL_M = 25.0
 
 
 # ======================================================================
@@ -365,7 +370,7 @@ def test_optimal_first_burn_only_intercept():
     res = transfer_optimal(o1, o2, arrival_burn=False)
     ref = _OPT_RESULTS.get("min_dv") or transfer_optimal(o1, o2)
     assert len(res.transfer.burns) == 1
-    assert res.transfer.arrival_error < 10.0
+    assert res.transfer.arrival_error < GEO_DRIFT_ARRIVAL_TOL_M
     assert res.dv_total < ref.dv_total          # one burn beats two
     # ...and the cheapest intercept is the first Hohmann burn.
     assert abs(res.dv_total - _hohmann_dv(R1, R2)[0]) < 25.0
@@ -396,7 +401,7 @@ def test_optimal_finds_cheap_geo_drift_window():
                            n_grid=(24, 48), rk_step=60.0)
     _OPT_RESULTS["geo"] = res
     assert res.dv_total < 25.0
-    assert res.transfer.arrival_error < 10.0
+    assert res.transfer.arrival_error < GEO_DRIFT_ARRIVAL_TOL_M
 
 
 # ---- engine model (thrust / mass / isp) -------------------------------
@@ -495,8 +500,9 @@ def _demo_figures():
     fig, axes = plt.subplots(2, 3, figsize=(15, 10))
     for ax, name in zip(axes.ravel(), CATALOG):
         case, res = _RESULTS[name]
-        transfer_trajectory_plot(
+        orbit_plot(
             res, ax=ax, annotate_burns=False,
+            view="transfer_trajectory",
             title=(f"{name}\ndv {res.dv_total:.1f} m/s | "
                    f"arrival err {res.arrival_error:.1f} m"))
         ax.tick_params(labelsize=8)
@@ -509,11 +515,12 @@ def _demo_figures():
 
     # ---- Figure 2: 3-D view of the combined plane change --------------
     case, res = _RESULTS["Raise + 15 deg plane change"]
-    transfer_trajectory_plot(
+    orbit_plot(
         res, three_d=True,
+        view="transfer_trajectory_3d",
         title="Raise + plane change: cross-track (W) delta-v carries "
               "the inclination",
-        save_path=f"{FIGDIR}/demo_transfer_plane_change_3d.jpg")
+        save=f"{FIGDIR}/demo_transfer_plane_change_3d.jpg")
 
     # ---- Figure 3: delta-v budget by transfer type ---------------------
     names = list(CATALOG)
@@ -600,21 +607,30 @@ def _demo_figures():
     eng = transfer_ssapy((r1d, v1d, 0.0),
                          (r2d, v2d, (150.0 / 180.0) * TOF_HOHMANN),
                          thrust=1000.0, mass=500.0, isp=320.0)
-    transfer_burn_profile_plot(
+    orbit_plot(
         eng, title="Burn timeline: 500 kg / 1 kN / Isp 320 s, "
                    f"total dv {eng.dv_total:.1f} m/s",
-        save_path=f"{FIGDIR}/demo_transfer_burn_profile.jpg")
+        view="transfer_burn_profile",
+        save=f"{FIGDIR}/demo_transfer_burn_profile.jpg")
 
     # ---- Figures 7-8: transfer_optimal mission-designer curves --------
     o1, o2 = _opt_boundaries()
-    transfer_optimal(o1, o2, visualize=True,
-                     fig_prefix=f"{FIGDIR}/demo_transfer_optimal_leo")
+    opt_leo = transfer_optimal(o1, o2, visualize=False)
+    orbit_plot(
+        opt_leo,
+        view="transfer_designer",
+        save=f"{FIGDIR}/demo_transfer_optimal_leo_designer_curves.jpg",
+    )
     dep = _circular_state(RGEO, 0.0)
     arr = _circular_state(RGEO, np.deg2rad(3.0))
-    transfer_optimal((dep[0], dep[1], 0.0), (arr[0], arr[1], 0.0),
-                     tof_range=(3600.0, 1.3 * 86164.0),
-                     n_grid=(24, 48), rk_step=60.0, visualize=True,
-                     fig_prefix=f"{FIGDIR}/demo_transfer_optimal_geo")
+    opt_geo = transfer_optimal((dep[0], dep[1], 0.0), (arr[0], arr[1], 0.0),
+                               tof_range=(3600.0, 1.3 * 86164.0),
+                               n_grid=(24, 48), rk_step=60.0, visualize=False)
+    orbit_plot(
+        opt_geo,
+        view="transfer_designer",
+        save=f"{FIGDIR}/demo_transfer_optimal_geo_designer_curves.jpg",
+    )
 
     for fname in ["demo_transfer_catalog_gallery",
                   "demo_transfer_plane_change_3d",

@@ -64,7 +64,6 @@ def test_ssatk_short_helper_aliases_are_primary_exports():
 def test_figpath_roots_relative_paths_under_home_output_dir(tmp_path, monkeypatch):
     home_figs = tmp_path / "home_figs"
     monkeypatch.setattr(fig_path_module, "HOME_FIG_DIR", home_figs)
-    monkeypatch.setattr(fig_path_module, "FALLBACK_DIR", tmp_path / "fallback_figs")
 
     path = Path(fig_path_module.figpath("demo/../plots/example"))
 
@@ -72,11 +71,33 @@ def test_figpath_roots_relative_paths_under_home_output_dir(tmp_path, monkeypatc
     assert path.parent.exists()
 
 
+def test_figpath_can_use_explicit_env_root(tmp_path, monkeypatch):
+    env_figs = tmp_path / "env_figs"
+    monkeypatch.setenv("SSATK_FIGURES_DIR", str(env_figs))
+
+    path = Path(fig_path_module.figpath("demo_gallery/index.html"))
+
+    assert path == env_figs / "demo_gallery" / "index.html"
+    assert path.parent.exists()
+
+
+def test_figpath_does_not_fall_back_to_cwd(tmp_path, monkeypatch):
+    blocked_home = tmp_path / "blocked_home"
+    blocked_home.write_text("not a directory", encoding="utf-8")
+    fallback = tmp_path / "fallback_figs"
+    monkeypatch.setattr(fig_path_module, "HOME_FIG_DIR", blocked_home)
+    monkeypatch.setattr(fig_path_module, "FALLBACK_DIR", fallback)
+
+    with pytest.raises(RuntimeError, match="SSATK_FIGURES_DIR"):
+        fig_path_module.figpath("plots/example")
+
+    assert not fallback.exists()
+
+
 def test_figsave_defaults_to_figpath_and_adds_jpg_extension(tmp_path, monkeypatch):
     import matplotlib.pyplot as plt
 
     monkeypatch.setattr(fig_path_module, "HOME_FIG_DIR", tmp_path / "figs")
-    monkeypatch.setattr(fig_path_module, "FALLBACK_DIR", tmp_path / "fallback_figs")
 
     fig, ax = plt.subplots()
     ax.plot([0, 1], [0, 1])
@@ -91,7 +112,6 @@ def test_figsave_without_path_uses_home_figure_default(tmp_path, monkeypatch):
     import matplotlib.pyplot as plt
 
     monkeypatch.setattr(fig_path_module, "HOME_FIG_DIR", tmp_path / "figs")
-    monkeypatch.setattr(fig_path_module, "FALLBACK_DIR", tmp_path / "fallback_figs")
 
     fig, ax = plt.subplots()
     ax.plot([0, 1], [1, 0])
@@ -106,7 +126,6 @@ def test_figsave_accepts_relative_save_aliases(tmp_path, monkeypatch):
     import matplotlib.pyplot as plt
 
     monkeypatch.setattr(fig_path_module, "HOME_FIG_DIR", tmp_path / "figs")
-    monkeypatch.setattr(fig_path_module, "FALLBACK_DIR", tmp_path / "fallback_figs")
 
     fig, ax = plt.subplots()
     ax.plot([0, 1], [0, 1])
@@ -144,7 +163,6 @@ def test_figsave_rejects_conflicting_save_aliases():
 
 def test_datapath_uses_ssatk_data_dir_and_custom_dirs(tmp_path, monkeypatch):
     monkeypatch.setattr(data_path_module, "HOME_DATA_DIR", tmp_path / "home_data")
-    monkeypatch.setattr(data_path_module, "FALLBACK_DATA_DIR", tmp_path / "fallback_data")
 
     default_path = Path(data_path_module.datapath("catalogs/sample.txt"))
     custom_path = Path(data_path_module.datapath("cache/sample.npy", dirs=[tmp_path / "custom_data"]))
@@ -153,3 +171,26 @@ def test_datapath_uses_ssatk_data_dir_and_custom_dirs(tmp_path, monkeypatch):
     assert default_path.parent.exists()
     assert custom_path == tmp_path / "custom_data" / "cache" / "sample.npy"
     assert custom_path.parent.exists()
+
+
+def test_datapath_can_use_explicit_env_root(tmp_path, monkeypatch):
+    env_data = tmp_path / "env_data"
+    monkeypatch.setenv("SSATK_DATA_DIR", str(env_data))
+
+    path = Path(data_path_module.datapath("catalogs/sample.txt"))
+
+    assert path == env_data / "catalogs" / "sample.txt"
+    assert path.parent.exists()
+
+
+def test_datapath_does_not_fall_back_to_cwd(tmp_path, monkeypatch):
+    blocked_home = tmp_path / "blocked_home"
+    blocked_home.write_text("not a directory", encoding="utf-8")
+    fallback = tmp_path / "fallback_data"
+    monkeypatch.setattr(data_path_module, "HOME_DATA_DIR", blocked_home)
+    monkeypatch.setattr(data_path_module, "FALLBACK_DATA_DIR", fallback)
+
+    with pytest.raises(RuntimeError, match="SSATK_DATA_DIR"):
+        data_path_module.datapath("catalogs/sample.txt")
+
+    assert not fallback.exists()

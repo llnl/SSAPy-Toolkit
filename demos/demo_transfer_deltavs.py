@@ -2,6 +2,9 @@ import numpy as np
 from ssapy_toolkit.constants import EARTH_MU  # [35]
 
 
+
+# Smoke/validation module: exercised by pytest, not rendered in the demo gallery.
+GALLERY_INCLUDE = False
 def delta_v_semi_major_change_circular(a_initial, a_final):
     r1 = np.asarray(a_initial, dtype=float)
     r2 = np.asarray(a_final, dtype=float)

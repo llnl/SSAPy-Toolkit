@@ -1,5 +1,10 @@
 import os
 import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,6 +16,9 @@ from ssapy_toolkit.ssapy_wrappers.ssapy_orbits import ssapy_orbit
 from ssapy_toolkit.constants import RGEO  # [19]
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
+
+# Smoke/validation module: exercised by pytest, not rendered in the demo gallery.
+GALLERY_INCLUDE = False
 
 
 def test_coordinate_transforms(make_figures=False):

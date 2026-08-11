@@ -20,12 +20,12 @@ from ssapy.accel import AccelKepler
 from ssapy.body import get_body
 from ssapy.propagator import SciPyPropagator
 
-from ssapy_toolkit.plots.divergence_plot import divergence_plot
+from ssapy_toolkit.plots.orbit_plot import orbit_plot
 from ssapy_toolkit.plots.divergence_gif import divergence_gif
-from ssapy_toolkit.plots.figpath import figpath
-from ssapy_toolkit.plots.plotutils import figsave
+from ssapy_toolkit.plots.figpath import ssatk_path
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
+FIGDIR = "demo_gallery/figures"
 
 
 def main(make_figures=None, fast=None):
@@ -87,28 +87,41 @@ def main(make_figures=None, fast=None):
     v_histories = np.array(v_histories)
 
     r_final = r_histories[:, -1, :]
-    fig1 = divergence_plot(
+    fig1 = orbit_plot(
         r_final,
+        view="divergence",
         v_center=v_nominal_hist[-1],
         title=f"Position Errors at T+{duration_hours:.0f} hours (Median Center)",
+        show=False,
+        save=f"{FIGDIR}/divergence_plot_final_median" if make_figures else False,
     )
-    fig2 = divergence_plot(
+    fig2 = orbit_plot(
         r_final,
+        view="divergence",
         r_center=r_nominal_hist[-1],
         v_center=v_nominal_hist[-1],
         title=f"Position Errors at T+{duration_hours:.0f} hours (Nominal Center)",
+        show=False,
+        save=f"{FIGDIR}/divergence_plot_final_explicit" if make_figures else False,
     )
 
     if make_figures:
-        figsave(fig1, "demo_gallery/figures/divergence_plot_final_median")
-        figsave(fig2, "demo_gallery/figures/divergence_plot_final_explicit")
+        orbit_plot(
+            np.transpose(r_histories, (1, 2, 0)),
+            t=times_gps,
+            view="orbit_divergence",
+            r_moon=np.zeros_like(r_nominal_hist),
+            title="Orbit divergence across propagated samples",
+            show=False,
+            save=f"{FIGDIR}/orbit_divergence_samples",
+        )
 
     gif_results = {}
     if make_figures:
         gif_results["explicit"] = divergence_gif(
             r_histories=r_histories,
             times_gps=times_gps,
-            output_path=figpath("demo_gallery/figures/divergence_test_explicit.gif"),
+            output_path=ssatk_path(f"{FIGDIR}/divergence_test_explicit.gif"),
             r_nominal_hist=r_nominal_hist,
             v_nominal_hist=v_nominal_hist,
             duration=0.2,
@@ -118,7 +131,7 @@ def main(make_figures=None, fast=None):
         gif_results["median"] = divergence_gif(
             r_histories=r_histories,
             times_gps=times_gps,
-            output_path=figpath("demo_gallery/figures/divergence_test_median.gif"),
+            output_path=ssatk_path(f"{FIGDIR}/divergence_test_median.gif"),
             fps=5,
         )
     else:

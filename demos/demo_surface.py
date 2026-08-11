@@ -23,6 +23,9 @@ from ssapy_toolkit.constants import EARTH_RADIUS
 from ssapy_toolkit.plots.figpath import figpath  # [32]
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
+
+# Smoke/validation module: exercised by pytest, not rendered in the demo gallery.
+GALLERY_INCLUDE = False
 SAVE_FIGS = not UNDER_PYTEST
 RANDOM_SEED = 0
 EPOCHS = ["2025-01-01T00:00:00", "2025-03-20T12:00:00", "2025-06-21T12:00:00"]

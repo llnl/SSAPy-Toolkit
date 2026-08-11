@@ -59,10 +59,10 @@ def main(make_figures=None, fast=None):
         raise RuntimeError("Expected dashboard figures not found in output.")
 
     if make_figures:
-        out_dir = "/demo_gallery/figures"
+        out_dir = "demo_gallery/figures"
         figsave(fig_time, out_dir + "/accel_ladder_time_domain.jpg", dpi=200)
         figsave(fig_rung, out_dir + "/accel_ladder_rung_summary.jpg", dpi=200)
-        print("Saved (figsave root-normalized):")
+        print("Saved via ssatk figure output root:")
         print("  " + out_dir + "/accel_ladder_time_domain.jpg")
         print("  " + out_dir + "/accel_ladder_rung_summary.jpg")
 

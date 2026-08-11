@@ -1,5 +1,10 @@
 import os
 import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 import numpy as np
 import imageio.v2 as imageio
@@ -47,7 +52,7 @@ def main(make_artifacts=None, fast=None, verbose=None):
     except Exception:
         pass
 
-    n = 120 if fast else 240
+    n = 90 if fast else 120
     x = np.linspace(0, 4 * np.pi, n)
     y = np.sin(x) * np.exp(-0.1 * x)
 
@@ -72,8 +77,8 @@ def main(make_artifacts=None, fast=None, verbose=None):
             save_path=figpath("demo_gallery/figures/test_chunks.gif"),
             array_arg_indices=(0, 1),
             mode="chunks",
-            chunk_size=30 if fast else 60,
-            step=30 if fast else 60,
+            chunk_size=30 if fast else 40,
+            step=30 if fast else 40,
             fps=12,
             verbose=verbose,
         )
@@ -104,7 +109,7 @@ def main(make_artifacts=None, fast=None, verbose=None):
             save_path=figpath("demo_gallery/figures/test_cumulative.gif"),
             array_arg_indices=(0, 1),
             mode="cumulative",
-            step=10 if fast else 20,
+            step=15 if fast else 30,
             fps=10,
             verbose=verbose,
         )
@@ -133,8 +138,8 @@ def main(make_artifacts=None, fast=None, verbose=None):
             save_path=figpath("demo_gallery/figures/test_sliding.gif"),
             array_arg_indices=(0, 1),
             mode="sliding",
-            chunk_size=20 if fast else 50,
-            step=10 if fast else 15,
+            chunk_size=20 if fast else 30,
+            step=15 if fast else 30,
             fps=10,
             inject_ax=True,
             ax_arg_index=0,
@@ -162,13 +167,10 @@ def main(make_artifacts=None, fast=None, verbose=None):
 
         r, _v, t = ssapy_orbit(a=RGEO, e=0.2)
 
-        if fast:
-            step = max(1, len(r) // 120)
-            r_use = r[::step]
-            t_use = t.gps[::step]
-        else:
-            r_use = r
-            t_use = t.gps
+        max_points = 80 if fast else 100
+        step = max(1, len(r) // max_points)
+        r_use = r[::step]
+        t_use = t.gps[::step]
 
         out4 = gifify(
             groundtrack_dashboard,
@@ -176,8 +178,8 @@ def main(make_artifacts=None, fast=None, verbose=None):
             save_path=figpath("demo_gallery/figures/test_groundtrack.gif"),
             array_arg_indices=(0, 1),
             mode="sliding",
-            chunk_size=40 if fast else 120,
-            step=15 if fast else 30,
+            chunk_size=30 if fast else 40,
+            step=20 if fast else 30,
             fps=8,
             verbose=verbose,
             fixed_limits=True,

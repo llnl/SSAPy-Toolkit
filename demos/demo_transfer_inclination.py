@@ -5,6 +5,9 @@ from ssapy_toolkit.constants import RGEO, VGEO
 from ssapy_toolkit.plots.figpath import figpath  # [36]
 
 
+
+# Smoke/validation module: exercised by pytest, not rendered in the demo gallery.
+GALLERY_INCLUDE = False
 def run_case(name, r0, v0, a_thrust, i_target):
     rf, vf, tf = transfer_inclination_continuous(r0=r0, v0=v0, a_thrust=a_thrust, i_target=i_target)
     np.set_printoptions(precision=6, suppress=True)

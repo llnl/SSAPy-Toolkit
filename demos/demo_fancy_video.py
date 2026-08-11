@@ -1,5 +1,10 @@
 import os
 import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -246,16 +251,25 @@ def orbit_moon_video_demo(
     return {"r_sc_f": r_sc_f, "r_moon": r_moon, "t_frames_ok": t_frames_ok, "out_mp4": out_mp4}
 
 
-if __name__ == "__main__":
-    orbit_moon_video_demo(
+def main(make_figures=None, fast=None, save_gif=False):
+    if make_figures is None:
+        make_figures = not UNDER_PYTEST
+    if fast is None:
+        fast = UNDER_PYTEST
+
+    return orbit_moon_video_demo(
         t0="2024-01-01",
-        duration_days=60.0,
-        fps=12,
-        seconds_per_frame=3 * 3600,
-        trail_len=220,
+        duration_days=2.0 if fast else 7.0,
+        fps=6 if fast else 8,
+        seconds_per_frame=12 * 3600 if fast else 6 * 3600,
+        trail_len=24 if fast else 48,
         out_name="demo_gallery/figures/demo_orbit_moon_video.mp4",
-        save_gif=False,
-        make_figures=True,
-        fast=False,
+        save_gif=save_gif,
+        make_figures=make_figures,
+        fast=fast,
     )
+
+
+if __name__ == "__main__":
+    main(make_figures=True, fast=False)
     print("VIDEO DEMO DONE.")

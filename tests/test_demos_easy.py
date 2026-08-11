@@ -33,11 +33,36 @@ def test_demo_compare_models():
     assert "figure_rung_summary" in out
 
 
+def test_demo_continuous_transfers():
+    demo_continuous_transfers = demo_main("demo_continuous_transfers")
+    out = demo_continuous_transfers(make_figures=False, fast=True)
+    assert "velocity_burn" in out
+    assert "normal_burn" in out
+    assert len(out["speed_change_velocity"]) > 0
+
+
 def test_demo_converting_impulse_and_burns():
     demo_converting_impulse_and_burns = demo_main("demo_converting_impulse_and_burns")
     out = demo_converting_impulse_and_burns(make_figures=False, fast=True)
     assert "burn_to_deltav" in out
     assert "deltav_to_burn" in out
+
+
+def test_demo_coordinate_frames():
+    demo_coordinate_frames = demo_main("demo_coordinate_frames")
+    out = demo_coordinate_frames(make_figures=False, fast=True)
+    assert "roundtrip_error_m" in out
+    assert out["roundtrip_error_m"].shape[0] > 0
+    assert out["ntw_error"] < 1e-9
+
+
+def test_demo_data_package_access():
+    demo_data_package_access = demo_main("demo_data_package_access")
+    out = demo_data_package_access(verbose=False)
+    assert out["path_exists"]
+    assert "DEMO-1" in out["text"]
+    assert out["missing_package_available"] is False
+    assert "is not installed" in out["missing_error"]
 
 
 def test_demo_ellipse_ae_for_arrival_rv():
@@ -51,6 +76,13 @@ def test_demo_ellipses():
     out = demo_ellipses(make_figures=False, fast=True)
     assert "trajectories" in out
     assert len(out["trajectories"]) > 0
+
+
+def test_demo_first_user_workflow():
+    demo_first_user_workflow = demo_main("demo_first_user_workflow")
+    out = demo_first_user_workflow(make_figures=False, fast=True)
+    assert "orbit" in out
+    assert out["r"].shape[1] == 3
 
 
 def test_demo_gcrs_to_itrs_astropy():
@@ -104,6 +136,14 @@ def test_demo_parsing_3le():
         assert out["data"] is not None
 
 
+def test_demo_photometry_application():
+    demo_photometry_application = demo_main("demo_photometry_application")
+    out = demo_photometry_application(make_figures=False, fast=True)
+    assert out["ranges_km"].shape[0] > 0
+    assert set(out["topocentric"]) == {"V", "SWIR", "LWIR"}
+    assert out["topocentric"]["V"].shape == out["ranges_km"].shape
+
+
 def test_demo_sampling():
     demo_sampling = demo_main("demo_sampling")
     out = demo_sampling(make_figures=False, fast=True, verbose=False)
@@ -123,13 +163,6 @@ def test_demo_ssapy_ground_lambertian_reflectance():
     out = demo_ssapy_ground_lambertian_reflectance(make_figures=False, fast=True)
     assert "mv" in out
     assert len(out["mv"]) > 0
-
-
-def test_demo_ssapy_orbit_and_plot():
-    demo_ssapy_orbit_and_plot = demo_main("demo_ssapy_orbit_and_plot")
-    out = demo_ssapy_orbit_and_plot(make_figures=False, fast=True)
-    assert "r" in out
-    assert "mv" in out
 
 
 def test_demo_transfer_rendezvous():

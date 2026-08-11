@@ -8,11 +8,17 @@ import sys
 import tempfile
 from pathlib import Path
 
-from ssapy_toolkit.data import data_path, read_data_text
+from ssapy_toolkit.data import (
+    DataPackageNotFoundError,
+    data_package_available,
+    data_path,
+    read_data_text,
+)
 
 
 DEMO_PACKAGE = "demo_ssapy_data"
 DEMO_RESOURCE = "catalogs/sample_catalog.txt"
+MISSING_PACKAGE = "demo_ssapy_data_missing_offline"
 
 
 def _create_demo_package(root: Path) -> None:
@@ -43,17 +49,31 @@ def main(verbose: bool = True):
             sys.path.remove(str(root))
             sys.modules.pop(DEMO_PACKAGE, None)
 
+    missing_available = data_package_available(MISSING_PACKAGE)
+    missing_error = ""
+    try:
+        read_data_text(DEMO_RESOURCE, package=MISSING_PACKAGE)
+    except DataPackageNotFoundError as exc:
+        missing_error = str(exc)
+
     result = {
+        "title": "Packaged Data Access",
+        "description": "Reads a sample data resource from a wheel-style package and reports graceful missing-package behavior.",
         "package": DEMO_PACKAGE,
         "resource": DEMO_RESOURCE,
         "text": text,
         "path_exists": path_exists,
         "path_name": path_name,
+        "missing_package_available": missing_available,
+        "missing_error": missing_error,
     }
 
     if verbose:
         print(f"Read {DEMO_RESOURCE} from package {DEMO_PACKAGE}:")
         print(text.strip())
+        print()
+        print(f"Missing package available: {missing_available}")
+        print(f"Graceful missing-package message: {missing_error}")
 
     return result
 

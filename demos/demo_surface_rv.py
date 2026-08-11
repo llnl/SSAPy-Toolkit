@@ -11,6 +11,9 @@ from ssapy_toolkit.plots.figpath import figpath  # inferred from repo pattern
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
+# Smoke/validation module: exercised by pytest, not rendered in the demo gallery.
+GALLERY_INCLUDE = False
+
 
 def main(make_figures=None, fast=None):
     if make_figures is None:

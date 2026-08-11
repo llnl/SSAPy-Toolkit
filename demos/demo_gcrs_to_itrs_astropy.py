@@ -4,6 +4,9 @@ import astropy.units as u
 import numpy as np
 
 
+
+# Smoke/validation module: exercised by pytest, not rendered in the demo gallery.
+GALLERY_INCLUDE = False
 def main(verbose=True):
     """
     Demonstrate converting a GCRS position/velocity state to ITRS using Astropy.

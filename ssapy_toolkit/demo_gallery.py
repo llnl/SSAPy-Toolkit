@@ -1,5 +1,6 @@
 from __future__ import annotations
 import html
+import ast
 import importlib.util
 import io
 import json
@@ -76,8 +77,28 @@ def discover_demo_files(demos_dir: Path) -> list[Path]:
     for path in sorted(demos_dir.glob("*.py")):
         if path.name in {"run_all_demos.py", "demo_gallery.py", "__init__.py"}:
             continue
+        if not _gallery_include_enabled(path):
+            continue
         candidates.append(path)
     return candidates
+
+
+def _gallery_include_enabled(path: Path) -> bool:
+    """Return False when a demo module opts out of gallery rendering."""
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (OSError, SyntaxError, UnicodeDecodeError):
+        return True
+
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            names = [target.id for target in node.targets if isinstance(target, ast.Name)]
+            if "GALLERY_INCLUDE" in names and isinstance(node.value, ast.Constant):
+                return bool(node.value.value)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            if node.target.id == "GALLERY_INCLUDE" and isinstance(node.value, ast.Constant):
+                return bool(node.value.value)
+    return True
 
 
 def import_module_from_path(path: Path):

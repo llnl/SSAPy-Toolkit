@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from ssapy_toolkit.plots.build_dashboard import build_dashboard  # [2]
+from ssapy_toolkit.plots.plotutils import figsave
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -53,7 +54,9 @@ def main(make_figures=None, fast=None):
         show=make_figures,
     )
 
-    if not make_figures:
+    if make_figures:
+        figsave(fig, "demo_gallery/figures/build_dashboard_overview.jpg")
+    else:
         plt.close(fig)
 
     return {"fig": fig, "axes": axes, "meta": meta}

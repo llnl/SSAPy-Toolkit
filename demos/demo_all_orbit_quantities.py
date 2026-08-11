@@ -19,6 +19,9 @@ from ssapy_toolkit.orbital_mechanics.all_orbit_quanities import all_orbital_quan
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
+# Smoke/validation module: exercised by pytest, not rendered in the demo gallery.
+GALLERY_INCLUDE = False
+
 
 def print_summary(tag, out):
     print(f"\n=== {tag} ===")

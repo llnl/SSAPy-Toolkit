@@ -57,7 +57,7 @@ Before requesting review, run the focused checks that match the change:
 ```bash
 pip install -e .[dev]
 pytest tests
-python -m ssapy_toolkit.run_all_demos --no-open
+python -m ssapy_toolkit.run_all_demos
 python scripts/check_repository_policy.py
 ```
 

@@ -12,6 +12,9 @@ from ssapy_toolkit.io.pprint_utils import pprint
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
+# Smoke/validation module: exercised by pytest, not rendered in the demo gallery.
+GALLERY_INCLUDE = False
+
 
 def main(verbose=False, fast=False, allow_download=None):
     if allow_download is None:

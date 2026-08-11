@@ -32,17 +32,3 @@ def test_demo_gifify_smoke():
     demo_gifify = demo_attr("demo_gifify")
     out = demo_gifify(make_artifacts=False, fast=True, verbose=False)
     assert isinstance(out, dict)
-
-
-@pytest.mark.slow
-def test_demo_write_gif_smoke():
-    demo_write_gif = demo_attr("demo_write_gif")
-    out = demo_write_gif(make_artifacts=False, fast=True)
-    assert isinstance(out, dict)
-
-
-@pytest.mark.slow
-def test_demo_write_video_smoke():
-    demo_write_video = demo_attr("demo_write_video")
-    out = demo_write_video(make_artifacts=False, fast=True)
-    assert isinstance(out, dict)
