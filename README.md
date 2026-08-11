@@ -68,8 +68,37 @@ This installs the package in editable mode along with development dependencies
 
 ## Usage
 
-The top-level package does not re-export submodules, so import the specific
-module you need:
+The Toolkit is intended to be the main user-facing entry point. Shared SSAPy
+constants are available through the Toolkit, so users do not need to know
+whether a constant originates in base SSAPy or Toolkit-specific helpers:
+
+```
+import ssapy_toolkit as ssatk
+
+print(ssatk.EARTH_MU)
+print(ssatk.constants.RGEO)
+
+orbit = ssatk.Orbit.fromKeplerianElements(
+    a=ssatk.constants.RGEO,
+    e=0.0,
+    i=0.0,
+    pa=0.0,
+    raan=0.0,
+    trueAnomaly=0.0,
+    t=0.0,
+)
+r, v = ssatk.rv(orbit, time=[0.0, 60.0])
+```
+
+Base SSAPy core objects such as `Orbit`, `rv`, `groundTrack`, and `AccelKepler`
+are lazily available through `ssapy_toolkit`. Toolkit duplicate helpers take
+precedence at the top level, so names such as `ssapy_toolkit.norm`,
+`ssapy_toolkit.deg0to360`, and `ssapy_toolkit.period` resolve to Toolkit
+implementations. Toolkit submodules also win on collisions such as
+`ssapy_toolkit.io` and `ssapy_toolkit.utils`; the base package remains available
+as `ssapy_toolkit.ssapy` when direct SSAPy module access is needed.
+
+For workflow functions, import the specific Toolkit module you need:
 
 ```
 from ssapy_toolkit.orbital_mechanics import keplerian

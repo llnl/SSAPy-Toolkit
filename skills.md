@@ -32,12 +32,29 @@ Basic import check:
 
 ```python
 import ssapy
-import ssapy_toolkit
+import ssapy_toolkit as ssatk
 import ssapy_toolkit.data as ssatk_data
 
-print(ssapy_toolkit.__version__)
+print(ssatk.__version__)
+print(ssatk.EARTH_MU)
 print(ssatk_data.data_package_available())
 ```
+
+Use Toolkit as the main user-facing entry point where possible. Shared
+astrodynamics constants are re-exported from base SSAPy through
+`ssapy_toolkit.constants` and lazy top-level attributes such as
+`ssapy_toolkit.EARTH_MU`, so user code does not need to import
+`ssapy.constants` directly.
+
+Base SSAPy core objects are also lazily exposed through the Toolkit entry point.
+Prefer examples like `import ssapy_toolkit as ssatk`, then `ssatk.Orbit`,
+`ssatk.rv`, `ssatk.groundTrack`, and `ssatk.AccelKepler` when writing
+user-facing Toolkit code. If a helper exists in both packages and Toolkit
+already has a public implementation, the top-level `ssatk` alias should resolve
+to the Toolkit implementation, for example `ssatk.norm`, `ssatk.deg0to360`, and
+`ssatk.period`. Toolkit submodules win on name collisions (`ssatk.io` is Toolkit
+I/O, not `ssapy.io`); use `ssatk.ssapy` for direct access to the base SSAPy
+package when a base submodule is required.
 
 ## Data Access Rules
 

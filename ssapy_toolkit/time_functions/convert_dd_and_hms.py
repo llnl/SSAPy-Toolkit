@@ -1,5 +1,7 @@
 import numpy as np
 
+from .convert_dd_and_dms import dms_to_dd
+
 
 def hms_to_dd(hms):
     """
