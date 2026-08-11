@@ -1,7 +1,10 @@
 from ._orbit_plot_core import _orbit_plot_core
+from .plotutils import _pop_save_path_aliases, _raise_unrecognized_kwargs
 
 
-def orbit_plot_xyxz(r, t=None, title="", figsize=(7, 7), save_path=False, frame="gcrf", show=False, c="black", pad=1):
+def orbit_plot_xyxz(r, t=None, title="", figsize=(7, 7), save_path=False, frame="gcrf", show=False, c="black", pad=1, **save_kwargs):
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "orbit_plot_xyxz")
     return _orbit_plot_core(
         r,
         t=t,
@@ -14,4 +17,5 @@ def orbit_plot_xyxz(r, t=None, title="", figsize=(7, 7), save_path=False, frame=
         pad=pad,
         views=("xy", "xz"),
         lunar_transform="fixed",
+        layout="legacy",
     )

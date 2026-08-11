@@ -13,11 +13,16 @@ from ..coordinates import gcrf_to_itrf as _gcrf_to_itrf
 from ..coordinates import gcrf_to_lunar as _gcrf_to_lunar
 from ..coordinates import gcrf_to_lunar_fixed as _gcrf_to_lunar_fixed
 from ._frames import normalize_orbit_frame as _normalize_orbit_frame
+from .globe_plot import globe_plot as _globe_plot
+from .groundtrack_plot import groundtrack_plot as _groundtrack_plot
 from .plotutils import save_plot as _save_plot
 from .plotutils import valid_orbits as _valid_orbits
 
 
-_VALID_VIEWS = ("xy", "xz", "yz", "3d")
+_COORDINATE_VIEWS = ("xy", "xz", "yz", "3d")
+_SPECIAL_VIEWS = ("groundtrack", "globe")
+_VALID_VIEWS = _COORDINATE_VIEWS + _SPECIAL_VIEWS
+_WIDE_VIEWS = {"groundtrack"}
 _VIEW_AXES = {
     "xy": (0, 1, "x", "y"),
     "xz": (0, 2, "x", "z"),
@@ -45,12 +50,15 @@ def _orbit_plot_core(
     views=("xy", "xz", "yz", "3d"),
     xy_title_includes_title=False,
     lunar_transform="standard",
+    layout="auto",
+    special_plot_kwargs=None,
 ):
     views = tuple(views)
     unsupported = [view for view in views if view not in _VALID_VIEWS]
     if unsupported:
         raise ValueError(f"Unsupported orbit plot views: {unsupported}")
 
+    special_plot_kwargs = dict(special_plot_kwargs or {})
     r, t = _valid_orbits(r, t)
 
     if "w" in c:
@@ -61,83 +69,87 @@ def _orbit_plot_core(
         plotcolor = "black"
 
     fig = _plt.figure(dpi=100, figsize=figsize, facecolor=plotcolor)
-    axes = _create_orbit_axes(fig, views)
+    axes = _create_orbit_axes(fig, views, layout=layout)
 
     bounds = {
         "lower": _np.array([_np.inf, _np.inf, _np.inf]),
         "upper": _np.array([-_np.inf, -_np.inf, -_np.inf]),
     }
 
-    if any(_np.max(_np.linalg.norm(xyz, axis=-1)) >= 0.95 * _RGEO for xyz in r):
-        unit_conversion = _RGEO
-        unit_label = "GEO"
-    else:
-        unit_conversion = 1e3
-        unit_label = "km"
-
-    frame_key = _normalize_orbit_frame(frame)
-    frame_transformations = _orbit_frame_transformations(lunar_transform)
-    if frame_key not in frame_transformations:
-        raise ValueError("Unknown plot type provided. Accepted: gcrf, itrf, lunar, lunar fixed")
-
-    for orbit_index, xyz_raw in enumerate(r):
-        xyz = xyz_raw
-        t_current = t[orbit_index]
-        r_moon = _get_body("moon").position(t_current).T
-        r_earth = _np.zeros(_np.shape(r_moon))
-
-        title2, transform_func = frame_transformations[frame_key]
-        if transform_func:
-            xyz = transform_func(xyz, t_current)
-            r_moon = transform_func(r_moon, t_current)
-            r_earth = transform_func(r_earth, t_current)
-
-        xyz = xyz / unit_conversion
-        r_moon = r_moon / unit_conversion
-        r_earth = r_earth / unit_conversion
-
-        lower_bound_temp, upper_bound_temp = _find_smallest_bounding_cube(xyz, pad=pad)
-        bounds["lower"] = _np.minimum(bounds["lower"], lower_bound_temp)
-        bounds["upper"] = _np.maximum(bounds["upper"], upper_bound_temp)
-
-        stn = _plot_settings(frame_key, r_moon, r_earth, unit_conversion)
-        if len(r) == 1:
-            scatter_dot_colors = _cm.rainbow(_np.linspace(0, 1, len(xyz[:, 0])))
+    coordinate_views = tuple(view for view in views if view in _COORDINATE_VIEWS)
+    if coordinate_views:
+        if any(_np.max(_np.linalg.norm(xyz, axis=-1)) >= 0.95 * _RGEO for xyz in r):
+            unit_conversion = _RGEO
+            unit_label = "GEO"
         else:
-            scatter_dot_colors = _cm.rainbow(_np.linspace(0, 1, len(r)))[orbit_index]
+            unit_conversion = 1e3
+            unit_label = "km"
 
-        for view in views:
-            if view == "3d":
-                _plot_orbit_3d(
-                    axes[view],
-                    xyz,
-                    stn,
-                    bounds,
-                    unit_label,
-                    unit_conversion,
-                    scatter_dot_colors,
-                    textcolor,
-                    frame_key,
-                )
+        frame_key = _normalize_orbit_frame(frame)
+        frame_transformations = _orbit_frame_transformations(lunar_transform)
+        if frame_key not in frame_transformations:
+            raise ValueError("Unknown plot type provided. Accepted: gcrf, itrf, lunar, lunar fixed")
+
+        for orbit_index, xyz_raw in enumerate(r):
+            xyz = xyz_raw
+            t_current = t[orbit_index]
+            r_moon = _get_body("moon").position(t_current).T
+            r_earth = _np.zeros(_np.shape(r_moon))
+
+            title2, transform_func = frame_transformations[frame_key]
+            if transform_func:
+                xyz = transform_func(xyz, t_current)
+                r_moon = transform_func(r_moon, t_current)
+                r_earth = transform_func(r_earth, t_current)
+
+            xyz = xyz / unit_conversion
+            r_moon = r_moon / unit_conversion
+            r_earth = r_earth / unit_conversion
+
+            lower_bound_temp, upper_bound_temp = _find_smallest_bounding_cube(xyz, pad=pad)
+            bounds["lower"] = _np.minimum(bounds["lower"], lower_bound_temp)
+            bounds["upper"] = _np.maximum(bounds["upper"], upper_bound_temp)
+
+            stn = _plot_settings(frame_key, r_moon, r_earth, unit_conversion)
+            if len(r) == 1:
+                scatter_dot_colors = _cm.rainbow(_np.linspace(0, 1, len(xyz[:, 0])))
             else:
-                _plot_orbit_view(
-                    axes[view],
-                    view,
-                    xyz,
-                    stn,
-                    bounds,
-                    unit_label,
-                    unit_conversion,
-                    scatter_dot_colors,
-                    textcolor,
-                    frame_key,
-                    title,
-                    title2,
-                    xy_title_includes_title,
-                )
+                scatter_dot_colors = _cm.rainbow(_np.linspace(0, 1, len(r)))[orbit_index]
 
-    _set_orbit_limits(axes, bounds)
-    _style_orbit_axes(axes.values(), plotcolor, textcolor)
+            for view in coordinate_views:
+                if view == "3d":
+                    _plot_orbit_3d(
+                        axes[view],
+                        xyz,
+                        stn,
+                        bounds,
+                        unit_label,
+                        unit_conversion,
+                        scatter_dot_colors,
+                        textcolor,
+                        frame_key,
+                    )
+                else:
+                    _plot_orbit_view(
+                        axes[view],
+                        view,
+                        xyz,
+                        stn,
+                        bounds,
+                        unit_label,
+                        unit_conversion,
+                        scatter_dot_colors,
+                        textcolor,
+                        frame_key,
+                        title,
+                        title2,
+                        xy_title_includes_title,
+                    )
+
+        _set_orbit_limits(axes, bounds)
+        _style_orbit_axes([axes[view] for view in coordinate_views], plotcolor, textcolor)
+
+    _plot_special_views(axes, views, r, t, title, c, special_plot_kwargs)
 
     if save_path:
         _save_plot(fig, save_path)
@@ -147,15 +159,17 @@ def _orbit_plot_core(
     return fig, [axes[view] for view in views]
 
 
-def _create_orbit_axes(fig, views):
+def _create_orbit_axes(fig, views, *, layout="auto"):
     if views == ("xy",):
         return {"xy": fig.add_subplot(1, 1, 1)}
-    if views == ("xy", "xz"):
+
+    if layout == "legacy" and views == ("xy", "xz"):
         return {
             "xy": fig.add_subplot(1, 2, 1),
             "xz": fig.add_subplot(1, 2, 2),
         }
-    if views == ("xy", "xz", "yz", "3d"):
+
+    if layout == "legacy" and views == ("xy", "xz", "yz", "3d"):
         return {
             "xy": fig.add_subplot(2, 2, 1),
             "xz": fig.add_subplot(2, 2, 2),
@@ -163,11 +177,108 @@ def _create_orbit_axes(fig, views):
             "3d": fig.add_subplot(2, 2, 4, projection="3d"),
         }
 
+    nrows, ncols = _auto_grid_shape_for_views(views)
+    grid = fig.add_gridspec(nrows, ncols)
     axes = {}
-    for index, view in enumerate(views, start=1):
-        projection = "3d" if view == "3d" else None
-        axes[view] = fig.add_subplot(1, len(views), index, projection=projection)
+    for view, row, col, colspan in _pack_views(views, ncols):
+        projection = "3d" if view in {"3d", "globe"} else None
+        axes[view] = fig.add_subplot(grid[row, col: col + colspan], projection=projection)
     return axes
+
+
+def _pack_views(views, ncols):
+    pending = list(views)
+    placements = []
+    row = 0
+    col = 0
+
+    while pending:
+        remaining = ncols - col
+        candidate_index = 0
+        candidate_colspan = _view_colspan(pending[candidate_index])
+
+        if candidate_colspan > remaining:
+            gap_filler_index = _first_view_that_fits(pending[1:], remaining)
+            if gap_filler_index is None:
+                row += 1
+                col = 0
+                continue
+            candidate_index = gap_filler_index + 1
+            candidate_colspan = _view_colspan(pending[candidate_index])
+
+        view = pending.pop(candidate_index)
+        placements.append((view, row, col, candidate_colspan))
+        col += candidate_colspan
+
+        if col >= ncols:
+            row += 1
+            col = 0
+
+    return placements
+
+
+def _first_view_that_fits(views, remaining_columns):
+    for index, view in enumerate(views):
+        if _view_colspan(view) <= remaining_columns:
+            return index
+    return None
+
+
+def _view_colspan(view):
+    return 2 if view in _WIDE_VIEWS else 1
+
+
+def _auto_grid_shape_for_views(views):
+    if views == ("groundtrack",):
+        return 1, 2
+    nslots = sum(_view_colspan(view) for view in views)
+    return _auto_grid_shape(nslots)
+
+
+def _auto_grid_shape(nviews):
+    if nviews < 1:
+        raise ValueError("at least one view is required")
+    if nviews == 1:
+        return 1, 1
+    if nviews <= 4:
+        return 2, 2
+
+    nrows = int(_np.ceil(_np.sqrt(nviews)))
+    ncols = int(_np.ceil(nviews / nrows))
+    if nrows > ncols:
+        nrows, ncols = ncols, nrows
+    return nrows, ncols
+
+
+def _plot_special_views(axes, views, r, t, title, c, special_plot_kwargs):
+    if "groundtrack" in views:
+        groundtrack_kwargs = _filter_kwargs(_groundtrack_plot, special_plot_kwargs)
+        _groundtrack_plot(
+            r,
+            t,
+            ax=axes["groundtrack"],
+            save_path=None,
+            title=groundtrack_kwargs.pop("title", title or "Ground Track"),
+            **groundtrack_kwargs,
+        )
+
+    if "globe" in views:
+        globe_kwargs = _filter_kwargs(_globe_plot, special_plot_kwargs)
+        _globe_plot(
+            r,
+            t=t,
+            ax=axes["globe"],
+            save_path=None,
+            title=globe_kwargs.pop("title", title),
+            c=globe_kwargs.pop("c", c),
+            **globe_kwargs,
+        )
+
+
+def _filter_kwargs(func, kwargs):
+    allowed = func.__code__.co_varnames[:func.__code__.co_argcount + func.__code__.co_kwonlyargcount]
+    excluded = {"r", "t", "ax", "save_path"}
+    return {key: value for key, value in kwargs.items() if key in allowed and key not in excluded}
 
 
 def _orbit_frame_transformations(lunar_transform):
@@ -305,6 +416,8 @@ def _plot_orbit_3d(ax, xyz, stn, bounds, unit_label, unit_conversion, scatter_do
 
 def _set_orbit_limits(axes, bounds):
     for view, ax in axes.items():
+        if view not in _COORDINATE_VIEWS:
+            continue
         if view == "3d":
             ax.set_xlim(bounds["lower"][0], bounds["upper"][0])
             ax.set_ylim(bounds["lower"][1], bounds["upper"][1])

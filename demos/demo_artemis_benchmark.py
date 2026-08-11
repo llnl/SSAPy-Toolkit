@@ -11,17 +11,17 @@ from astropy.time import Time
 from ssapy import Orbit, rv, SciPyPropagator, AccelKepler
 
 from ssapy_toolkit.plots.figpath import figpath
-from ssapy_toolkit.io.datapath import datapath
+from ssapy_toolkit.io.demo_data import ensure_demo_data_file
 from ssapy_toolkit.plots.cislunar_plot_3d import cislunar_plot_3d
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
 
-def _find_csv():
-    p = Path(datapath("artemis2_orion_state_vectors.csv"))
-    if p.exists():
-        return p
-    raise FileNotFoundError(f"Could not find artemis2_orion_state_vectors.csv at {p}")
+def _find_csv(allow_download=True):
+    return ensure_demo_data_file(
+        "artemis2_orion_state_vectors.csv",
+        allow_download=allow_download,
+    )
 
 
 def _load_orion_csv(csv_path: Path):
@@ -59,15 +59,25 @@ def _propagate_segment(r0, v0, t0, t_eval, propagator):
     return r_prop, v_prop
 
 
-def main(make_figures=None, fast=None, verbose=None, sync_threshold_km=50.0):
+def main(make_figures=None, fast=None, verbose=None, sync_threshold_km=50.0, allow_download=None):
     if make_figures is None:
         make_figures = not UNDER_PYTEST
     if fast is None:
         fast = UNDER_PYTEST
     if verbose is None:
         verbose = not UNDER_PYTEST
+    if allow_download is None:
+        allow_download = not UNDER_PYTEST
 
-    csv_path = _find_csv()
+    csv_path = _find_csv(allow_download=allow_download)
+    if csv_path is None:
+        print("Skipping demo_artemis_benchmark: missing optional Artemis II state-vector data")
+        return {
+            "skipped": True,
+            "reason": "missing_data_file",
+            "csv_path": None,
+        }
+
     t_ref, r_ref, v_ref = _load_orion_csv(csv_path)
 
     if fast:
@@ -112,6 +122,7 @@ def main(make_figures=None, fast=None, verbose=None, sync_threshold_km=50.0):
 
     result = {
         "csv_path": str(csv_path),
+        "skipped": False,
         "times": t_ref,
         "r_truth": r_ref,
         "v_truth": v_ref,

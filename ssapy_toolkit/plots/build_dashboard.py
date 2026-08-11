@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
 
-from .plotutils import figsave
+from .plotutils import figsave, _pop_save_path_aliases, _raise_unrecognized_kwargs
 
 
 def build_dashboard(
@@ -16,6 +16,7 @@ def build_dashboard(
     show=False,
     wspace=0.25,
     hspace=0.35,
+    **save_kwargs,
 ):
     """
     Build a custom dashboard from user-provided panel renderers.
@@ -43,6 +44,9 @@ def build_dashboard(
         axes: list of axes created (one per panel)
         outputs: list of return values from each panel's render()
     """
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "build_dashboard")
+
     fig = plt.figure(figsize=figsize, dpi=dpi, facecolor=facecolor)
     gs = gridspec.GridSpec(nrows, ncols, figure=fig)
     gs.update(wspace=wspace, hspace=hspace)

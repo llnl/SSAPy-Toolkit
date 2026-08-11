@@ -31,6 +31,35 @@ Basic Example
    r, v = ssatk.rv(orbit, time=[0.0, 60.0])
 
    # Use Toolkit keplerian routines and plotting helpers around SSAPy objects.
+   from ssapy_toolkit.plots import orbit_plot
+
+   orbit_plot(r, view="xy", frame="gcrf")
+   orbit_plot(r, view=("xy", "xz", "3d"), frame="itrf")
+   orbit_plot(r, view="lunar_yz")
+   orbit_plot(r, view="lunar_xy", coordinate="gcrf")
+   orbit_plot(r, view="ground track")
+   orbit_plot(r, view=("groundtrack", "globe"))
+   orbit_plot(r, view="dashboard")
+   orbit_plot(r, view="cislunar_3d")
+   orbit_plot(r, view="cislunar_dashboard")
+
+Plot saving
+------------
+
+All plotting helpers accept ``save``, ``savefig``, ``save_fig``,
+``save_figure``, ``savepath``, and ``save_path`` as equivalent save-path
+keywords. Relative filenames are saved under ``~/ssatk_figures`` and absolute
+paths are honored exactly as provided:
+
+.. code-block:: python
+
+   from ssapy_toolkit.plots import orbit_plot, ssatk_fig, ssatk_path
+
+   orbit_plot(r, view="xy", save="quicklook/orbit_xy")
+   orbit_plot(r, view="globe", save_fig="/tmp/orbit_globe.png")
+
+   figure_path = ssatk_path("reports/summary")
+   saved_path = ssatk_fig(fig, save_path=figure_path)
 
 
 Relationship to SSAPy
@@ -69,3 +98,13 @@ file:
 
 This keeps ``SSAPy-Toolkit`` source-only while allowing users to get required
 data through normal ``pip`` installation.
+
+Optional demo data
+------------------
+
+Demo-only files should also stay out of the repository. Demos that need public
+sample data can call :func:`ssapy_toolkit.io.demo_data.ensure_demo_data_file`,
+which first checks the local ``ssatk_data`` cache, then downloads from a known
+public source when internet access is available. When the file cannot be found
+or fetched, the helper emits ``DemoDataUnavailableWarning`` and returns
+``None`` so demos and tests can skip gracefully instead of failing hard.

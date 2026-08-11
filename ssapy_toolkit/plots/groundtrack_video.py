@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FFMpegWriter
 from matplotlib import rcParams
 
+from .plotutils import _pop_save_path_aliases, _raise_unrecognized_kwargs
+
 # ssapy ground track (geodetic/cartesian converters)
 from ssapy import groundTrack
 
@@ -97,6 +99,7 @@ def groundtrack_video(
     max_frames=2000,
     progress=True,
     mode="map",              # <<< NEW: "map" (2D lon/lat; matches your plot), "surface3d", "eci3d"
+    **save_kwargs,
 ):
     """
     Create an MP4 animation of satellite ground tracks.
@@ -119,6 +122,9 @@ def groundtrack_video(
     fps, bitrate, max_frames, progress : controls
     mode : "map" | "surface3d" | "eci3d"
     """
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "groundtrack_video")
+
     if not save_path or not str(save_path).lower().endswith(".mp4"):
         raise ValueError("Please provide save_path ending with '.mp4'.")
 

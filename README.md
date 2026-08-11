@@ -107,6 +107,29 @@ from ssapy_toolkit.coordinates import gcrf_to_itrf
 from ssapy_toolkit.plots import orbit_plot
 ```
 
+`orbit_plot` is the main entry point for in-space trajectory plots. It keeps the
+legacy four-panel orbit view by default, and also accepts compact selectors for
+common slices and cislunar views:
+
+```
+orbit_plot(r, t, frame="gcrf")                         # xy, xz, yz, and 3-D
+orbit_plot(r, t, view="xy", frame="itrf")             # one 2-D slice
+orbit_plot(r, t, view=("xy", "xz", "3d"))            # custom panels
+orbit_plot(r, t, view="lunar_yz")                     # lunar-fixed YZ slice
+orbit_plot(r, t, view="lunar_xy", coordinate="gcrf")  # override coordinates
+orbit_plot(r, t, view="ground track")                 # wide ground-track map
+orbit_plot(r, t, view=("groundtrack", "globe"))       # map + 3-D globe
+orbit_plot(r, t, view="dashboard")                    # map, globe, and slices
+orbit_plot(r, t, view="cislunar_3d")                  # lunar-fixed 3-D view
+orbit_plot(r, t, view="cislunar_xy")                  # GCRF + lunar XY views
+orbit_plot(r, t, view="cislunar_dashboard")           # cislunar dashboard
+```
+
+All plotting helpers accept `save`, `savefig`, `save_fig`, `save_figure`,
+`savepath`, and `save_path` as equivalent save-path keywords. Relative names
+are saved under `~/ssatk_figures`; absolute paths are used exactly as provided.
+Use `ssatk_path` and `ssatk_fig` for direct path and figure-save helpers.
+
 More detailed examples can be found in the `demos/` directory. To render the
 full demo gallery as a visualization document:
 

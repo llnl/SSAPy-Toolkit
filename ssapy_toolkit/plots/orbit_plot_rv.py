@@ -1,12 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from ..constants import EARTH_MU, EARTH_RADIUS
-from .plotutils import save_plot
+from .plotutils import save_plot, _pop_save_path_aliases, _raise_unrecognized_kwargs
 from ..integrators import leapfrog
 from ssapy import Orbit
 
 
-def orbit_plot_rv(state_vectors, colors=False, mu=EARTH_MU, show=True, c='black', figsize=(7, 7), save_path=False, title=''):
+def orbit_plot_rv(state_vectors, colors=False, mu=EARTH_MU, show=True, c='black', figsize=(7, 7), save_path=False, title='', **save_kwargs):
     """
     Plots the 3D orbital ellipse(s) given one or more sets of state vectors.
 
@@ -22,6 +22,9 @@ def orbit_plot_rv(state_vectors, colors=False, mu=EARTH_MU, show=True, c='black'
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "orbit_plot_rv")
+
     from ..orbital_mechanics import period, a_from_periap
 
     if c in ('black', 'b'):

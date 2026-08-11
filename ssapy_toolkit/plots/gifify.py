@@ -4,6 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import imageio.v2 as imageio
 
+from .plotutils import _pop_save_path_aliases
+
 
 def gifify(
     plot_func,
@@ -36,6 +38,8 @@ def gifify(
 
     """
     # ---------- defaults & validation ----------
+    save_path, fkwargs = _pop_save_path_aliases(fkwargs, save_path=save_path)
+
     if save_path is None:
         from .figpath import figpath
         save_path = figpath("animation.gif")

@@ -9,7 +9,7 @@ from ssapy import groundTrack
 from ..compute import find_smallest_bounding_cube
 from ..constants import EARTH_RADIUS
 from ..time_functions import to_gps
-from .plotutils import save_plot, valid_orbits
+from .plotutils import save_plot, valid_orbits, _pop_save_path_aliases, _raise_unrecognized_kwargs
 from ._groundtrack_helpers import clean_lonlat, force_title
 
 
@@ -24,6 +24,7 @@ def groundtrack_dashboard(
     limit=None,
     fontsize=18,
     labels=None,
+    **save_kwargs,
 ):
     """
     Visualizes multiple satellite ground tracks, altitude/velocity over time, and 3D trajectories.
@@ -58,6 +59,8 @@ def groundtrack_dashboard(
 
     Author: Travis Yeager
     """
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "groundtrack_dashboard")
 
     r, t = valid_orbits(r, t)
     n_orbits = len(r)

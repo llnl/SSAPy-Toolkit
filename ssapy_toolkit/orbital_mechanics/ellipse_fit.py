@@ -31,6 +31,7 @@ dict
 """
 
 from ..plots import save_plot
+from ..plots.plotutils import _pop_save_path_aliases, _raise_unrecognized_kwargs
 import numpy as np
 
 
@@ -50,7 +51,11 @@ def ellipse_fit(
     save_path=False,
     time_of_departure=None,
     time_of_arrival=None,
+    **save_kwargs,
 ):
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "ellipse_fit")
+
     from ..constants import EARTH_MU, EARTH_RADIUS  # [m³ s⁻²], [m]
 
     mu_m3_s2 = EARTH_MU
@@ -925,4 +930,3 @@ def delta_v_transfer(
         "pos_residual_p1": res_p1,      # [m]  |r_depart − P1|, or None if no Orbit given
         "pos_residual_p2": res_p2,      # [m]  |r_arrive − P2|, or None if no Orbit given
     }
-

@@ -79,6 +79,12 @@ with data_path("catalogs/example.csv") as path:
 If a new Toolkit function needs data, add the data to SSAPy-Data and publish a
 new `llnl-ssapy-data` wheel instead of committing the data here.
 
+For demo-only public sample data, use
+`ssapy_toolkit.io.demo_data.ensure_demo_data_file`. It checks `~/ssatk_data` and
+nearby `ssatk_data` caches first, optionally downloads from a configured public
+source, and returns `None` with `DemoDataUnavailableWarning` when offline or
+unavailable so demos/tests can skip gracefully.
+
 ## Module Map
 
 - `ssapy_toolkit.accelerations`: acceleration models and maneuver accelerations.
@@ -103,13 +109,14 @@ Prefer small shared helpers when two modules implement the same private utility.
 Keep shared helpers lightweight so imports do not force heavy packages such as
 `pandas`, `astropy`, plotting backends, or SSAPy unless they are required.
 
-Use `ssapy_toolkit.plots.figpath` / `ssapy_toolkit.plots.figsave` (`fpath` /
-`fsave` for short imports) for figure outputs. If `figsave` receives no
-`save_path`, it writes `figure.jpg` under `~/ssatk_figures`, with a local
-`./ssatk_figures` fallback if the home directory is not writable. Use
-`ssapy_toolkit.io.datapath.datapath` (`dpath`) for local user data/cache outputs;
-do not add those outputs to the repository. Prefer `h5cache` / `h5load` for HDF5
-caches; legacy `yu*` names are compatibility-only.
+Use `ssapy_toolkit.plots.ssatk_path` / `ssapy_toolkit.plots.ssatk_fig` for
+figure outputs; `figpath`, `figsave`, `fpath`, and `fsave` remain short aliases.
+Plot functions accept `save`, `savefig`, `save_fig`, `save_figure`, `savepath`,
+and `save_path`; relative filenames go under `~/ssatk_figures`, while absolute
+paths are honored. Use `ssapy_toolkit.io.datapath.datapath` (`dpath`) or
+`ssapy_toolkit.io.ssatk_data.ssatk_data` for local user data/cache outputs; do
+not add those outputs to the repository. Prefer `h5cache` / `h5load` or the
+`ssatk_cache` / `ssatk_load` convenience wrappers for HDF5 caches.
 
 For plotting cleanup, keep public plot names as stable wrappers and place shared
 implementation in private core modules. Current examples are
@@ -117,6 +124,17 @@ implementation in private core modules. Current examples are
 `orbit_plot_xy`, and `orbit_plot_xyxz`, and
 `ssapy_toolkit.plots._cislunar_plot_core._cislunar_plot_core` for `cislunar_plot`,
 `cislunar_plot_3d`, and `cislunar_plot_xy`.
+Prefer `ssapy_toolkit.plots.orbit_plot` as the main public entry point for
+in-space plots. It accepts selectors such as `view="xy"`, `view="3d"`,
+`view=("xy", "xz", "3d")`, `view="lunar_yz"`, `view="ground track"`,
+`view="globe"`, `view="dashboard"`, `view="cislunar_3d"`,
+`view="cislunar_xy"`, and `view="cislunar_dashboard"`; older
+wrappers remain for compatibility. `frame`, `coordinate`, and `coordinates`
+are aliases; `lunar_*` views default to `coordinate="lunar_fixed"` unless
+explicitly overwritten. Ground-track views reserve a two-column-wide subplot;
+when `view="groundtrack"` is the only view, the figure uses a one-row,
+two-column aspect. Mixed layouts backfill one-column views into current-row gaps
+before wrapping a wide ground-track panel.
 
 For new or changed public behavior:
 

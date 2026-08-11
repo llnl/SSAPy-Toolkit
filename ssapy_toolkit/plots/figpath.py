@@ -6,7 +6,7 @@ DEFAULT_FIG_DIR_NAME = "ssatk_figures"
 HOME_FIG_DIR = Path.home() / DEFAULT_FIG_DIR_NAME
 FALLBACK_DIR = Path.cwd() / DEFAULT_FIG_DIR_NAME
 
-__all__ = ["figpath", "fpath"]
+__all__ = ["ssatk_path", "figpath", "fpath"]
 
 # You can keep this around if you like, but it's no longer used for extension logic.
 _KNOWN_EXTS = {
@@ -25,7 +25,7 @@ _KNOWN_EXTS = {
 }
 
 
-def figpath(filename="figure"):
+def ssatk_path(filename="figure"):
     """
     Build a path under the SSATK figure directory.
 
@@ -37,14 +37,14 @@ def figpath(filename="figure"):
 
     Examples
     --------
-    figpath("plot")                          -> ~/ssatk_figures/plot
-    figpath("demo_gallery/figures/burn_to_dv")              -> ~/ssatk_figures/demo_gallery/figures/burn_to_dv
-    figpath("demo_gallery/figures/burn_to_dv.png")          -> ~/ssatk_figures/demo_gallery/figures/burn_to_dv.png
-    figpath("/abs/path/ignored/name.svg")    -> ~/ssatk_figures/abs/path/ignored/name.svg
-    figpath("weird/name.foo")                -> ~/ssatk_figures/weird/name.foo
+    ssatk_path("plot")                          -> ~/ssatk_figures/plot
+    ssatk_path("demo_gallery/figures/burn_to_dv")              -> ~/ssatk_figures/demo_gallery/figures/burn_to_dv
+    ssatk_path("demo_gallery/figures/burn_to_dv.png")          -> ~/ssatk_figures/demo_gallery/figures/burn_to_dv.png
+    ssatk_path("/abs/path/ignored/name.svg")    -> ~/ssatk_figures/abs/path/ignored/name.svg
+    ssatk_path("weird/name.foo")                -> ~/ssatk_figures/weird/name.foo
     """
     if not isinstance(filename, (str, Path)):
-        raise TypeError("figpath(filename): filename must be str or pathlib.Path")
+        raise TypeError("ssatk_path(filename): filename must be str or pathlib.Path")
 
     # Normalize to a safe relative path (no drive, no leading slash, no traversal)
     rel_parts = safe_relative_parts(filename)
@@ -69,4 +69,5 @@ def figpath(filename="figure"):
     raise RuntimeError(f"Could not create or access {DEFAULT_FIG_DIR_NAME} in HOME or CWD.")
 
 
-fpath = figpath
+figpath = ssatk_path
+fpath = ssatk_path

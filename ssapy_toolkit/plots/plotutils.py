@@ -23,6 +23,16 @@ from ..constants import EARTH_RADIUS, MOON_RADIUS
 from ..vectors import rotation_matrix_from_vectors
 
 
+_SAVE_PATH_ALIAS_KEYS = (
+    "save",
+    "savefig",
+    "save_fig",
+    "save_figure",
+    "savepath",
+    "save_path",
+)
+
+
 class VarType(Enum):
     NONE = auto()
     TIME = auto()
@@ -422,7 +432,51 @@ def _figure_save_path(save_path=None, default_name="figure"):
     return figpath(path)
 
 
-def figsave(figure, save_path=None, dpi=200, default_name="figure"):
+def _save_alias_explicit(value):
+    return value is not None and value is not False
+
+
+def _save_alias_values_equal(left, right):
+    if left is True or right is True:
+        return left is True and right is True
+    if (left is None or left is False) and (right is None or right is False):
+        return True
+    return left == right or str(left) == str(right)
+
+
+def _pop_save_path_aliases(kwargs=None, save_path=None):
+    """Resolve standard save-path aliases from a keyword dictionary."""
+    kwargs = dict(kwargs or {})
+    provided = []
+
+    if _save_alias_explicit(save_path):
+        provided.append(("save_path", save_path))
+
+    for key in _SAVE_PATH_ALIAS_KEYS:
+        if key in kwargs:
+            provided.append((key, kwargs.pop(key)))
+
+    if not provided:
+        return save_path, kwargs
+
+    first_key, first_value = provided[0]
+    for key, value in provided[1:]:
+        if not _save_alias_values_equal(first_value, value):
+            raise TypeError(
+                "Conflicting figure save aliases: "
+                f"{first_key}={first_value!r} and {key}={value!r}"
+            )
+
+    return provided[-1][1], kwargs
+
+
+def _raise_unrecognized_kwargs(kwargs, func_name):
+    if kwargs:
+        names = ", ".join(sorted(kwargs))
+        raise TypeError(f"{func_name}() got unexpected keyword argument(s): {names}")
+
+
+def figsave(figure, save_path=None, dpi=200, default_name="figure", **save_kwargs):
     """
     Save a Matplotlib figure through the SSATK figure-output policy.
 
@@ -436,6 +490,8 @@ def figsave(figure, save_path=None, dpi=200, default_name="figure"):
         via save_plot_to_pdf.
       * If save_path has any other extension -> use it directly with figure.savefig().
     """
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "figsave")
     save_path = _figure_save_path(save_path, default_name=default_name)
     if save_path is None:
         return None
@@ -464,17 +520,14 @@ def figsave(figure, save_path=None, dpi=200, default_name="figure"):
         return None
 
 
+ssatk_fig = figsave
 fsave = figsave
 
 
-def save_plot(figure, save_path=None, dpi=200, default_name="figure"):
+def save_plot(figure, save_path=None, dpi=200, default_name="figure", **save_kwargs):
     """Compatibility wrapper for :func:`figsave`."""
-    return figsave(figure, save_path=save_path, dpi=dpi, default_name=default_name)
-
-
-def yufig(figure, save_path=None, dpi=200):
-    """Backward-compatible alias for :func:`figsave`. Prefer ``figsave``."""
-    return figsave(figure, save_path=save_path, dpi=dpi)
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    return figsave(figure, save_path=save_path, dpi=dpi, default_name=default_name, **save_kwargs)
 
 
 def display_figure(figname, display='IPython'):

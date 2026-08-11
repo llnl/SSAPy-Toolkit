@@ -18,6 +18,8 @@ from ssapy.propagator import KeplerianPropagator
 from ssapy.compute import rv
 from ssapy.constants import EARTH_MU, EARTH_RADIUS
 
+from .plotutils import _pop_save_path_aliases, _raise_unrecognized_kwargs
+
 
 def _burn_label(i, b):
     a = b.dv_mag / (b.t_end - b.t_start)
@@ -41,7 +43,7 @@ def _orbit_ring(r, v, n=361):
 def transfer_trajectory_plot(result, ax=None, three_d=False,
                              show_orbits=True, show_earth=True,
                              annotate_burns=True, title=None,
-                             save_path=None):
+                             save_path=None, **save_kwargs):
     """Plot a transfer trajectory with burn locations and strengths.
 
     Parameters
@@ -67,12 +69,16 @@ def transfer_trajectory_plot(result, ax=None, three_d=False,
     -------
     matplotlib axes (when ``save_path`` is None)
     """
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "transfer_trajectory_plot")
+    should_save = save_path is not None and save_path is not False
+
     transfer = getattr(result, "transfer", result)
     if transfer.trajectory is None:
         raise ValueError("result has no trajectory; rerun the transfer "
                          "with propagate=True.")
     import matplotlib
-    if save_path is not None:
+    if should_save:
         matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -137,7 +143,7 @@ def transfer_trajectory_plot(result, ax=None, three_d=False,
                  f"arrival err {transfer.arrival_error:.1f} m")
     ax.set_title(title, fontsize=10)
 
-    if save_path is not None:
+    if should_save:
         from ssapy_toolkit.plots import figsave
         ax.legend(fontsize=8, loc="lower left")
         fig.tight_layout()

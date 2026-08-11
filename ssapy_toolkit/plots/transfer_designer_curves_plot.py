@@ -13,8 +13,10 @@ be regenerated at any time from the result object alone.
 
 import numpy as np
 
+from .plotutils import _pop_save_path_aliases, _raise_unrecognized_kwargs
 
-def transfer_designer_curves_plot(result, save_path=None):
+
+def transfer_designer_curves_plot(result, save_path=None, **save_kwargs):
     """Plot porkchop + per-burn Pareto curves from a transfer_optimal
     result.
 
@@ -25,8 +27,12 @@ def transfer_designer_curves_plot(result, save_path=None):
         If given, save via ``ssapy_toolkit.plots.figsave`` and close;
         otherwise the figure is returned.
     """
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "transfer_designer_curves_plot")
+    should_save = save_path is not None and save_path is not False
+
     import matplotlib
-    if save_path is not None:
+    if should_save:
         matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib.colors import LogNorm
@@ -79,7 +85,7 @@ def transfer_designer_curves_plot(result, save_path=None):
                  fontsize=12)
     fig.tight_layout()
 
-    if save_path is not None:
+    if should_save:
         from ssapy_toolkit.plots import figsave
         figsave(fig, save_path)
         plt.close(fig)

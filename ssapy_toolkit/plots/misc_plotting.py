@@ -6,7 +6,7 @@ import numpy as np
 from ssapy.body import get_body
 from ..constants import RGEO, EARTH_MU, MOON_MU
 from ..time_functions import Time
-from .plotutils import make_black, make_white, save_plot
+from .plotutils import make_black, make_white, save_plot, _pop_save_path_aliases, _raise_unrecognized_kwargs
 
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -16,7 +16,7 @@ lunar_semi_major = 384399000  # m
 
 
 def koe_plot(r: np.ndarray, v: np.ndarray, t=None,
-             elements=None, save_path=None, body: str = 'Earth'):
+             elements=None, save_path=None, body: str = 'Earth', **save_kwargs):
     """
     Generates a plot of orbital elements (eccentricity, inclination, and semi-major axis)
     for a given position and velocity vectors.
@@ -40,6 +40,9 @@ def koe_plot(r: np.ndarray, v: np.ndarray, t=None,
     -------
     (plt.Figure, plt.Axes)
     """
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "koe_plot")
+
     if elements is None:
         elements = ['a', 'e', 'i']
 
@@ -107,10 +110,13 @@ def koe_plot(r: np.ndarray, v: np.ndarray, t=None,
 
 def koe_2dhist(stable_data, title: str = "Initial orbital elements of\n1 year stable cislunar orbits",
                limits: list = [1, 50], bins: int = 200, logscale: bool = False, cmap: str = 'coolwarm',
-               save_path: str = None) -> plt.Figure:
+               save_path: str = None, **save_kwargs) -> plt.Figure:
     """
     Generates a 2D histogram plot of orbital elements for a set of stable orbital data.
     """
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "koe_2dhist")
+
     # Validate angle data ranges
     if not (np.all((0 <= stable_data.i) & (stable_data.i <= 2 * np.pi))):
         raise ValueError("Inclination (`i`) must be in the range [0, 2π] radians.")
@@ -213,7 +219,10 @@ def koe_2dhist(stable_data, title: str = "Initial orbital elements of\n1 year st
 
 def scatter2d(x: list, y: list, cs: list, xlabel: str = 'x', ylabel: str = 'y', title: str = '',
               cbar_label: str = '', dotsize: int = 1, colorsMap: str = 'jet', colorscale: str = 'linear',
-              colormin: float = None, colormax: float = None, save_path: str = None) -> None:
+              colormin: float = None, colormax: float = None, save_path: str = None, **save_kwargs) -> None:
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "scatter2d")
+
     fig = plt.figure()
     ax = fig.add_subplot(111)
 
@@ -248,12 +257,15 @@ def scatter2d(x: list, y: list, cs: list, xlabel: str = 'x', ylabel: str = 'y', 
 
 def scatter3d(x: list, y: list = None, z: list = None, cs: list = None,
               xlabel: str = 'x', ylabel: str = 'y', zlabel: str = 'z', cbar_label: str = '', dotsize: int = 1,
-              colorsMap: str = 'jet', title: str = '', save_path: str = None):
+              colorsMap: str = 'jet', title: str = '', save_path: str = None, **save_kwargs):
     """
     Returns
     -------
     (plt.Figure, matplotlib.axes._subplots.Axes3DSubplot)
     """
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "scatter3d")
+
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
@@ -292,7 +304,10 @@ def dotcolors_scaled(num_colors: int) -> list:
 
 # Make a plot of multiple cislunar orbit in GCRF frame.
 def orbit_divergence_plot(rs: np.ndarray, r_moon: np.ndarray = None, t=None,
-                          limits: float = None, title: str = '', save_path: str = None) -> None:
+                          limits: float = None, title: str = '', save_path: str = None, **save_kwargs) -> None:
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "orbit_divergence_plot")
+
     if limits is None:
         limits = np.nanmax(np.linalg.norm(rs, axis=1) / RGEO) * 1.2
         print(f'limits: {limits}')

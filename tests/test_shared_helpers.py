@@ -4,14 +4,17 @@ import importlib
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from ssapy_toolkit._paths import safe_relative_parts
 from ssapy_toolkit._sorting import natural_key
 from ssapy_toolkit.io.datapath import datapath, dpath
 from ssapy_toolkit.io.h5cache import h5cache, h5load
+from ssapy_toolkit.io.ssatk_cache import ssatk_cache, ssatk_load
+from ssapy_toolkit.io.ssatk_data import ssatk_data
 from ssapy_toolkit.orbital_mechanics._two_body import _keplerian_two_body_rhs
-from ssapy_toolkit.plots.figpath import figpath, fpath
-from ssapy_toolkit.plots.plotutils import figsave, fsave
+from ssapy_toolkit.plots.figpath import figpath, fpath, ssatk_path
+from ssapy_toolkit.plots.plotutils import figsave, fsave, ssatk_fig
 
 data_path_module = importlib.import_module("ssapy_toolkit.io.datapath")
 fig_path_module = importlib.import_module("ssapy_toolkit.plots.figpath")
@@ -46,11 +49,16 @@ def test_keplerian_two_body_rhs_returns_velocity_and_gravity():
 
 
 def test_ssatk_short_helper_aliases_are_primary_exports():
+    assert ssatk_path is figpath
     assert fpath is figpath
+    assert ssatk_fig is figsave
     assert fsave is figsave
     assert dpath is datapath
+    assert callable(ssatk_data)
     assert callable(h5cache)
     assert callable(h5load)
+    assert callable(ssatk_cache)
+    assert callable(ssatk_load)
 
 
 def test_figpath_roots_relative_paths_under_home_output_dir(tmp_path, monkeypatch):
@@ -92,6 +100,46 @@ def test_figsave_without_path_uses_home_figure_default(tmp_path, monkeypatch):
 
     assert saved == tmp_path / "figs" / "figure.jpg"
     assert saved.exists()
+
+
+def test_figsave_accepts_relative_save_aliases(tmp_path, monkeypatch):
+    import matplotlib.pyplot as plt
+
+    monkeypatch.setattr(fig_path_module, "HOME_FIG_DIR", tmp_path / "figs")
+    monkeypatch.setattr(fig_path_module, "FALLBACK_DIR", tmp_path / "fallback_figs")
+
+    fig, ax = plt.subplots()
+    ax.plot([0, 1], [0, 1])
+
+    saved = Path(ssatk_fig(fig, save="aliases/relative_plot"))
+
+    assert saved == tmp_path / "figs" / "aliases" / "relative_plot.jpg"
+    assert saved.exists()
+
+
+def test_figsave_honors_absolute_save_aliases(tmp_path):
+    import matplotlib.pyplot as plt
+
+    output_path = tmp_path / "absolute" / "plot.png"
+    fig, ax = plt.subplots()
+    ax.plot([0, 1], [1, 0])
+
+    saved = Path(figsave(fig, save_fig=output_path))
+
+    assert saved == output_path
+    assert saved.exists()
+
+
+def test_figsave_rejects_conflicting_save_aliases():
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots()
+    ax.plot([0, 1], [1, 0])
+
+    with pytest.raises(TypeError, match="Conflicting figure save aliases"):
+        figsave(fig, save="one", save_figure="two")
+
+    plt.close(fig)
 
 
 def test_datapath_uses_ssatk_data_dir_and_custom_dirs(tmp_path, monkeypatch):

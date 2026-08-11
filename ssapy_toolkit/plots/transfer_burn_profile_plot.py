@@ -11,8 +11,10 @@ Works with a ``TransferResult`` (from ``transfer_ssapy``) or an
 ``OptimalTransferResult`` (from ``transfer_optimal``).
 """
 
+from .plotutils import _pop_save_path_aliases, _raise_unrecognized_kwargs
 
-def transfer_burn_profile_plot(result, title=None, save_path=None):
+
+def transfer_burn_profile_plot(result, title=None, save_path=None, **save_kwargs):
     """Plot acceleration-vs-time and cumulative delta-v for all burns.
 
     Parameters
@@ -23,8 +25,12 @@ def transfer_burn_profile_plot(result, title=None, save_path=None):
         If given, save via ``ssapy_toolkit.plots.figsave`` and close;
         otherwise the figure is returned.
     """
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "transfer_burn_profile_plot")
+
     transfer = getattr(result, "transfer", result)
     burns = transfer.burns
+    should_save = save_path is not None and save_path is not False
     if transfer.trajectory is not None:
         t0 = float(transfer.trajectory["t"][0])
         t1 = float(transfer.trajectory["t"][-1])
@@ -33,7 +39,7 @@ def transfer_burn_profile_plot(result, title=None, save_path=None):
         t1 = burns[-1].t_end
 
     import matplotlib
-    if save_path is not None:
+    if should_save:
         matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -85,7 +91,7 @@ def transfer_burn_profile_plot(result, title=None, save_path=None):
     ax2.grid(alpha=0.3)
 
     fig.tight_layout()
-    if save_path is not None:
+    if should_save:
         from ssapy_toolkit.plots import figsave
         figsave(fig, save_path)
         plt.close(fig)

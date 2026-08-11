@@ -1,4 +1,4 @@
-def groundtrack_dashboard_gamma_heading(r, t, save_path=None, pad=500, show=False, show_legend=True, t0=None, limit=None, fontsize=18):
+def groundtrack_dashboard_gamma_heading(r, t, save_path=None, pad=500, show=False, show_legend=True, t0=None, limit=None, fontsize=18, **save_kwargs):
     """
     Visualizes multiple satellite ground tracks, altitude/velocity over time,
     gamma over time, heading over time, and 3D trajectories (ITRF and GCRF).
@@ -18,8 +18,11 @@ def groundtrack_dashboard_gamma_heading(r, t, save_path=None, pad=500, show=Fals
     from ..constants import EARTH_RADIUS
     from ..time_functions import to_gps
     from ..orbital_mechanics.gamma_and_heading import calc_gamma_and_heading
-    from .plotutils import save_plot, valid_orbits
+    from .plotutils import save_plot, valid_orbits, _pop_save_path_aliases, _raise_unrecognized_kwargs
     from ._groundtrack_helpers import clean_lonlat, force_title
+
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "groundtrack_dashboard_gamma_heading")
 
     r, t = valid_orbits(r, t)
 

@@ -1,26 +1,33 @@
 #!/usr/bin/env python3
 
-from pathlib import Path
+import os
+import sys
 
-from ssapy_toolkit.io.datapath import datapath
+from ssapy_toolkit.io.demo_data import ensure_demo_data_file
 from ssapy_toolkit.io.read_3le import read_3le
 from ssapy_toolkit.io.read_3le_by_bit import read_3le_by_bit
 from ssapy_toolkit.io.tle_iter_pairs import tle_iter_pairs
 from ssapy_toolkit.io.tle_prop_to_time import tle_prop_to_time
 from ssapy_toolkit.io.pprint_utils import pprint
 
+UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
-def main(verbose=False, fast=False):
-    tle_path = datapath("full_catalog_3le.txt")
 
-    if not Path(tle_path).exists():
-        print(f"Skipping demo_parsing_3le: missing data file {tle_path}")
+def main(verbose=False, fast=False, allow_download=None):
+    if allow_download is None:
+        allow_download = not UNDER_PYTEST
+
+    tle_path = ensure_demo_data_file("full_catalog_3le.txt", allow_download=allow_download)
+    if tle_path is None:
+        print("Skipping demo_parsing_3le: missing optional 3LE catalog data")
         return {
             "data": None,
             "skipped": True,
             "reason": "missing_data_file",
-            "tle_path": tle_path,
+            "tle_path": None,
         }
+
+    tle_path = str(tle_path)
 
     print(f"DATA: {tle_path}")
 

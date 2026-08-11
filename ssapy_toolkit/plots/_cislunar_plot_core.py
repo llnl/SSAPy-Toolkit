@@ -40,8 +40,10 @@ def _cislunar_plot_core(
     legend=True,
 ):
     mode = mode.lower()
+    if mode in {"dashboard", "cislunar_dashboard"}:
+        mode = "combined"
     if mode not in {"combined", "3d", "xy"}:
-        raise ValueError("mode must be one of: combined, 3d, xy")
+        raise ValueError("mode must be one of: combined, dashboard, 3d, xy")
 
     r, t = _valid_orbits(r, t)
     textcolor, plotcolor = _plot_colors(c)

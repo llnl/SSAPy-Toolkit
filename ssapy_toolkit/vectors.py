@@ -77,7 +77,7 @@ def norm(arr):
     return np.sqrt(np.einsum("...i,...i", arr, arr))
 
 
-def rotate_vector(v_unit, theta, phi, save_path=False):
+def rotate_vector(v_unit, theta, phi, save_path=False, **save_kwargs):
     v_unit = v_unit / np.linalg.norm(v_unit, axis=-1)
     if np.all(np.abs(v_unit) != np.max(np.abs(v_unit))):
         perp_vector = np.cross(v_unit, np.array([1, 0, 0]))
@@ -119,6 +119,11 @@ def rotate_vector(v_unit, theta, phi, save_path=False):
                     cos_phi + (1 - cos_phi) * v_unit[2]**2]])
 
     v2 = np.dot(R2, v1)
+
+    from .plots.plotutils import _pop_save_path_aliases, _raise_unrecognized_kwargs
+
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "rotate_vector")
 
     if save_path:
         plt.rcParams.update({'font.size': 9, 'figure.facecolor': 'black'})

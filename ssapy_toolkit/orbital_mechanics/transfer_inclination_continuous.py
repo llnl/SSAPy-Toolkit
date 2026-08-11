@@ -2,6 +2,7 @@ import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 from ..plots import set_axes_equal, save_plot
+from ..plots.plotutils import _pop_save_path_aliases, _raise_unrecognized_kwargs
 from ..constants import EARTH_MU, EARTH_RADIUS
 from ._two_body import _keplerian_two_body_rhs
 
@@ -18,7 +19,11 @@ def transfer_inclination_continuous(
     body_radius=EARTH_RADIUS,
     plot=False,
     save_path=False,
+    **save_kwargs,
 ):
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "transfer_inclination_continuous")
+
     if (i_target is None) == (delta_v is None):
         raise ValueError("Specify exactly one of i_target or delta_v.")
 

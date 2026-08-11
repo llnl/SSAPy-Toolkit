@@ -15,7 +15,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from ssapy import groundTrack
-from .plotutils import load_earth_file, save_plot
+from .plotutils import load_earth_file, save_plot, _pop_save_path_aliases, _raise_unrecognized_kwargs
 
 
 def _as_list(x):
@@ -172,6 +172,9 @@ def groundtrack_plot(
     legend_kwargs=None,
     central_longitude=0.0,
     relabel_xticks=True,
+    figsize=(14, 8),
+    ax=None,
+    **save_kwargs,
 ):
     """
     Plot one or more orbit ground tracks on an Earth map.
@@ -214,6 +217,9 @@ def groundtrack_plot(
     -------
     fig : matplotlib.figure.Figure
     """
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "groundtrack_plot")
+
     # Normalize inputs
     r_list = _as_list(r)
     t_list = _broadcast_time_list(r_list, t)
@@ -229,8 +235,11 @@ def groundtrack_plot(
         raise ValueError("linestyles must have same length as number of orbits (tracks)")
 
     # Figure
-    fig = plt.figure(figsize=(14, 8))
-    ax = fig.add_subplot(111)
+    if ax is None:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+    else:
+        fig = ax.figure
 
     xmin = central_longitude - 180.0
     xmax = central_longitude + 180.0
