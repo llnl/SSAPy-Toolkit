@@ -15,17 +15,36 @@ Basic Example
 
 .. code-block:: python
 
-   import ssapy_toolkit as st
+   import ssapy_toolkit as ssatk
 
    from ssapy_toolkit.orbital_mechanics import keplerian
 
-   # Use keplerian routines and plotting helpers here
+   orbit = ssatk.Orbit.fromKeplerianElements(
+       a=ssatk.constants.RGEO,
+       e=0.0,
+       i=0.0,
+       pa=0.0,
+       raan=0.0,
+       trueAnomaly=0.0,
+       t=0.0,
+   )
+   r, v = ssatk.rv(orbit, time=[0.0, 60.0])
+
+   # Use Toolkit keplerian routines and plotting helpers around SSAPy objects.
 
 
 Relationship to SSAPy
 ----------------------
 
 SSAPy Toolkit is designed as an extension library for `SSAPy <https://github.com/llnl/SSAPy/tree/main>`_, which provides high-fidelity orbital modeling and analysis across LEO through the cislunar regime. SSAPy handles orbit propagation, force models, integrators, and rich coordinate/frame support; SSAPy Toolkit builds on top of that to provide convenience utilities for data IO, plotting (including ground tracks and cislunar visualizations), and higher-level orbital mechanics helpers.
+
+Use ``import ssapy_toolkit as ssatk`` as the main user-facing entry point.
+Shared astrodynamics constants are available through ``ssatk.constants`` and as
+lazy top-level attributes such as ``ssatk.EARTH_MU``. Core SSAPy classes and
+functions such as ``ssatk.Orbit``, ``ssatk.rv``, ``ssatk.groundTrack``, and
+``ssatk.AccelKepler`` are also lazily available through the Toolkit. If a name
+exists in both packages, Toolkit helpers and submodules take precedence; direct
+base-package access remains available through ``ssatk.ssapy``.
 
 Packaged data
 -------------
