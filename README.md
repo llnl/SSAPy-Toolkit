@@ -123,6 +123,8 @@ orbit_plot(r, t, view="dashboard")                    # map, globe, and slices
 orbit_plot(r, t, view="cislunar_3d")                  # lunar-fixed 3-D view
 orbit_plot(r, t, view="cislunar_xy")                  # GCRF + lunar XY views
 orbit_plot(r, t, view="cislunar_dashboard")           # cislunar dashboard
+orbit_plot(r, t, view="xy", save="quicklooks/orbit.mp4")  # animated MP4
+orbit_plot(r, t, view="xy", save="quicklooks/orbit.gif")  # animated GIF
 ```
 
 All plotting helpers accept `save`, `savefig`, `save_fig`, `save_figure`,

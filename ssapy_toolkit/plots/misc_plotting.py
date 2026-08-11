@@ -304,7 +304,8 @@ def dotcolors_scaled(num_colors: int) -> list:
 
 # Make a plot of multiple cislunar orbit in GCRF frame.
 def orbit_divergence_plot(rs: np.ndarray, r_moon: np.ndarray = None, t=None,
-                          limits: float = None, title: str = '', save_path: str = None, **save_kwargs) -> None:
+                          limits: float = None, title: str = '', save_path: str = None,
+                          show: bool = True, **save_kwargs):
     save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
     _raise_unrecognized_kwargs(save_kwargs, "orbit_divergence_plot")
 
@@ -381,7 +382,9 @@ def orbit_divergence_plot(rs: np.ndarray, r_moon: np.ndarray = None, t=None,
         plt.text(y[-1], z[-1], '$\\leftarrow$ end')
 
     plt.tight_layout()
-    plt.show(block=False)
+    if show:
+        plt.show(block=False)
     if save_path:
         save_plot(fig, save_path)
-    return
+        return None
+    return fig

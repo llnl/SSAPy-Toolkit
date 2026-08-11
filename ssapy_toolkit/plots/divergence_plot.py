@@ -1,7 +1,18 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def divergence_plot(r_vectors, r_center=None, v_center=None, title='Position Errors Projected onto Velocity Plane'):
+from .plotutils import figsave, _pop_save_path_aliases, _raise_unrecognized_kwargs
+
+
+def divergence_plot(
+    r_vectors,
+    r_center=None,
+    v_center=None,
+    title='Position Errors Projected onto Velocity Plane',
+    show=True,
+    save_path=None,
+    **save_kwargs,
+):
     """
     Plot position errors projected onto a plane defined by velocity vector.
     
@@ -17,6 +28,9 @@ def divergence_plot(r_vectors, r_center=None, v_center=None, title='Position Err
     title : str, optional
         Plot title
     """
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "divergence_plot")
+
     # Use median if r_center not provided
     if r_center is None:
         r_center = np.median(r_vectors, axis=0)
@@ -98,7 +112,10 @@ def divergence_plot(r_vectors, r_center=None, v_center=None, title='Position Err
     ax.legend(loc='upper right', fontsize=10)
     
     plt.tight_layout()
-    plt.show()
+    if save_path:
+        figsave(fig, save_path)
+    if show:
+        plt.show()
     
     return fig
 

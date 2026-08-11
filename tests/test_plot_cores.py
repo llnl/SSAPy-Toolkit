@@ -99,6 +99,31 @@ def test_orbit_plot_entry_point_accepts_save_aliases(monkeypatch):
         module.orbit_plot(_sample_track(), t=np.arange(3.0), view="xy", save="one.jpg", save_fig="two.jpg")
 
 
+def test_orbit_plot_routes_gif_and_mp4_saves_to_animation(monkeypatch):
+    module = importlib.import_module("ssapy_toolkit.plots.orbit_plot")
+    calls = []
+
+    def fake_animation(r, **kwargs):
+        calls.append(kwargs)
+        return kwargs["save_path"]
+
+    def fail_core(r, **kwargs):
+        raise AssertionError("animated save paths should not call static orbit core")
+
+    monkeypatch.setattr(module, "_orbit_animation_core", fake_animation)
+    monkeypatch.setattr(module, "_orbit_plot_core", fail_core)
+
+    assert module.orbit_plot(_sample_track(), t=np.arange(3.0), view="xy", save_path="orbit.mp4", fps=12, tail=5) == "orbit.mp4"
+    assert calls[-1]["views"] == ("xy",)
+    assert calls[-1]["fps"] == 12
+    assert calls[-1]["tail"] == 5
+
+    assert module.orbit_plot(_sample_track(), t=np.arange(3.0), view="lunar_xz", savefig="orbit.gif") == "orbit.gif"
+    assert calls[-1]["views"] == ("xz",)
+    assert calls[-1]["frame"] == "lunar_fixed"
+    assert calls[-1]["lunar_transform"] == "fixed"
+
+
 def test_orbit_plot_routes_keyword_views_to_orbit_core(monkeypatch):
     module = importlib.import_module("ssapy_toolkit.plots.orbit_plot")
     calls = []
@@ -248,6 +273,91 @@ def test_orbit_plot_routes_cislunar_keywords_to_cislunar_core(monkeypatch):
     assert module.orbit_plot(_sample_track(), t=np.arange(3.0), view="cislunar dashboard") == ("fig", "combined")
     assert calls[-1]["mode"] == "combined"
     assert calls[-1]["figsize"] == (12, 7)
+
+
+def test_orbit_plot_routes_transfer_keywords(monkeypatch):
+    module = importlib.import_module("ssapy_toolkit.plots.orbit_plot")
+    transfer_trajectory = importlib.import_module("ssapy_toolkit.plots.transfer_trajectory_plot")
+    transfer_burn = importlib.import_module("ssapy_toolkit.plots.transfer_burn_profile_plot")
+    transfer_designer = importlib.import_module("ssapy_toolkit.plots.transfer_designer_curves_plot")
+    transfer_legacy = importlib.import_module("ssapy_toolkit.plots.transfer_plot")
+    calls = []
+
+    class FakeTransfer:
+        burns = []
+        trajectory = {"t": np.arange(3.0), "r": _sample_track(), "v": _sample_track()}
+        transfer_orbit = object()
+
+    class FakeOptimal:
+        transfer = FakeTransfer()
+
+    def fake_trajectory(result, **kwargs):
+        calls.append(("trajectory", result, kwargs))
+        return "trajectory_axes"
+
+    def fake_burn(result, **kwargs):
+        calls.append(("burn", result, kwargs))
+        return "burn_fig"
+
+    def fake_designer(result, **kwargs):
+        calls.append(("designer", result, kwargs))
+        return "designer_fig"
+
+    def fake_legacy(*args, **kwargs):
+        calls.append(("legacy", args, kwargs))
+        return "legacy_fig"
+
+    monkeypatch.setattr(transfer_trajectory, "transfer_trajectory_plot", fake_trajectory)
+    monkeypatch.setattr(transfer_burn, "transfer_burn_profile_plot", fake_burn)
+    monkeypatch.setattr(transfer_designer, "transfer_designer_curves_plot", fake_designer)
+    monkeypatch.setattr(transfer_legacy, "transfer_plot", fake_legacy)
+
+    result = FakeOptimal()
+    assert module.orbit_plot(result, view="transfer", save_path="transfer.png") == "trajectory_axes"
+    assert calls[-1][0] == "trajectory"
+    assert calls[-1][2]["save_path"] == "transfer.png"
+    assert calls[-1][2]["three_d"] is False
+
+    assert module.orbit_plot(result, view="transfer_trajectory_3d") == "trajectory_axes"
+    assert calls[-1][2]["three_d"] is True
+
+    assert module.orbit_plot(result, view="transfer_burn_profile", title="Burns") == "burn_fig"
+    assert calls[-1] == ("burn", result, {"title": "Burns", "save_path": False})
+
+    assert module.orbit_plot(result, view="transfer_designer", title="Designer") == "designer_fig"
+    assert calls[-1] == ("designer", result, {"title": "Designer", "save_path": False})
+
+    states = tuple(np.array([7_000_000.0, 0.0, 0.0]) for _ in range(6))
+    assert module.orbit_plot(states, view="transfer_plot") == "legacy_fig"
+    assert calls[-1][0] == "legacy"
+    assert len(calls[-1][1]) == 6
+
+
+def test_orbit_plot_routes_divergence_keywords(monkeypatch):
+    module = importlib.import_module("ssapy_toolkit.plots.orbit_plot")
+    divergence = importlib.import_module("ssapy_toolkit.plots.divergence_plot")
+    misc = importlib.import_module("ssapy_toolkit.plots.misc_plotting")
+    calls = []
+
+    def fake_divergence(r, **kwargs):
+        calls.append(("divergence", r, kwargs))
+        return "divergence_fig"
+
+    def fake_orbit_divergence(r, **kwargs):
+        calls.append(("orbit_divergence", r, kwargs))
+        return "orbit_divergence_fig"
+
+    monkeypatch.setattr(divergence, "divergence_plot", fake_divergence)
+    monkeypatch.setattr(misc, "orbit_divergence_plot", fake_orbit_divergence)
+
+    assert module.orbit_plot(_sample_track(), view="divergence", v_center=np.array([0.0, 1.0, 0.0])) == "divergence_fig"
+    assert calls[-1][0] == "divergence"
+    assert calls[-1][2]["show"] is False
+    np.testing.assert_allclose(calls[-1][2]["v_center"], [0.0, 1.0, 0.0])
+
+    assert module.orbit_plot(_sample_track(), t=np.arange(3.0), view="orbit_divergence") == "orbit_divergence_fig"
+    assert calls[-1][0] == "orbit_divergence"
+    assert calls[-1][2]["show"] is False
 
 
 def test_cislunar_dashboard_wrapper_delegates_to_core(monkeypatch):

@@ -57,9 +57,15 @@ paths are honored exactly as provided:
 
    orbit_plot(r, view="xy", save="quicklook/orbit_xy")
    orbit_plot(r, view="globe", save_fig="/tmp/orbit_globe.png")
+   orbit_plot(r, t, view="xy", save="quicklook/orbit_xy.mp4")
+   orbit_plot(r, t, view="xy", save="quicklook/orbit_xy.gif")
 
    figure_path = ssatk_path("reports/summary")
    saved_path = ssatk_fig(fig, save_path=figure_path)
+
+For :func:`ssapy_toolkit.plots.orbit_plot`, ``.mp4`` and ``.gif`` save paths
+create animated quicklooks with short fading tails. Static extensions such as
+``.png`` and ``.jpg`` save the full time-series figure.
 
 
 Relationship to SSAPy

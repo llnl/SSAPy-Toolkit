@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Iterable as _Iterable
+from pathlib import Path
 
 from ._cislunar_plot_core import _cislunar_plot_core
 from ._orbit_plot_core import _orbit_plot_core
+from .orbit_animation import orbit_animation as _orbit_animation_core
 from .plotutils import _pop_save_path_aliases
 
 
@@ -99,6 +101,51 @@ _CISLUNAR_VIEW_ALIASES = {
     "cislunar_2d": "xy",
     **{key: "combined" for key in _CISLUNAR_DASHBOARD_ALIAS_KEYS},
 }
+_TRANSFER_VIEW_ALIASES = {
+    "transfer": "auto",
+    "transfer_plot": "auto",
+    "transferplot": "auto",
+    "transfer_orbit": "legacy",
+    "transfer_orbits": "legacy",
+    "transfer_states": "legacy",
+    "transfer_legacy": "legacy",
+    "transfer_3d": "legacy",
+    "transfer_trajectory": "trajectory",
+    "transfertrajectory": "trajectory",
+    "trajectory_transfer": "trajectory",
+    "transfer_arc": "trajectory",
+    "transfer_trajectory_2d": "trajectory",
+    "transfer_arc_2d": "trajectory",
+    "transfer_trajectory_3d": "trajectory_3d",
+    "transfer_3d_trajectory": "trajectory_3d",
+    "transfer_arc_3d": "trajectory_3d",
+    "transfer_burn": "burn_profile",
+    "transfer_burns": "burn_profile",
+    "transfer_burn_profile": "burn_profile",
+    "transfer_burn_profile_plot": "burn_profile",
+    "burn_profile": "burn_profile",
+    "burn_profile_plot": "burn_profile",
+    "burn_timeline": "burn_profile",
+    "transfer_timeline": "burn_profile",
+    "transfer_designer": "designer",
+    "transfer_designer_plot": "designer",
+    "transfer_designer_curves": "designer",
+    "transfer_designer_curves_plot": "designer",
+    "designer": "designer",
+    "designer_curves": "designer",
+    "porkchop": "designer",
+    "porkchop_plot": "designer",
+}
+_DIVERGENCE_VIEW_ALIASES = {
+    "divergence": "divergence",
+    "divergence_plot": "divergence",
+    "position_divergence": "divergence",
+    "velocity_plane_divergence": "divergence",
+    "ntw_divergence": "divergence",
+    "orbit_divergence": "orbit_divergence",
+    "orbit_divergence_plot": "orbit_divergence",
+    "cislunar_divergence": "orbit_divergence",
+}
 
 
 def orbit_plot(
@@ -129,11 +176,16 @@ def orbit_plot(
         ``"xy"``, ``"xz"``, ``"yz"``, ``"3d"``, ``"xyxz"``,
         ``"lunar_xy"``, ``"lunar_yz"``, ``"full"``, ``"cislunar"``,
         ``"cislunar_3d"``, ``"cislunar_xy"``, ``"dashboard"``,
-        ``"cislunar_dashboard"``, ``"groundtrack"``, or
-        ``"globe"``. Multiple standard orbit
+        ``"cislunar_dashboard"``, ``"groundtrack"``, ``"globe"``,
+        ``"transfer_trajectory"``, ``"transfer_burn_profile"``,
+        ``"transfer_designer"``, or ``"divergence"``. Multiple standard orbit
         views can be provided as an iterable, for example
         ``("xy", "xz", "3d")``. Multiple orbit views are placed in order on
         an automatic grid: 2x2, 2x3, 3x3, etc.
+        When ``save_path`` or a save alias ends in ``.mp4`` or ``.gif``,
+        coordinate views are saved as an animated orbit with a short fading
+        tail. Static image extensions such as ``.png`` and ``.jpg`` save the
+        full time-series figure.
     frame, coordinate, coordinates : str, optional
         Coordinate-frame aliases for non-cislunar orbit views. Use one of these
         synonyms per call. Supported aliases include GCRF/GCRS, ITRF/ITRS,
@@ -171,12 +223,52 @@ def orbit_plot(
             legend=legend,
         )
 
+    if plot_family == "transfer":
+        return _dispatch_transfer_view(
+            target,
+            r,
+            title=title,
+            figsize=figsize,
+            save_path=save_path,
+            show=show,
+            c=c,
+            plot_kwargs=plot_kwargs,
+        )
+
+    if plot_family == "divergence":
+        return _dispatch_divergence_view(
+            target,
+            r,
+            t=t,
+            title=title,
+            save_path=save_path,
+            show=show,
+            plot_kwargs=plot_kwargs,
+        )
+
     coordinate_frame = _resolve_coordinate_frame(
         frame=frame,
         coordinate=coordinate,
         coordinates=coordinates,
         default_coordinate=default_coordinate,
     )
+    if _is_animation_save_path(save_path):
+        return _orbit_animation_core(
+            r,
+            t=t,
+            title=title,
+            figsize=figsize,
+            save_path=save_path,
+            frame=coordinate_frame,
+            show=show,
+            c=c,
+            pad=pad,
+            views=target,
+            lunar_transform=_resolve_lunar_transform(coordinate_frame, lunar_transform),
+            layout="auto",
+            **plot_kwargs,
+        )
+
     return _orbit_plot_core(
         r,
         t=t,
@@ -202,6 +294,10 @@ def _resolve_view_selector(view):
         key = _normalize_selector_key(view)
         if key in _CISLUNAR_VIEW_ALIASES:
             return "cislunar", _CISLUNAR_VIEW_ALIASES[key], None
+        if key in _TRANSFER_VIEW_ALIASES:
+            return "transfer", _TRANSFER_VIEW_ALIASES[key], None
+        if key in _DIVERGENCE_VIEW_ALIASES:
+            return "divergence", _DIVERGENCE_VIEW_ALIASES[key], None
         if key in _LUNAR_VIEW_ALIASES:
             return "orbit", _LUNAR_VIEW_ALIASES[key], "lunar_fixed"
         if key in _MAP_VIEW_ALIASES:
@@ -211,7 +307,14 @@ def _resolve_view_selector(view):
         if any(separator in view for separator in (",", "+", "/")):
             views, default_coordinate = _normalize_views(view)
             return "orbit", views, default_coordinate
-        valid = sorted(set(_ORBIT_VIEW_ALIASES) | set(_LUNAR_VIEW_ALIASES) | set(_MAP_VIEW_ALIASES) | set(_CISLUNAR_VIEW_ALIASES))
+        valid = sorted(
+            set(_ORBIT_VIEW_ALIASES)
+            | set(_LUNAR_VIEW_ALIASES)
+            | set(_MAP_VIEW_ALIASES)
+            | set(_CISLUNAR_VIEW_ALIASES)
+            | set(_TRANSFER_VIEW_ALIASES)
+            | set(_DIVERGENCE_VIEW_ALIASES)
+        )
         raise ValueError(f"Unknown orbit_plot view {view!r}. Supported views include: {', '.join(valid)}")
 
     if isinstance(view, _Iterable):
@@ -220,10 +323,139 @@ def _resolve_view_selector(view):
             key = _normalize_selector_key(view_items[0])
             if key in _CISLUNAR_VIEW_ALIASES:
                 return "cislunar", _CISLUNAR_VIEW_ALIASES[key], None
+            if key in _TRANSFER_VIEW_ALIASES:
+                return "transfer", _TRANSFER_VIEW_ALIASES[key], None
+            if key in _DIVERGENCE_VIEW_ALIASES:
+                return "divergence", _DIVERGENCE_VIEW_ALIASES[key], None
         views, default_coordinate = _normalize_views(view_items)
         return "orbit", views, default_coordinate
 
     raise TypeError("view must be a string or iterable of strings")
+
+
+def _is_animation_save_path(save_path):
+    if save_path in (None, False, True):
+        return False
+    return Path(str(save_path)).suffix.lower() in {".gif", ".mp4"}
+
+
+def _dispatch_transfer_view(target, r, *, title, figsize, save_path, show, c, plot_kwargs):
+    if target == "auto":
+        target = "trajectory" if _looks_like_transfer_result(r) else "legacy"
+
+    if target == "legacy":
+        from .transfer_plot import transfer_plot
+
+        args = _legacy_transfer_args(r, plot_kwargs)
+        return transfer_plot(
+            *args,
+            show=show,
+            c=c,
+            figsize=figsize,
+            save_path=save_path,
+            title=title,
+            **plot_kwargs,
+        )
+
+    if target in {"trajectory", "trajectory_3d"}:
+        from .transfer_trajectory_plot import transfer_trajectory_plot
+
+        plot_kwargs.setdefault("three_d", target == "trajectory_3d")
+        ax = transfer_trajectory_plot(
+            r,
+            title=title or None,
+            save_path=save_path,
+            **plot_kwargs,
+        )
+        _show_if_requested(show, ax)
+        return ax
+
+    if target == "burn_profile":
+        from .transfer_burn_profile_plot import transfer_burn_profile_plot
+
+        fig = transfer_burn_profile_plot(
+            r,
+            title=title or None,
+            save_path=save_path,
+            **plot_kwargs,
+        )
+        _show_if_requested(show, fig)
+        return fig
+
+    if target == "designer":
+        from .transfer_designer_curves_plot import transfer_designer_curves_plot
+
+        fig = transfer_designer_curves_plot(
+            r,
+            title=title or None,
+            save_path=save_path,
+            **plot_kwargs,
+        )
+        _show_if_requested(show, fig)
+        return fig
+
+    raise ValueError(f"Unknown transfer orbit_plot target {target!r}")
+
+
+def _dispatch_divergence_view(target, r, *, t, title, save_path, show, plot_kwargs):
+    if target == "divergence":
+        from .divergence_plot import divergence_plot
+
+        return divergence_plot(
+            r,
+            title=title or "Position Errors Projected onto Velocity Plane",
+            save_path=save_path,
+            show=show,
+            **plot_kwargs,
+        )
+
+    if target == "orbit_divergence":
+        from .misc_plotting import orbit_divergence_plot
+
+        return orbit_divergence_plot(
+            r,
+            t=t,
+            title=title,
+            save_path=save_path,
+            show=show,
+            **plot_kwargs,
+        )
+
+    raise ValueError(f"Unknown divergence orbit_plot target {target!r}")
+
+
+def _looks_like_transfer_result(value):
+    transfer = getattr(value, "transfer", value)
+    return hasattr(transfer, "burns") or hasattr(transfer, "trajectory") or hasattr(transfer, "transfer_orbit")
+
+
+def _legacy_transfer_args(r, plot_kwargs):
+    if isinstance(r, dict):
+        names = ("r0", "v0", "rtransfer", "vtransfer", "rf", "vf")
+        missing = [name for name in names if name not in r]
+        if missing:
+            raise TypeError("view='transfer' dictionary input requires keys: " + ", ".join(names))
+        return tuple(r[name] for name in names)
+
+    if isinstance(r, (list, tuple)) and len(r) == 6:
+        return tuple(r)
+
+    names = ("v0", "rtransfer", "vtransfer", "rf", "vf")
+    missing = [name for name in names if name not in plot_kwargs]
+    if missing:
+        raise TypeError(
+            "view='transfer' requires either a TransferResult, a six-item "
+            "(r0, v0, rtransfer, vtransfer, rf, vf) input, or keyword(s): "
+            + ", ".join(names)
+        )
+    return (r, *(plot_kwargs.pop(name) for name in names))
+
+
+def _show_if_requested(show, artist):
+    if show and artist is not None:
+        import matplotlib.pyplot as plt
+
+        plt.show()
 
 
 def _normalize_views(views):

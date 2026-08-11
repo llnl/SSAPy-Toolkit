@@ -128,13 +128,17 @@ Prefer `ssapy_toolkit.plots.orbit_plot` as the main public entry point for
 in-space plots. It accepts selectors such as `view="xy"`, `view="3d"`,
 `view=("xy", "xz", "3d")`, `view="lunar_yz"`, `view="ground track"`,
 `view="globe"`, `view="dashboard"`, `view="cislunar_3d"`,
-`view="cislunar_xy"`, and `view="cislunar_dashboard"`; older
-wrappers remain for compatibility. `frame`, `coordinate`, and `coordinates`
-are aliases; `lunar_*` views default to `coordinate="lunar_fixed"` unless
-explicitly overwritten. Ground-track views reserve a two-column-wide subplot;
-when `view="groundtrack"` is the only view, the figure uses a one-row,
-two-column aspect. Mixed layouts backfill one-column views into current-row gaps
-before wrapping a wide ground-track panel.
+`view="cislunar_xy"`, `view="cislunar_dashboard"`,
+`view="transfer_trajectory"`, `view="transfer_burn_profile"`,
+`view="transfer_designer"`, and `view="divergence"`; older wrappers remain for
+compatibility. `frame`, `coordinate`, and `coordinates` are aliases; `lunar_*`
+views default to `coordinate="lunar_fixed"` unless explicitly overwritten.
+Ground-track views reserve a two-column-wide subplot; when `view="groundtrack"`
+is the only view, the figure uses a one-row, two-column aspect. Mixed layouts
+backfill one-column views into current-row gaps before wrapping a wide
+ground-track panel. For `orbit_plot`, `.mp4` and `.gif` save paths create
+animated quicklooks with short fading tails. `.png`, `.jpg`, and other static
+image extensions save the full time-series figure.
 
 For new or changed public behavior:
 

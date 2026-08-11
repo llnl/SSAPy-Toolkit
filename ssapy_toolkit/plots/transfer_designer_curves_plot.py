@@ -16,7 +16,7 @@ import numpy as np
 from .plotutils import _pop_save_path_aliases, _raise_unrecognized_kwargs
 
 
-def transfer_designer_curves_plot(result, save_path=None, **save_kwargs):
+def transfer_designer_curves_plot(result, title=None, save_path=None, **save_kwargs):
     """Plot porkchop + per-burn Pareto curves from a transfer_optimal
     result.
 
@@ -81,7 +81,7 @@ def transfer_designer_curves_plot(result, save_path=None, **save_kwargs):
 
     mode = "rendezvous" if result.rendezvous else "insertion"
     burns = "both burns" if result.arrival_burn else "first burn only"
-    fig.suptitle(f"transfer_optimal: {result.objective}, {mode}, {burns}",
+    fig.suptitle(title or f"transfer_optimal: {result.objective}, {mode}, {burns}",
                  fontsize=12)
     fig.tight_layout()
 
