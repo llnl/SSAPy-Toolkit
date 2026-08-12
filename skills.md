@@ -102,6 +102,20 @@ For transfer work, prefer `transfer_ssapy` for fixed boundary states and
 `transfer_bielliptic` only for the analytic three-impulse, coplanar circular
 orbit-to-orbit case through an intermediate apoapsis; it intentionally does not
 solve target phasing.
+Transfer solvers should accept either `orbit1`/`orbit2` SSAPy `Orbit` objects
+or raw `r1, v1, r2, v2` state vectors. For `transfer_optimal`, use
+`departure_mode="now"` / `leave_now=True` to depart from the supplied state, or
+`departure_mode="optimize"` / `"leave_whenever"` to search departure phase.
+Use `stage_mode="immediate"` for explicit staged transfers with no wait at the
+staging orbit, `stage_mode="timed"` for staged transfers with an optimized
+wait/phase before each post-stage leg, and `stage_mode="best"` to compare direct
+versus staged routes. The default `n_stage_stops=1` searches one intermediate
+staging orbit; increase `n_stage_stops` with a bounded `stage_beam_width` for
+multi-stop searches.
+The user-facing maneuver gallery is consolidated in
+`demos/demo_orbital_maneuvers.py`; avoid adding one-off transfer demos unless a
+new workflow cannot fit that all-in-one summary. Put solver-specific regression
+coverage in `tests/test_orbital_maneuver_modes.py` or adjacent transfer tests.
 
 Prefer correctly spelled module paths in new code:
 `coordinates.equatorial_and_ecliptic`, `coordinates.local_and_equatorial`,

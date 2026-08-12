@@ -20,7 +20,8 @@ def deltav_to_burn(orbit, times, delta_v_ntw):
 
     Returns
     -------
-    dict: keys r_continuous, r_instantaneous, delta_v_ntw, delta_v_gcrf, t_center, a_ntw
+    dict: keys r_continuous, v_continuous, r_instantaneous,
+    v_instantaneous, delta_v_ntw, delta_v_gcrf, t_center, a_ntw
     """
     r0 = np.asarray(orbit.r, float)
     v0 = np.asarray(orbit.v, float)
@@ -74,10 +75,13 @@ def deltav_to_burn(orbit, times, delta_v_ntw):
                               radial=None, velocity=None, inclination=None)
 
     r_inst = np.vstack([r_pre[:-1], r_post])
+    v_inst = np.vstack([v_pre[:-1], v_post])
 
     return {
         "r_continuous":     r_cont,
+        "v_continuous":     v_cont,
         "r_instantaneous":  r_inst,
+        "v_instantaneous":  v_inst,
         "delta_v_ntw":      delta_v_ntw,
         "delta_v_gcrf":     delta_v_gcrf,
         "t_center":         t_center,

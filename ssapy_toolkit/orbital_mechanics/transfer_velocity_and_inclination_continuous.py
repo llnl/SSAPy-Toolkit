@@ -6,13 +6,16 @@ from ..accelerations import accel_velocity
 from ..plots.set_axes_equal import set_axes_equal
 from ..constants import EARTH_MU, EARTH_RADIUS
 from ._two_body import _keplerian_two_body_rhs
+from ._transfer_result import maneuver_burn, trajectory_dict, transfer_result, transfer_state
 
 
 def transfer_velocity_and_inclination_continuous(
-    r0,
-    v0,
-    i_target,
-    a_thrust,
+    r0=None,
+    v0=None,
+    *,
+    initial=None,
+    i_target=None,
+    a_thrust=1.0,
     mu=EARTH_MU,
     t0=0.0,
     max_time1=36000,
@@ -20,6 +23,14 @@ def transfer_velocity_and_inclination_continuous(
     body_radius=EARTH_RADIUS,
     plot=False
 ):
+    if initial is not None:
+        state0 = transfer_state(state=initial, mu=mu)
+        r0, v0, t0 = state0["r"], state0["v"], state0["t"]
+    if r0 is None or v0 is None:
+        raise ValueError("transfer_velocity_and_inclination_continuous requires initial or r0/v0")
+    if i_target is None:
+        raise ValueError("i_target is required")
+
     def equations_velocity_burn(t, y):
         r = y[:3]
         v = y[3:]
@@ -107,7 +118,42 @@ def transfer_velocity_and_inclination_continuous(
     if plot:
         _plot_transfer(r0, v0, r_full, v_full, t_full, t0, t_final, mu, body_radius)
 
-    return r_full, v_full, t_full
+    duration1 = float(t1 - t0)
+    duration2 = float(t_final - t1)
+    vhat0 = np.asarray(v0, dtype=float) / np.linalg.norm(v0)
+    h1 = np.cross(y1[:3], y1[3:])
+    normal1 = h1 / np.linalg.norm(h1) if np.linalg.norm(h1) > 0.0 else np.array([0.0, 0.0, 1.0])
+    burns = [
+        maneuver_burn(
+            name="velocity_aligned_phase",
+            kind="continuous_velocity_aligned_burn",
+            state={"r": r0, "v": v0, "t": t0},
+            delta_v=a_thrust * duration1 * vhat0,
+            t_start=t0,
+            t_end=t1,
+            notes="Phase 1 acceleration follows instantaneous velocity; delta_v is the integrated-thrust equivalent.",
+        ),
+        maneuver_burn(
+            name="normal_phase",
+            kind="continuous_orbit-normal_burn",
+            state={"r": y1[:3], "v": y1[3:], "t": t1},
+            delta_v=a_thrust * duration2 * normal1,
+            t_start=t1,
+            t_end=t_final,
+            notes="Phase 2 acceleration follows instantaneous angular momentum; delta_v is the integrated-thrust equivalent.",
+        ),
+    ]
+    return transfer_result(
+        method="transfer_velocity_and_inclination_continuous",
+        initial={"r": r0, "v": v0, "t": t0},
+        target={"r": r_full[-1], "v": v_full[-1], "t": t_final},
+        final={"r": r_full[-1], "v": v_full[-1], "t": t_final},
+        burns=burns,
+        trajectory=trajectory_dict(t=t_full, r=r_full, v=v_full),
+        tof=t_final - t0,
+        assumptions=["two sequential continuous burns", "two-body gravity"],
+        diagnostics={"i_target": i_target, "a_thrust": a_thrust, "phase_split_time": t1},
+    )
 
 
 def _plot_transfer(r0, v0, r_full, v_full, t_full, t0, t_final, mu, body_radius):

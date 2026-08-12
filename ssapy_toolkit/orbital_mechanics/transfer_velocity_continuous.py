@@ -7,11 +7,14 @@ from ..accelerations import accel_velocity
 from ..plots import set_axes_equal, save_plot
 from ..plots.plotutils import _pop_save_path_aliases, _raise_unrecognized_kwargs
 from ..constants import EARTH_MU, EARTH_RADIUS
+from ._transfer_result import maneuver_burn, trajectory_dict, transfer_result, transfer_state
 
 
 def transfer_velocity_continuous(
-    r0,
-    v0,
+    r0=None,
+    v0=None,
+    *,
+    initial=None,
     v_target=None,  # Target delta_v in m/s, optional
     a_thrust=1.0,
     mu=EARTH_MU,
@@ -34,6 +37,11 @@ def transfer_velocity_continuous(
     """
     save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
     _raise_unrecognized_kwargs(save_kwargs, "transfer_velocity_continuous")
+    if initial is not None:
+        state0 = transfer_state(state=initial, mu=mu)
+        r0, v0, t0 = state0["r"], state0["v"], state0["t"]
+    if r0 is None or v0 is None:
+        raise ValueError("transfer_velocity_continuous requires initial or r0/v0")
 
     def equations(t, y):
         r = y[:3]
@@ -98,7 +106,30 @@ def transfer_velocity_continuous(
     if plot:
         _plot_transfer(sol, r0, v0, r_final, v_final, t0, t_final, mu, body_radius, save_path)
 
-    return r_vals, v_vals, t_vals
+    thrust_sign = -1.0 if v_target is not None and v_target < 0 else 1.0
+    duration = float(t_final - t0)
+    integrated_delta_v = abs(v_target) if v_target is not None else abs(a_thrust) * duration
+    delta_v_vec = thrust_sign * integrated_delta_v * np.asarray(v0, dtype=float) / np.linalg.norm(v0)
+    burn = maneuver_burn(
+        name="velocity_aligned_continuous_burn",
+        kind="continuous_velocity_aligned_burn",
+        state={"r": r0, "v": v0, "t": t0},
+        delta_v=delta_v_vec,
+        t_start=t0,
+        t_end=t_final,
+        notes="Acceleration follows the instantaneous velocity direction; delta_v is the integrated-thrust equivalent.",
+    )
+    return transfer_result(
+        method="transfer_velocity_continuous",
+        initial={"r": r0, "v": v0, "t": t0},
+        target={"r": r_final, "v": v_final, "t": t_final},
+        final={"r": r_final, "v": v_final, "t": t_final},
+        burns=[burn],
+        trajectory=trajectory_dict(t=t_vals, r=r_vals, v=v_vals),
+        tof=duration,
+        assumptions=["continuous thrust along instantaneous velocity", "two-body gravity"],
+        diagnostics={"v_target": v_target, "a_thrust": a_thrust, "specific_energy_final": energy},
+    )
 
 
 def _plot_transfer(sol, r0, v0, r_final, v_final, t0, t_final, mu, body_radius, save_path):

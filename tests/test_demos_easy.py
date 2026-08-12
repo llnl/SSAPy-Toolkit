@@ -33,19 +33,13 @@ def test_demo_compare_models():
     assert "figure_rung_summary" in out
 
 
-def test_demo_continuous_transfers():
-    demo_continuous_transfers = demo_main("demo_continuous_transfers")
-    out = demo_continuous_transfers(make_figures=False, fast=True)
-    assert "velocity_burn" in out
-    assert "normal_burn" in out
-    assert len(out["speed_change_velocity"]) > 0
-
-
-def test_demo_converting_impulse_and_burns():
-    demo_converting_impulse_and_burns = demo_main("demo_converting_impulse_and_burns")
-    out = demo_converting_impulse_and_burns(make_figures=False, fast=True)
-    assert "burn_to_deltav" in out
-    assert "deltav_to_burn" in out
+def test_demo_orbital_maneuvers():
+    demo_orbital_maneuvers = demo_main("demo_orbital_maneuvers")
+    out = demo_orbital_maneuvers(make_figures=False, fast=True)
+    assert set(out["results"]) == {"impulsive", "fixed_time", "continuous", "optimal", "burn_conversion"}
+    assert len(out["summary_delta_v"]) >= 10
+    assert "burn_to_deltav" in out["results"]["burn_conversion"]
+    assert "deltav_to_burn" in out["results"]["burn_conversion"]
 
 
 def test_demo_coordinate_frames():
@@ -163,10 +157,3 @@ def test_demo_ssapy_ground_lambertian_reflectance():
     out = demo_ssapy_ground_lambertian_reflectance(make_figures=False, fast=True)
     assert "mv" in out
     assert len(out["mv"]) > 0
-
-
-def test_demo_transfer_rendezvous():
-    demo_transfer_rendezvous = demo_main("demo_transfer_rendezvous")
-    out = demo_transfer_rendezvous(make_figures=False, fast=True)
-    assert "|delta_v1|" in out
-    assert "|delta_v2|" in out

@@ -6,9 +6,9 @@ location annotated with its strength: delta-v magnitude, duration, the
 acceleration flown, and -- when an engine model was used -- the thrust
 and propellant estimate.
 
-Works with a ``TransferResult`` (from ``transfer_ssapy``) or an
-``OptimalTransferResult`` (from ``transfer_optimal``); the result must
-have been produced with ``propagate=True`` so a trajectory exists.
+Works with the canonical transfer dictionaries returned by
+``transfer_ssapy`` and ``transfer_optimal``; the result must have been
+produced with ``propagate=True`` so a trajectory exists.
 """
 
 import numpy as np
@@ -21,14 +21,26 @@ from ssapy.constants import EARTH_MU, EARTH_RADIUS
 from .plotutils import _pop_save_path_aliases, _raise_unrecognized_kwargs
 
 
+def _burn_get(b, name, default=None):
+    return b.get(name, default) if isinstance(b, dict) else getattr(b, name, default)
+
+
 def _burn_label(i, b):
-    a = b.dv_mag / (b.t_end - b.t_start)
-    label = (f"burn {i}: {b.dv_mag:.1f} m/s\n"
-             f"{a:.3f} m/s$^2$ x {b.t_end - b.t_start:.0f} s")
-    if getattr(b, "thrust", None) is not None:
-        label += f"\nF = {b.thrust:.0f} N"
-    if getattr(b, "propellant_mass", None) is not None:
-        label += f", prop ~{b.propellant_mass:.1f} kg"
+    dv_mag = _burn_get(b, "delta_v_mag", _burn_get(b, "dv_mag", 0.0))
+    t_start = _burn_get(b, "t_start", _burn_get(b, "t", 0.0))
+    t_end = _burn_get(b, "t_end", t_start)
+    duration = _burn_get(b, "duration", t_end - t_start)
+    a = _burn_get(b, "acceleration_mag", None)
+    if a is None:
+        a = dv_mag / duration if duration else 0.0
+    label = (f"burn {i}: {dv_mag:.1f} m/s\n"
+             f"{a:.3f} m/s$^2$ x {duration:.0f} s")
+    thrust = _burn_get(b, "thrust")
+    propellant_mass = _burn_get(b, "propellant_mass")
+    if thrust is not None:
+        label += f"\nF = {thrust:.0f} N"
+    if propellant_mass is not None:
+        label += f", prop ~{propellant_mass:.1f} kg"
     return label
 
 
@@ -48,8 +60,8 @@ def transfer_trajectory_plot(result, ax=None, three_d=False,
 
     Parameters
     ----------
-    result : TransferResult or OptimalTransferResult
-        A propagated transfer (``propagate=True``).
+    result : dict
+        A canonical propagated transfer dictionary (``propagate=True``).
     ax : matplotlib axes, optional
         Draw onto existing axes (e.g. a gallery panel); otherwise a new
         figure is created.  Must be a 3-D axes when ``three_d=True``.
@@ -74,9 +86,11 @@ def transfer_trajectory_plot(result, ax=None, three_d=False,
     should_save = save_path is not None and save_path is not False
 
     transfer = getattr(result, "transfer", result)
-    if transfer.trajectory is None:
+    trajectory = transfer.get("trajectory") if isinstance(transfer, dict) else transfer.trajectory
+    if trajectory is None:
         raise ValueError("result has no trajectory; rerun the transfer "
                          "with propagate=True.")
+    burns = transfer.get("burns") if isinstance(transfer, dict) else transfer.burns
     import matplotlib
     if should_save:
         matplotlib.use("Agg")
@@ -92,9 +106,9 @@ def transfer_trajectory_plot(result, ax=None, three_d=False,
     else:
         fig = ax.get_figure()
 
-    tt = transfer.trajectory["t"]
-    tr = transfer.trajectory["r"] / 1e3
-    tv = transfer.trajectory["v"]
+    tt = trajectory["t"]
+    tr = trajectory["r"] / 1e3
+    tv = trajectory["v"]
 
     def plot(xyz, *a, **kw):
         cols = (xyz[:, 0], xyz[:, 1], xyz[:, 2]) if three_d \
@@ -112,9 +126,10 @@ def transfer_trajectory_plot(result, ax=None, three_d=False,
                 EARTH_RADIUS / 1e3 * np.sin(ang), color="0.85")
     plot(tr, "C3-", lw=2, label="transfer")
 
-    for i, b in enumerate(transfer.burns, 1):
+    for i, b in enumerate(burns, 1):
         # Burn location: trajectory position at the burn start.
-        rb = np.array([np.interp(b.t_start, tt, tr[:, k])
+        burn_time = _burn_get(b, "t_start", _burn_get(b, "t", tt[0]))
+        rb = np.array([np.interp(burn_time, tt, tr[:, k])
                        for k in range(3)])
         if three_d:
             ax.scatter(*rb, color="k", marker="*", s=120, zorder=5)
@@ -139,8 +154,12 @@ def transfer_trajectory_plot(result, ax=None, three_d=False,
         ax.set_ylim(-lim, lim)
         ax.set_zlim(-lim, lim)
     if title is None:
-        title = (f"dv {transfer.dv_total:.1f} m/s | "
-                 f"arrival err {transfer.arrival_error:.1f} m")
+        dv_total = transfer.get("delta_v_total") if isinstance(transfer, dict) else transfer.dv_total
+        diagnostics = transfer.get("diagnostics", {}) if isinstance(transfer, dict) else {}
+        arrival_error = diagnostics.get("arrival_error", getattr(transfer, "arrival_error", None))
+        title = f"dv {dv_total:.1f} m/s"
+        if arrival_error is not None:
+            title += f" | arrival err {arrival_error:.1f} m"
     ax.set_title(title, fontsize=10)
 
     if should_save:

@@ -73,13 +73,29 @@ def test_transfer_ssapy_nonpropagating_modes_and_validation():
     arrival = (r2, v2, 1000.0)
 
     result = tsf.transfer_ssapy(departure, arrival, propagate=False, refine=False, burn_duration=1.0, dv_budget=1e9)
-    assert len(result.burns) == 2
-    assert result.within_budget is True
-    assert result.trajectory is None
-    assert result.transfer_orbit.r.shape == (3,)
+    assert result["schema_version"] == "ssatk.transfer.v2"
+    assert len(result["burns"]) == 2
+    assert result["diagnostics"]["within_budget"] is True
+    assert result["trajectory"] is None
+    assert result["transfer_orbits"][0].r.shape == (3,)
+
+    mapped = tsf.transfer_ssapy(
+        initial={"r": r1, "v": v1, "t": 10.0},
+        target={"r": r2, "v": v2, "t": 1010.0},
+        propagate=False,
+        refine=False,
+        burn_duration=1.0,
+        thrust=1e7,
+        mass=1000.0,
+        isp=300.0,
+    )
+    assert mapped["tof"] == pytest.approx(1000.0)
+    assert mapped["hardware"]["thrust"] == pytest.approx(1e7)
+    assert mapped["hardware"]["mass"] == pytest.approx(1000.0)
+    assert mapped["burns"][0]["propellant_mass"] > 0.0
 
     intercept = tsf.transfer_ssapy(departure, arrival, propagate=False, refine=False, burn_duration=1.0, arrival_burn=False, burn_accel=100.0)
-    assert len(intercept.burns) == 1
+    assert len(intercept["burns"]) == 1
 
     with pytest.raises(ValueError, match="after departure"):
         tsf.transfer_ssapy(arrival, departure, propagate=False, refine=False)
@@ -95,7 +111,7 @@ def test_transfer_ssapy_nonpropagating_modes_and_validation():
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         result = tsf.transfer_ssapy(departure, arrival, propagate=False, refine=False, burn_duration=1.0, dv_budget=1.0)
-    assert result.within_budget is False
+    assert result["diagnostics"]["within_budget"] is False
     assert any("exceeding" in str(w.message) for w in caught)
     with pytest.raises(ValueError, match="exceeding"):
         tsf.transfer_ssapy(departure, arrival, propagate=False, refine=False, burn_duration=1.0, dv_budget=1.0, raise_on_budget=True)
@@ -171,10 +187,10 @@ def test_transfer_ssapy_propagation_path_with_fakes(monkeypatch):
         propagator=FakePropagator,
         rk_step=3.0,
     )
-    assert result.trajectory["r"].shape[1] == 3
-    assert result.arrival_error is not None
-    assert isinstance(result.propagator, FakePropagator)
-    assert all(b.propellant_mass is not None for b in result.burns)
+    assert result["trajectory"]["r"].shape[1] == 3
+    assert result["diagnostics"]["arrival_error"] is not None
+    assert isinstance(result["transfer_orbits"][0], FakeOrbit)
+    assert all(burn["propellant_mass"] is not None for burn in result["burns"])
 
     intercept = tsf.transfer_ssapy(
         (r1, v1, 0.0),
@@ -185,8 +201,8 @@ def test_transfer_ssapy_propagation_path_with_fakes(monkeypatch):
         refine=False,
         n_samples=4,
     )
-    assert len(intercept.burns) == 1
-    assert intercept.trajectory["t"].size >= 2
+    assert len(intercept["burns"]) == 1
+    assert intercept["trajectory"]["t"].size >= 2
 
 
 def test_transfer_ssapy_propagation_error_branches(monkeypatch):

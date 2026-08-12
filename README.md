@@ -113,6 +113,17 @@ transfer between coplanar circular orbits through an intermediate apoapsis
 radius. It is useful for quick radius-to-radius trade studies; use
 `transfer_ssapy` or `transfer_optimal` when fixed epochs, target phasing,
 perturbed propagation, or non-circular boundary states matter.
+Transfer entry points accept either SSAPy `Orbit` objects (`orbit1`/`orbit2`,
+`initial`/`target`) or raw inertial state vectors (`r1, v1, r2, v2`). For
+`transfer_optimal`, set `departure_mode="now"` or `leave_now=True` to depart
+from the supplied state; leave the default `departure_mode="optimize"` to search
+for the best departure phase/time.
+Set `stage_mode="immediate"` or `stage_mode="timed"` to explicitly search
+staged transfers through candidate staging orbits; `stage_mode="best"` compares
+the direct and staged routes. Timed staging allows each post-stage leg to wait
+for an appropriate phase instead of leaving the staging orbit immediately. The
+default `n_stage_stops=1` searches one intermediate staging orbit; increase
+`n_stage_stops` and set `stage_beam_width` for bounded multi-stop searches.
 
 `orbit_plot` is the main entry point for in-space trajectory plots. It keeps the
 legacy four-panel orbit view by default, and also accepts compact selectors for

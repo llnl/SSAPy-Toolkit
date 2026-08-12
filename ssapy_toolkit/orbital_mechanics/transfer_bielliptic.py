@@ -8,6 +8,7 @@ from ssapy import Orbit
 from ..constants import EARTH_MU
 from ..time_functions import Time, to_gps
 from ..plots.plotutils import _pop_save_path_aliases, _raise_unrecognized_kwargs
+from ._transfer_result import maneuver_burn, trajectory_dict, transfer_result, transfer_state
 from .misc import bi_elliptic_transfer_delta_v, circular_velocity, vis_viva
 
 
@@ -38,6 +39,8 @@ def _circularity_error(radius_vector, velocity, mu):
 
 def _resolve_transfer_inputs(
     *args,
+    initial=None,
+    target=None,
     r1=None,
     v1=None,
     r2=None,
@@ -50,7 +53,7 @@ def _resolve_transfer_inputs(
     mu=EARTH_MU,
 ):
     if args:
-        if len(args) == 2 and all(isinstance(arg, Orbit) for arg in args):
+        if len(args) == 2 and all(hasattr(arg, attr) for arg in args for attr in ("r", "v", "t")):
             orbit1, orbit2 = args
         elif len(args) == 2 and all(np.isscalar(arg) for arg in args):
             radius1, radius2 = args
@@ -63,14 +66,10 @@ def _resolve_transfer_inputs(
             )
 
     if orbit1 is not None:
-        if not isinstance(orbit1, Orbit):
-            raise ValueError("orbit1 must be an ssapy.Orbit object")
         r1 = orbit1.r
         v1 = orbit1.v
         t0 = orbit1.t
     if orbit2 is not None:
-        if not isinstance(orbit2, Orbit):
-            raise ValueError("orbit2 must be an ssapy.Orbit object")
         r2 = orbit2.r
         v2 = orbit2.v
 
@@ -130,6 +129,8 @@ def _rotate_planar_state(x_coord, y_coord, x_velocity, y_velocity, radius_hat, t
 
 def transfer_bielliptic(
     *args,
+    initial=None,
+    target=None,
     r1=None,
     v1=None,
     r2=None,
@@ -146,6 +147,10 @@ def transfer_bielliptic(
     samples_per_arc=300,
     check_circular=True,
     circular_tol=1e-3,
+    burn_accel=None,
+    thrust=None,
+    mass=None,
+    isp=None,
     plot=False,
     save_path=False,
     **save_kwargs,
@@ -185,8 +190,9 @@ def transfer_bielliptic(
     Returns
     -------
     dict
-        Compatibility-style transfer dictionary with burn vectors, magnitudes,
-        transfer arcs, time of flight, and SSAPy ``Orbit`` objects.
+        Canonical transfer dictionary with three burns, sampled transfer arcs,
+        time of flight, assumptions, diagnostics, and SSAPy transfer ``Orbit``
+        objects.
     """
     save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
     _raise_unrecognized_kwargs(save_kwargs, "transfer_bielliptic")
@@ -198,6 +204,13 @@ def transfer_bielliptic(
 
     if samples_per_arc < 2:
         raise ValueError("samples_per_arc must be at least 2")
+
+    if initial is not None:
+        initial_state = transfer_state(state=initial, mu=mu)
+        r1, v1, t0 = initial_state["r"], initial_state["v"], initial_state["t"]
+    if target is not None:
+        target_state = transfer_state(state=target, mu=mu)
+        r2, v2 = target_state["r"], target_state["v"]
 
     r1, v1, radius1, _r2_input, v2_input, radius2, t0 = _resolve_transfer_inputs(
         *args,
@@ -272,6 +285,7 @@ def transfer_bielliptic(
     v_intermediate_before = -v_apoapsis1 * tangent_hat
     v_intermediate_after = -v_apoapsis2 * tangent_hat
     r_arrive = radius2 * radius_hat
+    v_arrive_preburn = v_periapsis2 * tangent_hat
     v_arrive = v_circular2 * tangent_hat
 
     initial_orbit = Orbit(r=r_depart, v=v_depart, t=t0, mu=mu)
@@ -279,40 +293,72 @@ def transfer_bielliptic(
     transfer1 = Orbit(r=r_depart, v=v_depart + delta_v1, t=t0, mu=mu)
     transfer2 = Orbit(r=r_intermediate, v=v_intermediate_after, t=t0 + tof1, mu=mu)
 
-    dv1_mag = float(np.linalg.norm(delta_v1))
-    dv2_mag = float(np.linalg.norm(delta_v2))
-    dv3_mag = float(np.linalg.norm(delta_v3))
-    result = {
-        "initial": initial_orbit,
-        "final": final_orbit,
-        "transfer": transfer1,
-        "transfer1": transfer1,
-        "transfer2": transfer2,
-        "r_transfer": r_transfer,
-        "v_transfer": v_transfer,
-        "t_transfer": t_transfer,
-        "intermediate_radius": rb,
-        "r_intermediate": r_intermediate,
-        "v_intermediate_before": v_intermediate_before,
-        "v_intermediate_after": v_intermediate_after,
-        "semi_major_axes": (semi_major_axis1, semi_major_axis2),
-        "tof1": float(tof1),
-        "tof2": float(tof2),
-        "tof": float(tof),
-        "t_to_transfer": 0.0,
-        "delta_v1": delta_v1,
-        "delta_v2": delta_v2,
-        "delta_v3": delta_v3,
-        "|delta_v1|": dv1_mag,
-        "|delta_v2|": dv2_mag,
-        "|delta_v3|": dv3_mag,
-        "delta_v_total": dv1_mag + dv2_mag + dv3_mag,
-        "|delta_v_total|": dv1_mag + dv2_mag + dv3_mag,
-        "phase_note": (
-            "Analytic bi-elliptic orbit-to-orbit transfer; target phasing is "
-            "not solved. Use transfer_optimal or transfer_ssapy for fixed epochs."
+    initial_state = transfer_state(state={"r": r_depart, "v": v_depart, "t": t0, "orbit": initial_orbit}, mu=mu)
+    target_state = transfer_state(state={"r": r_arrive, "v": v_arrive, "t": t0 + tof, "orbit": final_orbit}, mu=mu)
+    burns = [
+        maneuver_burn(
+            name="departure",
+            state={"r": r_depart, "v": v_depart, "t": t0},
+            delta_v=delta_v1,
+            t=t0,
+            burn_accel=burn_accel,
+            thrust=thrust,
+            mass=mass,
+            isp=isp,
         ),
-    }
+        maneuver_burn(
+            name="intermediate_apoapsis",
+            state={"r": r_intermediate, "v": v_intermediate_before, "t": t0 + tof1},
+            delta_v=delta_v2,
+            t=t0 + tof1,
+            burn_accel=burn_accel,
+            thrust=thrust,
+            mass=mass,
+            isp=isp,
+        ),
+        maneuver_burn(
+            name="arrival_circularization",
+            state={"r": r_arrive, "v": v_arrive_preburn, "t": t0 + tof},
+            delta_v=delta_v3,
+            t=t0 + tof,
+            burn_accel=burn_accel,
+            thrust=thrust,
+            mass=mass,
+            isp=isp,
+        ),
+    ]
+    result = transfer_result(
+        method="transfer_bielliptic",
+        initial=initial_state,
+        target=target_state,
+        final=target_state,
+        burns=burns,
+        trajectory=trajectory_dict(t=t_transfer + t0, r=r_transfer, v=v_transfer),
+        transfer_orbits=[transfer1, transfer2],
+        tof=tof,
+        assumptions=[
+            "circular boundary orbits",
+            "coplanar orbit-to-orbit transfer",
+            "target phasing is not solved",
+            "two-body impulsive bi-elliptic transfer",
+        ],
+        diagnostics={
+            "radius1": radius1,
+            "radius2": radius2,
+            "intermediate_radius": rb,
+            "semi_major_axes": (semi_major_axis1, semi_major_axis2),
+            "tof1": float(tof1),
+            "tof2": float(tof2),
+            "analytic_delta_v": bi_elliptic_transfer_delta_v(radius1, radius2, rb, mu),
+            "intermediate_state": {
+                "r": r_intermediate,
+                "v_before": v_intermediate_before,
+                "v_after": v_intermediate_after,
+                "t": t0 + tof1,
+            },
+            "circularity_error": [error1 if check_circular else None, error2 if check_circular else None],
+        },
+    )
 
     if plot:
         from ..plots import transfer_plot
@@ -331,7 +377,7 @@ def transfer_bielliptic(
                 f"TOF {tof / 3600:.2f} h | Δv {result['delta_v_total'] / 1e3:.3f} km/s"
             ),
         )
-        result["fig"] = fig
+        result["figure"] = fig
 
     return result
 

@@ -5,11 +5,14 @@ from ..plots import set_axes_equal, save_plot
 from ..plots.plotutils import _pop_save_path_aliases, _raise_unrecognized_kwargs
 from ..constants import EARTH_MU, EARTH_RADIUS
 from ._two_body import _keplerian_two_body_rhs
+from ._transfer_result import maneuver_burn, trajectory_dict, transfer_result, transfer_state
 
 
 def transfer_inclination_continuous(
-    r0,
-    v0,
+    r0=None,
+    v0=None,
+    *,
+    initial=None,
     i_target=None,
     delta_v=None,
     a_thrust=1,
@@ -23,6 +26,11 @@ def transfer_inclination_continuous(
 ):
     save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
     _raise_unrecognized_kwargs(save_kwargs, "transfer_inclination_continuous")
+    if initial is not None:
+        state0 = transfer_state(state=initial, mu=mu)
+        r0, v0, t0 = state0["r"], state0["v"], state0["t"]
+    if r0 is None or v0 is None:
+        raise ValueError("transfer_inclination_continuous requires initial or r0/v0")
 
     if (i_target is None) == (delta_v is None):
         raise ValueError("Specify exactly one of i_target or delta_v.")
@@ -100,7 +108,32 @@ def transfer_inclination_continuous(
             save_path,
         )
 
-    return r_traj, v_traj, t_traj
+    duration = float(t_traj[-1] - t0)
+    h0 = np.cross(r0, v0)
+    h_norm = np.linalg.norm(h0)
+    normal = h0 / h_norm if h_norm > 0.0 else np.array([0.0, 0.0, 1.0])
+    sign = -1.0 if delta_v is not None and delta_v < 0 else 1.0
+    integrated_delta_v = abs(delta_v) if delta_v is not None else abs(a_thrust) * duration
+    burn = maneuver_burn(
+        name="normal_continuous_burn",
+        kind="continuous_orbit-normal_burn",
+        state={"r": r0, "v": v0, "t": t0},
+        delta_v=sign * integrated_delta_v * normal,
+        t_start=t0,
+        t_end=t_traj[-1],
+        notes="Acceleration follows the instantaneous angular-momentum direction; delta_v is the integrated-thrust equivalent.",
+    )
+    return transfer_result(
+        method="transfer_inclination_continuous",
+        initial={"r": r0, "v": v0, "t": t0},
+        target={"r": r_traj[-1], "v": v_traj[-1], "t": t_traj[-1]},
+        final={"r": r_traj[-1], "v": v_traj[-1], "t": t_traj[-1]},
+        burns=[burn],
+        trajectory=trajectory_dict(t=t_traj, r=r_traj, v=v_traj),
+        tof=duration,
+        assumptions=["continuous thrust along instantaneous orbit normal", "two-body gravity"],
+        diagnostics={"i_target": i_target, "delta_v_target": delta_v, "a_thrust": a_thrust},
+    )
 
 
 def _plot_transfer(

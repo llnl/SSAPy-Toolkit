@@ -5,8 +5,8 @@ states, one time of flight -> the unique connecting two-burn transfer),
 :func:`transfer_optimal` searches over the *free* variables of an
 orbit-to-orbit transfer -- departure time along orbit 1, time of flight,
 arrival phase along orbit 2 (insertion mode), and motion sense -- to find
-the transfer that minimizes total delta-v (default) or, given a delta-v
-budget, the fastest transfer that fits it.
+the transfer that minimizes total, departure, or arrival delta-v, or given a
+delta-v budget, the fastest transfer that fits it.
 
 The search uses a coarse porkchop grid of fast impulsive Lambert solves
 (Keplerian boundary ephemerides), filters out infeasible candidates
@@ -30,9 +30,136 @@ from ssapy.propagator import KeplerianPropagator
 from ssapy.compute import rv
 from ssapy.constants import EARTH_MU, EARTH_RADIUS
 
-from ssapy_toolkit.orbital_mechanics.transfer_ssapy_function import (
-    transfer_ssapy, solve_lambert)
+from ssapy_toolkit.orbital_mechanics.transfer_ssapy_function import transfer_ssapy, solve_lambert
+from ssapy_toolkit.orbital_mechanics._transfer_result import transfer_boundary_states, transfer_state
 from ssapy_toolkit.time_functions._gps import _to_gps_seconds
+
+
+_OBJECTIVE_ALIASES = {
+    "min_dv": "min_dv",
+    "dv": "min_dv",
+    "delta_v": "min_dv",
+    "deltav": "min_dv",
+    "minimum_delta_v": "min_dv",
+    "min_time": "min_time",
+    "time": "min_time",
+    "tof": "min_time",
+    "minimum_time": "min_time",
+}
+
+_DELTA_V_MODE_ALIASES = {
+    "total": "total",
+    "both": "total",
+    "sum": "total",
+    "all": "total",
+    "two_burn": "total",
+    "two_burns": "total",
+    "first": "first",
+    "departure": "first",
+    "depart": "first",
+    "dv1": "first",
+    "first_burn": "first",
+    "departure_burn": "first",
+    "last": "last",
+    "final": "last",
+    "arrival": "last",
+    "insertion": "last",
+    "dv2": "last",
+    "second": "last",
+    "last_burn": "last",
+    "arrival_burn": "last",
+}
+
+_DEPARTURE_MODE_ALIASES = {
+    "optimize": "optimize",
+    "optimal": "optimize",
+    "search": "optimize",
+    "anytime": "optimize",
+    "any_time": "optimize",
+    "whenever": "optimize",
+    "leave_whenever": "optimize",
+    "free": "optimize",
+    "now": "now",
+    "leave_now": "now",
+    "fixed": "now",
+    "fixed_departure": "now",
+    "current": "now",
+    "state": "now",
+}
+
+_STAGE_MODE_ALIASES = {
+    "direct": "direct",
+    "single": "direct",
+    "single_stage": "direct",
+    "one_stage": "direct",
+    "one_leg": "direct",
+    "immediate": "immediate",
+    "immediate_stage": "immediate",
+    "immediate_staged": "immediate",
+    "staged_immediate": "immediate",
+    "timed": "timed",
+    "stage_timed": "timed",
+    "staged": "timed",
+    "multi_stage": "timed",
+    "multistage": "timed",
+    "appropriately_timed": "timed",
+    "optimize": "timed",
+    "optimized": "timed",
+    "leave_whenever": "timed",
+    "best": "best",
+    "compare": "best",
+    "auto": "best",
+}
+
+_STAGE_TIMING_ALIASES = {
+    "immediate": "immediate",
+    "immediate_stage": "immediate",
+    "immediate_staged": "immediate",
+    "staged_immediate": "immediate",
+    "now": "immediate",
+    "leave_now": "immediate",
+    "fixed": "immediate",
+    "fixed_departure": "immediate",
+    "no_wait": "immediate",
+    "timed": "timed",
+    "stage_timed": "timed",
+    "staged": "timed",
+    "multi_stage": "timed",
+    "multistage": "timed",
+    "appropriately_timed": "timed",
+    "optimized_timing": "timed",
+    "optimize": "timed",
+    "optimized": "timed",
+    "leave_whenever": "timed",
+    "wait": "timed",
+    "phased": "timed",
+}
+
+
+def _normalize_keyword(value, aliases, name):
+    key = str(value).strip().lower().replace("-", "_").replace(" ", "_")
+    try:
+        return aliases[key]
+    except KeyError as exc:
+        valid = ", ".join(sorted(set(aliases.values())))
+        raise ValueError(f"{name} must be one of: {valid}") from exc
+
+
+def _delta_v_metric(delta_v1, delta_v2, mode, arrival_burn=True):
+    if mode == "first":
+        return float(delta_v1)
+    if mode == "last":
+        if not arrival_burn:
+            raise ValueError("delta_v_mode='last' requires arrival_burn=True")
+        return float(delta_v2)
+    return float(delta_v1 + (delta_v2 if arrival_burn else 0.0))
+
+
+def _result_delta_v_metric(result, mode, arrival_burn=True):
+    magnitudes = list(result.get("delta_v_magnitudes", []))
+    delta_v1 = magnitudes[0] if magnitudes else 0.0
+    delta_v2 = magnitudes[1] if len(magnitudes) > 1 else 0.0
+    return _delta_v_metric(delta_v1, delta_v2, mode, arrival_burn=arrival_burn)
 
 
 def _as_orbit(s, mu):
@@ -40,9 +167,8 @@ def _as_orbit(s, mu):
         return Orbit(np.asarray(s.r, float).ravel(),
                      np.asarray(s.v, float).ravel(),
                      _to_gps_seconds(s.t), mu=mu)
-    r, v, t = s
-    return Orbit(np.asarray(r, float).ravel(),
-                 np.asarray(v, float).ravel(), _to_gps_seconds(t), mu=mu)
+    state = transfer_state(state=s, mu=mu)
+    return Orbit(state["r"], state["v"], state["t"], mu=mu)
 
 
 def _period(orbit, mu):
@@ -75,68 +201,257 @@ def _conic_perigee(r, v, mu):
     return h * h / (mu * (1.0 + e))
 
 
-class OptimalTransferResult:
-    """Output of :func:`transfer_optimal`.
+def _unit(vector, fallback=None):
+    vector = np.asarray(vector, dtype=float).reshape(3)
+    norm = np.linalg.norm(vector)
+    if norm <= 1e-12:
+        if fallback is None:
+            raise ValueError("Cannot normalize zero vector")
+        return _unit(fallback)
+    return vector / norm
 
-    Attributes
-    ----------
-    transfer : TransferResult
-        The fully propagated/refined plan from :func:`transfer_ssapy`
-        for the chosen geometry (burn NTW components, trajectory, etc.).
-    t_depart, t_arrive, tof : float
-        Chosen epochs [GPS s] and time of flight [s].
-    dv_total : float
-        Objective delta-v of the chosen transfer [m/s] (first burn only
-        when ``arrival_burn=False``).
-    prograde : bool
-        Motion sense of the chosen Lambert geometry.
-    arrival_phase : float or None
-        Insertion mode only: chosen arrival point, as time-since-epoch
-        along orbit 2 [s].
-    objective, rendezvous, arrival_burn :
-        The search configuration.
-    perigee_altitude : float
-        Transfer-conic perigee altitude above the Earth's surface [m].
-    grid : dict
-        The porkchop search grid: ``t_dep`` and ``tof`` axes [s], the
-        ``cost`` array [m/s] (minimized over phase/sense; NaN where
-        infeasible), and the feasible fraction.
-    pareto : dict
-        ``{'tof', 'dv'}``: best feasible delta-v per time of flight.
-    """
 
-    def __init__(self, **kw):
-        self.__dict__.update(kw)
+def _slerp_unit(start, stop, fraction):
+    start = _unit(start, fallback=[0.0, 0.0, 1.0])
+    stop = _unit(stop, fallback=start)
+    dot = float(np.clip(np.dot(start, stop), -1.0, 1.0))
+    if dot < 0.0:
+        stop = -stop
+        dot = -dot
+    if dot > 0.9995:
+        return _unit((1.0 - fraction) * start + fraction * stop, fallback=start)
+    angle = np.arccos(dot)
+    return _unit(
+        np.sin((1.0 - fraction) * angle) * start / np.sin(angle)
+        + np.sin(fraction * angle) * stop / np.sin(angle),
+        fallback=start,
+    )
 
-    def summary(self):
-        mode = ("rendezvous" if self.rendezvous else "insertion")
-        burns = "both burns" if self.arrival_burn else "first burn only"
-        lines = [
-            f"Objective: {self.objective} ({mode}, {burns}, "
-            f"{'prograde' if self.prograde else 'retrograde'})",
-            f"Departure: t = {self.t_depart:.1f} GPS s "
-            f"({(self.t_depart - self.grid['t_dep'][0]) / 3600:.2f} h "
-            f"into window)",
-            f"Time of flight: {self.tof / 3600:.2f} h "
-            f"(arrive t = {self.t_arrive:.1f} GPS s)",
-            f"Objective delta-v: {self.dv_total:.2f} m/s",
-            f"Transfer-conic perigee altitude: "
-            f"{self.perigee_altitude / 1e3:.0f} km",
-            f"Search grid: {self.grid['feasible_fraction'] * 100:.0f}% "
-            f"of candidates feasible",
-        ]
-        if self.arrival_phase is not None:
-            lines.append(f"Arrival phase along orbit 2: "
-                         f"{self.arrival_phase:.1f} s past its epoch")
-        lines.append("--- chosen transfer (transfer_ssapy) ---")
-        lines.append(self.transfer.summary())
-        return "\n".join(lines)
+
+def _basis_from_normal(normal, reference=None):
+    normal = _unit(normal, fallback=[0.0, 0.0, 1.0])
+    if reference is None:
+        reference = np.array([1.0, 0.0, 0.0])
+    reference = np.asarray(reference, dtype=float).reshape(3)
+    radial = reference - np.dot(reference, normal) * normal
+    if np.linalg.norm(radial) <= 1e-12:
+        radial = np.cross(normal, [1.0, 0.0, 0.0])
+    if np.linalg.norm(radial) <= 1e-12:
+        radial = np.cross(normal, [0.0, 1.0, 0.0])
+    radial = _unit(radial)
+    tangent = _unit(np.cross(normal, radial))
+    return radial, tangent
+
+
+def _circular_state_in_plane(radius, normal, phase, *, t=0.0, mu=EARTH_MU, reference=None):
+    radial0, tangent0 = _basis_from_normal(normal, reference=reference)
+    radial = np.cos(phase) * radial0 + np.sin(phase) * tangent0
+    tangent = -np.sin(phase) * radial0 + np.cos(phase) * tangent0
+    return {
+        "r": float(radius) * radial,
+        "v": np.sqrt(mu / float(radius)) * tangent,
+        "t": float(t),
+        "label": "staging_orbit",
+    }
+
+
+def _default_stage_radii(initial_state, target_state):
+    r0 = np.linalg.norm(initial_state["r"])
+    rf = np.linalg.norm(target_state["r"])
+    high = max(r0, rf)
+    radii = np.array([
+        np.sqrt(r0 * rf),
+        0.5 * (r0 + rf),
+        1.5 * high,
+        2.5 * high,
+    ])
+    radii = radii[np.isfinite(radii) & (radii > 0.0)]
+    return sorted({float(np.round(radius, 6)) for radius in radii})
+
+
+def _stage_candidates(initial_state, target_state, *, stage_radii=None, stage_plane_fractions=None, n_stage_phase=8, mu=EARTH_MU):
+    if stage_radii is None:
+        stage_radii = _default_stage_radii(initial_state, target_state)
+    if stage_plane_fractions is None:
+        stage_plane_fractions = (0.0, 0.5, 1.0)
+    n_stage_phase = int(n_stage_phase)
+    if n_stage_phase < 1:
+        raise ValueError("n_stage_phase must be at least 1")
+
+    h0 = np.cross(initial_state["r"], initial_state["v"])
+    hf = np.cross(target_state["r"], target_state["v"])
+    reference = initial_state["r"]
+    for radius in stage_radii:
+        radius = float(radius)
+        if radius <= 0.0:
+            raise ValueError("stage_radii must be positive")
+        for fraction in stage_plane_fractions:
+            normal = _slerp_unit(h0, hf, float(fraction))
+            for phase in np.linspace(0.0, 2.0 * np.pi, n_stage_phase, endpoint=False):
+                yield _circular_state_in_plane(radius, normal, phase, t=initial_state["t"], mu=mu, reference=reference), {
+                    "radius": radius,
+                    "plane_fraction": float(fraction),
+                    "phase": float(phase),
+                }
+
+
+def _stage_info_key(stage_info):
+    return (
+        round(float(stage_info.get("radius", 0.0)), 6),
+        round(float(stage_info.get("plane_fraction", 0.0)), 12),
+        round(float(stage_info.get("phase", 0.0)), 12),
+    )
+
+
+def _stage_departure_window(state, stage_timing, stage_wait_window, mu):
+    if stage_timing == "immediate":
+        return "now", None
+    stage_orbit = _as_orbit(state, mu)
+    wait = _period(stage_orbit, mu) if stage_wait_window is None else float(stage_wait_window)
+    if wait < 0.0:
+        raise ValueError("stage_wait_window must be non-negative")
+    return "optimize", (float(state["t"]), float(state["t"]) + wait)
+
+
+def _state_after_leg(leg, *, label="staging_departure"):
+    stage_arrive = float(leg["diagnostics"].get("t_arrive", leg["final"]["t"]))
+    return {
+        "r": leg["final"]["r"],
+        "v": leg["final"]["v"],
+        "t": stage_arrive,
+        "label": label,
+    }
+
+
+def _stage_objective_key(result, objective, dv_budget):
+    objective_delta_v = float(result["diagnostics"]["objective_delta_v"])
+    elapsed = float(result["tof"])
+    if objective == "min_time":
+        if dv_budget is None:
+            raise ValueError("objective='min_time' requires dv_budget")
+        if objective_delta_v > dv_budget:
+            return None
+        return (elapsed, objective_delta_v)
+    return (objective_delta_v, elapsed)
+
+
+def _stage_metric(legs, mode, arrival_burn=True):
+    first = legs[0]["delta_v_magnitudes"][0] if legs and legs[0].get("delta_v_magnitudes") else 0.0
+    last_mags = legs[-1].get("delta_v_magnitudes", []) if legs else []
+    last = last_mags[-1] if last_mags else 0.0
+    total = sum(float(leg.get("delta_v_total", 0.0)) for leg in legs)
+    if mode == "first":
+        return float(first)
+    if mode == "last":
+        if not arrival_burn:
+            raise ValueError("delta_v_mode='last' requires arrival_burn=True")
+        return float(last)
+    return float(total)
+
+
+def _concat_trajectories(legs):
+    trajectories = [leg.get("trajectory") for leg in legs]
+    if not trajectories or any(traj is None or traj.get("r") is None for traj in trajectories):
+        return None
+    out = {"frame": trajectories[0].get("frame", "gcrf")}
+    for key in ("t", "r", "v"):
+        arrays = [traj.get(key) for traj in trajectories]
+        if any(array is None for array in arrays):
+            out[key] = None
+            continue
+        stitched = []
+        for index, array in enumerate(arrays):
+            array = np.asarray(array)
+            stitched.append(array[1:] if index and array.shape[0] else array)
+        out[key] = np.concatenate(stitched, axis=0)
+    return out
+
+
+def _combine_stage_legs(legs, *, stage_mode, stage_timing, objective, delta_v_mode, arrival_burn, stage_info, direct_result=None):
+    burns = [burn for leg in legs for burn in leg.get("burns", [])]
+    delta_v_total = float(sum(burn["delta_v_mag"] for burn in burns))
+    delta_v_magnitudes = [burn["delta_v_mag"] for burn in burns]
+    transfer_orbits = [orbit for leg in legs for orbit in leg.get("transfer_orbits", [])]
+    first_depart = legs[0]["diagnostics"].get("t_depart", legs[0]["initial"]["t"])
+    final_arrive = legs[-1]["diagnostics"].get("t_arrive", legs[-1]["final"]["t"])
+    assumptions = []
+    for leg in legs:
+        assumptions.extend(leg.get("assumptions", []))
+    assumptions.extend(["explicit multi-stage transfer search", f"stage timing: {stage_timing}"])
+    combined = dict(legs[-1])
+    combined.update(
+        method="transfer_optimal_staged",
+        initial=legs[0]["initial"],
+        target=legs[-1]["target"],
+        final=legs[-1]["final"],
+        tof=float(final_arrive - first_depart),
+        burns=burns,
+        delta_v_total=delta_v_total,
+        delta_v_vectors=[burn["delta_v"] for burn in burns],
+        delta_v_ntw_vectors=[burn["delta_v_ntw"] for burn in burns],
+        delta_v_magnitudes=delta_v_magnitudes,
+        trajectory=_concat_trajectories(legs),
+        transfer_orbits=transfer_orbits,
+        success=all(leg.get("success", True) for leg in legs),
+        assumptions=list(dict.fromkeys(assumptions)),
+    )
+    combined["diagnostics"] = dict(combined.get("diagnostics", {}))
+    combined["diagnostics"].update(
+        objective=objective,
+        delta_v_mode=delta_v_mode,
+        stage_mode=stage_mode,
+        stage_timing=stage_timing,
+        stage_count=len(legs),
+        leg_count=len(legs),
+        stage_stop_count=max(0, len(legs) - 1),
+        objective_delta_v=_stage_metric(legs, delta_v_mode, arrival_burn=arrival_burn),
+        t_depart=float(first_depart),
+        t_arrive=float(final_arrive),
+        stage=stage_info,
+        legs=[
+            {
+                "method": leg.get("method"),
+                "delta_v_total": leg.get("delta_v_total"),
+                "objective_delta_v": leg.get("diagnostics", {}).get("objective_delta_v"),
+                "t_depart": leg.get("diagnostics", {}).get("t_depart"),
+                "t_arrive": leg.get("diagnostics", {}).get("t_arrive"),
+                "tof": leg.get("tof"),
+            }
+            for leg in legs
+        ],
+    )
+    if direct_result is not None:
+        combined["diagnostics"]["direct_delta_v_total"] = direct_result.get("delta_v_total")
+        combined["diagnostics"]["direct_objective_delta_v"] = direct_result.get("diagnostics", {}).get("objective_delta_v")
+    combined["stage_legs"] = legs
+    return combined
 
 
 def transfer_optimal(
-    orbit1,
-    orbit2,
+    *args,
+    orbit1=None,
+    orbit2=None,
+    initial=None,
+    target=None,
+    r1=None,
+    v1=None,
+    r2=None,
+    v2=None,
+    t1=0.0,
+    t2=None,
     objective="min_dv",
+    delta_v_mode="total",
+    departure_mode="optimize",
+    leave_now=None,
+    stage_mode="direct",
+    stage_radii=None,
+    stage_plane_fractions=None,
+    n_stage_phase=8,
+    n_stage_stops=1,
+    stage_beam_width=8,
+    stage_timing=None,
+    stage_wait_window=None,
+    stage_tof_range=None,
     rendezvous=True,
     arrival_burn=True,
     t_window=None,
@@ -161,13 +476,50 @@ def transfer_optimal(
 
     Parameters
     ----------
-    orbit1, orbit2 : ssapy.orbit.Orbit or (r, v, t) tuple
-        Departure and target orbits.  Epochs may be GPS seconds or
-        ``astropy.time.Time``.
+    initial, target, orbit1, orbit2 : ssapy.orbit.Orbit or (r, v, t) tuple
+        Departure and target orbits/states.  Epochs may be GPS seconds or
+        ``astropy.time.Time``.  The legacy positional form
+        ``transfer_optimal(initial, target, ...)`` is supported.
+    r1, v1, r2, v2 : array_like, optional
+        Raw state-vector form.  Equivalent positional form
+        ``transfer_optimal(r1, v1, r2, v2, ...)`` is accepted.  These vectors
+        define the osculating departure and target orbits; the optimizer still
+        searches departure time, time of flight, and optionally target phase.
     objective : {"min_dv", "min_time"}
         ``min_dv`` (default) minimizes the objective delta-v within the
         allowed windows.  ``min_time`` minimizes time of flight among
         candidates whose delta-v fits ``dv_budget`` (required).
+        Aliases such as ``"delta_v"`` and ``"time"`` are accepted.
+    delta_v_mode : {"total", "first", "last"}
+        Which burn cost the optimizer minimizes or budgets. ``"total"``
+        (aliases ``"both"``/``"sum"``) uses the departure burn plus the
+        arrival burn when ``arrival_burn=True``. ``"first"`` (aliases
+        ``"departure"``/``"dv1"``) optimizes the departure burn only.
+        ``"last"`` (aliases ``"arrival"``/``"dv2"``) optimizes the final
+        matching burn only and requires ``arrival_burn=True``.
+    departure_mode : {"optimize", "now"}
+        ``"optimize"`` (default, aliases ``"whenever"``/``"anytime"``)
+        searches departure phase/time along the initial orbit. ``"now"``
+        (aliases ``"leave_now"``/``"fixed"``) fixes the departure state to
+        the supplied epoch/state.  ``leave_now=True`` is a convenience alias.
+    stage_mode : {"direct", "immediate", "timed", "best"}
+        ``"direct"`` keeps the original one-leg optimizer. ``"immediate"``
+        explicitly searches two-leg staged transfers and starts the second leg
+        immediately at the staging orbit. ``"timed"`` lets the second leg wait
+        for an optimized departure phase/time from the staging orbit.
+        ``"best"`` compares the direct and timed-staged answers.
+    stage_radii, stage_plane_fractions, n_stage_phase : optional
+        Staging-orbit search grid.  By default, circular staging orbits span
+        intermediate/high radii and planes interpolated between the initial and
+        target angular-momentum vectors.
+    n_stage_stops, stage_beam_width : int, optional
+        Number of intermediate staging orbits to search and beam width retained
+        between staged legs.  The default ``n_stage_stops=1`` searches a two-leg
+        staged transfer; larger values opt into explicit multi-stop staging.
+    stage_wait_window, stage_tof_range : optional
+        Wait-time search span after reaching the staging orbit and per-leg
+        time-of-flight range.  Defaults to one staging-orbit period and
+        ``tof_range``, respectively.
     rendezvous : bool
         If True (default), the arrival state is wherever the *object on
         orbit 2* is at ``t_depart + tof`` (its phase is set by its
@@ -219,10 +571,12 @@ def transfer_optimal(
         propagated plan (the search itself uses impulsive Keplerian
         Lambert costs; the finishing differential correction absorbs
         finite-burn and force-model differences).
-
     Returns
     -------
-    OptimalTransferResult
+    dict
+        Canonical transfer dictionary. ``diagnostics`` includes the search
+        objective, rendezvous/insertion mode, chosen arrival phase,
+        perigee altitude, delta-v budget, porkchop grid, and Pareto curves.
 
     Notes
     -----
@@ -234,16 +588,105 @@ def transfer_optimal(
       resulting epoch error is absorbed by the final refinement, but for
       strongly perturbed, multi-week windows treat the porkchop as
       approximate.
-    * Both motion senses are searched automatically when the two orbits
-      counter-rotate; co-rotating geometries search prograde only.
+        * Both motion senses are searched automatically when the two orbits
+        counter-rotate; co-rotating geometries search prograde only.
     """
+    if orbit1 is not None:
+        if initial is not None:
+            raise TypeError("Specify either orbit1 or initial, not both")
+        initial = orbit1
+    if orbit2 is not None:
+        if target is not None:
+            raise TypeError("Specify either orbit2 or target, not both")
+        target = orbit2
+
+    if len(args) in (3, 4):
+        # Backward-compatible legacy positional objective/delta_v_mode form:
+        # transfer_optimal(initial, target, "time", "first", ...).  Four raw
+        # state vectors are handled by transfer_boundary_states below.
+        try:
+            raw_vector_call = len(args) == 4 and all(np.asarray(value, dtype=float).size == 3 for value in args)
+        except (TypeError, ValueError):
+            raw_vector_call = False
+        if not raw_vector_call:
+            objective = args[2]
+            if len(args) == 4:
+                delta_v_mode = args[3]
+            args = args[:2]
+
+    objective = _normalize_keyword(objective, _OBJECTIVE_ALIASES, "objective")
+    delta_v_mode = _normalize_keyword(delta_v_mode, _DELTA_V_MODE_ALIASES, "delta_v_mode")
+    if leave_now is not None:
+        departure_mode = "now" if leave_now else "optimize"
+    departure_mode = _normalize_keyword(departure_mode, _DEPARTURE_MODE_ALIASES, "departure_mode")
+    stage_mode = _normalize_keyword(stage_mode, _STAGE_MODE_ALIASES, "stage_mode")
+    if delta_v_mode == "last" and not arrival_burn:
+        raise ValueError("delta_v_mode='last' requires arrival_burn=True")
+
+    if stage_mode != "direct":
+        return _transfer_optimal_staged(
+            *args,
+            orbit1=orbit1,
+            orbit2=orbit2,
+            initial=initial,
+            target=target,
+            r1=r1,
+            v1=v1,
+            r2=r2,
+            v2=v2,
+            t1=t1,
+            t2=t2,
+            objective=objective,
+            delta_v_mode=delta_v_mode,
+            departure_mode=departure_mode,
+            stage_mode=stage_mode,
+            stage_radii=stage_radii,
+            stage_plane_fractions=stage_plane_fractions,
+            n_stage_phase=n_stage_phase,
+            n_stage_stops=n_stage_stops,
+            stage_beam_width=stage_beam_width,
+            stage_timing=stage_timing,
+            stage_wait_window=stage_wait_window,
+            stage_tof_range=stage_tof_range,
+            rendezvous=rendezvous,
+            arrival_burn=arrival_burn,
+            t_window=t_window,
+            tof_range=tof_range,
+            n_grid=n_grid,
+            n_phase=n_phase,
+            dv_budget=dv_budget,
+            perigee_margin=perigee_margin,
+            polish=polish,
+            visualize=visualize,
+            fig_prefix=fig_prefix,
+            accel=accel,
+            propagator=propagator,
+            burn_duration=burn_duration,
+            burn_accel=burn_accel,
+            thrust=thrust,
+            mass=mass,
+            isp=isp,
+            **transfer_kwargs,
+        )
+
     mu = EARTH_MU
-    o1 = _as_orbit(orbit1, mu)
-    o2 = _as_orbit(orbit2, mu)
+    departure_state, arrival_state = transfer_boundary_states(
+        *args,
+        initial=initial,
+        target=target,
+        r1=r1,
+        v1=v1,
+        r2=r2,
+        v2=v2,
+        t1=t1,
+        t2=t2,
+        mu=mu,
+        name="transfer_optimal",
+    )
+    o1 = _as_orbit(departure_state, mu)
+    o2 = _as_orbit(arrival_state, mu)
     p1, p2 = _period(o1, mu), _period(o2, mu)
 
-    if objective not in ("min_dv", "min_time"):
-        raise ValueError("objective must be 'min_dv' or 'min_time'")
     if objective == "min_time" and dv_budget is None:
         raise ValueError("objective='min_time' requires dv_budget")
     if (thrust is None) != (mass is None):
@@ -254,14 +697,22 @@ def transfer_optimal(
     a_burn = (thrust / mass) if thrust is not None else burn_accel
 
     t0 = float(o1.t)
-    if t_window is None:
+    if departure_mode == "now":
+        if t_window is not None:
+            warnings.warn("departure_mode='now' fixes departure at the supplied state; ignoring t_window.")
+        t_window = (t0, t0)
+    elif t_window is None:
         t_window = (t0, t0 + p1)
     t_window = (_to_gps_seconds(t_window[0]), _to_gps_seconds(t_window[1]))
     if tof_range is None:
         tof_range = (0.02 * max(p1, p2), 1.5 * max(p1, p2))
 
     n_dep, n_tof = n_grid
-    t_deps = np.linspace(*t_window, n_dep)
+    if departure_mode == "now":
+        n_dep = 1
+        t_deps = np.array([t0], dtype=float)
+    else:
+        t_deps = np.linspace(*t_window, n_dep)
     tofs = np.linspace(*tof_range, n_tof)
 
     # Both senses only if the orbits counter-rotate.
@@ -296,14 +747,15 @@ def transfer_optimal(
             if _conic_perigee(r1, v1l, mu) < r_min:
                 continue
             dv1 = np.linalg.norm(v1l - v1)
-            dv2 = np.linalg.norm(v2 - v2l) if arrival_burn else 0.0
+            dv2_actual = np.linalg.norm(v2 - v2l)
+            dv2 = dv2_actual if arrival_burn else 0.0
             # Burn-fit filter with headroom: transfer_ssapy enforces
             # burns <= a third of the TOF on the *refined* delta-v,
             # which exceeds this impulsive estimate by the finite-burn
             # steering losses; 25% here reserves that growth.
             if a_burn is not None and (dv1 + dv2) / a_burn >= 0.25 * tof:
                 continue                 # burns don't fit this window
-            c = dv1 + (dv2 if arrival_burn else 0.0)
+            c = _delta_v_metric(dv1, dv2_actual, delta_v_mode, arrival_burn=arrival_burn)
             if not (c >= best[0]):       # also catches best == NaN
                 best, best_sense = (c, dv1, dv2), sense
         return best, best_sense
@@ -420,18 +872,24 @@ def transfer_optimal(
             accel=accel, propagator=propagator, burn_duration=burn_duration,
             burn_accel=burn_accel, thrust=thrust, mass=mass, isp=isp,
             prograde=sense, arrival_burn=arrival_burn,
-            dv_budget=dv_budget if objective == "min_dv" else None,
+            dv_budget=(dv_budget if objective == "min_dv" and delta_v_mode == "total" else None),
             **transfer_kwargs)
-        if objective == "min_dv" or transfer.dv_total <= dv_budget:
+        objective_delta_v = _result_delta_v_metric(transfer, delta_v_mode, arrival_burn=arrival_burn)
+        if objective == "min_dv" or objective_delta_v <= dv_budget:
             break
-        budget_eff = budget_eff * dv_budget / transfer.dv_total
+        budget_eff = budget_eff * dv_budget / objective_delta_v
     if (objective == "min_time" and dv_budget is not None
-            and transfer.dv_total > dv_budget):
+            and objective_delta_v > dv_budget):
         warnings.warn(
-            f"min_time plan requires {transfer.dv_total:.1f} m/s, "
+            f"min_time plan requires {objective_delta_v:.1f} m/s in "
+            f"delta_v_mode='{delta_v_mode}', "
             f"exceeding the {dv_budget:.1f} m/s budget even after "
             "reserving finite-burn losses; treat this budget as "
             "infeasible for this geometry/engine.")
+    if objective == "min_dv" and dv_budget is not None and objective_delta_v > dv_budget:
+        warnings.warn(
+            f"Transfer requires {objective_delta_v:.1f} m/s in "
+            f"delta_v_mode='{delta_v_mode}', exceeding the {dv_budget:.1f} m/s budget.")
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
@@ -447,19 +905,36 @@ def transfer_optimal(
                 pareto_dv[_j] = c_flat[_j, _k]
                 pareto_dv1[_j] = d1_flat[_j, _k]
                 pareto_dv2[_j] = d2_flat[_j, _k]
-    result = OptimalTransferResult(
-        transfer=transfer,
-        t_depart=t_dep, t_arrive=t_dep + tof, tof=tof,
-        dv_total=transfer.dv_total,
-        prograde=bool(sense),
-        arrival_phase=phase,
-        objective=objective, rendezvous=rendezvous,
+    transfer_orbit = transfer["transfer_orbits"][0]
+    perigee_altitude = _conic_perigee(
+        np.ravel(transfer_orbit.r),
+        np.ravel(transfer_orbit.v),
+        mu,
+    ) - EARTH_RADIUS
+    standard = dict(transfer)
+    standard["method"] = "transfer_optimal"
+    standard["assumptions"] = list(transfer.get("assumptions", []))
+    standard["assumptions"].extend([
+        "coarse Lambert porkchop search",
+        "optional Nelder-Mead polishing",
+    ])
+    standard["diagnostics"] = dict(transfer.get("diagnostics", {}))
+    standard["diagnostics"].update(
+        objective=objective,
+        delta_v_mode=delta_v_mode,
+        departure_mode=departure_mode,
+        objective_delta_v=objective_delta_v,
+        rendezvous=rendezvous,
         arrival_burn=arrival_burn,
-        perigee_altitude=_conic_perigee(
-            np.ravel(transfer.transfer_orbit.r),
-            np.ravel(transfer.transfer_orbit.v), mu) - EARTH_RADIUS,
+        arrival_phase=phase,
+        prograde=bool(sense),
+        t_depart=t_dep,
+        t_arrive=t_dep + tof,
+        perigee_altitude=perigee_altitude,
         dv_budget=dv_budget,
+        within_delta_v_budget=(None if dv_budget is None else bool(objective_delta_v <= dv_budget)),
         grid=dict(t_dep=t_deps, tof=tofs, cost=cost,
+                  delta_v_mode=delta_v_mode,
                   feasible_fraction=feasible_fraction),
         pareto=dict(tof=tofs, dv=pareto_dv,
                     dv1=pareto_dv1, dv2=pareto_dv2),
@@ -469,5 +944,297 @@ def transfer_optimal(
         from ssapy_toolkit.plots.transfer_designer_curves_plot import (
             transfer_designer_curves_plot)
         transfer_designer_curves_plot(
-            result, save_path=f"{fig_prefix}_designer_curves.jpg")
+            standard, save_path=f"{fig_prefix}_designer_curves.jpg")
+    return standard
+
+
+def _transfer_optimal_staged(
+    *args,
+    orbit1=None,
+    orbit2=None,
+    initial=None,
+    target=None,
+    r1=None,
+    v1=None,
+    r2=None,
+    v2=None,
+    t1=0.0,
+    t2=None,
+    objective="min_dv",
+    delta_v_mode="total",
+    departure_mode="optimize",
+    stage_mode="timed",
+    stage_radii=None,
+    stage_plane_fractions=None,
+    n_stage_phase=8,
+    n_stage_stops=1,
+    stage_beam_width=8,
+    stage_timing=None,
+    stage_wait_window=None,
+    stage_tof_range=None,
+    rendezvous=True,
+    arrival_burn=True,
+    t_window=None,
+    tof_range=None,
+    n_grid=(32, 32),
+    n_phase=24,
+    dv_budget=None,
+    perigee_margin=100e3,
+    polish=True,
+    visualize=False,
+    fig_prefix="demo_gallery/figures/transfer_optimal",
+    accel=None,
+    propagator=None,
+    burn_duration=10.0,
+    burn_accel=None,
+    thrust=None,
+    mass=None,
+    isp=None,
+    **transfer_kwargs,
+):
+    """Search explicit staged transfers through one or more staging orbits."""
+    if orbit1 is not None:
+        if initial is not None and initial is not orbit1:
+            raise TypeError("Specify either orbit1 or initial, not both")
+        initial = orbit1
+        orbit1 = None
+    if orbit2 is not None:
+        if target is not None and target is not orbit2:
+            raise TypeError("Specify either orbit2 or target, not both")
+        target = orbit2
+        orbit2 = None
+
+    if stage_timing is None:
+        stage_timing = "immediate" if stage_mode == "immediate" else "timed"
+    stage_timing = _normalize_keyword(stage_timing, _STAGE_TIMING_ALIASES, "stage_timing")
+
+    n_stage_stops = int(n_stage_stops)
+    stage_beam_width = int(stage_beam_width)
+    if n_stage_stops < 1:
+        raise ValueError("n_stage_stops must be at least 1 for staged transfers")
+    if stage_beam_width < 1:
+        raise ValueError("stage_beam_width must be at least 1")
+
+    if visualize:
+        warnings.warn("visualize=True is currently ignored for staged transfer searches; plot the returned staged result with orbit_plot.")
+
+    mu = EARTH_MU
+    initial_state, target_state = transfer_boundary_states(
+        *args,
+        orbit1=orbit1,
+        orbit2=orbit2,
+        initial=initial,
+        target=target,
+        r1=r1,
+        v1=v1,
+        r2=r2,
+        v2=v2,
+        t1=t1,
+        t2=t2,
+        mu=mu,
+        name="transfer_optimal",
+    )
+
+    direct_result = None
+    if stage_mode == "best":
+        direct_result = transfer_optimal(
+            initial_state,
+            target_state,
+            objective=objective,
+            delta_v_mode=delta_v_mode,
+            departure_mode=departure_mode,
+            rendezvous=rendezvous,
+            arrival_burn=arrival_burn,
+            t_window=t_window,
+            tof_range=tof_range,
+            n_grid=n_grid,
+            n_phase=n_phase,
+            dv_budget=dv_budget,
+            perigee_margin=perigee_margin,
+            polish=polish,
+            visualize=False,
+            fig_prefix=fig_prefix,
+            accel=accel,
+            propagator=propagator,
+            burn_duration=burn_duration,
+            burn_accel=burn_accel,
+            thrust=thrust,
+            mass=mass,
+            isp=isp,
+            stage_mode="direct",
+            **transfer_kwargs,
+        )
+
+    best = None
+    best_key = None
+    errors = []
+    leg_tof_range = stage_tof_range if stage_tof_range is not None else tof_range
+    candidates = list(_stage_candidates(
+        initial_state,
+        target_state,
+        stage_radii=stage_radii,
+        stage_plane_fractions=stage_plane_fractions,
+        n_stage_phase=n_stage_phase,
+        mu=mu,
+    ))
+
+    partials = [
+        {
+            "current_state": initial_state,
+            "legs": [],
+            "stage_infos": [],
+            "stage_keys": set(),
+        }
+    ]
+
+    def run_leg(departure_state, arrival_state, *, leg_delta_v_mode, leg_departure_mode, leg_t_window, leg_rendezvous, leg_arrival_burn):
+        return transfer_optimal(
+            departure_state,
+            arrival_state,
+            objective="min_dv",
+            delta_v_mode=leg_delta_v_mode,
+            departure_mode=leg_departure_mode,
+            rendezvous=leg_rendezvous,
+            arrival_burn=leg_arrival_burn,
+            t_window=leg_t_window,
+            tof_range=leg_tof_range,
+            n_grid=n_grid,
+            n_phase=n_phase,
+            perigee_margin=perigee_margin,
+            polish=polish,
+            visualize=False,
+            fig_prefix=fig_prefix,
+            accel=accel,
+            propagator=propagator,
+            burn_duration=burn_duration,
+            burn_accel=burn_accel,
+            thrust=thrust,
+            mass=mass,
+            isp=isp,
+            stage_mode="direct",
+            **transfer_kwargs,
+        )
+
+    def partial_key(partial):
+        legs = partial["legs"]
+        if not legs:
+            return (0.0, 0.0)
+        rank_mode = "first" if delta_v_mode == "first" else "total"
+        metric = _stage_metric(legs, rank_mode, arrival_burn=True)
+        first_depart = legs[0]["diagnostics"].get("t_depart", legs[0]["initial"]["t"])
+        last_arrive = legs[-1]["diagnostics"].get("t_arrive", legs[-1]["final"]["t"])
+        elapsed = float(last_arrive) - float(first_depart)
+        return (elapsed, metric) if objective == "min_time" else (metric, elapsed)
+
+    for stop_index in range(n_stage_stops):
+        next_partials = []
+        for partial in partials:
+            for stage_state, stage_info in candidates:
+                stage_key = _stage_info_key(stage_info)
+                if stage_key in partial["stage_keys"]:
+                    continue
+                try:
+                    if partial["legs"]:
+                        leg_departure_mode, leg_t_window = _stage_departure_window(
+                            partial["current_state"], stage_timing, stage_wait_window, mu)
+                    else:
+                        leg_departure_mode, leg_t_window = departure_mode, t_window
+                    leg_delta_v_mode = "first" if stop_index == 0 and delta_v_mode == "first" else "total"
+                    leg = run_leg(
+                        partial["current_state"],
+                        stage_state,
+                        leg_delta_v_mode=leg_delta_v_mode,
+                        leg_departure_mode=leg_departure_mode,
+                        leg_t_window=leg_t_window,
+                        leg_rendezvous=True,
+                        leg_arrival_burn=True,
+                    )
+                    next_partials.append(
+                        {
+                            "current_state": _state_after_leg(leg),
+                            "legs": partial["legs"] + [leg],
+                            "stage_infos": partial["stage_infos"] + [stage_info],
+                            "stage_keys": partial["stage_keys"] | {stage_key},
+                        }
+                    )
+                except Exception as exc:
+                    errors.append(f"stage {stop_index + 1}: {type(exc).__name__}: {exc}")
+                    continue
+        partials = sorted(next_partials, key=partial_key)[:stage_beam_width]
+        if not partials:
+            break
+
+    for partial in partials:
+        try:
+            final_departure_mode, final_t_window = _stage_departure_window(
+                partial["current_state"], stage_timing, stage_wait_window, mu)
+            final_delta_v_mode = "total" if delta_v_mode == "first" else delta_v_mode
+            final_leg = run_leg(
+                partial["current_state"],
+                target_state,
+                leg_delta_v_mode=final_delta_v_mode,
+                leg_departure_mode=final_departure_mode,
+                leg_t_window=final_t_window,
+                leg_rendezvous=rendezvous,
+                leg_arrival_burn=arrival_burn,
+            )
+            stage_summary = {
+                "stops": partial["stage_infos"],
+                "n_stage_stops": n_stage_stops,
+                "candidate_count": len(candidates),
+                "beam_width": stage_beam_width,
+            }
+            if len(partial["stage_infos"]) == 1:
+                stage_summary.update(partial["stage_infos"][0])
+            combined = _combine_stage_legs(
+                partial["legs"] + [final_leg],
+                stage_mode=stage_mode,
+                stage_timing=stage_timing,
+                objective=objective,
+                delta_v_mode=delta_v_mode,
+                arrival_burn=arrival_burn,
+                stage_info=stage_summary,
+                direct_result=direct_result,
+            )
+            key = _stage_objective_key(combined, objective, dv_budget)
+            if key is None:
+                continue
+            if best is None or key < best_key:
+                best = combined
+                best_key = key
+        except Exception as exc:
+            errors.append(f"final leg: {type(exc).__name__}: {exc}")
+            continue
+
+    if best is None:
+        if direct_result is not None:
+            direct_result = dict(direct_result)
+            direct_result["diagnostics"] = dict(direct_result.get("diagnostics", {}))
+            direct_result["diagnostics"].update(stage_mode=stage_mode, staged_search_failed=True, staged_errors=errors[:10])
+            return direct_result
+        detail = "; ".join(errors[:5]) if errors else "no stage candidates were generated"
+        raise RuntimeError(f"No feasible staged transfer found ({detail}).")
+
+    if stage_mode == "best" and direct_result is not None:
+        direct_key = _stage_objective_key(direct_result, objective, dv_budget)
+        if direct_key is not None and direct_key <= best_key:
+            direct_result = dict(direct_result)
+            direct_result["diagnostics"] = dict(direct_result.get("diagnostics", {}))
+            direct_result["diagnostics"].update(
+                stage_mode="best",
+                selected_stage_mode="direct",
+                staged_candidate_delta_v=best["diagnostics"]["objective_delta_v"],
+                staged_candidate_tof=best["tof"],
+                staged_candidate_stage_stop_count=best["diagnostics"].get("stage_stop_count"),
+            )
+            return direct_result
+        best["diagnostics"]["selected_stage_mode"] = "staged"
+    return best
+
+
+def transfer_rendezvous(*args, **kwargs):
+    """Search a rendezvous transfer and return the canonical transfer dict."""
+    result = transfer_optimal(*args, rendezvous=True, **kwargs)
+    result["method"] = "transfer_rendezvous"
+    result["assumptions"].append("standardized wrapper around transfer_optimal(rendezvous=True)")
     return result

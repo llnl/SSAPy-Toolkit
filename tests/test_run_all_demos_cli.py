@@ -86,6 +86,9 @@ def test_gallery_discovery_skips_test_only_demos():
 
     assert "demo_parsing_3le.py" not in names
     assert "demo_transfer_vburn.py" not in names
+    assert "demo_transfer_rendezvous.py" not in names
+    assert "demo_transfer_ssapy.py" not in names
+    assert "demo_orbital_maneuvers.py" in names
     assert "demo_first_user_workflow.py" in names
     assert "demo_data_package_access.py" in names
 

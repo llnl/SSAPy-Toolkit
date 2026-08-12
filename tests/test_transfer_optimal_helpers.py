@@ -14,32 +14,12 @@ def _state(radius=7000e3, theta=0.0, t=0.0):
     return r, v, t
 
 
-def test_optimal_transfer_result_summary_and_helpers(monkeypatch):
-    transfer = SimpleNamespace(summary=lambda: "transfer summary")
-    result = tof.OptimalTransferResult(
-        transfer=transfer,
-        t_depart=10.0,
-        t_arrive=110.0,
-        tof=100.0,
-        dv_total=42.0,
-        prograde=False,
-        arrival_phase=12.0,
-        objective="min_dv",
-        rendezvous=False,
-        arrival_burn=False,
-        perigee_altitude=500e3,
-        grid={"t_dep": np.array([0.0, 10.0]), "feasible_fraction": 0.5},
-        pareto={"tof": np.array([100.0]), "dv": np.array([42.0])},
-    )
-    summary = result.summary()
-    assert "insertion" in summary
-    assert "retrograde" in summary
-    assert "Arrival phase" in summary
-    assert "transfer summary" in summary
-
+def test_optimal_time_and_orbit_helpers(monkeypatch):
     assert tof._to_gps_seconds(Time(5.0, format="gps")) == pytest.approx(5.0)
     orbit = tof._as_orbit(_state(t=Time(0.0, format="gps")), EARTH_MU)
     assert orbit.r.shape == (3,)
+    mapped_orbit = tof._as_orbit({"r": orbit.r, "v": orbit.v, "t": 12.0}, EARTH_MU)
+    assert mapped_orbit.t == pytest.approx(12.0)
     assert tof._period(orbit, EARTH_MU) > 0.0
     with pytest.raises(ValueError, match="closed"):
         tof._period(SimpleNamespace(a=-1.0), EARTH_MU)
@@ -69,6 +49,10 @@ def test_transfer_optimal_early_validation_branches():
         tof.transfer_optimal(dep, arr, thrust=1.0, n_grid=(2, 2), polish=False)
     with pytest.raises(ValueError, match="either burn_accel"):
         tof.transfer_optimal(dep, arr, thrust=1.0, mass=1.0, burn_accel=1.0, n_grid=(2, 2), polish=False)
+    with pytest.raises(ValueError, match="delta_v_mode"):
+        tof.transfer_optimal(dep, arr, delta_v_mode="bad", n_grid=(2, 2), polish=False)
+    with pytest.raises(ValueError, match="requires arrival_burn"):
+        tof.transfer_optimal(dep, arr, delta_v_mode="last", arrival_burn=False, n_grid=(2, 2), polish=False)
 
 
 class FakeOrbit:
@@ -80,12 +64,9 @@ class FakeOrbit:
         self.a = max(np.linalg.norm(self.r), 1.0)
 
 
-class FakeTransfer(SimpleNamespace):
-    def summary(self):
-        return "fake transfer summary"
-
-
-def _install_fast_optimal_fakes(monkeypatch, dv=10.0):
+def _install_fast_optimal_fakes(monkeypatch, dv=10.0, dv1=None, dv2=0.0):
+    dv1 = float(dv if dv1 is None else dv1)
+    dv2 = float(dv2)
     monkeypatch.setattr(tof, "Orbit", FakeOrbit)
     monkeypatch.setattr(tof, "_conic_perigee", lambda r, v, mu: tof.EARTH_RADIUS + 1e6)
 
@@ -99,12 +80,40 @@ def _install_fast_optimal_fakes(monkeypatch, dv=10.0):
     def fake_solve_lambert(r1, r2, tof_seconds, mu=EARTH_MU, prograde=True, max_iter=60, tol=1e-6):
         if not prograde:
             raise RuntimeError("fake retrograde miss")
-        return np.asarray(r1, dtype=float) * 0.0 + np.array([dv, 0.0, 0.0]), np.asarray(r2, dtype=float) * 0.0
+        return (
+            np.asarray(r1, dtype=float) * 0.0 + np.array([dv1, 0.0, 0.0]),
+            np.asarray(r2, dtype=float) * 0.0 + np.array([0.0, dv2, 0.0]),
+        )
 
     def fake_transfer(departure, arrival, **kwargs):
         r1, v1, t1 = departure
+        r2, v2, t2 = arrival
         transfer_orbit = FakeOrbit(r1, np.array([1.0, 0.0, 0.0]), t1)
-        return FakeTransfer(dv_total=float(dv), transfer_orbit=transfer_orbit)
+        arrival_burn = kwargs.get("arrival_burn", True)
+        magnitudes = [dv1] + ([dv2] if arrival_burn else [])
+        burns = [
+            {"delta_v_mag": value, "delta_v": np.array([value, 0.0, 0.0])}
+            for value in magnitudes
+        ]
+        return {
+            "schema_version": "ssatk.transfer.v2",
+            "method": "transfer_ssapy",
+            "initial": {"r": np.asarray(r1), "v": np.asarray(v1), "t": float(t1)},
+            "target": {"r": np.asarray(r2), "v": np.asarray(v2), "t": float(t2)},
+            "final": {"r": np.asarray(r2), "v": np.asarray(v2), "t": float(t2)},
+            "tof": float(t2) - float(t1),
+            "burns": burns,
+            "delta_v_total": float(sum(magnitudes)),
+            "delta_v_vectors": [burn["delta_v"] for burn in burns],
+            "delta_v_ntw_vectors": [burn["delta_v"] for burn in burns],
+            "delta_v_magnitudes": magnitudes,
+            "trajectory": None,
+            "transfer_orbits": [transfer_orbit],
+            "hardware": {},
+            "success": True,
+            "assumptions": ["fake transfer"],
+            "diagnostics": {"arrival_error": 0.0},
+        }
 
     monkeypatch.setattr(tof, "rv", fake_rv)
     monkeypatch.setattr(tof, "solve_lambert", fake_solve_lambert)
@@ -133,12 +142,104 @@ def test_transfer_optimal_rendezvous_and_visualization(monkeypatch, tmp_path):
         fig_prefix=str(tmp_path / "optimal"),
         refine=False,
     )
-    assert result.rendezvous is True
-    assert result.arrival_phase is None
-    assert result.grid["cost"].shape == (2, 3)
-    assert result.pareto["dv"].shape == (3,)
+    assert result["method"] == "transfer_optimal"
+    assert result["diagnostics"]["rendezvous"] is True
+    assert result["diagnostics"]["delta_v_mode"] == "total"
+    assert result["diagnostics"]["objective_delta_v"] == pytest.approx(12.0)
+    assert result["diagnostics"]["arrival_phase"] is None
+    assert result["diagnostics"]["grid"]["cost"].shape == (2, 3)
+    assert result["diagnostics"]["pareto"]["dv"].shape == (3,)
     assert plotted == [str(tmp_path / "optimal") + "_designer_curves.jpg"]
-    assert "fake transfer summary" in result.summary()
+
+
+def test_transfer_optimal_orbit_workflow_burn_cost_modes(monkeypatch):
+    _install_fast_optimal_fakes(monkeypatch, dv1=30.0, dv2=7.0)
+    dep = tof.Orbit(*_state(radius=7000e3, theta=0.0, t=0.0))
+    arr = tof.Orbit(*_state(radius=7200e3, theta=0.2, t=5.0))
+
+    both = tof.transfer_optimal(
+        dep,
+        arr,
+        objective="delta_v",
+        delta_v_mode="both",
+        t_window=(0.0, 10.0),
+        tof_range=(20.0, 30.0),
+        n_grid=(2, 2),
+        polish=False,
+        refine=False,
+    )
+    first = tof.transfer_optimal(
+        dep,
+        arr,
+        delta_v_mode="departure",
+        arrival_burn=False,
+        t_window=(0.0, 10.0),
+        tof_range=(20.0, 30.0),
+        n_grid=(2, 2),
+        polish=False,
+        refine=False,
+    )
+    last = tof.transfer_optimal(
+        dep,
+        arr,
+        delta_v_mode="arrival",
+        t_window=(0.0, 10.0),
+        tof_range=(20.0, 30.0),
+        n_grid=(2, 2),
+        polish=False,
+        refine=False,
+    )
+
+    assert both["diagnostics"]["delta_v_mode"] == "total"
+    assert both["diagnostics"]["objective_delta_v"] == pytest.approx(37.0)
+    assert both["diagnostics"]["grid"]["cost"][0, 0] == pytest.approx(37.0)
+
+    assert first["diagnostics"]["delta_v_mode"] == "first"
+    assert first["diagnostics"]["arrival_burn"] is False
+    assert first["diagnostics"]["objective_delta_v"] == pytest.approx(30.0)
+    assert len(first["burns"]) == 1
+
+    assert last["diagnostics"]["delta_v_mode"] == "last"
+    assert last["diagnostics"]["objective_delta_v"] == pytest.approx(7.0)
+    assert last["diagnostics"]["grid"]["cost"][0, 0] == pytest.approx(7.0)
+
+
+def test_transfer_optimal_min_time_budget_uses_selected_delta_v_mode(monkeypatch):
+    _install_fast_optimal_fakes(monkeypatch, dv1=100.0, dv2=8.0)
+    dep = _state(radius=7000e3, theta=0.0, t=0.0)
+    arr = _state(radius=7200e3, theta=0.3, t=15.0)
+
+    result = tof.transfer_optimal(
+        dep,
+        arr,
+        objective="time",
+        delta_v_mode="last",
+        dv_budget=9.0,
+        t_window=(0.0, 10.0),
+        tof_range=(20.0, 40.0),
+        n_grid=(2, 2),
+        polish=False,
+        refine=False,
+    )
+    assert result["diagnostics"]["objective"] == "min_time"
+    assert result["diagnostics"]["delta_v_mode"] == "last"
+    assert result["diagnostics"]["objective_delta_v"] == pytest.approx(8.0)
+    assert result["diagnostics"]["within_delta_v_budget"] is True
+    assert result["delta_v_total"] == pytest.approx(108.0)
+
+    with pytest.raises(ValueError, match="No transfer"):
+        tof.transfer_optimal(
+            dep,
+            arr,
+            objective="time",
+            delta_v_mode="last",
+            dv_budget=7.0,
+            t_window=(0.0, 10.0),
+            tof_range=(20.0, 40.0),
+            n_grid=(2, 2),
+            polish=False,
+            refine=False,
+        )
 
 
 def test_transfer_optimal_insertion_min_time_and_polish(monkeypatch):
@@ -160,10 +261,10 @@ def test_transfer_optimal_insertion_min_time_and_polish(monkeypatch):
         polish=True,
         refine=False,
     )
-    assert result.objective == "min_time"
-    assert result.arrival_phase is not None
-    assert result.arrival_burn is False
-    assert result.grid["cost"].shape == (2, 2)
+    assert result["diagnostics"]["objective"] == "min_time"
+    assert result["diagnostics"]["arrival_phase"] is not None
+    assert result["diagnostics"]["arrival_burn"] is False
+    assert result["diagnostics"]["grid"]["cost"].shape == (2, 2)
 
 
 def test_transfer_optimal_no_feasible_and_budget_branches(monkeypatch):

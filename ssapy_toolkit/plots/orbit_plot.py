@@ -444,7 +444,7 @@ def _legacy_transfer_args(r, plot_kwargs):
     missing = [name for name in names if name not in plot_kwargs]
     if missing:
         raise TypeError(
-            "view='transfer' requires either a TransferResult, a six-item "
+            "view='transfer' requires either a canonical transfer dict, a six-item "
             "(r0, v0, rtransfer, vtransfer, rf, vf) input, or keyword(s): "
             + ", ".join(names)
         )

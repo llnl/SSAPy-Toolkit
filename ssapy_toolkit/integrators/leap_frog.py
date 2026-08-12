@@ -54,7 +54,7 @@ def leapfrog(
         State history up to (and including) the first impact step, or full length.
     """
     # ---- time array (seconds since t[0]) ----
-    t_arr = np.asarray(to_gps(t), dtype=float)
+    t_arr = np.array(to_gps(t), dtype=float, copy=True)
     t_arr -= t_arr[0]
     n_steps = len(t_arr)
 
