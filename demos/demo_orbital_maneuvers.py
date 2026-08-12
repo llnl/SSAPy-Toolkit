@@ -3,8 +3,9 @@
 This gallery demo consolidates the previous small transfer, burn-conversion,
 and rendezvous maneuver demos into one user-facing workflow.  It compares
 analytic impulsive transfers, fixed-time Lambert wrappers, optimized searches,
-continuous low-thrust burns, and finite-burn/impulse conversions, then renders
-one large summary figure under ``~/ssatk_figures/demo_gallery/figures``.
+explicit staged optimal transfers, continuous low-thrust burns, and
+finite-burn/impulse conversions, then renders summary figures under
+``~/ssatk_figures/demo_gallery/figures``.
 """
 
 from __future__ import annotations
@@ -155,14 +156,18 @@ def _burn_label(index, count):
         return (r"$\Delta v_0$", r"$\Delta v_f$")[index]
     if count == 3:
         return (r"$\Delta v_0$", r"$\Delta v_m$", r"$\Delta v_f$")[index]
-    return rf"$\Delta v_{{{index + 1}}}$"
+    if index == 0:
+        return r"$\Delta v_0$"
+    if index == count - 1:
+        return r"$\Delta v_f$"
+    return rf"$\Delta v_{{s{index}}}$"
 
 
 def _annotate_burns(ax, result, view="xy"):
     burns = result.get("burns") or []
     if not burns:
         return
-    offsets = [(14, 14), (14, -22), (-52, 18), (-52, -24)]
+    offsets = [(16, 14), (18, -22), (-58, 18), (-58, -26), (10, 34), (-66, 36), (22, -42), (-72, -44)]
     for index, burn in enumerate(burns):
         state = burn.get("state") or {}
         if state.get("r") is None:
@@ -203,6 +208,91 @@ def _plot_transfer_panel(ax, result, title, *, view="xy", trajectory=None, extra
     _annotate_burns(ax, result, view=view)
     _style_axis(ax, title, view=view)
     ax.legend(fontsize=7, loc="best")
+
+
+def _stage_waits(result):
+    legs = result.get("stage_legs") or []
+    waits = []
+    for first_leg, next_leg in zip(legs[:-1], legs[1:]):
+        first_arrive = first_leg.get("diagnostics", {}).get("t_arrive", first_leg.get("final", {}).get("t", 0.0))
+        next_depart = next_leg.get("diagnostics", {}).get("t_depart", next_leg.get("initial", {}).get("t", first_arrive))
+        waits.append(max(0.0, float(next_depart) - float(first_arrive)))
+    return waits
+
+
+def _format_waits(result):
+    waits = _stage_waits(result)
+    if not waits:
+        return "waits=none"
+    return "waits=" + "/".join(f"{wait / 60.0:.0f} min" for wait in waits)
+
+
+def _staged_title(name, result):
+    parts = [_format_dv(result)]
+    tof = _format_tof(result)
+    if tof:
+        parts.append(tof)
+    parts.append(_format_waits(result))
+    return f"{name}\n" + ", ".join(parts)
+
+
+def _plot_staged_panel(ax, result, title, *, view="xy"):
+    legs = result.get("stage_legs") or []
+    if not legs:
+        _plot_transfer_panel(ax, result, title, view=view)
+        return
+
+    initial = result["initial"]
+    final = result.get("final") or result.get("target")
+    _plot_projected(ax, _orbit_path_from_state(initial), view=view, color=INITIAL_ORBIT_COLOR, label="initial orbit", linewidth=1.7, alpha=0.85, zorder=1)
+    _plot_projected(ax, _orbit_path_from_state(final), view=view, color=FINAL_ORBIT_COLOR, label="target orbit", linewidth=1.7, alpha=0.85, zorder=1)
+
+    leg_colors = ["#d62728", "#ff7f0e", "#9467bd", "#8c564b"]
+    for index, leg in enumerate(legs):
+        path = _trajectory(leg)
+        if path is not None:
+            _plot_projected(
+                ax,
+                path,
+                view=view,
+                color=leg_colors[index % len(leg_colors)],
+                label=f"transfer leg {index + 1}",
+                linewidth=2.6,
+                alpha=0.95,
+                zorder=3,
+            )
+        if index < len(legs) - 1:
+            stage_state = leg.get("final") or leg.get("target")
+            if stage_state and stage_state.get("r") is not None and stage_state.get("v") is not None:
+                _plot_projected(
+                    ax,
+                    _orbit_path_from_state(stage_state),
+                    view=view,
+                    color=leg_colors[index % len(leg_colors)],
+                    label=f"staging orbit {index + 1}",
+                    linestyle="--",
+                    linewidth=1.3,
+                    alpha=0.55,
+                    zorder=1,
+                )
+                _scatter_projected(ax, stage_state["r"], view=view, color=leg_colors[index % len(leg_colors)], marker="D", label=f"stage {index + 1}", size=38)
+
+    _scatter_projected(ax, initial["r"], view=view, color=INITIAL_ORBIT_COLOR, marker="o", label="start", size=44)
+    _scatter_projected(ax, final["r"], view=view, color=FINAL_ORBIT_COLOR, marker="s", label="target/final", size=44)
+    _annotate_burns(ax, result, view=view)
+    _style_axis(ax, title, view=view)
+    ax.legend(fontsize=6.5, loc="best")
+
+
+def _burn_event_time(result, burn, index):
+    state = burn.get("state") or {}
+    if state.get("t") is not None:
+        return float(state["t"])
+    if index == 0:
+        return float(result.get("diagnostics", {}).get("t_depart", result.get("initial", {}).get("t", 0.0)))
+    if index == len(result.get("burns", [])) - 1:
+        return float(result.get("diagnostics", {}).get("t_arrive", result.get("final", {}).get("t", 0.0)))
+    return float(result.get("initial", {}).get("t", 0.0))
 
 
 def _burn_conversion_panel_result(result):
@@ -311,6 +401,55 @@ def _build_maneuver_results(fast):
         "Rendezvous wrapper": transfer_rendezvous((r0, v0, 0.0), (r_short, v_short, 0.0), **optimal_kwargs),
     }
 
+    staged_angle = 0.2
+    staged_inclination = np.deg2rad(25.0)
+    r_staged_target, v_staged_target, _ = _circular_state(12_500e3, staged_angle, staged_inclination)
+    staged_kwargs = {
+        "departure_mode": "now",
+        "tof_range": (1800.0, 9000.0),
+        "n_grid": (3, 3) if fast else (5, 5),
+        "polish": False,
+        "propagate": False,
+        "refine": False,
+        "burn_duration": 1.0,
+    }
+    staged_search_kwargs = {
+        "stage_radii": [9000e3, 11_500e3] if fast else [8500e3, 10_500e3, 12_500e3],
+        "stage_plane_fractions": [0.0, 1.0] if fast else [0.0, 0.5, 1.0],
+        "n_stage_phase": 1 if fast else 2,
+        "stage_beam_width": 2 if fast else 4,
+        "stage_wait_window": 6000.0 if fast else 12_000.0,
+    }
+    staged_boundary = ((r0, v0, 0.0), (r_staged_target, v_staged_target, 0.0))
+    staged_optimal = {
+        "Direct leave-now": transfer_optimal(*staged_boundary, **staged_kwargs),
+        "Immediate one-stop": transfer_optimal(
+            *staged_boundary,
+            stage_mode="immediate",
+            n_stage_stops=1,
+            **staged_kwargs,
+            **staged_search_kwargs,
+        ),
+        "Timed one-stop": transfer_optimal(
+            *staged_boundary,
+            stage_mode="timed",
+            stage_timing="appropriately timed",
+            n_stage_stops=1,
+            **staged_kwargs,
+            **staged_search_kwargs,
+        ),
+        "Timed two-stop min-time": transfer_optimal(
+            *staged_boundary,
+            stage_mode="timed",
+            stage_timing="appropriately timed",
+            n_stage_stops=2,
+            objective="time",
+            dv_budget=50_000.0,
+            **staged_kwargs,
+            **staged_search_kwargs,
+        ),
+    }
+
     orbit = Orbit(r0, v0, t=0.0)
     burn_times = np.arange(0.0, 30.0 if fast else 600.0, 1.0)
     burn_accel = np.array([0.01, 0.02, 0.002]) if fast else np.array([0.10, 0.50, 0.05])
@@ -325,6 +464,7 @@ def _build_maneuver_results(fast):
         "fixed_time": fixed_time,
         "continuous": continuous,
         "optimal": optimal,
+        "staged_optimal": staged_optimal,
         "burn_conversion": burn_conversion,
     }
 
@@ -393,6 +533,105 @@ def _make_summary_figure(results):
     return fig
 
 
+def _make_staged_optimal_figure(results):
+    fig, axes = plt.subplots(2, 2, figsize=(17, 14), constrained_layout=True)
+    axes = axes.ravel()
+    staged = results["staged_optimal"]
+    panels = [
+        ("Direct leave-now baseline", staged["Direct leave-now"], "xy"),
+        ("Immediate one-stop staging", staged["Immediate one-stop"], "xy"),
+        ("Timed one-stop staging", staged["Timed one-stop"], "xz"),
+        ("Timed two-stop min-time", staged["Timed two-stop min-time"], "xz"),
+    ]
+    for ax, (name, result, view) in zip(axes, panels):
+        _plot_staged_panel(ax, result, _staged_title(name, result), view=view)
+    fig.suptitle(
+        "Explicit staged optimal transfer search\n"
+        "Blue is the starting orbit, green is the final orbit, colored dashed curves are staging orbits, and colored solid curves are sequential transfer legs.",
+        fontsize=15,
+    )
+    return fig
+
+
+def _make_staged_timeline_figure(results):
+    staged = results["staged_optimal"]
+    names = list(staged)
+    fig, ax = plt.subplots(figsize=(16, 7), constrained_layout=True)
+    leg_colors = ["#d62728", "#ff7f0e", "#9467bd", "#8c564b"]
+    wait_label_added = False
+
+    for row, name in enumerate(names):
+        result = staged[name]
+        legs = result.get("stage_legs") or [result]
+        y = len(names) - row - 1
+        for leg_index, leg in enumerate(legs):
+            depart = float(leg.get("diagnostics", {}).get("t_depart", leg.get("initial", {}).get("t", 0.0))) / 3600.0
+            arrive = float(leg.get("diagnostics", {}).get("t_arrive", leg.get("final", {}).get("t", 0.0))) / 3600.0
+            ax.plot(
+                [depart, arrive],
+                [y, y],
+                color=leg_colors[leg_index % len(leg_colors)],
+                linewidth=4.0,
+                solid_capstyle="round",
+                label="transfer leg" if row == 0 and leg_index == 0 else None,
+            )
+            if leg_index < len(legs) - 1:
+                next_depart = float(legs[leg_index + 1].get("diagnostics", {}).get("t_depart", arrive * 3600.0)) / 3600.0
+                if next_depart > arrive:
+                    ax.broken_barh(
+                        [(arrive, next_depart - arrive)],
+                        (y - 0.24, 0.48),
+                        facecolors="#9e9e9e",
+                        alpha=0.28,
+                        label="optimized wait" if not wait_label_added else None,
+                    )
+                    wait_label_added = True
+        burns = result.get("burns") or []
+        for burn_index, burn in enumerate(burns):
+            event_time = _burn_event_time(result, burn, burn_index) / 3600.0
+            delta_v = float(burn.get("delta_v_mag", 0.0))
+            marker_size = 45.0 + 0.03 * delta_v
+            ax.scatter(
+                event_time,
+                y,
+                s=marker_size,
+                color=IMPULSE_COLOR,
+                marker="*",
+                edgecolor="black",
+                linewidth=0.5,
+                zorder=4,
+                label="impulse" if row == 0 and burn_index == 0 else None,
+            )
+            ax.annotate(
+                f"{_burn_label(burn_index, len(burns))}\n{delta_v:.0f} m/s",
+                xy=(event_time, y),
+                xytext=(0, 18 if burn_index % 2 == 0 else -24),
+                textcoords="offset points",
+                ha="center",
+                va="center",
+                fontsize=8,
+                bbox={"boxstyle": "round,pad=0.2", "facecolor": "white", "edgecolor": IMPULSE_COLOR, "alpha": 0.88},
+                arrowprops={"arrowstyle": "-", "color": IMPULSE_COLOR, "lw": 0.7},
+            )
+
+        ax.text(
+            float(result.get("diagnostics", {}).get("t_arrive", result.get("tof", 0.0))) / 3600.0 + 0.25,
+            y,
+            f"{result['delta_v_total']:.0f} m/s, {_format_waits(result)}",
+            va="center",
+            fontsize=9,
+        )
+
+    ax.set_yticks(range(len(names)))
+    ax.set_yticklabels(list(reversed(names)))
+    ax.set_xlabel("mission elapsed time [hours]")
+    ax.set_title("Staged optimal transfer burn timing and optimized waits")
+    ax.grid(axis="x", alpha=0.25)
+    ax.set_ylim(-0.6, len(names) - 0.4)
+    ax.legend(loc="upper right", fontsize=9)
+    return fig
+
+
 def main(make_figures=None, fast=None):
     if make_figures is None:
         make_figures = not UNDER_PYTEST
@@ -402,18 +641,31 @@ def main(make_figures=None, fast=None):
     results = _build_maneuver_results(fast=fast)
     summary_delta_v = _summarize_delta_v({key: value for key, value in results.items() if key != "burn_conversion"})
     output_path = None
+    staged_output_path = None
+    staged_timeline_output_path = None
     fig = None
+    staged_fig = None
+    staged_timeline_fig = None
     if make_figures:
         fig = _make_summary_figure(results)
         output_path = figsave(fig, f"{FIGDIR}/orbital_maneuvers_overview.jpg")
+        staged_fig = _make_staged_optimal_figure(results)
+        staged_output_path = figsave(staged_fig, f"{FIGDIR}/orbital_maneuvers_staged_optimal.jpg")
+        staged_timeline_fig = _make_staged_timeline_figure(results)
+        staged_timeline_output_path = figsave(staged_timeline_fig, f"{FIGDIR}/orbital_maneuvers_staged_timeline.jpg")
 
     return {
         "title": "Orbital Maneuvers Overview",
-        "description": "Consolidated SSATK demo for impulsive, continuous, fixed-time, optimized, and finite-burn maneuvers.",
+        "description": "Consolidated SSATK demo for impulsive, continuous, fixed-time, optimized, staged, and finite-burn maneuvers.",
         "results": results,
         "summary_delta_v": summary_delta_v,
         "figure": fig,
+        "staged_figure": staged_fig,
+        "staged_timeline_figure": staged_timeline_fig,
         "output_path": output_path,
+        "staged_output_path": staged_output_path,
+        "staged_timeline_output_path": staged_timeline_output_path,
+        "output_paths": [path for path in (output_path, staged_output_path, staged_timeline_output_path) if path is not None],
     }
 
 

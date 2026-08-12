@@ -36,10 +36,19 @@ def test_demo_compare_models():
 def test_demo_orbital_maneuvers():
     demo_orbital_maneuvers = demo_main("demo_orbital_maneuvers")
     out = demo_orbital_maneuvers(make_figures=False, fast=True)
-    assert set(out["results"]) == {"impulsive", "fixed_time", "continuous", "optimal", "burn_conversion"}
-    assert len(out["summary_delta_v"]) >= 10
+    assert set(out["results"]) == {"impulsive", "fixed_time", "continuous", "optimal", "staged_optimal", "burn_conversion"}
+    assert len(out["summary_delta_v"]) >= 14
     assert "burn_to_deltav" in out["results"]["burn_conversion"]
     assert "deltav_to_burn" in out["results"]["burn_conversion"]
+    staged = out["results"]["staged_optimal"]
+    assert staged["Immediate one-stop"]["diagnostics"]["stage_timing"] == "immediate"
+    assert staged["Timed one-stop"]["diagnostics"]["stage_stop_count"] == 1
+    assert staged["Timed two-stop min-time"]["diagnostics"]["stage_stop_count"] == 2
+    timed_waits = [
+        b["diagnostics"]["t_depart"] - a["diagnostics"]["t_arrive"]
+        for a, b in zip(staged["Timed two-stop min-time"]["stage_legs"][:-1], staged["Timed two-stop min-time"]["stage_legs"][1:])
+    ]
+    assert any(wait > 0 for wait in timed_waits)
 
 
 def test_demo_coordinate_frames():
