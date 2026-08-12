@@ -113,9 +113,10 @@ versus staged routes. The default `n_stage_stops=1` searches one intermediate
 staging orbit; increase `n_stage_stops` with a bounded `stage_beam_width` for
 multi-stop searches.
 The user-facing maneuver gallery is consolidated in
-`demos/demo_orbital_maneuvers.py`, including staged optimal geometry and burn
-timeline figures. Avoid adding one-off transfer demos unless a new workflow
-cannot fit that all-in-one summary. Put solver-specific regression coverage in
+`demos/demo_orbital_maneuvers.py`, including staged optimal geometry, burn
+timeline figures, and elliptical GEO-or-below direct-vs-staged comparisons.
+Avoid adding one-off transfer demos unless a new workflow cannot fit that
+all-in-one summary. Put solver-specific regression coverage in
 `tests/test_orbital_maneuver_modes.py` or adjacent transfer tests.
 
 Prefer correctly spelled module paths in new code:

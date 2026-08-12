@@ -18,7 +18,7 @@ import numpy as np
 from ssapy import Orbit
 from ssapy.compute import rv
 
-from ssapy_toolkit.constants import EARTH_MU
+from ssapy_toolkit.constants import EARTH_MU, EARTH_RADIUS
 from ssapy_toolkit.orbital_mechanics.burn_to_deltav import burn_to_deltav
 from ssapy_toolkit.orbital_mechanics.deltav_to_burn import deltav_to_burn
 from ssapy_toolkit.orbital_mechanics.transfer_bielliptic import transfer_bielliptic
@@ -53,6 +53,34 @@ def _circular_state(radius=7000e3, theta=0.0, inclination=0.0, t=0.0):
     r = radius * np.array([cos_theta, sin_theta * cos_inc, sin_theta * sin_inc])
     v = np.sqrt(EARTH_MU / radius) * np.array([-sin_theta, cos_theta * cos_inc, cos_theta * sin_inc])
     return r, v, t
+
+
+def _rotation_x(angle):
+    cos_angle = np.cos(angle)
+    sin_angle = np.sin(angle)
+    return np.array([[1.0, 0.0, 0.0], [0.0, cos_angle, -sin_angle], [0.0, sin_angle, cos_angle]])
+
+
+def _rotation_z(angle):
+    cos_angle = np.cos(angle)
+    sin_angle = np.sin(angle)
+    return np.array([[cos_angle, -sin_angle, 0.0], [sin_angle, cos_angle, 0.0], [0.0, 0.0, 1.0]])
+
+
+def _elliptical_state(rp, ra, true_anomaly=0.0, inclination=0.0, raan=0.0, arg_perigee=0.0, t=0.0):
+    semimajor_axis = 0.5 * (rp + ra)
+    eccentricity = (ra - rp) / (ra + rp)
+    semilatus_rectum = semimajor_axis * (1.0 - eccentricity**2)
+    radius = semilatus_rectum / (1.0 + eccentricity * np.cos(true_anomaly))
+    r_perifocal = radius * np.array([np.cos(true_anomaly), np.sin(true_anomaly), 0.0])
+    v_perifocal = np.sqrt(EARTH_MU / semilatus_rectum) * np.array([-np.sin(true_anomaly), eccentricity + np.cos(true_anomaly), 0.0])
+    rotation = _rotation_z(raan) @ _rotation_x(inclination) @ _rotation_z(arg_perigee)
+    return rotation @ r_perifocal, rotation @ v_perifocal, t, eccentricity
+
+
+def _period_from_rpra(rp, ra):
+    semimajor_axis = 0.5 * (rp + ra)
+    return 2.0 * np.pi * np.sqrt(semimajor_axis**3 / EARTH_MU)
 
 
 def _trajectory(result, samples=300):
@@ -110,16 +138,66 @@ def _project(points, view="xy"):
 
 
 def _plot_projected(ax, points, *, view, color, label, linestyle="-", linewidth=2.0, alpha=1.0, zorder=2):
+    points = np.asarray(points, dtype=float)
+    if view == "3d":
+        ax.plot(points[:, 0] / 1e3, points[:, 1] / 1e3, points[:, 2] / 1e3, color=color, label=label, linestyle=linestyle, linewidth=linewidth, alpha=alpha, zorder=zorder)
+        return
     x, y, _ = _project(points, view=view)
     ax.plot(x, y, color=color, label=label, linestyle=linestyle, linewidth=linewidth, alpha=alpha, zorder=zorder)
 
 
 def _scatter_projected(ax, points, *, view, color, marker, label, size=42, zorder=5):
-    x, y, _ = _project(np.asarray(points, dtype=float).reshape(-1, 3), view=view)
+    points = np.asarray(points, dtype=float).reshape(-1, 3)
+    if view == "3d":
+        ax.scatter(points[:, 0] / 1e3, points[:, 1] / 1e3, points[:, 2] / 1e3, color=color, marker=marker, s=size, label=label, edgecolor="black", linewidth=0.4, zorder=zorder)
+        return
+    x, y, _ = _project(points, view=view)
     ax.scatter(x, y, color=color, marker=marker, s=size, label=label, edgecolor="black", linewidth=0.4, zorder=zorder)
 
 
-def _style_axis(ax, title, view="xy"):
+def _plot_earth(ax, view="xy"):
+    radius_km = EARTH_RADIUS / 1e3
+    if view == "3d":
+        theta = np.linspace(0.0, 2.0 * np.pi, 48)
+        phi = np.linspace(0.0, np.pi, 24)
+        x = radius_km * np.outer(np.cos(theta), np.sin(phi))
+        y = radius_km * np.outer(np.sin(theta), np.sin(phi))
+        z = radius_km * np.outer(np.ones_like(theta), np.cos(phi))
+        ax.plot_surface(x, y, z, color="#4f9bd9", alpha=0.35, linewidth=0.0, shade=True, zorder=0)
+        ax.plot_wireframe(x, y, z, color="#1f5f99", linewidth=0.2, alpha=0.25, zorder=0)
+        return
+    from matplotlib.patches import Circle
+
+    ax.add_patch(Circle((0.0, 0.0), radius_km, facecolor="#4f9bd9", edgecolor="#1f5f99", alpha=0.35, linewidth=1.0, zorder=0, label="Earth"))
+
+
+def _set_equal_3d(ax, point_sets):
+    arrays = [np.asarray(points, dtype=float).reshape(-1, 3) / 1e3 for points in point_sets if points is not None]
+    arrays.append(np.array([[-EARTH_RADIUS, -EARTH_RADIUS, -EARTH_RADIUS], [EARTH_RADIUS, EARTH_RADIUS, EARTH_RADIUS]], dtype=float) / 1e3)
+    combined = np.vstack(arrays)
+    center = 0.5 * (np.nanmax(combined, axis=0) + np.nanmin(combined, axis=0))
+    span = np.nanmax(np.nanmax(combined, axis=0) - np.nanmin(combined, axis=0))
+    radius = 0.55 * span if np.isfinite(span) and span > 0.0 else EARTH_RADIUS / 1e3
+    ax.set_xlim(center[0] - radius, center[0] + radius)
+    ax.set_ylim(center[1] - radius, center[1] + radius)
+    ax.set_zlim(center[2] - radius, center[2] + radius)
+    try:
+        ax.set_box_aspect((1, 1, 1))
+    except AttributeError:
+        pass
+
+
+def _style_axis(ax, title, view="xy", point_sets=None):
+    _plot_earth(ax, view=view)
+    if view == "3d":
+        ax.set_title(title)
+        ax.set_xlabel("x [km]")
+        ax.set_ylabel("y [km]")
+        ax.set_zlabel("z [km]")
+        _set_equal_3d(ax, point_sets or [])
+        ax.grid(alpha=0.25)
+        ax.view_init(elev=22, azim=-55)
+        return
     _, _, labels = _project(np.zeros((1, 3)), view=view)
     ax.set_title(title)
     ax.set_xlabel(labels[0])
@@ -174,6 +252,11 @@ def _annotate_burns(ax, result, view="xy"):
             continue
         label = _burn_label(index, len(burns))
         text = f"{label}\n{burn['delta_v_mag']:.0f} m/s"
+        if view == "3d":
+            r = np.asarray(state["r"], dtype=float).reshape(3) / 1e3
+            ax.scatter(r[0], r[1], r[2], color=IMPULSE_COLOR, marker="*", s=130, edgecolor="black", linewidth=0.6, zorder=6)
+            ax.text(r[0], r[1], r[2], text, fontsize=7, ha="center", va="center", zorder=7)
+            continue
         x, y, _ = _project(np.asarray(state["r"], dtype=float).reshape(1, 3), view=view)
         ax.scatter(x[0], y[0], color=IMPULSE_COLOR, marker="*", s=130, edgecolor="black", linewidth=0.6, zorder=6)
         ax.annotate(
@@ -196,17 +279,19 @@ def _plot_transfer_panel(ax, result, title, *, view="xy", trajectory=None, extra
     start_orbit = _orbit_path_from_state(initial)
     final_orbit = _orbit_path_from_state(final)
     transfer_path = _trajectory(result) if trajectory is None else np.asarray(trajectory, dtype=float)
+    bounds = [start_orbit, final_orbit, transfer_path]
 
     _plot_projected(ax, start_orbit, view=view, color=INITIAL_ORBIT_COLOR, label="initial orbit", linewidth=1.7, alpha=0.85, zorder=1)
     _plot_projected(ax, final_orbit, view=view, color=FINAL_ORBIT_COLOR, label="final orbit", linewidth=1.7, alpha=0.85, zorder=1)
     if transfer_path is not None:
         _plot_projected(ax, transfer_path, view=view, color=MANEUVER_COLOR, label="maneuver trajectory", linewidth=2.8, zorder=3)
     for path_label, path_points, path_color, path_style in extra_paths or []:
+        bounds.append(path_points)
         _plot_projected(ax, path_points, view=view, color=path_color, label=path_label, linestyle=path_style, linewidth=2.0, alpha=0.95, zorder=3)
     _scatter_projected(ax, initial["r"], view=view, color=INITIAL_ORBIT_COLOR, marker="o", label="start", size=44)
     _scatter_projected(ax, final["r"], view=view, color=FINAL_ORBIT_COLOR, marker="s", label="target/final", size=44)
     _annotate_burns(ax, result, view=view)
-    _style_axis(ax, title, view=view)
+    _style_axis(ax, title, view=view, point_sets=bounds)
     ax.legend(fontsize=7, loc="best")
 
 
@@ -236,6 +321,23 @@ def _staged_title(name, result):
     return f"{name}\n" + ", ".join(parts)
 
 
+def _stage_savings_text(result, baseline):
+    savings = float(baseline["delta_v_total"]) - float(result["delta_v_total"])
+    if abs(savings) < 1.0:
+        return "same Δv as direct"
+    if savings > 0.0:
+        return f"saves {savings:.0f} m/s vs direct"
+    return f"costs {-savings:.0f} m/s vs direct"
+
+
+def _best_delta_v_result(results):
+    return min(results, key=lambda result: float(result["delta_v_total"]))
+
+
+def _staged_title_with_savings(name, result, baseline):
+    return _staged_title(name, result) + "\n" + _stage_savings_text(result, baseline)
+
+
 def _plot_staged_panel(ax, result, title, *, view="xy"):
     legs = result.get("stage_legs") or []
     if not legs:
@@ -244,13 +346,17 @@ def _plot_staged_panel(ax, result, title, *, view="xy"):
 
     initial = result["initial"]
     final = result.get("final") or result.get("target")
-    _plot_projected(ax, _orbit_path_from_state(initial), view=view, color=INITIAL_ORBIT_COLOR, label="initial orbit", linewidth=1.7, alpha=0.85, zorder=1)
-    _plot_projected(ax, _orbit_path_from_state(final), view=view, color=FINAL_ORBIT_COLOR, label="target orbit", linewidth=1.7, alpha=0.85, zorder=1)
+    initial_orbit = _orbit_path_from_state(initial)
+    final_orbit = _orbit_path_from_state(final)
+    bounds = [initial_orbit, final_orbit]
+    _plot_projected(ax, initial_orbit, view=view, color=INITIAL_ORBIT_COLOR, label="initial orbit", linewidth=1.7, alpha=0.85, zorder=1)
+    _plot_projected(ax, final_orbit, view=view, color=FINAL_ORBIT_COLOR, label="target orbit", linewidth=1.7, alpha=0.85, zorder=1)
 
     leg_colors = ["#d62728", "#ff7f0e", "#9467bd", "#8c564b"]
     for index, leg in enumerate(legs):
         path = _trajectory(leg)
         if path is not None:
+            bounds.append(path)
             _plot_projected(
                 ax,
                 path,
@@ -264,9 +370,11 @@ def _plot_staged_panel(ax, result, title, *, view="xy"):
         if index < len(legs) - 1:
             stage_state = leg.get("final") or leg.get("target")
             if stage_state and stage_state.get("r") is not None and stage_state.get("v") is not None:
+                stage_orbit = _orbit_path_from_state(stage_state)
+                bounds.append(stage_orbit)
                 _plot_projected(
                     ax,
-                    _orbit_path_from_state(stage_state),
+                    stage_orbit,
                     view=view,
                     color=leg_colors[index % len(leg_colors)],
                     label=f"staging orbit {index + 1}",
@@ -280,7 +388,7 @@ def _plot_staged_panel(ax, result, title, *, view="xy"):
     _scatter_projected(ax, initial["r"], view=view, color=INITIAL_ORBIT_COLOR, marker="o", label="start", size=44)
     _scatter_projected(ax, final["r"], view=view, color=FINAL_ORBIT_COLOR, marker="s", label="target/final", size=44)
     _annotate_burns(ax, result, view=view)
-    _style_axis(ax, title, view=view)
+    _style_axis(ax, title, view=view, point_sets=bounds)
     ax.legend(fontsize=6.5, loc="best")
 
 
@@ -402,11 +510,11 @@ def _build_maneuver_results(fast):
     }
 
     staged_angle = 0.2
-    staged_inclination = np.deg2rad(25.0)
-    r_staged_target, v_staged_target, _ = _circular_state(12_500e3, staged_angle, staged_inclination)
+    staged_inclination = np.deg2rad(90.0)
+    r_staged_target, v_staged_target, _ = _circular_state(15_000e3, staged_angle, staged_inclination)
     staged_kwargs = {
         "departure_mode": "now",
-        "tof_range": (1800.0, 9000.0),
+        "tof_range": (1800.0, 15_000.0),
         "n_grid": (3, 3) if fast else (5, 5),
         "polish": False,
         "propagate": False,
@@ -414,11 +522,11 @@ def _build_maneuver_results(fast):
         "burn_duration": 1.0,
     }
     staged_search_kwargs = {
-        "stage_radii": [9000e3, 11_500e3] if fast else [8500e3, 10_500e3, 12_500e3],
-        "stage_plane_fractions": [0.0, 1.0] if fast else [0.0, 0.5, 1.0],
-        "n_stage_phase": 1 if fast else 2,
-        "stage_beam_width": 2 if fast else 4,
-        "stage_wait_window": 6000.0 if fast else 12_000.0,
+        "stage_radii": [20_000e3, 40_000e3, 80_000e3],
+        "stage_plane_fractions": [0.0, 0.5, 1.0],
+        "n_stage_phase": 2,
+        "stage_beam_width": 3 if fast else 5,
+        "stage_wait_window": 25_000.0,
     }
     staged_boundary = ((r0, v0, 0.0), (r_staged_target, v_staged_target, 0.0))
     staged_optimal = {
@@ -450,6 +558,60 @@ def _build_maneuver_results(fast):
         ),
     }
 
+    elliptical_cases = {
+        "Sub-GEO mild ellipses": {
+            "initial": (7000e3, 11_000e3, np.deg2rad(60.0), 0.0, 0.0, 0.0),
+            "target": (9000e3, 16_000e3, np.deg2rad(220.0), 0.0, np.deg2rad(10.0), np.deg2rad(80.0)),
+        },
+        "MEO ellipses below GEO": {
+            "initial": (12_000e3, 26_000e3, 0.0, 0.0, 0.0, 0.0),
+            "target": (16_000e3, 32_000e3, np.deg2rad(20.0), 0.0, np.deg2rad(10.0), 0.0),
+        },
+    }
+    elliptical_two_burn = {}
+    for case_name, case in elliptical_cases.items():
+        rp1, ra1, nu1, inc1, raan1, argp1 = case["initial"]
+        rp2, ra2, nu2, inc2, raan2, argp2 = case["target"]
+        r_elliptic0, v_elliptic0, _, e0 = _elliptical_state(rp1, ra1, nu1, inc1, raan1, argp1)
+        r_elliptic1, v_elliptic1, _, e1 = _elliptical_state(rp2, ra2, nu2, inc2, raan2, argp2)
+        max_period = max(_period_from_rpra(rp1, ra1), _period_from_rpra(rp2, ra2))
+        elliptical_kwargs = {
+            "departure_mode": "now",
+            "tof_range": (0.12 * max_period, max_period),
+            "n_grid": (3, 3) if fast else (5, 5),
+            "polish": False,
+            "propagate": False,
+            "refine": False,
+            "burn_duration": 1.0,
+        }
+        stage_radii = sorted(
+            {
+                float(np.sqrt(min(rp1, rp2) * max(ra1, ra2))),
+                float(0.5 * (min(rp1, rp2) + max(ra1, ra2))),
+                float(min(42_164e3, 1.2 * max(ra1, ra2))),
+                42_164e3,
+            }
+        )
+        elliptical_stage_kwargs = {
+            "stage_radii": stage_radii,
+            "stage_plane_fractions": [0.0, 0.5, 1.0],
+            "n_stage_phase": 1 if fast else 2,
+            "stage_beam_width": 2 if fast else 4,
+            "stage_wait_window": 0.5 * max_period,
+        }
+        boundary = ((r_elliptic0, v_elliptic0, 0.0), (r_elliptic1, v_elliptic1, 0.0))
+        direct = transfer_optimal(*boundary, **elliptical_kwargs)
+        staged_candidates = [
+            transfer_optimal(*boundary, stage_mode="immediate", n_stage_stops=1, **elliptical_kwargs, **elliptical_stage_kwargs),
+            transfer_optimal(*boundary, stage_mode="timed", n_stage_stops=1, **elliptical_kwargs, **elliptical_stage_kwargs),
+            transfer_optimal(*boundary, stage_mode="timed", n_stage_stops=2, **elliptical_kwargs, **elliptical_stage_kwargs),
+        ]
+        best_staged = _best_delta_v_result(staged_candidates)
+        direct["case_description"] = f"e₀={e0:.2f}, e_f={e1:.2f}; both apogees below GEO"
+        best_staged["case_description"] = direct["case_description"]
+        elliptical_two_burn[f"{case_name} direct"] = direct
+        elliptical_two_burn[f"{case_name} best staged"] = best_staged
+
     orbit = Orbit(r0, v0, t=0.0)
     burn_times = np.arange(0.0, 30.0 if fast else 600.0, 1.0)
     burn_accel = np.array([0.01, 0.02, 0.002]) if fast else np.array([0.10, 0.50, 0.05])
@@ -465,6 +627,7 @@ def _build_maneuver_results(fast):
         "continuous": continuous,
         "optimal": optimal,
         "staged_optimal": staged_optimal,
+        "elliptical_two_burn": elliptical_two_burn,
         "burn_conversion": burn_conversion,
     }
 
@@ -474,26 +637,26 @@ def _first_key(entries, prefix):
 
 
 def _make_summary_figure(results):
-    fig, axes = plt.subplots(3, 3, figsize=(19, 17), constrained_layout=True)
+    fig, axes = plt.subplots(3, 3, figsize=(20, 18), constrained_layout=True, subplot_kw={"projection": "3d"})
     axes = axes.ravel()
 
     panels = [
-        ("Hohmann raise", results["impulsive"]["Hohmann raise"], "xy", None),
-        ("Hohmann lower", results["impulsive"]["Hohmann lower"], "xy", None),
-        ("Bi-elliptic raise", results["impulsive"]["Bi-elliptic raise"], "xy", None),
-        ("Bi-elliptic lower", results["impulsive"]["Bi-elliptic lower"], "xy", None),
-        ("Fixed-time Lambert", results["fixed_time"]["transfer_ssapy"], "xy", None),
-        ("Optimized transfer", results["optimal"]["Optimal total Δv"], "xy", None),
+        ("Hohmann raise", results["impulsive"]["Hohmann raise"], "3d", None),
+        ("Hohmann lower", results["impulsive"]["Hohmann lower"], "3d", None),
+        ("Bi-elliptic raise", results["impulsive"]["Bi-elliptic raise"], "3d", None),
+        ("Bi-elliptic lower", results["impulsive"]["Bi-elliptic lower"], "3d", None),
+        ("Fixed-time Lambert", results["fixed_time"]["transfer_ssapy"], "3d", None),
+        ("Optimized transfer", results["optimal"]["Optimal total Δv"], "3d", None),
         (
             "Continuous tangential burn",
             results["continuous"][_first_key(results["continuous"], "Velocity +")],
-            "xy",
+            "3d",
             None,
         ),
         (
             "Continuous plane-change burn",
             results["continuous"][_first_key(results["continuous"], "Inclination +")],
-            "xz",
+            "3d",
             None,
         ),
     ]
@@ -521,33 +684,35 @@ def _make_summary_figure(results):
         axes[8],
         burn_as_transfer,
         _maneuver_title("Finite burn vs impulse", burn_as_transfer),
-        view="xy",
+        view="3d",
         extra_paths=[("impulse approximation", r_inst, IMPULSE_COLOR, "--")],
     )
 
     fig.suptitle(
         "SSAPy-Toolkit orbital maneuver overview\n"
-        "Each panel uses blue for the starting orbit, green for the target/final orbit, and red for the maneuver path.",
+        "Earth is rendered to scale at the origin; blue is the starting orbit, green is the target/final orbit, and red is the maneuver path.",
         fontsize=16,
     )
     return fig
 
 
 def _make_staged_optimal_figure(results):
-    fig, axes = plt.subplots(2, 2, figsize=(17, 14), constrained_layout=True)
+    fig, axes = plt.subplots(2, 2, figsize=(18, 15), constrained_layout=True, subplot_kw={"projection": "3d"})
     axes = axes.ravel()
     staged = results["staged_optimal"]
+    baseline = staged["Direct leave-now"]
     panels = [
-        ("Direct leave-now baseline", staged["Direct leave-now"], "xy"),
-        ("Immediate one-stop staging", staged["Immediate one-stop"], "xy"),
-        ("Timed one-stop staging", staged["Timed one-stop"], "xz"),
-        ("Timed two-stop min-time", staged["Timed two-stop min-time"], "xz"),
+        ("Direct leave-now baseline", staged["Direct leave-now"], "3d"),
+        ("Immediate one-stop staging", staged["Immediate one-stop"], "3d"),
+        ("Timed one-stop staging", staged["Timed one-stop"], "3d"),
+        ("Timed two-stop min-time", staged["Timed two-stop min-time"], "3d"),
     ]
     for ax, (name, result, view) in zip(axes, panels):
-        _plot_staged_panel(ax, result, _staged_title(name, result), view=view)
+        title = _staged_title(name, result) if result is baseline else _staged_title_with_savings(name, result, baseline)
+        _plot_staged_panel(ax, result, title, view=view)
     fig.suptitle(
-        "Explicit staged optimal transfer search\n"
-        "Blue is the starting orbit, green is the final orbit, colored dashed curves are staging orbits, and colored solid curves are sequential transfer legs.",
+        "When staged transfers help: fixed departure, orbit raise, and large plane change\n"
+        "Earth is rendered to scale; blue is the starting orbit, green is the final orbit, colored dashed curves are staging orbits, and colored solid curves are sequential transfer legs.",
         fontsize=15,
     )
     return fig
@@ -556,6 +721,7 @@ def _make_staged_optimal_figure(results):
 def _make_staged_timeline_figure(results):
     staged = results["staged_optimal"]
     names = list(staged)
+    baseline = staged["Direct leave-now"]
     fig, ax = plt.subplots(figsize=(16, 7), constrained_layout=True)
     leg_colors = ["#d62728", "#ff7f0e", "#9467bd", "#8c564b"]
     wait_label_added = False
@@ -617,7 +783,7 @@ def _make_staged_timeline_figure(results):
         ax.text(
             float(result.get("diagnostics", {}).get("t_arrive", result.get("tof", 0.0))) / 3600.0 + 0.25,
             y,
-            f"{result['delta_v_total']:.0f} m/s, {_format_waits(result)}",
+            f"{result['delta_v_total']:.0f} m/s, {_format_waits(result)}, {_stage_savings_text(result, baseline)}",
             va="center",
             fontsize=9,
         )
@@ -625,10 +791,36 @@ def _make_staged_timeline_figure(results):
     ax.set_yticks(range(len(names)))
     ax.set_yticklabels(list(reversed(names)))
     ax.set_xlabel("mission elapsed time [hours]")
-    ax.set_title("Staged optimal transfer burn timing and optimized waits")
+    ax.set_title("Staged optimal transfer burn timing: waiting and splitting plane changes can reduce total Δv")
     ax.grid(axis="x", alpha=0.25)
     ax.set_ylim(-0.6, len(names) - 0.4)
     ax.legend(loc="upper right", fontsize=9)
+    return fig
+
+
+def _make_elliptical_two_burn_figure(results):
+    elliptical = results["elliptical_two_burn"]
+    case_names = [key.removesuffix(" direct") for key in elliptical if key.endswith(" direct")]
+    fig, axes = plt.subplots(len(case_names), 2, figsize=(18, 8 * len(case_names)), constrained_layout=True, subplot_kw={"projection": "3d"})
+    axes = np.asarray(axes).reshape(len(case_names), 2)
+
+    for row, case_name in enumerate(case_names):
+        direct = elliptical[f"{case_name} direct"]
+        staged = elliptical[f"{case_name} best staged"]
+        description = direct.get("case_description", "elliptical boundary orbits")
+        direct_title = f"{case_name}: direct two-burn\n{_format_dv(direct)}, {_format_tof(direct)}, {description}"
+        staged_title = (
+            f"{case_name}: best staged option\n"
+            f"{_format_dv(staged)}, {_format_tof(staged)}, {_stage_savings_text(staged, direct)}"
+        )
+        _plot_transfer_panel(axes[row, 0], direct, direct_title, view="3d")
+        _plot_staged_panel(axes[row, 1], staged, staged_title, view="3d")
+
+    fig.suptitle(
+        "Elliptical GEO-or-below cases where direct two-burn transfers stay cheaper\n"
+        "Earth is rendered to scale. These examples have nonzero eccentricity on both boundary orbits; staging adds burns without enough timing or plane-change benefit.",
+        fontsize=15,
+    )
     return fig
 
 
@@ -643,9 +835,11 @@ def main(make_figures=None, fast=None):
     output_path = None
     staged_output_path = None
     staged_timeline_output_path = None
+    elliptical_output_path = None
     fig = None
     staged_fig = None
     staged_timeline_fig = None
+    elliptical_fig = None
     if make_figures:
         fig = _make_summary_figure(results)
         output_path = figsave(fig, f"{FIGDIR}/orbital_maneuvers_overview.jpg")
@@ -653,6 +847,8 @@ def main(make_figures=None, fast=None):
         staged_output_path = figsave(staged_fig, f"{FIGDIR}/orbital_maneuvers_staged_optimal.jpg")
         staged_timeline_fig = _make_staged_timeline_figure(results)
         staged_timeline_output_path = figsave(staged_timeline_fig, f"{FIGDIR}/orbital_maneuvers_staged_timeline.jpg")
+        elliptical_fig = _make_elliptical_two_burn_figure(results)
+        elliptical_output_path = figsave(elliptical_fig, f"{FIGDIR}/orbital_maneuvers_elliptical_two_burn.jpg")
 
     return {
         "title": "Orbital Maneuvers Overview",
@@ -662,10 +858,12 @@ def main(make_figures=None, fast=None):
         "figure": fig,
         "staged_figure": staged_fig,
         "staged_timeline_figure": staged_timeline_fig,
+        "elliptical_figure": elliptical_fig,
         "output_path": output_path,
         "staged_output_path": staged_output_path,
         "staged_timeline_output_path": staged_timeline_output_path,
-        "output_paths": [path for path in (output_path, staged_output_path, staged_timeline_output_path) if path is not None],
+        "elliptical_output_path": elliptical_output_path,
+        "output_paths": [path for path in (output_path, staged_output_path, staged_timeline_output_path, elliptical_output_path) if path is not None],
     }
 
 
