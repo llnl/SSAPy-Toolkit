@@ -77,7 +77,7 @@ def rand_num(low: float = 0.0, high: float = 1.0) -> float:
     float
         Uniform random number in [low, high).
     """
-    return float(np.random.uniform(low, high, 1).astype("float64"))
+    return float(np.random.uniform(low, high))
 
 
 def shuffle(x: list) -> None:
@@ -165,7 +165,7 @@ def normal_scalar(mean: float = 0.0, std: float = 1.0) -> float:
     -------
     float
     """
-    return float(np.random.normal(loc=mean, scale=std, size=1))
+    return float(np.random.normal(loc=mean, scale=std))
 
 
 def normal_array(

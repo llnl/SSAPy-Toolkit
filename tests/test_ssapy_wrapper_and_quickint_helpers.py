@@ -176,7 +176,7 @@ def test_ssapy_orbit_incremented_and_similar_orbits(monkeypatch):
     assert len(times) == 2
 
 
-def test_quickint_modes_and_period_validation(monkeypatch, capsys):
+def test_quickint_modes_and_period_validation(monkeypatch):
     module = importlib.import_module("ssapy_toolkit.integrators.quick_int")
     monkeypatch.setattr(module, "Time", FakeTime)
     monkeypatch.setattr(module, "Orbit", FakeOrbit)
@@ -185,8 +185,8 @@ def test_quickint_modes_and_period_validation(monkeypatch, capsys):
 
     assert module._validate_period(5.0) == 5.0
     for bad in (None, np.inf, np.nan, 99 * 86400.0, 0.0, -1.0):
-        assert module._validate_period(bad, max_period_days=1) == 86400
-    assert "WARNING" in capsys.readouterr().out
+        with pytest.warns(UserWarning, match="Orbit period"):
+            assert module._validate_period(bad, max_period_days=1) == 86400
     assert module._is_position_like([1, 2, 3]) is True
     assert module._is_position_like(object()) is False
 

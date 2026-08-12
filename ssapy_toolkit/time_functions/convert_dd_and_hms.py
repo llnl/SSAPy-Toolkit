@@ -1,4 +1,5 @@
 import numpy as np
+import warnings
 
 from .convert_dd_and_dms import dms_to_dd
 
@@ -50,7 +51,11 @@ def dd_to_hms(degree_decimal):
     if isinstance(degree_decimal, str):
         degree_decimal = dms_to_dd(degree_decimal)
     if degree_decimal < 0:
-        print('dd for HMS conversion cannot be negative, assuming positive.')
+        warnings.warn(
+            "dd for HMS conversion cannot be negative; using its absolute value.",
+            UserWarning,
+            stacklevel=2,
+        )
         _dd = -degree_decimal / 15
     else:
         _dd = degree_decimal / 15

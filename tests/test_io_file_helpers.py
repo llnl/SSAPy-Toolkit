@@ -179,12 +179,16 @@ def test_hdf5_to_csv_helpers_and_main(tmp_path, monkeypatch, capsys):
     hdf5_to_csv.place_cell(grid, 1, 2, "x")
     assert hdf5_to_csv.normalize_grid(grid) == [["", "", ""], ["", "", "x"]]
 
-    out_dir = hdf5_to_csv.hdf5_to_csv_per_key(h5_path)
+    with pytest.warns(UserWarning, match="Ignoring /cube"):
+        out_dir = hdf5_to_csv.hdf5_to_csv_per_key(h5_path)
     assert (out_dir / "group_vector.csv").exists()
-    assert "Ignoring /cube" in capsys.readouterr().err
 
     with pytest.raises(SystemExit):
         hdf5_to_csv.main()
+
+    with pytest.warns(UserWarning, match="Ignoring /cube"):
+        hdf5_to_csv.main([str(h5_path)])
+    assert "Wrote:" in capsys.readouterr().out
 
 
 def test_csv_and_io_utils(tmp_path, capsys):

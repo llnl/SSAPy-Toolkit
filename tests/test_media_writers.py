@@ -76,7 +76,7 @@ def test_gif_sorting_resolution_and_validation_branches(tmp_path, monkeypatch):
         assert write_gifs._sort_frames(["b.png", "a.png"]) == ["a.png", "b.png"]
 
 
-def test_write_gif_validation_and_nonuniform_writer(monkeypatch, tmp_path):
+def test_write_gif_validation_and_nonuniform_writer(monkeypatch, tmp_path, capsys):
     frames = [tmp_path / "frame_1.png", tmp_path / "frame_2.png"]
     for path in frames:
         _make_frame(path)
@@ -102,11 +102,12 @@ def test_write_gif_validation_and_nonuniform_writer(monkeypatch, tmp_path):
 
     monkeypatch.setattr(write_gifs.imageio, "get_writer", lambda *args, **kwargs: FakeWriter())
     monkeypatch.setattr(write_gifs.imageio, "imread", lambda path: np.zeros((4, 5, 3), dtype=np.uint8))
-    write_gif(str(tmp_path / "ok.gif"), frames, duration=0.1, sort_frames=False, uniform_size=False)
+    write_gif(str(tmp_path / "ok.gif"), frames, duration=0.1, sort_frames=False, uniform_size=False, verbose=True)
     assert appended == [(4, 5, 3), (4, 5, 3)]
+    assert "Writing gif" in capsys.readouterr().out
 
 
-def test_write_video_validation_and_fake_cv2_branches(monkeypatch, tmp_path):
+def test_write_video_validation_and_fake_cv2_branches(monkeypatch, tmp_path, capsys):
     folder = tmp_path / "frames"
     folder.mkdir()
     for name in ["frame_2.png", "frame_1.png", "bad.png"]:
@@ -165,8 +166,9 @@ def test_write_video_validation_and_fake_cv2_branches(monkeypatch, tmp_path):
     assert writes[-1] == "released"
 
     writes.clear()
-    write_video(str(tmp_path / "folder.mp4"), clean_folder, fps=2)
+    write_video(str(tmp_path / "folder.mp4"), clean_folder, fps=2, verbose=True)
     assert writes[-1] == "released"
+    assert "Writing video" in capsys.readouterr().out
 
     monkeypatch.setattr(write_videos.cv2, "VideoWriter", lambda *args: FakeWriter(opened=False))
     with pytest.raises(RuntimeError, match="Failed to open"):

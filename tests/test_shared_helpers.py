@@ -18,6 +18,8 @@ from ssapy_toolkit.plots.plotutils import figsave, fsave, ssatk_fig
 
 data_path_module = importlib.import_module("ssapy_toolkit.io.datapath")
 fig_path_module = importlib.import_module("ssapy_toolkit.plots.figpath")
+top_level_launch_pads = importlib.import_module("ssapy_toolkit.launch_pads")
+orbital_launch_pads = importlib.import_module("ssapy_toolkit.orbital_mechanics.launch_pads")
 
 
 def test_natural_key_sorts_embedded_numbers():
@@ -59,6 +61,11 @@ def test_ssatk_short_helper_aliases_are_primary_exports():
     assert callable(h5load)
     assert callable(ssatk_cache)
     assert callable(ssatk_load)
+
+
+def test_launch_pad_metadata_uses_one_canonical_dataset():
+    assert orbital_launch_pads.launch_pads is top_level_launch_pads.launch_pads
+    assert orbital_launch_pads.landing_pads is top_level_launch_pads.landing_pads
 
 
 def test_figpath_roots_relative_paths_under_home_output_dir(tmp_path, monkeypatch):

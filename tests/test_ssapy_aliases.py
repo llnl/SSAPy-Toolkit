@@ -44,6 +44,8 @@ def test_duplicated_helpers_resolve_to_toolkit_implementations():
     assert ssatk.deg0to360 is coordinates.deg0to360
     assert ssatk.period is orbital_mechanics.period
     assert ssatk.dd_to_hms is dd_to_hms
+    assert ssatk.rightascension2hourangle is coordinates.rightascension2hourangle
+    assert "rightascension2hourangle" in dir(ssatk)
 
 
 def test_split_hms_helper_accepts_dms_string_input():

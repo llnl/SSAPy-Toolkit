@@ -87,7 +87,9 @@ def koe_plot(r: np.ndarray, v: np.ndarray, t=None,
     if 'i' in elements and 'i' in orbital_elements:
         fig.text(xlab, ylab - 0.025, 'Inclination [Radians]', color='C2', rotation=90)
 
-    ax1.legend(loc='upper left')
+    handles, labels = ax1.get_legend_handles_labels()
+    if handles:
+        ax1.legend(handles, labels, loc='upper left')
 
     # Semi-major axis on right axis
     if 'a' in elements and 'a' in orbital_elements:

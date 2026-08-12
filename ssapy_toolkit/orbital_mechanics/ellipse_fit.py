@@ -33,6 +33,7 @@ dict
 from ..plots import save_plot
 from ..plots.plotutils import _pop_save_path_aliases, _raise_unrecognized_kwargs
 import numpy as np
+import warnings
 
 
 def ellipse_fit(
@@ -173,13 +174,24 @@ def ellipse_fit(
             for x0 in guesses:
                 for method in ("trust-constr", "SLSQP"):
                     try:
-                        sol = minimize(
-                            obj_min_e,
-                            x0,
-                            constraints=[constraint],
-                            method=method,
-                            tol=tol,
-                        )
+                        with warnings.catch_warnings():
+                            warnings.filterwarnings(
+                                "ignore",
+                                message="delta_grad == 0.0.*",
+                                category=UserWarning,
+                            )
+                            warnings.filterwarnings(
+                                "ignore",
+                                message="Singular Jacobian matrix.*",
+                                category=UserWarning,
+                            )
+                            sol = minimize(
+                                obj_min_e,
+                                x0,
+                                constraints=[constraint],
+                                method=method,
+                                tol=tol,
+                            )
                         eq_res = abs(float(equal_sum(sol.x))) if hasattr(sol, "x") else np.inf
                         obj_val = float(obj_min_e(sol.x)) if hasattr(sol, "x") else np.inf
                         debug_attempts.append(
@@ -709,7 +721,7 @@ def ellipse_fit(
         ax_dist = fig.add_subplot(gs[1])
         ax_speed = fig.add_subplot(gs[2])
 
-        colors = cm.get_cmap("RdYlGn_r")(np.linspace(0, 1, len(arc3d_m)))
+        colors = plt.get_cmap("RdYlGn_r")(np.linspace(0, 1, len(arc3d_m)))
 
         if arc3d_comp_m is not None:
             ax3d.scatter(

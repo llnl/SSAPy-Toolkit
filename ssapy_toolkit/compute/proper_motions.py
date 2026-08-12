@@ -1,4 +1,5 @@
 import numpy as np
+import warnings
 
 
 def proper_motion(x: np.ndarray, y: np.ndarray, z: np.ndarray, vx: np.ndarray, vy: np.ndarray, vz: np.ndarray,
@@ -41,7 +42,7 @@ def proper_motion(x: np.ndarray, y: np.ndarray, z: np.ndarray, vx: np.ndarray, v
     elif input_unit == 'rebound':
         return v_transverse / d_earth_mag * 206265 / (31557600 * 2 * np.pi)
     else:
-        print('Error - units provided not available, provide either SI or rebound units.')
+        warnings.warn("input_unit must be 'si' or 'rebound'.", UserWarning, stacklevel=2)
         return None
 
 
@@ -103,5 +104,5 @@ def proper_motion_ra_dec(
         pmdec = pmdec / (31557600 * 2 * np.pi)  # arcseconds * (au/sim_time)/au, convert to arcseconds / second
         return pmra, pmdec
     else:
-        print('Error - units provided not available, provide either SI or rebound units.')
+        warnings.warn("input_unit must be 'si' or 'rebound'.", UserWarning, stacklevel=2)
         return

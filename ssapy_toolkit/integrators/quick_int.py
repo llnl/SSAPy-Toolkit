@@ -3,6 +3,7 @@ from ..constants import EARTH_MU
 from ..time_functions import get_times, Time
 from ssapy import Orbit
 import numpy as np
+import warnings
 
 
 def _validate_period(period, max_period_days=30):
@@ -24,41 +25,46 @@ def _validate_period(period, max_period_days=30):
     
     # Check for None
     if period is None:
-        print(
-            f"WARNING: Orbit period is None - cannot determine integration time. "
-            f"Defaulting to {max_period_days} days."
+        warnings.warn(
+            f"Orbit period is None; defaulting to {max_period_days} days.",
+            UserWarning,
+            stacklevel=2,
         )
         return max_period_seconds
     
     # Check for inf or nan
     if np.isinf(period):
-        print(
-            f"WARNING: Orbit period is infinite - orbit may be hyperbolic or parabolic. "
-            f"Defaulting to {max_period_days} days for integration."
+        warnings.warn(
+            f"Orbit period is infinite; defaulting to {max_period_days} days for integration.",
+            UserWarning,
+            stacklevel=2,
         )
         return max_period_seconds
     
     if np.isnan(period):
-        print(
-            f"WARNING: Orbit period is NaN - orbit parameters may be invalid. "
-            f"Defaulting to {max_period_days} days for integration."
+        warnings.warn(
+            f"Orbit period is NaN; defaulting to {max_period_days} days for integration.",
+            UserWarning,
+            stacklevel=2,
         )
         return max_period_seconds
     
     # Check if period is unreasonably large
     if period > max_period_seconds:
-        print(
-            f"WARNING: Orbit period ({period:.2f} s = {period/86400:.2f} days) exceeds "
-            f"maximum allowed period of {max_period_days} days. "
-            f"Capping integration time to {max_period_days} days."
+        warnings.warn(
+            f"Orbit period ({period:.2f} s = {period/86400:.2f} days) exceeds "
+            f"maximum allowed period of {max_period_days} days; capping integration time.",
+            UserWarning,
+            stacklevel=2,
         )
         return max_period_seconds
     
     # Check if period is negative or zero
     if period <= 0:
-        print(
-            f"WARNING: Orbit period must be positive, got {period:.2f} s. "
-            f"Defaulting to {max_period_days} days."
+        warnings.warn(
+            f"Orbit period must be positive, got {period:.2f} s; defaulting to {max_period_days} days.",
+            UserWarning,
+            stacklevel=2,
         )
         return max_period_seconds
     

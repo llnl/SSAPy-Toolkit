@@ -28,10 +28,13 @@ def test_html_to_gif_crop_and_fake_browser(monkeypatch, tmp_path):
         def add_argument(self, value):
             self.arguments.append(value)
 
+    captured = {}
+
     class FakeDriver:
         def __init__(self, options=None):
             self.options = options
             self.quit_called = False
+            captured["options"] = options
 
         def get(self, url):
             self.url = url
@@ -47,6 +50,7 @@ def test_html_to_gif_crop_and_fake_browser(monkeypatch, tmp_path):
 
     monkeypatch.setattr(module, "Options", FakeOptions)
     monkeypatch.setattr(module.webdriver, "Chrome", FakeDriver)
+    monkeypatch.setenv("SSATK_CHROME_BINARY", "/opt/chrome")
     monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
     ticks = iter([0.0, 10.0])
     monkeypatch.setattr(module.time, "time", lambda: next(ticks, 10.0))
@@ -56,6 +60,10 @@ def test_html_to_gif_crop_and_fake_browser(monkeypatch, tmp_path):
     out_gif = tmp_path / "nested" / "demo.gif"
     module.html_to_gif(html_path=str(html_path), out_gif=str(out_gif), duration_s=0.1, fps=2, wait_after_load_s=0.0)
     assert out_gif.exists()
+    assert captured["options"].binary_location == "/opt/chrome"
+
+    module.main([str(html_path), str(tmp_path / "main.gif"), "--duration-s", "0.1", "--fps", "2"])
+    assert (tmp_path / "main.gif").exists()
 
     with pytest.raises(FileNotFoundError):
         module.html_to_gif(html_path=str(tmp_path / "missing.html"), out_gif=str(out_gif))

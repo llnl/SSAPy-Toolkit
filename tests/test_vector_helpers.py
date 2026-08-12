@@ -47,8 +47,18 @@ def test_extend_vector_and_angles():
 
 
 def test_rotation_helpers_preserve_lengths_and_align_vectors():
-    matrix = rotation_matrix_from_vectors(np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0]))
+    matrix = rotation_matrix_from_vectors([1.0, 0.0, 0.0], [0.0, 1.0, 0.0])
     np.testing.assert_allclose(matrix @ np.array([1.0, 0.0, 0.0]), [0.0, 1.0, 0.0], atol=1e-12)
+
+    identity = rotation_matrix_from_vectors(np.array([2.0, 0.0, 0.0]), np.array([5.0, 0.0, 0.0]))
+    np.testing.assert_allclose(identity, np.eye(3), atol=1e-12)
+
+    opposite = rotation_matrix_from_vectors(np.array([1.0, 0.0, 0.0]), np.array([-1.0, 0.0, 0.0]))
+    np.testing.assert_allclose(opposite @ np.array([1.0, 0.0, 0.0]), [-1.0, 0.0, 0.0], atol=1e-12)
+    np.testing.assert_allclose(opposite.T @ opposite, np.eye(3), atol=1e-12)
+
+    with pytest.raises(ValueError, match="zero-length"):
+        rotation_matrix_from_vectors(np.zeros(3), np.array([1.0, 0.0, 0.0]))
 
     rotated = rotate_vector(np.array([0.0, 0.0, 1.0]), theta=90.0, phi=0.0)
     np.testing.assert_allclose(rotated, [0.0, 1.0, 0.0], atol=1e-12)

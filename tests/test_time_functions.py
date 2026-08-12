@@ -35,6 +35,8 @@ def test_dms_and_hms_decimal_conversions_round_trip_common_values():
     assert dd_to_dms(12.5) == "12:30:0"
     assert dd_to_hms(15.0) == "1:0:0"
     assert dd_to_hms("15:0:0") == "1:0:0"
+    with pytest.warns(UserWarning, match="cannot be negative"):
+        assert dd_to_hms(-15.0) == "1:0:0"
 
 
 @pytest.mark.parametrize(
@@ -49,7 +51,11 @@ def test_dms_and_hms_decimal_conversions_round_trip_common_values():
 
 def test_decimal_angle_conversions_carry_rounded_seconds(value, expected_dms, expected_hms):
     assert dd_to_dms(value) == expected_dms
-    assert dd_to_hms(value) == expected_hms
+    if value < 0:
+        with pytest.warns(UserWarning, match="cannot be negative"):
+            assert dd_to_hms(value) == expected_hms
+    else:
+        assert dd_to_hms(value) == expected_hms
 
 
 def test_hms_to_dd_rejects_negative_values():
@@ -84,7 +90,7 @@ def test_relative_and_absolute_time_helpers_round_trip_start_and_end_anchors():
     assert len(time_abs_to_rel([])) == 0
 
 
-def test_get_times_start_end_middle_and_validation(capsys):
+def test_get_times_start_end_middle_and_validation():
     start = get_times((10, "s"), freq=(5, "s"), t0=Time(0, format="gps"))
     np.testing.assert_allclose(start.gps - start[0].gps, [0.0, 5.0, 10.0])
 
@@ -93,10 +99,10 @@ def test_get_times_start_end_middle_and_validation(capsys):
     np.testing.assert_allclose(end.gps, [90.0, 95.0, 100.0])
 
     middle_ref = Time(100.0, format="gps")
-    middle = get_times(10, freq=4, tm=middle_ref)
+    with pytest.warns(UserWarning, match="adjusted frequency"):
+        middle = get_times(10, freq=4, tm=middle_ref)
     assert middle[1].gps == pytest.approx(middle_ref.gps)
     np.testing.assert_allclose(middle.gps - middle[1].gps, [-5.0, 0.0, 5.0])
-    assert "adjusted frequency" in capsys.readouterr().out
 
     assert get_times(0, t0=middle_ref)[0].gps == pytest.approx(middle_ref.gps)
     assert get_times(0, tf=middle_ref)[0].gps == pytest.approx(middle_ref.gps)

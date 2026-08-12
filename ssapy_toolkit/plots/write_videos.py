@@ -15,6 +15,7 @@ def write_video(
     warn_on_ambiguous: bool = True,
     target_size: tuple = None,         # (width, height); if None, use first frame
     freeze_last_seconds: float = 0.0,  # extra time to hold last frame
+    verbose: bool = False,
 ):
     """
     Write frames to an MP4 video file, with natural sorting and uniform size.
@@ -37,6 +38,8 @@ def write_video(
         Output frame size in pixels. If None, use the size of the first frame.
     freeze_last_seconds : float
         Extra number of seconds to “freeze” the last frame by repeating it.
+    verbose : bool
+        If True, print progress messages while writing.
     """
     # Normalize frames into a list of file paths
     if isinstance(frames, (str, Path)):
@@ -58,7 +61,8 @@ def write_video(
     if sort_frames:
         paths = _sort_frames(paths, warn_on_ambiguous=warn_on_ambiguous)
 
-    print(f"Writing video: {video_name}")
+    if verbose:
+        print(f"Writing video: {video_name}")
 
     # Read first frame to determine output size
     first = cv2.imread(paths[0])
@@ -114,4 +118,5 @@ def write_video(
             writer.write(last_frame)
 
     writer.release()
-    print(f"Wrote: {video_name}")
+    if verbose:
+        print(f"Wrote: {video_name}")

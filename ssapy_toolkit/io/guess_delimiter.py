@@ -18,7 +18,6 @@ def guess_csv_delimiter(csv_file_path: str, sample_size: int = 32768, delimiters
         sample = csvfile.read(sample_size)  # Read a larger sample size
         try:
             dialect = csv.Sniffer().sniff(sample, delimiters=delimiters)
-            print(f"Guessed {dialect.delimiter} delimiter.")
             return dialect.delimiter
         except csv.Error:
             return "Could not determine delimiter"

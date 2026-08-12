@@ -97,6 +97,14 @@ unavailable so demos/tests can skip gracefully.
 - `ssapy_toolkit.ssapy_wrappers`: convenience wrappers around SSAPy orbits and propagation.
 - `demos/`: runnable examples that should stay small and avoid checked-in generated outputs.
 
+Prefer correctly spelled module paths in new code:
+`coordinates.equatorial_and_ecliptic`, `coordinates.local_and_equatorial`,
+`accelerations.accel_equatorial`, and
+`orbital_mechanics.all_orbit_quantities`. Legacy misspelled modules remain as
+compatibility aliases and should not be removed without a deprecation cycle.
+`ssapy_toolkit.launch_pads` is the canonical launch/test-site metadata module;
+`ssapy_toolkit.orbital_mechanics.launch_pads` re-exports the same dictionaries.
+
 ## Development Workflow
 
 Before changing behavior, search for an existing implementation:
@@ -156,6 +164,7 @@ Run focused checks before committing:
 python scripts/check_repository_policy.py
 python -m pytest -q tests/test_data_access.py
 python -m pytest -q tests/test_demos_easy.py
+ssapy-demo-gallery --output /tmp/ssatk-demo-gallery
 python -m flake8 <changed-python-files>
 git diff --check
 ```

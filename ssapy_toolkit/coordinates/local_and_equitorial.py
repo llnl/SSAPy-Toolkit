@@ -1,4 +1,5 @@
 import numpy as np
+import warnings
 from .sky_angles import zenithangle2altitude
 from ..time_functions import hms_to_dd, dd_to_hms, dd_to_dms
 
@@ -31,6 +32,11 @@ def rightasension2hourangle(right_ascension, local_time):
     return dd_to_dms(hms_to_dd(local_time) - hms_to_dd(right_ascension))
 
 
+def rightascension2hourangle(right_ascension, local_time):
+    """Correctly spelled alias for :func:`rightasension2hourangle`."""
+    return rightasension2hourangle(right_ascension, local_time)
+
+
 def equatorial_to_horizontal(
     observer_latitude,
     declination,
@@ -57,7 +63,11 @@ def equatorial_to_horizontal(
     """
     if hour_angle is not None:
         if right_ascension is not None:
-            print('Both right_ascension and hour_angle parameters are provided.\nUsing hour_angle for calculations.')
+            warnings.warn(
+                "Both right_ascension and hour_angle parameters are provided; using hour_angle for calculations.",
+                UserWarning,
+                stacklevel=2,
+            )
         if isinstance(hour_angle, str):
             hour_angle_dd = hms_to_dd(hour_angle)
         else:

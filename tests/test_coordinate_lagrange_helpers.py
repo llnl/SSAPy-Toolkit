@@ -153,11 +153,14 @@ def test_j2000_validation_and_time_parsing():
         j2000_to_gcrf(positions, object())
 
 
-def test_local_equatorial_and_earth_trojan_helpers(capsys):
-    from ssapy_toolkit.coordinates import local_and_equitorial as local
+def test_local_equatorial_and_earth_trojan_helpers():
+    from ssapy_toolkit.coordinates import local_and_equatorial, local_and_equitorial as local
+
+    assert local_and_equatorial.horizontal_to_equatorial is local.horizontal_to_equatorial
     from ssapy_toolkit.coordinates.earth_trojan_sim import inert2rot, sim_lonlatrad
 
     assert local.rightasension2hourangle("23:00:00", "01:00:00") == "30:0:0"
+    assert local.rightascension2hourangle("23:00:00", "01:00:00") == "30:0:0"
     assert isinstance(local.rightasension2hourangle(15.0, 2.0), str)
     az, alt = local.equatorial_to_horizontal(30.0, 10.0, hour_angle="01:00:00")
     assert np.isfinite(az)
@@ -165,8 +168,8 @@ def test_local_equatorial_and_earth_trojan_helpers(capsys):
     az_south, alt_south = local.equatorial_to_horizontal(-30.0, 10.0, right_ascension="01:00:00", local_time="02:00:00")
     assert np.isfinite(az_south)
     assert np.isfinite(alt_south)
-    local.equatorial_to_horizontal(30.0, 10.0, right_ascension="01:00:00", hour_angle="02:00:00")
-    assert "Both right_ascension" in capsys.readouterr().out
+    with pytest.warns(UserWarning, match="Both right_ascension"):
+        local.equatorial_to_horizontal(30.0, 10.0, right_ascension="01:00:00", hour_angle="02:00:00")
     with pytest.raises(ValueError, match="must be provided"):
         local.equatorial_to_horizontal(30.0, 10.0)
 

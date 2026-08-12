@@ -7,7 +7,7 @@ from ssapy_toolkit.compute.lyapunov_exponent import lyapunov_exponent_from_state
 from ssapy_toolkit.compute.proper_motions import proper_motion, proper_motion_ra_dec
 from ssapy_toolkit.compute.segment_intersection import segment_intersects_sphere
 from ssapy_toolkit.constants import EARTH_MU
-from ssapy_toolkit.coordinates import equitorial_and_ecliptic as eqecl
+from ssapy_toolkit.coordinates import equatorial_and_ecliptic, equitorial_and_ecliptic as eqecl
 from ssapy_toolkit.coordinates.cartesian_to_cylindrical import cart_to_cyl
 from ssapy_toolkit.coordinates.cartesian_to_spherical import cart2sph_deg
 from ssapy_toolkit.coordinates.gcrf_to_ntw import gcrf_to_ntw
@@ -85,6 +85,8 @@ def test_coordinate_conversion_helpers():
     np.testing.assert_allclose(ntw_to_gcrf([1, 2, 3], r_vec, v_vec), [1, 2, 3], atol=1e-12)
     np.testing.assert_allclose(gcrf_to_ntw([1, 2, 3], r_vec, v_vec), [1, 2, 3], atol=1e-12)
 
+    assert equatorial_and_ecliptic.equatorial_to_ecliptic is eqecl.equatorial_to_ecliptic
+
     xq, yq, zq = eqecl.ecliptic_xyz_to_equatorial_xyz(1.0, 2.0, 3.0)
     xc, yc, zc = eqecl.equatorial_xyz_to_ecliptic_xyz(xq, yq, zq)
     np.testing.assert_allclose([xc, yc, zc], [1.0, 2.0, 3.0])
@@ -139,7 +141,8 @@ def test_integrator_profile_and_simple_motion(monkeypatch):
 def test_proper_motion_segment_intersection_and_lyapunov():
     assert np.isclose(proper_motion(1.0, 0.0, 0.0, 0.0, 1.0, 0.0), 206265.0)
     assert np.isnan(proper_motion(0.0, 0.0, 0.0, 1.0, 0.0, 0.0))
-    assert proper_motion(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, input_unit="bad") is None
+    with pytest.warns(UserWarning, match="input_unit"):
+        assert proper_motion(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, input_unit="bad") is None
 
     r = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
     v = np.array([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0]])
@@ -149,7 +152,8 @@ def test_proper_motion_segment_intersection_and_lyapunov():
     assert np.all(np.abs(pmra_rebound) < np.abs(pmra))
     with pytest.raises(ValueError):
         proper_motion_ra_dec(x=1, y=2)
-    assert proper_motion_ra_dec(r=r, v=v, input_unit="bad") is None
+    with pytest.warns(UserWarning, match="input_unit"):
+        assert proper_motion_ra_dec(r=r, v=v, input_unit="bad") is None
 
     assert segment_intersects_sphere([-2, 0, 0], [2, 0, 0], radius=1.0)
     assert not segment_intersects_sphere([2, 0, 0], [3, 0, 0], radius=1.0)

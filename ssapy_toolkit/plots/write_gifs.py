@@ -129,6 +129,7 @@ def write_gif(
     uniform_size: bool = True,          # make all frames the same size
     target_size: tuple = None,          # if None, use size of first frame
     bg_color=(255, 255, 255, 0),        # padding color if sizes differ (RGBA)
+    verbose: bool = False,
 ) -> None:
     """
     Write frames to an animated GIF with robust sorting and size normalization.
@@ -158,6 +159,8 @@ def write_gif(
         If None, use the size of the first image as the canvas.
     bg_color : tuple
         RGBA background for padding (when uniform_size is True).
+    verbose : bool
+        If True, print progress messages while writing.
     """
     out = Path(gif_name)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -185,7 +188,8 @@ def write_gif(
             target_size = first_img.size
 
     # Write GIF
-    print(f"Writing gif: {out}")
+    if verbose:
+        print(f"Writing gif: {out}")
     with imageio.get_writer(out, mode="I", duration=frame_duration, loop=loop) as writer:
         for p in paths:
             arr = imageio.imread(p)
@@ -199,7 +203,8 @@ def write_gif(
 
             writer.append_data(arr)
 
-    print(f"Wrote {out}")
+    if verbose:
+        print(f"Wrote {out}")
 
 
 if __name__ == "__main__":

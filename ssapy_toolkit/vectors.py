@@ -51,10 +51,26 @@ def rotation_matrix_from_vectors(vec1, vec2):
     :param vec2: A 3d "destination" vector
     :return mat: A transform matrix (3x3) which when applied to vec1, aligns it with vec2.
     """
-    a, b = (vec1 / np.linalg.norm(vec1)).reshape(3), (vec2 / np.linalg.norm(vec2)).reshape(3)
+    vec1 = np.asarray(vec1, dtype=float)
+    vec2 = np.asarray(vec2, dtype=float)
+    vec1_norm = np.linalg.norm(vec1)
+    vec2_norm = np.linalg.norm(vec2)
+    if vec1_norm == 0 or vec2_norm == 0:
+        raise ValueError("Cannot align zero-length vectors.")
+
+    a, b = (vec1 / vec1_norm).reshape(3), (vec2 / vec2_norm).reshape(3)
     v = np.cross(a, b)
-    c = np.dot(a, b)
+    c = np.clip(np.dot(a, b), -1.0, 1.0)
     s = np.linalg.norm(v)
+
+    if np.isclose(s, 0.0):
+        if c > 0:
+            return np.eye(3)
+        basis = np.eye(3)[np.argmin(np.abs(a))]
+        axis = np.cross(a, basis)
+        axis /= np.linalg.norm(axis)
+        return 2.0 * np.outer(axis, axis) - np.eye(3)
+
     kmat = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
     rotation_matrix = np.eye(3) + kmat + kmat.dot(kmat) * ((1 - c) / (s**2))
     return rotation_matrix

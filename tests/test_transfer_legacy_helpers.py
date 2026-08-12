@@ -94,7 +94,8 @@ def test_hohmann_fake_orbit_modes_and_equal_radius(monkeypatch):
     np.testing.assert_allclose(ntw, [1.0, 2.0, 3.0])
     np.testing.assert_allclose(module._tangential_direction(np.array([0.0, 0.0, 1.0])), [1.0, 0.0, 0.0])
 
-    outward = module.transfer_hohmann([7000e3, 0.1, 0.0, 0.1, 0.0, 0.0], [9000e3, 0.1, 0.2, 0.2, 0.0, 0.0], plot=True)
+    with pytest.warns(UserWarning, match="Inclination of orbit2"):
+        outward = module.transfer_hohmann([7000e3, 0.1, 0.0, 0.1, 0.0, 0.0], [9000e3, 0.1, 0.2, 0.2, 0.0, 0.0], plot=True)
     assert outward["tof"] > 0.0
     assert "fig" in outward
     assert outward["delta_ntw1"].shape == (3,)

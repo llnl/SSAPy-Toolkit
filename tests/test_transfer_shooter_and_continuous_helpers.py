@@ -165,7 +165,8 @@ def test_continuous_transfer_main_paths_and_failures(monkeypatch):
 
     vel = importlib.import_module("ssapy_toolkit.orbital_mechanics.transfer_velocity_continuous")
     monkeypatch.setattr(vel, "solve_ivp", _patched_solver())
-    r, v, t = vel.transfer_velocity_continuous(r0, v0, v_target=-2.0, a_thrust=0.1, mu=1e12, max_time=2.0)
+    with pytest.warns(RuntimeWarning, match="Final orbit is unbound"):
+        r, v, t = vel.transfer_velocity_continuous(r0, v0, v_target=-2.0, a_thrust=0.1, mu=1e12, max_time=2.0)
     assert r.shape == (1000, 3)
     assert v.shape == (1000, 3)
     assert t[-1] == pytest.approx(2.0)
@@ -240,7 +241,8 @@ def test_coplanar_and_two_phase_continuous_transfers(monkeypatch):
 
     combo = importlib.import_module("ssapy_toolkit.orbital_mechanics.transfer_velocity_and_inclination_continuous")
     monkeypatch.setattr(combo, "solve_ivp", _patched_solver())
-    r, v, t = combo.transfer_velocity_and_inclination_continuous(r0, v0, i_target=0.1, a_thrust=0.1, mu=1e12)
+    with pytest.warns(RuntimeWarning, match="Final orbit is unbound"):
+        r, v, t = combo.transfer_velocity_and_inclination_continuous(r0, v0, i_target=0.1, a_thrust=0.1, mu=1e12)
     assert r.shape[1] == 3
     assert v.shape[1] == 3
     assert t[0] == 0.0

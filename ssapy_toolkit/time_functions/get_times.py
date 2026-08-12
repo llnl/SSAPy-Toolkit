@@ -1,6 +1,7 @@
 import numpy as np
 from astropy.time import Time
 import astropy.units as u
+import warnings
 
 
 def get_times(
@@ -122,12 +123,14 @@ def get_times(
         # Effective step size and diagnostics
         effective_freq = dur_seconds / N
         if not np.isclose(effective_freq, freq_seconds):
-            print(
-                "get_times warning: adjusted frequency to keep duration exact and tm centered.\n"
+            warnings.warn(
+                "get_times adjusted frequency to keep duration exact and tm centered. "
                 f"  requested freq = {freq_seconds:.6f} s\n"
                 f"  effective freq = {effective_freq:.6f} s\n"
                 f"  intervals N    = {N}\n"
-                f"  total span     = {dur_seconds:.6f} s"
+                f"  total span     = {dur_seconds:.6f} s",
+                UserWarning,
+                stacklevel=2,
             )
 
         timesteps = N + 1
