@@ -98,6 +98,10 @@ demos = ["README.md"]
 markers = [
   "slow: demo smoke tests that may render media or run longer workflows",
 ]
+filterwarnings = [
+  "ignore:Jupyter is migrating its paths.*:DeprecationWarning",
+  "ignore:Parsing dates involving a day of month without a year specified is ambiguious.*:DeprecationWarning",
+]
 
 [project.scripts]
 ssapy-demo-gallery = "ssapy_toolkit.run_all_demos:main"

@@ -20,3 +20,10 @@ def safe_relative_parts(path: str | Path) -> list[str]:
             continue
         parts.append(part)
     return parts
+
+
+def ensure_file_parent(path: str | Path) -> Path:
+    """Create the parent directory for a file path and return it as a Path."""
+    file_path = Path(path)
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    return file_path

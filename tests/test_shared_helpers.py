@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import importlib
+import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from ssapy_toolkit._paths import safe_relative_parts
+from ssapy_toolkit._paths import ensure_file_parent, safe_relative_parts
+from ssapy_toolkit._namespace import import_public_modules
 from ssapy_toolkit._sorting import natural_key
 from ssapy_toolkit.io.datapath import datapath, dpath
 from ssapy_toolkit.io.h5cache import h5cache, h5load
-from ssapy_toolkit.io.ssatk_cache import ssatk_cache, ssatk_load
+from ssapy_toolkit.io.ssatk_cache import ssatk_load_cache, ssatk_save_cache
 from ssapy_toolkit.io.ssatk_data import ssatk_data
 from ssapy_toolkit.orbital_mechanics._two_body import _keplerian_two_body_rhs
 from ssapy_toolkit.plots.figpath import figpath, fpath, ssatk_path
@@ -43,6 +45,35 @@ def test_safe_relative_parts_strips_roots_and_collapses_parent_segments():
     assert safe_relative_parts("./nested/./file.txt") == ["nested", "file.txt"]
 
 
+def test_ensure_file_parent_creates_nested_directory(tmp_path):
+    path = ensure_file_parent(tmp_path / "nested" / "output.txt")
+
+    assert path.parent.is_dir()
+    assert path.name == "output.txt"
+
+
+def test_import_public_modules_populates_namespace_deterministically(tmp_path, monkeypatch):
+    package = tmp_path / "demo_package"
+    package.mkdir()
+    init_file = package / "__init__.py"
+    init_file.write_text("", encoding="utf-8")
+    (package / "a.py").write_text("VALUE = 'a'\n_hidden = 'no'\n", encoding="utf-8")
+    (package / "b.py").write_text("VALUE = 'b'\nOTHER = 2\n", encoding="utf-8")
+    (package / "_private.py").write_text("EXPOSED = 3\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    namespace = {}
+    import_public_modules("demo_package", str(init_file), namespace)
+
+    assert namespace["VALUE"] == "b"
+    assert namespace["OTHER"] == 2
+    assert namespace["EXPOSED"] == 3
+    assert "_hidden" not in namespace
+    for module_name in list(sys.modules):
+        if module_name == "demo_package" or module_name.startswith("demo_package."):
+            sys.modules.pop(module_name, None)
+
+
 def test_keplerian_two_body_rhs_returns_velocity_and_gravity():
     mu = 4.0
     state = np.array([2.0, 0.0, 0.0, 0.0, 3.0, 0.0])
@@ -61,8 +92,8 @@ def test_ssatk_short_helper_aliases_are_primary_exports():
     assert callable(ssatk_data)
     assert callable(h5cache)
     assert callable(h5load)
-    assert callable(ssatk_cache)
-    assert callable(ssatk_load)
+    assert callable(ssatk_save_cache)
+    assert callable(ssatk_load_cache)
 
 
 def test_launch_pad_metadata_uses_one_canonical_dataset():
@@ -213,8 +244,8 @@ def test_ssatk_data_and_cache_wrappers_forward_arguments(monkeypatch, tmp_path):
     monkeypatch.setattr(ssatk_cache_module, "h5load", lambda *args, **kwargs: load_calls.append((args, kwargs)) or "loaded")
     monkeypatch.setattr(ssatk_data_module, "datapath", lambda filename="data", dirs=None: (filename, dirs))
 
-    assert ssatk_cache_module.ssatk_cache("payload", path=tmp_path / "cache.h5") == "cached"
-    assert ssatk_cache_module.ssatk_load(tmp_path / "cache.h5", key="payload") == "loaded"
+    assert ssatk_cache_module.ssatk_save_cache("payload", path=tmp_path / "cache.h5") == "cached"
+    assert ssatk_cache_module.ssatk_load_cache(tmp_path / "cache.h5", key="payload") == "loaded"
     assert ssatk_data_module.ssatk_data("catalog.txt", dirs=[tmp_path]) == ("catalog.txt", [tmp_path])
     assert cache_calls[0][0] == ("payload",)
     assert load_calls[0][1] == {"key": "payload"}

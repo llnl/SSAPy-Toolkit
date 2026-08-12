@@ -6,11 +6,12 @@ import csv
 import os
 from .get_memory import get_memory_usage
 from .io_utils import exists
+from ssapy_toolkit._paths import ensure_file_parent
 
 
 def read_csv(file_name: str, sep: Optional[str] = None, dtypes: Optional[Dict[str, Union[str, np.dtype]]] = None,
              col: Union[bool, List[str], None] = False, to_np: bool = False, drop_nan: bool = False,
-             skiprows: List[int] = []) -> Union[DataFrame, np.ndarray]:
+             skiprows: Optional[List[int]] = None) -> Union[DataFrame, np.ndarray]:
     """
     Read a CSV file with options.
 
@@ -28,6 +29,8 @@ def read_csv(file_name: str, sep: Optional[str] = None, dtypes: Optional[Dict[st
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
+    if skiprows is None:
+        skiprows = []
 
     if col and not isinstance(col, list):
         col = [col]  # Ensure col is always a list
@@ -95,6 +98,7 @@ def save_csv(file_name: str, df: DataFrame, sep: str = ',', dtypes: Optional[Dic
     if dtypes:
         df = df.astype(dtypes)
 
+    ensure_file_parent(file_name)
     df.to_csv(file_name, index=False, sep=sep)
     print(f'Saved {file_name} successfully.')
     return
@@ -135,6 +139,7 @@ def save_csv_header(filename: str, header: List[str], delimiter: str = ',') -> N
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
+    ensure_file_parent(filename)
     with open(filename, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile, delimiter=delimiter)
         writer.writerow(header)
@@ -175,8 +180,10 @@ def append_csv(file_names: List[str], save_path: str = 'combined_data.csv', sep:
         combined_df = combined_df.astype(dtypes)
 
     if save_path:
+        ensure_file_parent(save_path)
         combined_df.to_csv(save_path, sep=sep, index=False)
     else:
+        ensure_file_parent('combined_data.csv')
         combined_df.to_csv('combined_data.csv', sep=sep, index=False)
 
     print(f'The final dataframe has {combined_df.shape[0]} rows and {combined_df.shape[1]} columns.')
@@ -200,6 +207,7 @@ def append_csv_on_disk(csv_files: List[str], output_file: str) -> None:
     """
     delimiter = guess_csv_delimiter(csv_files[0])
     # Open the output file for writing
+    ensure_file_parent(output_file)
     with open(output_file, 'w', newline='') as outfile:
         writer = csv.writer(outfile, delimiter=delimiter)
 
@@ -256,6 +264,7 @@ def append_dict_to_csv(file_name: str, data_dict: Dict[str, List[Union[str, floa
     file_exists = os.path.exists(file_name)
 
     # Open the CSV file in append mode
+    ensure_file_parent(file_name)
     with open(file_name, 'a', newline='') as csvfile:
         writer = csv.writer(csvfile, delimiter=delimiter)
 
@@ -283,6 +292,7 @@ def save_csv_array_to_line(filename: str, array: List[Union[str, float, int]], d
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
+    ensure_file_parent(filename)
     with open(filename, 'a', newline='') as csvfile:
         writer = csv.writer(csvfile, delimiter=delimiter)
         writer.writerow(array)

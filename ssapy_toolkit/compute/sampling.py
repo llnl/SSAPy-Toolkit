@@ -371,7 +371,7 @@ def get_sigmas(n: int = 25, path: Optional[str] = None) -> np.ndarray:
             compute_new = not (
                 sigmas.ndim == 2 and sigmas.shape[0] == n and sigmas.shape[1] == 6
             )
-        except Exception:
+        except (OSError, ValueError, EOFError):
             # Corrupt or incompatible file -> recompute
             compute_new = True
 

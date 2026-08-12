@@ -154,6 +154,16 @@ def test_figsave_save_plot_display_and_theme_helpers(tmp_path, monkeypatch, caps
     monkeypatch.setattr(plotutils.PILImage, "open", lambda filename: FakePILImage())
     plotutils.display_figure(str(image_path.with_suffix("")), display="PIL")
     assert shown == [True]
+
+    displayed = []
+    fake_ipython_display = SimpleNamespace(
+        Image=lambda filename: ("image", filename),
+        display=lambda image: displayed.append(image),
+    )
+    monkeypatch.setitem(sys.modules, "IPython.display", fake_ipython_display)
+    plotutils.display_figure(str(image_path), display="IPython")
+    assert displayed == [("image", str(image_path))]
+
     with pytest.raises(ValueError, match="Invalid display"):
         plotutils.display_figure(str(image_path), display="bad")
 

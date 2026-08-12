@@ -1,6 +1,7 @@
 import json
 import inspect
 import numpy as np
+from ssapy_toolkit._paths import ensure_file_parent
 from datetime import datetime
 from pathlib import Path
 
@@ -161,8 +162,7 @@ def save_workspace(filename='workspace.json', exclude=None):
     }
     
     # Save to file
-    path = Path(filename)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path = ensure_file_parent(filename)
     with path.open('w', encoding='utf-8') as f:
         json.dump(result, f, indent=2)
     

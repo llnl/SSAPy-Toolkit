@@ -3,8 +3,11 @@
 # Requires: h5py, numpy
 
 import json
+import string
+
 import h5py
 import numpy as np
+from ssapy_toolkit._paths import ensure_file_parent
 
 # ------------------------ Name encoding (reversible) ------------------------
 
@@ -34,7 +37,7 @@ def _percent_decode_name(encoded):
     i = 0
     s = encoded
     while i < len(s):
-        if s[i] == "%" and i + 2 < len(s):
+        if s[i] == "%" and i + 2 < len(s) and all(ch in string.hexdigits for ch in s[i+1:i+3]):
             out.append(int(s[i+1:i+3], 16))
             i += 3
         else:
@@ -103,6 +106,7 @@ def json_to_hdf5(json_obj, h5_path, root="/"):
     """
     Write a JSON-serializable object to HDF5 file at h5_path.
     """
+    h5_path = ensure_file_parent(h5_path)
     with h5py.File(h5_path, "w") as f:
         f.attrs["format"] = np.bytes_("json-hdf5")
         f.attrs["name_encoding"] = np.bytes_("percent-utf8")
@@ -212,7 +216,8 @@ def hdf5_to_json(h5_path, root="/"):
 
 def hdf5_file_to_json(h5_path, json_path, root="/", pretty=True):
     obj = hdf5_to_json(h5_path, root=root)
-    with open(json_path, "w", encoding="utf-8") as fp:
+    json_path = ensure_file_parent(json_path)
+    with json_path.open("w", encoding="utf-8") as fp:
         if pretty:
             json.dump(obj, fp, ensure_ascii=False, indent=2, sort_keys=False)
         else:

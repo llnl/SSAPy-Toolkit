@@ -21,9 +21,10 @@
 
 import numpy as np
 from datetime import datetime
+from ssapy_toolkit._paths import ensure_file_parent
 try:
     from astropy.time import Time  # optional
-except Exception:
+except ImportError:
     Time = None  # gracefully degrade if astropy isn't installed
 import xml.etree.ElementTree as ET
 
@@ -87,7 +88,7 @@ def _decode_special_struct(struct):
         if shape:
             try:
                 arr = arr.reshape(shape)
-            except Exception:
+            except ValueError:
                 # If reshape fails, return flat array
                 pass
         return arr
@@ -96,7 +97,7 @@ def _decode_special_struct(struct):
         iso = struct.get("#text", "")
         try:
             return datetime.fromisoformat(iso)
-        except Exception:
+        except ValueError:
             return iso  # leave as string if parse fails
 
     if encoded_type == "astropy_time":
@@ -105,7 +106,7 @@ def _decode_special_struct(struct):
         if Time is not None:
             try:
                 return Time(isot, scale=scale)
-            except Exception:
+            except ValueError:
                 return isot
         return isot  # astropy not available: return text
 
@@ -262,4 +263,5 @@ def save_xml(filename, data, root_tag="root", pretty=True, xml_declaration=True,
     if pretty:
         _indent_in_place(root_element)
 
-    ET.ElementTree(root_element).write(filename, encoding=encoding, xml_declaration=xml_declaration)
+    path = ensure_file_parent(filename)
+    ET.ElementTree(root_element).write(path, encoding=encoding, xml_declaration=xml_declaration)

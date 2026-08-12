@@ -21,11 +21,12 @@ def test_converter_json_hdf5_roundtrip_files_and_edge_keys(tmp_path):
         "nested space": {"float": 1.5, "weird%key": {"a": 1}},
         "fallback": {"tuple": (1, 2)},
     }
-    h5_path = tmp_path / "payload.h5"
+    h5_path = tmp_path / "nested" / "payload.h5"
     json_path = tmp_path / "payload.json"
-    out_json = tmp_path / "out.json"
+    out_json = tmp_path / "converted" / "out.json"
 
     assert converter_json_hdf5._percent_decode_name(converter_json_hdf5._percent_encode_name("a/b % c")) == "a/b % c"
+    assert converter_json_hdf5._percent_decode_name("literal%nothex") == "literal%nothex"
     converter_json_hdf5.json_to_hdf5(payload, h5_path, root="root")
     loaded = converter_json_hdf5.hdf5_to_json(h5_path, root="root")
     assert loaded["plain/key"] == [1, True, None, "text"]
@@ -44,7 +45,7 @@ def test_converter_json_hdf5_roundtrip_files_and_edge_keys(tmp_path):
 
 
 def test_xml_utils_roundtrip_special_types_and_raw_structures(tmp_path):
-    path = tmp_path / "payload.xml"
+    path = tmp_path / "nested" / "payload.xml"
     when = datetime(2026, 1, 1, 12, 0, 0)
     time = Time("2026-01-01T12:00:00", scale="utc")
     payload = {
@@ -75,6 +76,7 @@ def test_xml_utils_roundtrip_special_types_and_raw_structures(tmp_path):
     flat = xml_utils._decode_special_struct(bad_shape)
     np.testing.assert_array_equal(flat, [1, 2])
     assert xml_utils._decode_special_struct({"@attrs": {"type": "datetime"}, "#text": "bad"}) == "bad"
+    assert xml_utils._decode_special_struct({"@attrs": {"type": "astropy_time", "scale": "utc"}, "#text": "bad"}) == "bad"
     assert xml_utils._decode_special_struct({"@attrs": {"type": "unknown"}, "#text": "x"})["#text"] == "x"
 
 

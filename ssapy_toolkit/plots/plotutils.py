@@ -13,7 +13,6 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.colors import cnames, to_rgb, rgb2hex
 from PIL import Image as PILImage
 from pypdf import PdfWriter
-from IPython.display import Image as IPythonImage, display as ipython_display
 from astropy.time import Time
 from erfa import gst94
 
@@ -533,6 +532,8 @@ def save_plot(figure, save_path=None, dpi=200, default_name="figure", **save_kwa
 def display_figure(figname, display='IPython'):
     def open_image(filename):
         if display == 'IPython':
+            from IPython.display import Image as IPythonImage, display as ipython_display
+
             img = IPythonImage(filename=filename)
             ipython_display(img)
         elif display == 'PIL':

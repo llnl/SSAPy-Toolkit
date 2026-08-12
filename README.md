@@ -133,6 +133,25 @@ are saved under `~/ssatk_figures`; absolute paths are used exactly as provided.
 Set `SSATK_FIGURES_DIR` to choose a different figure-output root explicitly.
 Use `ssatk_path` and `ssatk_fig` for direct path and figure-save helpers.
 
+For general data products, `ssatk_save` and `ssatk_load` choose the storage
+format from the file extension. Bare and relative data filenames are rooted
+under `~/ssatk_data`; bare and relative figure filenames are rooted under
+`~/ssatk_figures`; absolute paths are honored.
+
+```
+ssatk.ssatk_save({"r": r, "v": v, "t": t}, "runs/orbit.h5")
+state = ssatk.ssatk_load("runs/orbit.h5")
+
+ssatk.ssatk_save(r, "arrays/state.npy")
+ssatk.ssatk_save({"r": r, "v": v}, "arrays/state.npz")
+ssatk.ssatk_save(table, "tables/summary.csv")
+ssatk.ssatk_save(fig, "quicklooks/orbit.png")
+```
+
+For keyed HDF5 or NPZ outputs, pass `key=`. Non-mapping objects default to
+`"data"`; dictionaries use their own keys; nested dictionaries become nested
+HDF5 groups or slash-delimited NPZ members.
+
 More detailed examples can be found in the `demos/` directory. To render the
 full demo gallery as a visualization document:
 

@@ -1,4 +1,5 @@
 import importlib
+import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -151,3 +152,24 @@ def test_groundtrack_video_helpers_and_fake_writer(monkeypatch, tmp_path, capsys
     monkeypatch.setattr(module, "_ensure_ffmpeg_path", lambda: None)
     with pytest.raises(RuntimeError, match="ffmpeg"):
         module.groundtrack_video(r, np.arange(4.0), save_path=tmp_path / "missing.mp4")
+
+
+def test_groundtrack_video_ffmpeg_fallback_handles_imageio_errors(monkeypatch):
+    module = importlib.import_module("ssapy_toolkit.plots.groundtrack_video")
+    monkeypatch.setattr(module.shutil, "which", lambda name: None)
+
+    class BrokenImageioFFmpeg:
+        @staticmethod
+        def get_ffmpeg_exe():
+            raise RuntimeError("ffmpeg unavailable")
+
+    monkeypatch.setitem(sys.modules, "imageio_ffmpeg", BrokenImageioFFmpeg)
+
+    assert module._ensure_ffmpeg_path() is None
+
+
+def test_groundtrack_video_earth_texture_fallback(monkeypatch):
+    module = importlib.import_module("ssapy_toolkit.plots.groundtrack_video")
+    monkeypatch.setattr("ssapy_toolkit.plots.plotutils.load_earth_file", lambda: (_ for _ in ()).throw(FileNotFoundError("earth")))
+
+    assert module._try_load_earth() is None

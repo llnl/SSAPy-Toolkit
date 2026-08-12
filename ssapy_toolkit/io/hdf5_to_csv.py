@@ -26,7 +26,7 @@ def _stringify(x: Any) -> str:
     if isinstance(x, (bytes, bytearray)):
         try:
             return x.decode("utf-8")
-        except Exception:
+        except UnicodeDecodeError:
             return repr(x)
     return str(x)
 

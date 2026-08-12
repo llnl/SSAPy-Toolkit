@@ -166,7 +166,7 @@ def rotate_vector(v_unit, theta, phi, save_path=False, **save_kwargs):
     return v2 / np.linalg.norm(v2, axis=-1)
 
 
-def rotate_points_3d(points, axis=np.array([0, 0, 1]), theta=-np.pi / 2):
+def rotate_points_3d(points, axis=None, theta=-np.pi / 2):
     """
     Rotate a set of 3D points about a 3D axis by an angle theta in radians.
 
@@ -178,8 +178,17 @@ def rotate_points_3d(points, axis=np.array([0, 0, 1]), theta=-np.pi / 2):
     Returns:
         np.ndarray: The rotated set of 3D points, as an Nx3 array.
     """
+    if axis is None:
+        axis = np.array([0.0, 0.0, 1.0])
+    else:
+        axis = np.asarray(axis, dtype=float)
+
+    axis_norm = np.linalg.norm(axis)
+    if axis_norm == 0:
+        raise ValueError("Rotation axis cannot be the zero vector.")
+
     # Normalize the axis to be a unit vector
-    axis = axis / np.linalg.norm(axis)
+    axis = axis / axis_norm
 
     # Compute the quaternion representing the rotation
     qw = np.cos(theta / 2)

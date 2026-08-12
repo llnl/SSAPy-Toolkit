@@ -129,6 +129,11 @@ _TOOLKIT_DUPLICATE_ALIASES = {
     "rightascension2hourangle": ".coordinates.local_and_equatorial",
     "rightasension2hourangle": ".coordinates.local_and_equatorial",
     "sim_lonlatrad": ".coordinates.earth_trojan_sim",
+    "ssatk_load_cache": ".io.ssatk_cache",
+    "ssatk_save_cache": ".io.ssatk_cache",
+    "ssatk_load": ".io.ssatk_save",
+    "ssatk_save": ".io.ssatk_save",
+    "supported_save_formats": ".io.ssatk_save",
     "sun_ra_dec": ".coordinates.sky_angles",
     "unit_vector": ".vectors",
     "xyz_to_ecliptic": ".coordinates.equatorial_and_ecliptic",
@@ -187,7 +192,7 @@ try:
 
     iers.conf.auto_download = True
     iers.conf.auto_max_age = 365
-except Exception:
+except ImportError:
     pass
 
 # # Folders

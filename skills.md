@@ -116,6 +116,12 @@ rg "def function_name|class ClassName|keyword" ssapy_toolkit demos tests
 Prefer small shared helpers when two modules implement the same private utility.
 Keep shared helpers lightweight so imports do not force heavy packages such as
 `pandas`, `astropy`, plotting backends, or SSAPy unless they are required.
+Use `ssapy_toolkit._paths.ensure_file_parent` before writing nested output
+files from lightweight IO helpers instead of duplicating parent-directory
+creation logic.
+Use `ssapy_toolkit._namespace.import_public_modules` for legacy subpackage
+namespace imports, and `ssapy_toolkit.time_functions._gps._to_gps_seconds` for
+private GPS-second conversion from floats or `astropy.time.Time` objects.
 
 Use `ssapy_toolkit.plots.ssatk_path` / `ssapy_toolkit.plots.ssatk_fig` for
 figure outputs; `figpath`, `figsave`, `fpath`, and `fsave` remain short aliases.
@@ -124,7 +130,10 @@ and `save_path`; relative filenames go under `~/ssatk_figures`, while absolute
 paths are honored. Use `ssapy_toolkit.io.datapath.datapath` (`dpath`) or
 `ssapy_toolkit.io.ssatk_data.ssatk_data` for local user data/cache outputs; do
 not add those outputs to the repository. Prefer `h5cache` / `h5load` or the
-`ssatk_cache` / `ssatk_load` convenience wrappers for HDF5 caches.
+`ssatk_save_cache` / `ssatk_load_cache` convenience wrappers for HDF5 caches.
+Use `ssapy_toolkit.io.ssatk_save.ssatk_save` and `ssatk_load` as the generic
+extension-dispatched save/load entry points for data products; `ssatk_load` is
+reserved for this universal loader, not the HDF5 cache wrapper.
 
 For plotting cleanup, keep public plot names as stable wrappers and place shared
 implementation in private core modules. Current examples are
@@ -164,9 +173,16 @@ Run focused checks before committing:
 python scripts/check_repository_policy.py
 python -m pytest -q tests/test_data_access.py
 python -m pytest -q tests/test_demos_easy.py
-ssapy-demo-gallery --output /tmp/ssatk-demo-gallery
-python -m flake8 <changed-python-files>
+python -m ruff check <changed-python-files>
 git diff --check
+```
+
+Run the full demo gallery only after demo/plot changes are otherwise stable, or
+as a final release/PR validation step. Prefer the local module invocation from a
+clone to avoid stale console scripts from another install:
+
+```bash
+python -m ssapy_toolkit.run_all_demos --output /tmp/ssatk-demo-gallery
 ```
 
 Build-check release metadata when package dependencies or versioning changes:

@@ -3,8 +3,10 @@ import pytest
 import runpy
 from pathlib import Path
 from astropy.time import Time
+import ssapy_toolkit.time_functions as time_functions
 
 from ssapy_toolkit.time_functions.absolute_times_to_relative import time_abs_to_rel
+from ssapy_toolkit.time_functions._gps import _to_gps_seconds
 from ssapy_toolkit.time_functions.relative_times_to_absolute import time_rel_to_abs
 from ssapy_toolkit.coordinates.llh_to_gcrf import llh_to_gcrf
 from ssapy_toolkit.yastropy.astropy_gcrf_to_llh import astropy_gcrf_to_llh
@@ -33,6 +35,14 @@ def test_absolute_relative_time_roundtrips_and_validation():
         time_rel_to_abs(rel, start_ref, anchor="middle")
     with pytest.raises(TypeError, match="ref"):
         time_rel_to_abs(rel, object())
+
+
+def test_shared_gps_seconds_helper_accepts_time_and_float():
+    time = Time(12.5, format="gps")
+
+    assert _to_gps_seconds(time) == pytest.approx(12.5)
+    assert _to_gps_seconds("42.0") == pytest.approx(42.0)
+    assert "_to_gps_seconds" not in vars(time_functions)
 
 
 def test_astropy_llh_gcrf_roundtrip_and_surface_velocity():

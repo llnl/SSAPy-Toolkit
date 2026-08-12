@@ -10,7 +10,7 @@ __all__ = ["h5cache", "h5load"]
 
 try:
     import h5py
-except Exception as e:
+except (ImportError, OSError) as e:
     h5py = None
     _H5PY_IMPORT_ERROR = e
 

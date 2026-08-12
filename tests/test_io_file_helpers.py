@@ -18,7 +18,7 @@ h5cache_module = importlib.import_module("ssapy_toolkit.io.h5cache")
 
 
 def test_json_roundtrip_and_append_special_types(tmp_path):
-    path = tmp_path / "data.json"
+    path = tmp_path / "nested" / "data.json"
     when = datetime(2026, 1, 2, 3, 4, 5)
     time = Time("2026-01-02T03:04:05", scale="utc")
     payload = {
@@ -59,7 +59,7 @@ def test_json_roundtrip_and_append_special_types(tmp_path):
 
 
 def test_hdf5_utils_nested_append_combine_and_verify(tmp_path, capsys):
-    src1 = tmp_path / "src1.h5"
+    src1 = tmp_path / "nested" / "src1.h5"
     src2 = tmp_path / "src2.h5"
     out = tmp_path / "combined.h5"
 
@@ -174,6 +174,7 @@ def test_hdf5_to_csv_helpers_and_main(tmp_path, monkeypatch, capsys):
 
     assert hdf5_to_csv._stringify(None) == ""
     assert hdf5_to_csv._stringify(b"abc") == "abc"
+    assert hdf5_to_csv._stringify(b"\xff") == "b'\\xff'"
     assert hdf5_to_csv.key_to_filename("/bad path:a") == "bad_path_a"
     grid = []
     hdf5_to_csv.place_cell(grid, 1, 2, "x")
@@ -192,27 +193,33 @@ def test_hdf5_to_csv_helpers_and_main(tmp_path, monkeypatch, capsys):
 
 
 def test_csv_and_io_utils(tmp_path, capsys):
-    a = tmp_path / "a.csv"
+    a = tmp_path / "nested" / "a.csv"
     b = tmp_path / "b.csv"
     csv_utils.save_csv(a, {"x": [1, 2], "y": [3.0, np.nan]})
     csv_utils.save_csv(b, pd.DataFrame({"x": [4], "y": [5.0]}))
     assert "Saved" in capsys.readouterr().out
 
     assert guess_csv_delimiter(a) == ","
+    semicolon = tmp_path / "semicolon.csv"
+    semicolon.write_text("x;y\n1;2\n", encoding="utf-8")
+    assert guess_csv_delimiter(semicolon, delimiters=(";", ",")) == ";"
     assert csv_utils.read_csv_header(a) == ["x", "y"]
+    header_path = tmp_path / "headers" / "header.csv"
+    csv_utils.save_csv_header(header_path, ["left", "right"])
+    assert csv_utils.read_csv_header(header_path) == ["left", "right"]
     assert csv_utils.read_csv(a, col="x", to_np=True).tolist() == [1, 2]
     assert csv_utils.read_csv(a, drop_nan=True).shape == (1, 2)
 
-    combined = tmp_path / "combined.csv"
+    combined = tmp_path / "combined" / "combined.csv"
     csv_utils.append_csv([a, b, tmp_path / "missing.csv"], save_path=combined)
     assert pd.read_csv(combined).shape == (3, 2)
     assert "ERRORED" in capsys.readouterr().out
 
-    disk = tmp_path / "disk.csv"
+    disk = tmp_path / "disk" / "disk.csv"
     csv_utils.append_csv_on_disk([a, b], disk)
     assert pd.read_csv(disk).shape == (3, 2)
 
-    rows = tmp_path / "rows.csv"
+    rows = tmp_path / "rows" / "rows.csv"
     csv_utils.append_dict_to_csv(rows, {"a": [1, 2], "b": [3, 4]})
     csv_utils.append_dict_to_csv(rows, np.array([[5, 6]]))
     csv_utils.save_csv_array_to_line(rows, ["tail", 7])
@@ -245,7 +252,7 @@ def test_csv_and_io_utils(tmp_path, capsys):
 
 
 def test_pickle_and_memory_helpers_roundtrip(tmp_path, monkeypatch):
-    path = tmp_path / "payload.pkl"
+    path = tmp_path / "nested" / "payload.pkl"
     payload = {"name": "ssatk", "values": [1, 2, 3]}
 
     pickle_utils.save_pickle(payload, path)

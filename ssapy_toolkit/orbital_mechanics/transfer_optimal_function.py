@@ -32,17 +32,7 @@ from ssapy.constants import EARTH_MU, EARTH_RADIUS
 
 from ssapy_toolkit.orbital_mechanics.transfer_ssapy_function import (
     transfer_ssapy, solve_lambert)
-
-try:  # astropy is an SSAPy dependency, used only for time conversion
-    from astropy.time import Time
-except ImportError:  # pragma: no cover
-    Time = None
-
-
-def _to_gps_seconds(t):
-    if Time is not None and isinstance(t, Time):
-        return float(t.gps)
-    return float(t)
+from ssapy_toolkit.time_functions._gps import _to_gps_seconds
 
 
 def _as_orbit(s, mu):

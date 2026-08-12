@@ -1,8 +1,10 @@
 import json
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 from astropy.time import Time
+from ssapy_toolkit._paths import ensure_file_parent
 
 
 def save_json(filename: str, data) -> None:
@@ -27,7 +29,8 @@ def save_json(filename: str, data) -> None:
             return {"__type__": "tuple", "data": list(obj)}
         raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
-    with open(filename, "w", encoding="utf-8") as f:
+    path = ensure_file_parent(filename)
+    with path.open("w", encoding="utf-8") as f:
         json.dump(data, f, default=encode, indent=4)
 
 
@@ -50,7 +53,7 @@ def load_json(filename: str):
             return tuple(obj["data"])
         return obj
 
-    with open(filename, "r", encoding="utf-8") as f:
+    with Path(filename).open("r", encoding="utf-8") as f:
         return json.load(f, object_hook=decode)
 
 

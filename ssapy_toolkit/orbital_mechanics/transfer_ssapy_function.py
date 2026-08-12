@@ -33,11 +33,7 @@ from ssapy.orbit import Orbit
 from ssapy.propagator import RK78Propagator
 from ssapy.utils import normed, rv_to_ntw
 from ssapy.constants import EARTH_MU
-
-try:  # astropy is an SSAPy dependency, used only for time conversion
-    from astropy.time import Time
-except ImportError:  # pragma: no cover
-    Time = None
+from ssapy_toolkit.time_functions._gps import _to_gps_seconds
 
 
 # ---------------------------------------------------------------------------
@@ -273,13 +269,6 @@ class TransferResult:
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
-
-def _to_gps_seconds(t):
-    """Accept floats (GPS seconds) or astropy Time and return GPS seconds."""
-    if Time is not None and isinstance(t, Time):
-        return float(t.gps)
-    return float(t)
-
 
 def transfer_ssapy(
     departure,
@@ -768,4 +757,3 @@ def _ntw_to_inertial(r, v, ntw):
     wvec = normed(np.cross(r, v))
     nvec = normed(np.cross(tvec, wvec))
     return ntw[0] * nvec + ntw[1] * tvec + ntw[2] * wvec
-

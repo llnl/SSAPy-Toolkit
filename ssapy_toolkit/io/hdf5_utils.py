@@ -1,6 +1,7 @@
 import os
 import h5py
 import numpy as np
+from ssapy_toolkit._paths import ensure_file_parent
 
 
 def _ensure_parent(h5, key: str) -> h5py.Group:
@@ -32,6 +33,7 @@ def save_h5(filename: str, key: str, data) -> None:
     Create a dataset at `key`. Creates parent groups if needed. Fails if dataset exists.
     """
     try:
+        ensure_file_parent(filename)
         with h5py.File(filename, "a") as f:
             parent = _ensure_parent(f, key)
             name = key.strip("/").split("/")[-1]
@@ -48,6 +50,7 @@ def overwrite_h5(filename: str, key: str, new_data) -> None:
     """
     Overwrite (or create) dataset at `key`.
     """
+    ensure_file_parent(filename)
     with h5py.File(filename, "a") as f:
         parent = _ensure_parent(f, key)
         name = key.strip("/").split("/")[-1]
@@ -62,6 +65,7 @@ def append_h5(filename: str, key: str, append_data) -> None:
     Note: `append_data` must be broadcastable to the dataset shape except on axis 0.
     """
     arr = np.asarray(append_data)
+    ensure_file_parent(filename)
     with h5py.File(filename, "a") as f:
         parent = _ensure_parent(f, key)
         name = key.strip("/").split("/")[-1]

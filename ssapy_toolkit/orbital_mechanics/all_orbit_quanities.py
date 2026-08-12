@@ -161,5 +161,5 @@ def _extract_all_elements_ssapy(orbit: Orbit):
 def _safe_float(x):
     try:
         return float(x)
-    except Exception:
+    except (TypeError, ValueError, OverflowError):
         return np.nan
