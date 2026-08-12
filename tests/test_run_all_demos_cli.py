@@ -1,6 +1,5 @@
 from pathlib import Path
 from types import SimpleNamespace
-import tomllib
 
 import pytest
 
@@ -92,8 +91,7 @@ def test_gallery_discovery_skips_test_only_demos():
 
 
 def test_pyproject_installs_demo_package_and_cli_script():
-    pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    pyproject_text = Path("pyproject.toml").read_text(encoding="utf-8")
 
-    includes = pyproject["tool"]["setuptools"]["packages"]["find"]["include"]
-    assert "demos*" in includes
-    assert pyproject["project"]["scripts"]["ssapy-demo-gallery"] == "ssapy_toolkit.run_all_demos:main"
+    assert 'include = ["ssapy_toolkit*", "demos*"]' in pyproject_text
+    assert 'ssapy-demo-gallery = "ssapy_toolkit.run_all_demos:main"' in pyproject_text
