@@ -1,6 +1,8 @@
 import io
 import sys
+from types import SimpleNamespace
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytest
@@ -41,6 +43,8 @@ def test_formatting_sorting_type_and_math_helpers(capsys):
     assert utils.extractNum("frame_0042.png") == 42
     assert utils.sortbynum(["frame_10.png", "frame_2.png", "frame_1.png"]) == ["frame_1.png", "frame_2.png", "frame_10.png"]
     assert utils.sortbynum(["/tmp/frame_10.png", "/tmp/frame_2.png"]) == ["/tmp/frame_2.png", "/tmp/frame_10.png"]
+    assert utils.sortbynum([]) == []
+    assert utils.sortbynum(["final.png", "frame_2.png"]) == ["frame_2.png", "final.png"]
 
     assert utils.issorted([1, 2, 3]) is True
     assert "Yes" in capsys.readouterr().out
@@ -82,6 +86,11 @@ def test_stdout_and_timing_helpers(capsys, monkeypatch):
     utils.elapsed_time(0.0)
     assert "hours" in capsys.readouterr().out
 
+    times = iter([1.0])
+    monkeypatch.setattr(utils, "timer", lambda: next(times))
+    utils.ETA(idx=9, total_num=10, start_loop_time=0.0)
+    assert "minutes" in capsys.readouterr().out
+
 
 def test_geometry_helpers_and_kde():
     assert utils.close_to_any(np.array([1.0, 2.0]), np.array([3.0, 2.001]), atol=0.01)
@@ -92,6 +101,7 @@ def test_geometry_helpers_and_kde():
     hull = utils.contours_2d(points, plot=False)
     assert hull.shape[1] == 2
     assert len(hull) >= 3
+    assert utils.graham_scan(np.array([[0.0, 0.0], [1.0, 0.0], [2.0, 0.0], [0.0, 1.0]])).shape[1] == 2
 
     hull3d = utils.contours_3d(
         np.array(
@@ -109,6 +119,53 @@ def test_geometry_helpers_and_kde():
 
     kde = utils.kde(np.array([0.0, 0.5, 1.0, 1.5]))
     assert np.asarray(kde([0.5])).shape == (1,)
+
+
+def test_body_pos_and_contour_plot_branches(monkeypatch):
+    class FakeXYZ:
+        def to(self, unit):
+            return SimpleNamespace(value=np.array([1.0, 2.0, 3.0]))
+
+    fake_cartesian = SimpleNamespace(get_xyz=lambda: FakeXYZ())
+    fake_coord = SimpleNamespace(cartesian=fake_cartesian)
+    fake_body = SimpleNamespace(
+        heliocentricmeanecliptic=fake_coord,
+        gcrs=fake_coord,
+        icrs=fake_coord,
+        barycentricmeanecliptic=fake_coord,
+        barycentrictrueecliptic=fake_coord,
+    )
+    monkeypatch.setattr(utils, "Time", lambda date, format="jd": SimpleNamespace(date=date, format=format))
+    monkeypatch.setattr(utils, "get_body", lambda body, t: fake_body)
+
+    for coord in ["heliocentricmeanecliptic", "gcrs", "icrs", "barycentricmeanecliptic", "barycentrictrueecliptic"]:
+        np.testing.assert_allclose(utils.body_pos("earth", coord=coord), [1.0, 2.0, 3.0])
+
+    monkeypatch.setattr(plt, "show", lambda: None)
+    plt.close("all")
+    points = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0], [0.5, 0.5]])
+    assert utils.contours_2d(points, plot=True).shape[1] == 2
+    plt.close("all")
+    hull = utils.contours_3d(
+        np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [0.0, 0.0, 1.0],
+                [1.0, 1.0, 1.0],
+            ]
+        ),
+        plot=True,
+    )
+    assert hull.simplices.size > 0
+
+
+def test_ssapy_kwargs_defaults_and_overrides():
+    from ssapy_toolkit.ssapy_wrappers.sat_kwargs import ssapy_kwargs
+
+    assert ssapy_kwargs() == {"mass": 250, "area": 0.022, "CD": 2.3, "CR": 1.3}
+    assert ssapy_kwargs(mass=1, area=2, CD=3, CR=4) == {"mass": 1, "area": 2, "CD": 3, "CR": 4}
 
 
 def test_find_local_extrema_reduces_vector_rows(capsys):

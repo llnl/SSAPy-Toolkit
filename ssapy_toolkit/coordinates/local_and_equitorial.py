@@ -55,20 +55,18 @@ def equatorial_to_horizontal(
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
-    if right_ascension is not None:
-        hour_angle_dd = rightasension2hourangle(right_ascension, local_time)
-        hour_angle_dd = hms_to_dd(hour_angle_dd)
-    elif hour_angle is not None:
+    if hour_angle is not None:
+        if right_ascension is not None:
+            print('Both right_ascension and hour_angle parameters are provided.\nUsing hour_angle for calculations.')
         if isinstance(hour_angle, str):
             hour_angle_dd = hms_to_dd(hour_angle)
         else:
             hour_angle_dd = hour_angle
-    elif right_ascension is not None and hour_angle is not None:
-        print('Both right_ascension and hour_angle parameters are provided.\nUsing hour_angle for calculations.')
-        if hms:
-            hour_angle_dd = hms_to_dd(hour_angle)
+    elif right_ascension is not None:
+        hour_angle_dd = rightasension2hourangle(right_ascension, local_time)
+        hour_angle_dd = hms_to_dd(hour_angle_dd)
     else:
-        print('Either right_ascension or hour_angle must be provided.')
+        raise ValueError('Either right_ascension or hour_angle must be provided.')
 
     observer_latitude, hour_angle_rad, declination = np.radians(
         [observer_latitude, hour_angle_dd, declination]

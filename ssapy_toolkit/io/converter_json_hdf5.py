@@ -51,7 +51,7 @@ def _write_json_node(h, name, obj):
     """
     if isinstance(obj, dict):
         g = h.create_group(name)
-        g.attrs["kind"] = np.string_("dict")
+        g.attrs["kind"] = np.bytes_("dict")
         # Preserve key order (Python 3.7+ dicts are ordered)
         for k, v in obj.items():
             child = _percent_encode_name(k)
@@ -60,7 +60,7 @@ def _write_json_node(h, name, obj):
 
     if isinstance(obj, list):
         g = h.create_group(name)
-        g.attrs["kind"] = np.string_("list")
+        g.attrs["kind"] = np.bytes_("list")
         g.attrs["length"] = np.int64(len(obj))
         for i, v in enumerate(obj):
             _write_json_node(g, str(i), v)
@@ -69,34 +69,34 @@ def _write_json_node(h, name, obj):
     # Scalars
     if obj is None:
         g = h.create_group(name)
-        g.attrs["kind"] = np.string_("none")
+        g.attrs["kind"] = np.bytes_("none")
         return g
 
     if isinstance(obj, bool):
         d = h.create_dataset(name, data=np.bool_(obj))
-        d.attrs["kind"] = np.string_("bool")
+        d.attrs["kind"] = np.bytes_("bool")
         return d
 
     if isinstance(obj, int) and not isinstance(obj, bool):
         d = h.create_dataset(name, data=np.int64(obj))
-        d.attrs["kind"] = np.string_("int")
+        d.attrs["kind"] = np.bytes_("int")
         return d
 
     if isinstance(obj, float):
         d = h.create_dataset(name, data=np.float64(obj))
-        d.attrs["kind"] = np.string_("float")
+        d.attrs["kind"] = np.bytes_("float")
         return d
 
     if isinstance(obj, str):
         dt = h5py.string_dtype(encoding="utf-8")
         d = h.create_dataset(name, data=np.array(obj, dtype=dt))
-        d.attrs["kind"] = np.string_("str")
+        d.attrs["kind"] = np.bytes_("str")
         return d
 
     # Fallback: store as JSON string
     dt = h5py.string_dtype(encoding="utf-8")
     d = h.create_dataset(name, data=np.array(json.dumps(obj), dtype=dt))
-    d.attrs["kind"] = np.string_("json_blob")
+    d.attrs["kind"] = np.bytes_("json_blob")
     return d
 
 def json_to_hdf5(json_obj, h5_path, root="/"):
@@ -104,8 +104,8 @@ def json_to_hdf5(json_obj, h5_path, root="/"):
     Write a JSON-serializable object to HDF5 file at h5_path.
     """
     with h5py.File(h5_path, "w") as f:
-        f.attrs["format"] = np.string_("json-hdf5")
-        f.attrs["name_encoding"] = np.string_("percent-utf8")
+        f.attrs["format"] = np.bytes_("json-hdf5")
+        f.attrs["name_encoding"] = np.bytes_("percent-utf8")
         _write_json_node(f, root.strip("/"), json_obj)
 
 def json_file_to_hdf5(json_path, h5_path, root="/"):

@@ -82,6 +82,8 @@ def _coerce_times_for_ssapy(times, orbit_epoch_gps_s, assume="auto"):
         if _is_astropy_time(sample):
             return sample.__class__(times)
         if hasattr(sample, "year") or isinstance(sample, np.datetime64):
+            if isinstance(sample, np.datetime64):
+                times = np.asarray(times, dtype="datetime64[ns]")
             return _to_astropy_time(times)
 
     t = np.asarray(times, dtype=float).ravel()

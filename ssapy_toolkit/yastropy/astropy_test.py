@@ -3,8 +3,9 @@
 if __name__ == "__main__":
     import numpy as np
 
-    from ssapy_toolkit import *
-    from datetime import datetime
+    from astropy.time import Time
+    from ssapy_toolkit.yastropy.astropy_gcrf_to_llh import astropy_gcrf_to_llh
+    from ssapy_toolkit.yastropy.astropy_llh_to_gcrf import astropy_llh_to_gcrf
     
     # Test coordinates
     test_date = Time("2025-6-1", scale="utc")

@@ -19,6 +19,13 @@ def velocity_to_ntw(r, v, v_target):
     return np.array([n, t, w])
 
 
+def _tangential_direction(r):
+    tangent = np.cross([0, 0, 1], r)
+    if np.allclose(tangent, 0):
+        tangent = np.cross([0, 1, 0], r)
+    return tangent / np.linalg.norm(tangent)
+
+
 def transfer_hohmann(*args, r1=None, v1=None, r2=None, v2=None, elements1=None, elements2=None, orbit1=None, orbit2=None, t0=Time("2025-01-01"), mu=EARTH_MU, plot=False):
     """
     Compute a Hohmann transfer between two orbits and return orbital parameters and delta-V.
@@ -159,15 +166,19 @@ def transfer_hohmann(*args, r1=None, v1=None, r2=None, v2=None, elements1=None, 
     else:
         r1, r2 = orbit1.apoapsis, orbit2.periapsis
     r1_mag, r2_mag = np.linalg.norm(r1), np.linalg.norm(r2)
+    v1_direction = _tangential_direction(r1)
+    v2_direction = _tangential_direction(r2)
 
     if np.isclose(r1_mag, r2_mag, rtol=1e-6):
         v1_initial = np.sqrt(mu * (2.0 / r1_mag - 1.0 / orbit1.a))
         v2_final = np.sqrt(mu * (2.0 / r2_mag - 1.0 / orbit2.a))
+        v1_trans = v1_initial
+        v2_trans = v2_final
         delta_v1 = abs(v1_initial - v2_final)
         delta_v2 = 0.0
         tof = 0.0
         t_to_transfer = 0.0
-        transfer_orbit = Orbit(r=r1, v=orbit2.v, t=orbit1.t, mu=mu)
+        transfer_orbit = Orbit(r=r1, v=v1_direction * v2_final, t=orbit1.t, mu=mu)
     else:
         a_transfer = (r1_mag + r2_mag) / 2.0
         v1_initial = np.sqrt(mu * (2.0 / r1_mag - 1.0 / orbit1.a))
@@ -176,7 +187,6 @@ def transfer_hohmann(*args, r1=None, v1=None, r2=None, v2=None, elements1=None, 
         v2_trans = np.sqrt(mu * (2.0 / r2_mag - 1.0 / a_transfer))
         delta_v1 = v1_trans - v1_initial
         delta_v2 = v2_final - v2_trans
-        v1_direction = np.cross([0, 0, 1], r1) / np.linalg.norm(np.cross([0, 0, 1], r1))
         v1_trans_vector = v1_trans * v1_direction
         tof = np.pi * np.sqrt(a_transfer**3 / mu)
         M1 = orbit1.meanAnomaly
@@ -192,9 +202,9 @@ def transfer_hohmann(*args, r1=None, v1=None, r2=None, v2=None, elements1=None, 
     t_start = orbit1.t + t_to_transfer
     t_end = t_start + tof
     v1_initial_vector = v1_initial * v1_direction  # Assuming initial velocity direction aligns with transfer
-    v2_trans_vector = v2_trans * np.cross([0, 0, 1], r2) / np.linalg.norm(np.cross([0, 0, 1], r2))
+    v2_trans_vector = v2_trans * v2_direction
     delta_v1_vector = transfer_orbit.at(t_start).v - v1_initial_vector
-    delta_v2_vector = v2_final * v1_direction - transfer_orbit.at(t_end).v  # Adjusted direction assumption
+    delta_v2_vector = v2_final * v2_direction - transfer_orbit.at(t_end).v
 
     # Compute NTW delta-V
     delta_ntw1 = velocity_to_ntw(r1, v1_initial_vector, delta_v1_vector)

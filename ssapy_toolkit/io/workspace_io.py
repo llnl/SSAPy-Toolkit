@@ -71,7 +71,13 @@ def save_workspace(filename='workspace.json', exclude=None):
         
         try:
             # Handle different types
-            if isinstance(value, np.ndarray):
+            if HAS_ASTROPY and isinstance(value, u.Quantity):
+                workspace[name] = {
+                    '__type__': 'astropy.Quantity',
+                    'value': value.value.tolist() if hasattr(value.value, 'tolist') else float(value.value),
+                    'unit': str(value.unit)
+                }
+            elif isinstance(value, np.ndarray):
                 workspace[name] = {
                     '__type__': 'numpy.ndarray',
                     'data': value.tolist(),
@@ -100,17 +106,11 @@ def save_workspace(filename='workspace.json', exclude=None):
                     'colnames': value.colnames,
                     'meta': dict(value.meta) if value.meta else {}
                 }
-            elif HAS_ASTROPY and isinstance(value, u.Quantity):
-                workspace[name] = {
-                    '__type__': 'astropy.Quantity',
-                    'value': value.value.tolist() if hasattr(value.value, 'tolist') else float(value.value),
-                    'unit': str(value.unit)
-                }
             elif HAS_ASTROPY and isinstance(value, Time):
                 workspace[name] = {
                     '__type__': 'astropy.Time',
-                    'value': value.iso,
-                    'format': value.format,
+                    'value': value.isot,
+                    'format': 'isot',
                     'scale': value.scale
                 }
             elif HAS_ASTROPY and isinstance(value, SkyCoord):
@@ -202,8 +202,14 @@ def load_workspace(filename='workspace.json', into_globals=True):
                     df.columns.name = value['columns_name']
                 loaded_vars[name] = df
             elif type_name == 'pandas.Series' and HAS_PANDAS:
+                series_data = value['data']
+                if isinstance(series_data, dict):
+                    series_data = [
+                        series_data.get(idx, series_data.get(str(idx)))
+                        for idx in value['index']
+                    ]
                 loaded_vars[name] = pd.Series(
-                    value['data'],
+                    series_data,
                     index=value['index'],
                     name=value.get('name')
                 ).astype(value['dtype'])

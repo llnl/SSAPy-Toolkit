@@ -1,5 +1,7 @@
 import numpy as np
 import pytest
+import runpy
+from pathlib import Path
 from astropy.time import Time
 
 from ssapy_toolkit.time_functions.absolute_times_to_relative import time_abs_to_rel
@@ -47,3 +49,11 @@ def test_astropy_llh_gcrf_roundtrip_and_surface_velocity():
     assert v_surface.shape == (3,)
     assert np.isclose(np.linalg.norm(r_surface), 6_378_137.0, rtol=0, atol=1e-6)
     np.testing.assert_allclose(v_surface, np.cross([0.0, 0.0, 7.2921150e-5], r_surface))
+
+
+def test_astropy_roundtrip_script_entrypoint(capsys):
+    script = Path(__import__("ssapy_toolkit.yastropy.astropy_test", fromlist=["__file__"]).__file__)
+    runpy.run_path(script, run_name="__main__")
+    out = capsys.readouterr().out
+    assert "GCRF <-> Lat/Lon Conversion Test" in out
+    assert "Round-trip conversion successful" in out

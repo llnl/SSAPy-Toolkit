@@ -585,6 +585,62 @@ def test_globe_plot_returns_axis_after_theming(monkeypatch):
     fig.clear()
 
 
+def test_globe_plot_validation_labels_limits_and_save(monkeypatch, tmp_path):
+    import matplotlib.pyplot as plt
+    from astropy.time import Time
+    from PIL import Image
+
+    module = importlib.import_module("ssapy_toolkit.plots.globe_plot")
+    monkeypatch.setattr(module, "find_file", lambda *args, **kwargs: "earth.png")
+    monkeypatch.setattr(module.PILImage, "open", lambda path: Image.fromarray(np.ones((6, 12, 3), dtype=np.uint8) * 255))
+    monkeypatch.setattr(module, "make_white", lambda fig, ax: (fig, [ax]))
+    saved = []
+    monkeypatch.setattr(module, "save_plot", lambda fig, save_path: saved.append(Path(save_path)))
+
+    assert np.isfinite(module._earth_lon0_from_time(0.0))
+    assert np.isfinite(module._earth_lon0_from_time(Time(0.0, format="gps", scale="utc")))
+    with pytest.raises(ValueError, match="shape"):
+        module._earth_occultation_mask(np.ones((3, 2)), 1.0, 0.0, 0.0)
+
+    track = _sample_track()
+    with pytest.raises(ValueError, match="labels"):
+        module.globe_plot([track, track], labels=["one"], scale=2000)
+    with pytest.raises(ValueError, match="orbit_colors"):
+        module.globe_plot([track, track], orbit_colors=["red"], scale=2000)
+    with pytest.raises(ValueError, match="limits"):
+        module.globe_plot(track, limits=[[1, 2]], scale=2000)
+
+    fig2d, ax2d = plt.subplots()
+    with pytest.raises(ValueError, match="3D"):
+        module.globe_plot(track, ax=ax2d, scale=2000)
+    plt.close(fig2d)
+
+    fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+    returned_fig, returned_ax = module.globe_plot(
+        [track, track * 1.05],
+        t=[np.arange(3.0), np.arange(3.0)],
+        ax=ax,
+        c="white",
+        labels=["a", "b"],
+        orbit_colors=["red", "blue"],
+        legend_kwargs={"loc": "upper left"},
+        limits=[[-2, 2], [-3, 3], [-4, 4]],
+        title="Globe",
+        globe_time=0.0,
+        scale=2000,
+        savefig=tmp_path / "globe.png",
+    )
+    assert returned_fig is fig
+    assert returned_ax is ax
+    assert saved == [tmp_path / "globe.png"]
+    assert ax.get_xlim() == pytest.approx((-2, 2))
+    plt.close(fig)
+
+    fig, ax = module.globe_plot(track, c="other", orbit_colors=["green"], limits=1_000_000.0, scale=2000, show_legend=False)
+    assert ax.get_xlim()[1] < 1.0
+    plt.close(fig)
+
+
 def test_cislunar_plot_core_forwards_save_path(monkeypatch, tmp_path):
     core = importlib.import_module("ssapy_toolkit.plots._cislunar_plot_core")
     saved = {}
@@ -607,3 +663,34 @@ def test_cislunar_plot_core_forwards_save_path(monkeypatch, tmp_path):
     assert ax.name == "3d"
     assert saved["fig"] is fig
     assert saved["path"] == output_path
+
+
+def test_cislunar_plot_core_combined_and_xy_modes(monkeypatch):
+    core = importlib.import_module("ssapy_toolkit.plots._cislunar_plot_core")
+    monkeypatch.setattr(core, "_get_body", lambda name: _FakeBody())
+    monkeypatch.setattr(core, "_gcrf_to_lunar_fixed", lambda xyz, t: np.asarray(xyz) + 1000.0)
+    monkeypatch.setattr(
+        core,
+        "_lagrange_points_lunar_fixed_frame",
+        lambda: {"L1": np.array([1000.0, 1000.0, 1000.0]), "L2": np.array([1e9, 1e9, 1e9])},
+    )
+
+    tracks = [_sample_track(), _sample_track() * 1.05]
+    times = [np.arange(3.0), np.arange(3.0)]
+    fig, axes = core._cislunar_plot_core(tracks, t=times, mode="combined", c="black", legend=True, title="Demo")
+    assert len(axes) == 2
+    assert axes[0].name == "3d"
+    assert axes[1].name == "3d"
+    fig.clear()
+
+    fig, axes = core._cislunar_plot_core(_sample_track(), t=np.arange(3.0), mode="xy", c="white", legend=False)
+    assert axes[0].name == "rectilinear"
+    assert axes[1].name == "rectilinear"
+    fig.clear()
+
+    fig, axes = core._cislunar_plot_core(_sample_track(), t=np.arange(3.0), mode="cislunar_dashboard", legend=False)
+    assert len(axes) == 2
+    fig.clear()
+
+    with pytest.raises(ValueError, match="mode"):
+        core._cislunar_plot_core(_sample_track(), t=np.arange(3.0), mode="bad")

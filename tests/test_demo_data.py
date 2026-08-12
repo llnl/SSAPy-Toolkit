@@ -82,12 +82,110 @@ def test_ensure_demo_data_file_warns_and_cleans_up_failed_fetch(tmp_path, monkey
     assert not (tmp_path / "cache" / "broken.txt").exists()
 
 
+def test_ensure_demo_data_file_no_fetcher_empty_fetch_and_unlink_failure(tmp_path, monkeypatch):
+    _patch_demo_datapath(monkeypatch, tmp_path / "cache")
+
+    with pytest.warns(demo_data.DemoDataUnavailableWarning, match="no fetcher"):
+        assert demo_data.ensure_demo_data_file("unknown.bin") is None
+
+    def empty_fetcher(target, *, timeout):
+        Path(target).touch()
+
+    monkeypatch.setitem(demo_data._DEMO_DATA_FETCHERS, "empty.txt", empty_fetcher)
+    with pytest.warns(demo_data.DemoDataUnavailableWarning, match="produced no file"):
+        assert demo_data.ensure_demo_data_file("empty.txt") is None
+
+    def failing_fetcher(target, *, timeout):
+        Path(target).write_text("partial\n", encoding="utf-8")
+        raise OSError("disk issue")
+
+    def blocked_unlink(self, missing_ok=False):
+        raise OSError("permission denied")
+
+    monkeypatch.setitem(demo_data._DEMO_DATA_FETCHERS, "unlink-blocked.txt", failing_fetcher)
+    monkeypatch.setattr(demo_data.Path, "unlink", blocked_unlink)
+    with pytest.warns(demo_data.DemoDataUnavailableWarning, match="download failed"):
+        assert demo_data.ensure_demo_data_file("unlink-blocked.txt") is None
+
+
 def test_horizons_vector_rows_extracts_csv_rows():
     text = "header\n$$SOE\n2461132.5,A.D. 2026-Apr-02 00:00:00.0000,1,2,3,4,5,6,\n$$EOE\nfooter"
 
     rows = demo_data._horizons_vector_rows(text)
 
     assert rows == ["2461132.5,A.D. 2026-Apr-02 00:00:00.0000,1,2,3,4,5,6"]
+
+
+def test_demo_data_fetchers_validate_and_write_without_network(tmp_path, monkeypatch):
+    calls = []
+
+    def fake_download(url, *, timeout):
+        calls.append((url, timeout))
+        if "stations" in url:
+            return "ISS\n1 00000\n2 00000\n"
+        if "FORMAT=xml" in url:
+            return "<ndm><omm /></ndm>"
+        if "horizons" in url:
+            return "header\n$$SOE\n2461132.5,A.D. 2026-Apr-02 00:00:00.0000,1,2,3,4,5,6,extra\n$$EOE\n"
+        return "not tle"
+
+    monkeypatch.setattr(demo_data, "_download_text", fake_download)
+
+    tle_path = tmp_path / "tle.txt"
+    demo_data._fetch_full_catalog_3le(tle_path, timeout=4)
+    assert tle_path.read_text(encoding="utf-8").startswith("ISS")
+    assert len(calls) == 2
+
+    xml_path = tmp_path / "catalog.xml"
+    demo_data._fetch_full_catalog_xml(xml_path, timeout=5)
+    assert "<ndm" in xml_path.read_text(encoding="utf-8")
+
+    horizons_path = tmp_path / "horizons.csv"
+    demo_data._fetch_artemis2_orion_state_vectors(horizons_path, timeout=6)
+    contents = horizons_path.read_text(encoding="utf-8")
+    assert "JDTDB,Calendar_Date_TDB" in contents
+    assert "2461132.5" in contents
+
+    monkeypatch.setattr(demo_data, "_download_text", lambda *args, **kwargs: "invalid")
+    with pytest.raises(URLError):
+        demo_data._fetch_full_catalog_3le(tmp_path / "bad_tle.txt", timeout=1)
+    with pytest.raises(ValueError, match="OMM XML"):
+        demo_data._fetch_full_catalog_xml(tmp_path / "bad.xml", timeout=1)
+    with pytest.raises(ValueError, match="vector rows"):
+        demo_data._fetch_artemis2_orion_state_vectors(tmp_path / "bad.csv", timeout=1)
+
+
+def test_download_text_and_local_candidate_deduplication(tmp_path, monkeypatch):
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return "payload".encode("utf-8")
+
+    captured = {}
+
+    def fake_urlopen(request, timeout):
+        captured["agent"] = request.headers["User-agent"]
+        captured["timeout"] = timeout
+        return FakeResponse()
+
+    monkeypatch.setattr(demo_data, "urlopen", fake_urlopen)
+    assert demo_data._download_text("https://example.test/data", timeout=7) == "payload"
+    assert captured == {"agent": demo_data._USER_AGENT, "timeout": 7}
+
+    cache = tmp_path / demo_data.DEFAULT_DATA_DIR_NAME
+    _patch_demo_datapath(monkeypatch, cache)
+    candidates = list(demo_data._local_data_candidates("demo.txt", local_dirs=[cache, tmp_path]))
+    assert all(path != cache / "demo.txt" for path in candidates)
+    assert len({path.resolve(strict=False) for path in candidates}) == len(candidates)
+
+    module_path = tmp_path / "workdir" / "SSAPy-Toolkit" / "ssapy_toolkit" / "io" / "demo_data.py"
+    monkeypatch.setattr(demo_data, "__file__", str(module_path))
+    assert any(path.name == "demo.txt" for path in demo_data._local_data_candidates("demo.txt"))
 
 
 def test_demo_parsing_3le_skips_when_optional_data_unavailable(monkeypatch):

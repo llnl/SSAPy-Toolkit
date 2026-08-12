@@ -235,8 +235,8 @@ def ellipse_fit(
         if (a_m is None) == (e is None):
             raise ValueError("Provide exactly one of {a_m, e, F2_m}.")
 
-        if e is not None and float(e) == 0.0:
-            raise ValueError("e=0 (circular) is not supported by the current focus solver path.")
+        if e is not None and not (0.0 < float(e) < 1.0):
+            raise ValueError("e must satisfy 0 < e < 1 for ellipse fitting.")
 
         def residual(xy_m):
             F_m = _to_3d_m(xy_m, u_hat, v_hat)

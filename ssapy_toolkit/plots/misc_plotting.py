@@ -246,7 +246,7 @@ def scatter2d(x: list, y: list, cs: list, xlabel: str = 'x', ylabel: str = 'y', 
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     scalarMap.set_array(cs_arr)
-    fig.colorbar(scalarMap, shrink=.5, label=f'{cbar_label}', pad=0.04)
+    fig.colorbar(scalarMap, ax=ax, shrink=.5, label=f'{cbar_label}', pad=0.04)
     plt.tight_layout()
     fig, ax = make_black(fig, ax)
     plt.show(block=False)
@@ -284,7 +284,7 @@ def scatter3d(x: list, y: list = None, z: list = None, cs: list = None,
         scalarMap = cm.ScalarMappable(norm=cNorm, cmap=cmap)
         ax.scatter(x, y, z, c=scalarMap.to_rgba(cs_arr), s=dotsize)
         scalarMap.set_array(cs_arr)
-        fig.colorbar(scalarMap, shrink=.5, label=f'{cbar_label}', pad=0.075)
+        fig.colorbar(scalarMap, ax=ax, shrink=.5, label=f'{cbar_label}', pad=0.075)
 
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
