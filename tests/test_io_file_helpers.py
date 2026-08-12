@@ -11,7 +11,7 @@ import pandas as pd
 import pytest
 from astropy.time import Time
 
-from ssapy_toolkit.io import csv_utils, dict_to_from_hdf5, hdf5_to_csv, hdf5_utils, io_utils, json_utils
+from ssapy_toolkit.io import csv_utils, dict_to_from_hdf5, get_memory, hdf5_to_csv, hdf5_utils, io_utils, json_utils, pickle_utils
 from ssapy_toolkit.io.guess_delimiter import guess_csv_delimiter
 
 h5cache_module = importlib.import_module("ssapy_toolkit.io.h5cache")
@@ -184,7 +184,7 @@ def test_hdf5_to_csv_helpers_and_main(tmp_path, monkeypatch, capsys):
     assert (out_dir / "group_vector.csv").exists()
 
     with pytest.raises(SystemExit):
-        hdf5_to_csv.main()
+        hdf5_to_csv.main([])
 
     with pytest.warns(UserWarning, match="Ignoring /cube"):
         hdf5_to_csv.main([str(h5_path)])
@@ -242,6 +242,30 @@ def test_csv_and_io_utils(tmp_path, capsys):
     assert io_utils.pd_flatten(["[1,2]", 4], factor=2) == [0.5, 1.0, 2.0]
     np.testing.assert_array_equal(io_utils.str_to_array("[1, 2, 3]"), [1, 2, 3])
     assert len(io_utils.allfiles(tmp_path)) >= 1
+
+
+def test_pickle_and_memory_helpers_roundtrip(tmp_path, monkeypatch):
+    path = tmp_path / "payload.pkl"
+    payload = {"name": "ssatk", "values": [1, 2, 3]}
+
+    pickle_utils.save_pickle(payload, path)
+
+    assert pickle_utils.read_pickle(path) == payload
+
+    class FakeMemoryInfo:
+        rss = 2 * 1024**3
+
+    class FakeProcess:
+        def __init__(self, pid):
+            self.pid = pid
+
+        def memory_info(self):
+            return FakeMemoryInfo()
+
+    monkeypatch.setattr(get_memory, "Process", FakeProcess)
+    monkeypatch.setattr(get_memory.os, "getpid", lambda: 123)
+
+    assert get_memory.get_memory_usage() == "Memory used: 2.00 GB"
 
 
 def test_io_utils_directory_branches_and_numbered_image_sort(tmp_path, monkeypatch, capsys):

@@ -137,6 +137,82 @@ def test_gcrf_to_lunar_and_fixed_helpers(monkeypatch):
     np.testing.assert_allclose(fixed_vel, np.ones_like(fixed) * 5.0)
 
 
+def test_v_from_r_validation_and_time_inputs():
+    from astropy.time import Time
+    from ssapy_toolkit.coordinates.v_from_r import v_from_r
+
+    positions = np.array([[0.0, 0.0, 0.0], [2.0, 4.0, 6.0], [4.0, 8.0, 12.0]])
+    times = Time([0.0, 2.0, 4.0], format="gps", scale="utc")
+
+    velocities = v_from_r(positions, times)
+
+    np.testing.assert_allclose(velocities, np.array([[1.0, 2.0, 3.0]] * 3))
+    with pytest.raises(ValueError, match="shape"):
+        v_from_r(np.ones(3), [0.0, 1.0, 2.0])
+    with pytest.raises(ValueError, match="1D"):
+        v_from_r(positions, np.ones((3, 1)))
+    with pytest.raises(ValueError, match="same length"):
+        v_from_r(positions, [0.0, 1.0])
+    with pytest.raises(ValueError, match="at least two"):
+        v_from_r(positions[:1], [0.0])
+
+
+def test_surface_rv_wrappers_forward_arguments(monkeypatch):
+    module = importlib.import_module("ssapy_toolkit.coordinates.surface_rv")
+    astropy_calls = []
+
+    def fake_astropy_surface_rv(**kwargs):
+        astropy_calls.append(kwargs)
+        return np.array([1.0, 2.0, 3.0]), np.array([0.1, 0.2, 0.3])
+
+    class FakeEarthObserver:
+        def __init__(self, lon, lat, elevation=0.0, fast=False):
+            self.lon = lon
+            self.lat = lat
+            self.elevation = elevation
+            self.fast = fast
+
+        def getRV(self, t):
+            return np.array([self.lon, self.lat, self.elevation]), np.array([t, float(self.fast), 0.0])
+
+    monkeypatch.setattr(module, "astropy_surface_rv", fake_astropy_surface_rv)
+    monkeypatch.setattr(module, "EarthObserver", FakeEarthObserver)
+    monkeypatch.setattr(module, "to_gps", lambda value: 42.0)
+
+    r, v = module.surface_rv(lon=1.0, lat=2.0, elevation=3.0, t="time")
+    np.testing.assert_allclose(r, [1.0, 2.0, 3.0])
+    np.testing.assert_allclose(v, [0.1, 0.2, 0.3])
+    assert astropy_calls == [{"lon": 1.0, "lat": 2.0, "elevation": 3.0, "t": "time"}]
+
+    r_ssapy, v_ssapy = module.surface_rv_ssapy(lon=4.0, lat=5.0, elevation=6.0, t="time", fast=True)
+    np.testing.assert_allclose(r_ssapy, [4.0, 5.0, 6.0])
+    np.testing.assert_allclose(v_ssapy, [42.0, 1.0, 0.0])
+
+
+def test_lunar_rv_scalar_and_time_sequence(monkeypatch):
+    module = importlib.import_module("ssapy_toolkit.coordinates.lunar_position")
+
+    class FakeTimeValue:
+        def __init__(self, gps):
+            self.gps = float(gps)
+
+    class FakeMoonBody:
+        def position(self, t):
+            values = np.asarray(t, dtype=float)
+            return np.vstack((values, 2.0 * values, 3.0 * values)) if values.ndim else np.array([values, 2.0 * values, 3.0 * values])
+
+    monkeypatch.setattr(module, "Time", FakeTimeValue)
+    monkeypatch.setattr(module, "get_body", lambda name: FakeMoonBody())
+
+    r_scalar, v_scalar = module.get_lunar_rv(10.0)
+    np.testing.assert_allclose(r_scalar, [[10.0, 20.0, 30.0]])
+    np.testing.assert_allclose(v_scalar, [[1.0, 2.0, 3.0]])
+
+    r_vector, v_vector = module.get_lunar_rv([FakeTimeValue(0.0), FakeTimeValue(1.0), FakeTimeValue(2.0)])
+    np.testing.assert_allclose(r_vector, [[0.0, 0.0, 0.0], [1.0, 2.0, 3.0], [2.0, 4.0, 6.0]])
+    np.testing.assert_allclose(v_vector, [[1.0, 2.0, 3.0]] * 3)
+
+
 def test_j2000_validation_and_time_parsing():
     from ssapy_toolkit.coordinates.j2000_to_gcrf import j2000_to_gcrf
     from astropy.time import Time

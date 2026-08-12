@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """
-h5_to_csv.py
+hdf5_to_csv.py
 
 Library + script:
 
 - Import and call: hdf5_to_csv_per_key("input.h5")
-- Or run directly: python h5_to_csv.py
-  (uses the hard-coded path in main()).
+- Or run directly: python hdf5_to_csv.py input.h5
 """
 
 from __future__ import annotations

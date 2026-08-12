@@ -18,6 +18,8 @@ from ssapy_toolkit.plots.plotutils import figsave, fsave, ssatk_fig
 
 data_path_module = importlib.import_module("ssapy_toolkit.io.datapath")
 fig_path_module = importlib.import_module("ssapy_toolkit.plots.figpath")
+ssatk_cache_module = importlib.import_module("ssapy_toolkit.io.ssatk_cache")
+ssatk_data_module = importlib.import_module("ssapy_toolkit.io.ssatk_data")
 top_level_launch_pads = importlib.import_module("ssapy_toolkit.launch_pads")
 orbital_launch_pads = importlib.import_module("ssapy_toolkit.orbital_mechanics.launch_pads")
 
@@ -201,3 +203,18 @@ def test_datapath_does_not_fall_back_to_cwd(tmp_path, monkeypatch):
         data_path_module.datapath("catalogs/sample.txt")
 
     assert not fallback.exists()
+
+
+def test_ssatk_data_and_cache_wrappers_forward_arguments(monkeypatch, tmp_path):
+    cache_calls = []
+    load_calls = []
+
+    monkeypatch.setattr(ssatk_cache_module, "h5cache", lambda *args, **kwargs: cache_calls.append((args, kwargs)) or "cached")
+    monkeypatch.setattr(ssatk_cache_module, "h5load", lambda *args, **kwargs: load_calls.append((args, kwargs)) or "loaded")
+    monkeypatch.setattr(ssatk_data_module, "datapath", lambda filename="data", dirs=None: (filename, dirs))
+
+    assert ssatk_cache_module.ssatk_cache("payload", path=tmp_path / "cache.h5") == "cached"
+    assert ssatk_cache_module.ssatk_load(tmp_path / "cache.h5", key="payload") == "loaded"
+    assert ssatk_data_module.ssatk_data("catalog.txt", dirs=[tmp_path]) == ("catalog.txt", [tmp_path])
+    assert cache_calls[0][0] == ("payload",)
+    assert load_calls[0][1] == {"key": "payload"}

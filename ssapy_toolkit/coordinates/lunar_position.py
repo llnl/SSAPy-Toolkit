@@ -15,21 +15,24 @@ def get_lunar_rv(t):
 
     Returns:
     tuple: A tuple containing two elements:
-        - r (ndarray): The position of the Moon(s) at the given time(s), in kilometers.
-        - v (ndarray): The velocity of the Moon(s) at the given time(s), in kilometers per second.
+        - r (ndarray): The position of the Moon(s) at the given time(s),
+          in SSAPy ephemeris distance units.
+        - v (ndarray): The velocity of the Moon(s) at the given time(s),
+          in SSAPy ephemeris distance units per second.
 
     Author:
     Travis Yeager (yeager7@llnl.gov)
     """
-    if np.size(t) > 1:
-        if isinstance(t[0], Time):
-            t = t.gps
-    else:
-        if isinstance(t, Time):
-            t = t.gps
-    r = get_body("moon").position(t).T
+    if isinstance(t, Time):
+        t = t.gps
+    elif np.size(t) > 1 and isinstance(t[0], Time):
+        t = np.array([ti.gps for ti in t], dtype=float)
+
+    moon = get_body("moon")
+    r = moon.position(t).T
     if np.size(t) > 1:
         v = v_from_r(r, t)
     else:
-        v = (r - get_body("moon").position(t + 1).T) / 2
+        dt = 1.0
+        v = (moon.position(t + dt).T - moon.position(t - dt).T) / (2.0 * dt)
     return np.atleast_2d(r), np.atleast_2d(v)

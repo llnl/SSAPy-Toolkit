@@ -2,7 +2,15 @@ import numpy as np
 import pytest
 import importlib
 
+from ssapy_toolkit.io.tle_iter_pairs import tle_iter_pairs
+
 read_3le_by_bit = importlib.import_module("ssapy_toolkit.io.read_3le_by_bit")
+
+
+def _tle_line_with_checksum(prefix):
+    body = prefix[:68].ljust(68)
+    checksum = sum(int(ch) for ch in body if ch.isdigit()) + body.count("-")
+    return body + str(checksum % 10)
 
 
 TLE1 = "1 25544U 98067A   20029.54791435  .00000742  00000-0  20455-4 0  9993"
@@ -21,6 +29,29 @@ def test_cast_value_variants_and_errors():
     assert np.isnan(read_3le_by_bit._cast_value("bad", "tleexp"))
     with pytest.raises(ValueError, match="Unknown kind"):
         read_3le_by_bit._cast_value("1", "bad")
+
+
+def test_tle_iter_pairs_handles_bom_names_mismatch_and_checksum(tmp_path):
+    line1 = _tle_line_with_checksum("1 00005U 58002B   00179.78495062  .00000023  00000-0  28098-4 0  475")
+    line2 = _tle_line_with_checksum("2 00005  34.2682 348.7242 1859667 331.7664  19.3264 10.8241915741366")
+    mismatch_line2 = _tle_line_with_checksum("2 99999  34.2682 348.7242 1859667 331.7664  19.3264 10.8241915741366")
+    bad_line1 = line1[:-1] + str((int(line1[-1]) + 1) % 10)
+    path = tmp_path / "catalog.tle"
+    path.write_text(
+        "\ufeff0 VANGUARD 1\n"
+        f"{line1}\n{line2}\n\n"
+        "0 MISMATCH\n"
+        f"{line1}\n{mismatch_line2}\n"
+        "0 BAD CHECKSUM\n"
+        f"{bad_line1}\n{line2}\n",
+        encoding="utf-8",
+    )
+
+    assert list(tle_iter_pairs(path, validate_checksum=True)) == [
+        ("VANGUARD 1", line1, line2),
+        (None, line1, mismatch_line2),
+    ]
+    assert len(list(tle_iter_pairs(path, validate_checksum=False))) == 3
 
 
 def test_parse_fixed_width_records_and_selector(tmp_path):
