@@ -559,13 +559,17 @@ def _build_maneuver_results(fast):
     }
 
     elliptical_cases = {
-        "Sub-GEO mild ellipses": {
-            "initial": (7000e3, 11_000e3, np.deg2rad(60.0), 0.0, 0.0, 0.0),
-            "target": (9000e3, 16_000e3, np.deg2rad(220.0), 0.0, np.deg2rad(10.0), np.deg2rad(80.0)),
+        "Aligned sub-GEO ellipses": {
+            "initial": (7000e3, 11_000e3, 0.0, 0.0, 0.0, 0.0),
+            "target": (9000e3, 16_000e3, np.pi, 0.0, 0.0, 0.0),
         },
-        "MEO ellipses below GEO": {
+        "Slightly inclined MEO ellipses": {
+            "initial": (9000e3, 18_000e3, 0.0, np.deg2rad(5.0), 0.0, 0.0),
+            "target": (12_000e3, 26_000e3, np.pi, np.deg2rad(7.0), 0.0, 0.0),
+        },
+        "Near-GEO aligned ellipses": {
             "initial": (12_000e3, 26_000e3, 0.0, 0.0, 0.0, 0.0),
-            "target": (16_000e3, 32_000e3, np.deg2rad(20.0), 0.0, np.deg2rad(10.0), 0.0),
+            "target": (22_000e3, 42_164e3, np.pi, 0.0, 0.0, 0.0),
         },
     }
     elliptical_two_burn = {}
@@ -577,8 +581,8 @@ def _build_maneuver_results(fast):
         max_period = max(_period_from_rpra(rp1, ra1), _period_from_rpra(rp2, ra2))
         elliptical_kwargs = {
             "departure_mode": "now",
-            "tof_range": (0.12 * max_period, max_period),
-            "n_grid": (3, 3) if fast else (5, 5),
+            "tof_range": (0.10 * max_period, 1.20 * max_period),
+            "n_grid": (4, 4) if fast else (6, 6),
             "polish": False,
             "propagate": False,
             "refine": False,
@@ -604,7 +608,6 @@ def _build_maneuver_results(fast):
         staged_candidates = [
             transfer_optimal(*boundary, stage_mode="immediate", n_stage_stops=1, **elliptical_kwargs, **elliptical_stage_kwargs),
             transfer_optimal(*boundary, stage_mode="timed", n_stage_stops=1, **elliptical_kwargs, **elliptical_stage_kwargs),
-            transfer_optimal(*boundary, stage_mode="timed", n_stage_stops=2, **elliptical_kwargs, **elliptical_stage_kwargs),
         ]
         best_staged = _best_delta_v_result(staged_candidates)
         direct["case_description"] = f"e₀={e0:.2f}, e_f={e1:.2f}; both apogees below GEO"
