@@ -4,6 +4,7 @@ Demo script showing how to call synthetic_orbit_population and orbit_stats_dashb
 
 import os
 import sys
+import matplotlib.pyplot as plt
 import numpy as np
 
 from ssapy_toolkit.orbital_mechanics.synthetic_orbit_population import synthetic_orbit_population
@@ -70,7 +71,7 @@ def main(make_figures=None, fast=None):
         fig_pop = out_pop["figure"]
         figsave(fig_pop, "demo_gallery/figures/orbital_stats_dashboard_population.jpg")
         if fig_pop is not None:
-            fig_pop.show()
+            plt.close(fig_pop)
 
     return out_pop
 
