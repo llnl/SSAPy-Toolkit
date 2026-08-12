@@ -103,9 +103,16 @@ For workflow functions, import the specific Toolkit module you need:
 ```
 from ssapy_toolkit.orbital_mechanics import keplerian
 from ssapy_toolkit.orbital_mechanics import transfer_hohmann
+from ssapy_toolkit.orbital_mechanics import transfer_bielliptic
 from ssapy_toolkit.coordinates import gcrf_to_itrf
 from ssapy_toolkit.plots import orbit_plot
 ```
+
+`transfer_bielliptic` computes the analytic three-impulse, two-half-ellipse
+transfer between coplanar circular orbits through an intermediate apoapsis
+radius. It is useful for quick radius-to-radius trade studies; use
+`transfer_ssapy` or `transfer_optimal` when fixed epochs, target phasing,
+perturbed propagation, or non-circular boundary states matter.
 
 `orbit_plot` is the main entry point for in-space trajectory plots. It keeps the
 legacy four-panel orbit view by default, and also accepts compact selectors for

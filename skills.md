@@ -97,6 +97,12 @@ unavailable so demos/tests can skip gracefully.
 - `ssapy_toolkit.ssapy_wrappers`: convenience wrappers around SSAPy orbits and propagation.
 - `demos/`: runnable examples that should stay small and avoid checked-in generated outputs.
 
+For transfer work, prefer `transfer_ssapy` for fixed boundary states and
+`transfer_optimal` for departure/time-of-flight/phase searches. Use
+`transfer_bielliptic` only for the analytic three-impulse, coplanar circular
+orbit-to-orbit case through an intermediate apoapsis; it intentionally does not
+solve target phasing.
+
 Prefer correctly spelled module paths in new code:
 `coordinates.equatorial_and_ecliptic`, `coordinates.local_and_equatorial`,
 `accelerations.accel_equatorial`, and
