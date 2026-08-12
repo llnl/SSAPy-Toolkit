@@ -5,6 +5,8 @@ import rebound
 import numpy as np
 import matplotlib.pyplot as plt
 
+from ssapy_toolkit.plots.plotutils import figsave
+
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
 # Smoke/validation module: exercised by pytest, not rendered in the demo gallery.
@@ -55,7 +57,8 @@ def main(make_figures=None, fast=None):
         ax.set_title("Path of Object in Free Fall Through Earth (Point Source)")
         ax.legend()
         plt.axis("equal")
-        plt.show()
+        figsave(fig, "demo_gallery/figures/ellipses_rebound_path.jpg")
+        plt.close(fig)
 
     return {"positions": positions}
 

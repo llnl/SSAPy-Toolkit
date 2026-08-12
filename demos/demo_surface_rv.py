@@ -7,7 +7,7 @@ from astropy.time import Time
 
 from ssapy_toolkit.coordinates.surface_rv import surface_rv
 from ssapy_toolkit.time_functions.get_times import get_times
-from ssapy_toolkit.plots.figpath import figpath  # inferred from repo pattern
+from ssapy_toolkit.plots.plotutils import figsave
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -31,14 +31,15 @@ def main(make_figures=None, fast=None):
     rs = np.array(rs)
 
     if make_figures:
-        plt.figure()
+        fig = plt.figure()
         plt.plot(rs[:, 0], rs[:, 1], linewidth=1.5)
         plt.gca().set_aspect("equal", adjustable="box")
         plt.xlabel("x")
         plt.ylabel("y")
         plt.title("Single site trajectory (lat=0, lon=0)")
         plt.tight_layout()
-        plt.show()
+        figsave(fig, "demo_gallery/figures/surface_rv_xy.jpg")
+        plt.close(fig)
 
     return {"rs": rs, "times": times, "t0": t0}
 

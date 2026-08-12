@@ -21,6 +21,14 @@ except ImportError:
     HAS_ASTROPY = False
 
 
+def _representation_type_name(representation_type):
+    name = getattr(representation_type, "name", None)
+    if name is not None:
+        return name
+
+    return str(representation_type)
+
+
 def save_workspace(filename='workspace.json', exclude=None):
     """
     Save all variables from the current workspace to a JSON file.
@@ -119,7 +127,7 @@ def save_workspace(filename='workspace.json', exclude=None):
                     'ra': value.ra.deg,
                     'dec': value.dec.deg,
                     'frame': value.frame.name,
-                    'representation_type': value.representation_type.get_name()
+                    'representation_type': _representation_type_name(value.representation_type)
                 }
             elif isinstance(value, (datetime,)):
                 workspace[name] = {
@@ -153,7 +161,9 @@ def save_workspace(filename='workspace.json', exclude=None):
     }
     
     # Save to file
-    with open(filename, 'w') as f:
+    path = Path(filename)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open('w', encoding='utf-8') as f:
         json.dump(result, f, indent=2)
     
     print(f"✓ Workspace saved to '{filename}'")
@@ -181,7 +191,7 @@ def load_workspace(filename='workspace.json', into_globals=True):
     dict : Dictionary of loaded variables
     """
     # Load from file
-    with open(filename, 'r') as f:
+    with Path(filename).open('r', encoding='utf-8') as f:
         data = json.load(f)
     
     variables = data.get('variables', {})

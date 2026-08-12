@@ -14,6 +14,7 @@ from ssapy_toolkit.coordinates.itrf_to_gcrf import itrf_to_gcrf
 from ssapy_toolkit.time_functions.get_times import get_times
 from ssapy_toolkit.ssapy_wrappers.ssapy_orbits import ssapy_orbit
 from ssapy_toolkit.constants import RGEO  # [19]
+from ssapy_toolkit.plots.plotutils import figsave
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -47,7 +48,8 @@ def test_coordinate_transforms(make_figures=False):
         ax.set_zlabel("Z (m)")
         ax.set_title("GCRF and ITRF Coordinate Transformations")
         ax.legend()
-        plt.show()
+        figsave(fig, "demo_gallery/figures/itrf_to_gcrf_roundtrip.jpg")
+        plt.close(fig)
 
     return {"difference": difference, "tolerance": tolerance}
 

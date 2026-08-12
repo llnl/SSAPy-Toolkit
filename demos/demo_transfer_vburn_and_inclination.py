@@ -5,10 +5,8 @@ import matplotlib.pyplot as plt
 
 from ssapy_toolkit.orbital_mechanics.transfer_velocity_continuous import transfer_velocity_continuous
 from ssapy_toolkit.orbital_mechanics.transfer_inclination_continuous import transfer_inclination_continuous
-from ssapy_toolkit.constants import EARTH_RADIUS, RGEO, VGEO
-from ssapy_toolkit.plots.figpath import figpath
-from ssapy_toolkit.integrators.quick_int import quickint
-from ssapy_toolkit.time_functions.get_times import get_times  # [40]
+from ssapy_toolkit.constants import RGEO, VGEO
+from ssapy_toolkit.plots.plotutils import figsave
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -39,7 +37,8 @@ def main(make_figures=None):
         ax.set_zlabel("Z (m)")
         ax.set_title("Combined Trajectories of Velocity, Inclination Burns, and Coasting Orbit")
         ax.legend()
-        plt.show()
+        figsave(fig, "demo_gallery/figures/transfer_velocity_inclination.jpg")
+        plt.close(fig)
 
     return {"velocity_burn": (r1, v1, t1), "inclination_burn": (r2, v2, t2)}
 

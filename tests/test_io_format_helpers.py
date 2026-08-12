@@ -1,4 +1,5 @@
 import json
+import warnings
 from datetime import datetime
 
 import h5py
@@ -9,6 +10,7 @@ import astropy.units as u
 from astropy.coordinates import SkyCoord
 from astropy.table import Table
 from astropy.time import Time
+from astropy.utils.exceptions import AstropyDeprecationWarning
 
 from ssapy_toolkit.io import converter_json_hdf5, pprint_utils, workspace_io, xml_utils
 
@@ -209,7 +211,7 @@ def test_pprint_utils_h5py_optional_error(monkeypatch):
 
 
 def test_workspace_save_and_load_roundtrip(tmp_path, capsys):
-    path = tmp_path / "workspace.json"
+    path = tmp_path / "nested" / "workspace.json"
 
     def save_it():
         scalar = 42
@@ -238,6 +240,12 @@ def test_workspace_save_and_load_roundtrip(tmp_path, capsys):
 def test_workspace_astropy_types_and_global_injection(tmp_path):
     path = tmp_path / "workspace_astropy.json"
 
+    class FakeRepresentation:
+        name = "fake-representation"
+
+    assert workspace_io._representation_type_name(FakeRepresentation) == "fake-representation"
+    assert workspace_io._representation_type_name("fallback") == "fallback"
+
     def save_it():
         distance = 5.0 * u.km
         time = Time("2026-01-01T00:00:00", format="isot", scale="utc")
@@ -246,7 +254,11 @@ def test_workspace_astropy_types_and_global_injection(tmp_path):
         unsupported = object()
         return workspace_io.save_workspace(path)
 
-    saved = save_it()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        saved = save_it()
+
+    assert not [warning for warning in caught if issubclass(warning.category, AstropyDeprecationWarning)]
     assert "unsupported" in saved["__metadata__"]["skipped_variables"]
 
     loaded = workspace_io.load_workspace(path, into_globals=False)
