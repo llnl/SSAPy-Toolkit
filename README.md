@@ -207,8 +207,9 @@ For keyed HDF5 or NPZ outputs, pass `key=`. Non-mapping objects default to
 `"data"`; dictionaries use their own keys; nested dictionaries become nested
 HDF5 groups or slash-delimited NPZ members.
 
-More detailed examples can be found in the `demos/` directory. To render the
-full demo gallery as a visualization document:
+More detailed examples can be found in the categorized `demos/` directory. The
+demo gallery runner searches those subfolders recursively. To render the full
+demo gallery as a visualization document:
 
 ```
 ssapy-demo-gallery

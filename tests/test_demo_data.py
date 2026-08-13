@@ -189,7 +189,7 @@ def test_download_text_and_local_candidate_deduplication(tmp_path, monkeypatch):
 
 
 def test_demo_parsing_3le_skips_when_optional_data_unavailable(monkeypatch):
-    from demos import demo_parsing_3le
+    from demos.getting_started import demo_parsing_3le
 
     monkeypatch.setattr(demo_parsing_3le, "ensure_demo_data_file", lambda *args, **kwargs: None)
 
@@ -201,7 +201,7 @@ def test_demo_parsing_3le_skips_when_optional_data_unavailable(monkeypatch):
 
 
 def test_demo_artemis_benchmark_skips_when_optional_data_unavailable(monkeypatch):
-    from demos import demo_artemis_benchmark
+    from demos.orbital_mechanics import demo_artemis_benchmark
 
     monkeypatch.setattr(demo_artemis_benchmark, "_find_csv", lambda allow_download=True: None)
 

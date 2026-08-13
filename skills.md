@@ -95,7 +95,7 @@ unavailable so demos/tests can skip gracefully.
 - `ssapy_toolkit.orbital_mechanics`: Keplerian elements, transfers, burns, orbit fitting, and orbit statistics.
 - `ssapy_toolkit.plots`: orbit, cislunar, ground-track, dashboard, GIF, and video plotting helpers.
 - `ssapy_toolkit.ssapy_wrappers`: convenience wrappers around SSAPy orbits and propagation.
-- `demos/`: runnable examples that should stay small and avoid checked-in generated outputs.
+- `demos/`: categorized runnable examples (`getting_started`, `orbital_mechanics`, `coordinates`, `plotting`, `photometry`, `data_io`) that should stay small and avoid checked-in generated outputs.
 
 For transfer work, prefer `transfer_ssapy` for fixed boundary states and
 `transfer_optimal` for departure/time-of-flight/phase searches. Use
@@ -125,7 +125,7 @@ match. `route` accepts `"direct"`, `"immediate"`, `"multi_stage"`, or `"best"`;
 `timing="optimized"` maps to the timed staged search. Structured results include
 `diagnostics["problem_schema"] == "ssatk.transfer_problem.v1"`.
 The user-facing maneuver gallery is consolidated in
-`demos/demo_orbital_maneuvers.py`, including staged optimal geometry, burn
+`demos/orbital_mechanics/demo_orbital_maneuvers.py`, including staged optimal geometry, burn
 timeline figures, and elliptical GEO-or-below direct-vs-staged comparisons.
 Avoid adding one-off transfer demos unless a new workflow cannot fit that
 all-in-one summary. Put solver-specific regression coverage in

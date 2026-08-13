@@ -7,8 +7,32 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 
+DEMO_MODULES = {
+    "demo_all_orbit_quantities": "demos.orbital_mechanics.demo_all_orbit_quantities",
+    "demo_build_dashboard": "demos.plotting.demo_build_dashboard",
+    "demo_compare_models": "demos.orbital_mechanics.demo_compare_models",
+    "demo_orbital_maneuvers": "demos.orbital_mechanics.demo_orbital_maneuvers",
+    "demo_coordinate_frames": "demos.coordinates.demo_coordinate_frames",
+    "demo_data_package_access": "demos.getting_started.demo_data_package_access",
+    "demo_ellipse_ae_for_arrival_rv": "demos.orbital_mechanics.demo_ellipse_ae_for_arrival_rv",
+    "demo_ellipses": "demos.orbital_mechanics.demo_ellipses",
+    "demo_first_user_workflow": "demos.getting_started.demo_first_user_workflow",
+    "demo_gcrs_to_itrs_astropy": "demos.coordinates.demo_gcrs_to_itrs_astropy",
+    "demo_globe_plot": "demos.plotting.demo_globe_plot",
+    "demo_groundtrack_accuracy": "demos.plotting.demo_groundtrack_accuracy",
+    "demo_groundtrack_plot": "demos.plotting.demo_groundtrack_plot",
+    "demo_kepler_vs_harmonics": "demos.orbital_mechanics.demo_kepler_vs_harmonics",
+    "demo_orbital_stats_dashboard": "demos.plotting.demo_orbital_stats_dashboard",
+    "demo_parsing_3le": "demos.getting_started.demo_parsing_3le",
+    "demo_photometry_application": "demos.photometry.demo_photometry_application",
+    "demo_sampling": "demos.data_io.demo_sampling",
+    "demo_sphere_generation": "demos.data_io.demo_sphere_generation",
+    "demo_ssapy_ground_lambertian_reflectance": "demos.photometry.demo_ssapy_ground_lambertian_reflectance",
+}
+
+
 def demo_main(module_name):
-    return import_module(f"demos.{module_name}").main
+    return import_module(DEMO_MODULES[module_name]).main
 
 
 def test_demo_all_orbit_quantities():

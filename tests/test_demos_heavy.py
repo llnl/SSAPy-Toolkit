@@ -10,7 +10,11 @@ if str(ROOT) not in sys.path:
 
 
 def demo_attr(module_name, attr_name="main"):
-    return getattr(import_module(f"demos.{module_name}"), attr_name)
+    module_paths = {
+        "demo_fancy_video": "demos.plotting.demo_fancy_video",
+        "demo_gifify": "demos.plotting.demo_gifify",
+    }
+    return getattr(import_module(module_paths[module_name]), attr_name)
 
 
 @pytest.mark.slow

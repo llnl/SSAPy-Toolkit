@@ -1,1 +1,1 @@
-# Makes demos importable for pytest smoke tests.
+"""Packaged SSAPy-Toolkit demo scripts organized by workflow category."""

@@ -70,12 +70,13 @@ class DemoResult:
     stdout: str = ""
     stderr: str = ""
     error: str = ""
+    category: str = ""
 
 
 def discover_demo_files(demos_dir: Path) -> list[Path]:
     candidates = []
-    for path in sorted(demos_dir.glob("*.py")):
-        if path.name in {"run_all_demos.py", "demo_gallery.py", "__init__.py"}:
+    for path in sorted(demos_dir.rglob("demo_*.py")):
+        if "__pycache__" in path.parts:
             continue
         if not _gallery_include_enabled(path):
             continue
@@ -166,7 +167,7 @@ def _write_text_if_nonempty(path: Path, text: str) -> None:
         path.write_text(text, encoding="utf-8")
 
 
-def _invoke_demo(module, path: Path, output_root: Path):
+def _invoke_demo(module, path: Path, output_root: Path, cwd: Path | None = None):
     if hasattr(module, "run"):
         try:
             return module.run(output_root)
@@ -194,21 +195,38 @@ def _invoke_demo(module, path: Path, output_root: Path):
     env["SSAPY_DEMO_OUTPUT_DIR"] = str(output_root)
     return subprocess.run(
         [sys.executable, str(path.resolve())],
-        cwd=str(path.parent.parent.resolve()),
+        cwd=str((cwd or path.parent).resolve()),
         env=env,
         capture_output=True,
         text=True,
     )
 
 
-def run_demo_script(path: Path, output_root: Path) -> DemoResult:
-    name = path.stem
-    title = name.replace("_", " ").title()
-    description = f"Demo from {path.name}"
+def _demo_relative_path(path: Path, demos_dir: Path | None) -> Path:
+    if demos_dir is not None:
+        try:
+            return path.resolve().relative_to(Path(demos_dir).resolve())
+        except ValueError:
+            pass
+    return Path(path.name)
+
+
+def _safe_log_name(name: str) -> str:
+    return name.replace("/", "__").replace("\\", "__")
+
+
+def run_demo_script(path: Path, output_root: Path, demos_dir: Path | None = None) -> DemoResult:
+    relative_path = _demo_relative_path(path, demos_dir)
+    name = relative_path.with_suffix("").as_posix()
+    category = "" if relative_path.parent == Path(".") else relative_path.parent.as_posix()
+    safe_name = _safe_log_name(name)
+    title = path.stem.replace("_", " ").title()
+    description = f"Demo from {relative_path.as_posix()}"
     start = time.time()
     before = snapshot_figsave_files()
     stdout_text = ""
     stderr_text = ""
+    demo_cwd = Path(demos_dir).resolve().parent if demos_dir is not None else path.parent.resolve()
 
     try:
         module = import_module_from_path(path)
@@ -220,7 +238,7 @@ def run_demo_script(path: Path, output_root: Path) -> DemoResult:
         stdout_buf = io.StringIO()
         stderr_buf = io.StringIO()
         with redirect_stdout(stdout_buf), redirect_stderr(stderr_buf):
-            result = _invoke_demo(module, path, output_root)
+            result = _invoke_demo(module, path, output_root, cwd=demo_cwd)
 
         captured_stdout = stdout_buf.getvalue()
         captured_stderr = stderr_buf.getvalue()
@@ -247,8 +265,8 @@ def run_demo_script(path: Path, output_root: Path) -> DemoResult:
 
         log_dir = output_root / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
-        stdout_file = log_dir / f"{name}_stdout.txt"
-        stderr_file = log_dir / f"{name}_stderr.txt"
+        stdout_file = log_dir / f"{safe_name}_stdout.txt"
+        stderr_file = log_dir / f"{safe_name}_stderr.txt"
         _write_text_if_nonempty(stdout_file, stdout_text)
         _write_text_if_nonempty(stderr_file, stderr_text)
         if stdout_text:
@@ -267,18 +285,19 @@ def run_demo_script(path: Path, output_root: Path) -> DemoResult:
             files=files,
             stdout=stdout_text,
             stderr=stderr_text,
+            category=category,
         )
     except Exception:
         err = traceback.format_exc()
         log_dir = output_root / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
-        err_file = log_dir / f"{name}_ERROR.txt"
+        err_file = log_dir / f"{safe_name}_ERROR.txt"
         err_file.write_text(err, encoding="utf-8")
 
         log_dir = output_root / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
-        stdout_file = log_dir / f"{name}_stdout.txt"
-        stderr_file = log_dir / f"{name}_stderr.txt"
+        stdout_file = log_dir / f"{safe_name}_stdout.txt"
+        stderr_file = log_dir / f"{safe_name}_stderr.txt"
         _write_text_if_nonempty(stdout_file, stdout_text)
         _write_text_if_nonempty(stderr_file, stderr_text)
 
@@ -302,6 +321,7 @@ def run_demo_script(path: Path, output_root: Path) -> DemoResult:
             stdout=stdout_text,
             stderr=stderr_text,
             error=err,
+            category=category,
         )
 
 
@@ -393,6 +413,10 @@ def build_html_report(results: list[DemoResult], out_root: Path) -> None:
                 f"<pre>{html.escape(r.error)}</pre></details>"
             )
 
+        category_line = ""
+        if r.category:
+            category_line = f'<p class="meta"><strong>Category:</strong> {html.escape(r.category)}</p>'
+
         cards.append(
             f"""
             <section class="card">
@@ -401,6 +425,7 @@ def build_html_report(results: list[DemoResult], out_root: Path) -> None:
                 <span class="badge {badge_class}">{html.escape(r.status)}</span>
               </div>
               <p class="meta"><strong>Demo:</strong> {html.escape(r.name)}</p>
+              {category_line}
               <p>{html.escape(r.description)}</p>
               <p class="meta"><strong>Runtime:</strong> {r.runtime_seconds:.2f}s</p>
               <div class="gallery">
@@ -590,9 +615,10 @@ def run_all_demos(demos_dir: Path, output_root: Path, clean: bool = True) -> lis
 
     results: list[DemoResult] = []
     for path in discover_demo_files(demos_dir):
-        print(f"[demo] running {path.name}")
-        result = run_demo_script(path, output_root)
-        print(f"[demo] {path.name}: {result.status} ({result.runtime_seconds:.2f}s)")
+        rel = path.relative_to(demos_dir)
+        print(f"[demo] running {rel.as_posix()}")
+        result = run_demo_script(path, output_root, demos_dir=demos_dir)
+        print(f"[demo] {rel.as_posix()}: {result.status} ({result.runtime_seconds:.2f}s)")
         results.append(result)
 
     build_html_report(results, output_root)

@@ -26,6 +26,25 @@ python -m ssapy_toolkit.run_all_demos --demos-dir demos --output ./demo_gallery_
 
 ---
 
+## Demo categories
+
+The `demos/` package is organized by workflow area:
+
+| Folder | Contents |
+|--------|----------|
+| `getting_started/` | first workflow, packaged data access, time helpers, optional 3LE parsing |
+| `orbital_mechanics/` | orbit quantities, propagation/model comparisons, ellipse fitting, maneuvers, transfers, station keeping |
+| `coordinates/` | frame transforms, surface state vectors, NTW/GCRF checks, rotation utilities |
+| `plotting/` | dashboards, orbit/globe/ground-track plots, GIF/video, divergence plots |
+| `photometry/` | Lambertian brightness, thermal/reflection models, ground-observer examples |
+| `data_io/` | sampling, sphere generation, and dictionary/HDF5 round-trip examples |
+
+The gallery runner searches these subfolders recursively, so adding a new
+`demo_*.py` file under the right category is enough for it to appear unless the
+file sets `GALLERY_INCLUDE = False`.
+
+---
+
 ## Running after `pip install ssapy_toolkit`
 
 If `ssapy_toolkit` is installed and the console entry point is available, the

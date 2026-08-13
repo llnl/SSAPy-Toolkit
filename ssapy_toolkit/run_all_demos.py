@@ -12,7 +12,7 @@ def default_output_dir() -> Path:
 
 
 def _looks_like_demos_dir(path: Path) -> bool:
-    return path.is_dir() and any(path.glob("demo_*.py"))
+    return path.is_dir() and any(path.rglob("demo_*.py"))
 
 
 def find_default_demos_dir() -> Path | None:
