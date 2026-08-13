@@ -137,7 +137,9 @@ result = transfer_optimal(
             "initial": orbit1,              # or r1/v1/r2/v2 at top level
             "target": orbit2,
             "departure_mode": "leave now", # or "leave whenever"
-            "arrival_mode": "rendezvous",  # "intercept" or "insertion"
+            # inject: free-phase/first burn only; intercept: target position only;
+            # rendezvous: target position + velocity; insertion: free-phase velocity match
+            "arrival_mode": "rendezvous",
         },
         "objective": {"minimize": "delta_v", "delta_v_mode": "total"},
         "constraints": {

@@ -51,6 +51,7 @@ def transfer_designer_curves_plot(result, title=None, save_path=None, **save_kwa
         delta_v_mode = diagnostics.get("delta_v_mode", "total")
         rendezvous = diagnostics.get("rendezvous", True)
         arrival_burn = diagnostics.get("arrival_burn", len(result.get("burns", [])) > 1)
+        arrival_mode = diagnostics.get("arrival_mode")
     else:
         g = result.grid
         pareto = result.pareto
@@ -62,6 +63,7 @@ def transfer_designer_curves_plot(result, title=None, save_path=None, **save_kwa
         delta_v_mode = getattr(result, "delta_v_mode", "total")
         rendezvous = result.rendezvous
         arrival_burn = result.arrival_burn
+        arrival_mode = getattr(result, "arrival_mode", None)
     dep_h = (g["t_dep"] - g["t_dep"][0]) / 3600.0
     tof_h = g["tof"] / 3600.0
 
@@ -102,7 +104,7 @@ def transfer_designer_curves_plot(result, title=None, save_path=None, **save_kwa
     ax2.grid(alpha=0.3, which="both")
     ax2.legend(fontsize=8)
 
-    mode = "rendezvous" if rendezvous else "insertion"
+    mode = arrival_mode or ("rendezvous" if rendezvous else ("insertion" if arrival_burn else "inject"))
     burns = "both burns" if arrival_burn else "first burn only"
     fig.suptitle(title or f"transfer_optimal: {objective}, {mode}, {burns}, {delta_v_mode} dv",
                  fontsize=12)

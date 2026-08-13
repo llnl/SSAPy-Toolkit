@@ -32,6 +32,8 @@ def test_hohmann_matches_closed_form_outward_and_inward():
     outward = transfer_hohmann(radius1, radius2, samples=12, burn_accel=0.5)
     expected = hohmann_transfer_delta_v(radius1, radius2, EARTH_MU)
     _assert_standard_transfer(outward, "transfer_hohmann")
+    assert outward["diagnostics"]["arrival_mode"] == "insertion"
+    assert outward["diagnostics"]["arrival_burn"] is True
     np.testing.assert_allclose(outward["delta_v_magnitudes"], expected[:2], rtol=1e-12)
     assert outward["delta_v_total"] == pytest.approx(expected[-1])
     assert outward["trajectory"]["r"].shape == (12, 3)

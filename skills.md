@@ -117,9 +117,12 @@ schema over long flat argument lists. Use `problem={"boundary": ..., "objective"
 ..., "constraints": ..., "route": ..., "solver": ...}` when the user gives
 multiple boundary conditions, burn objectives, route preferences, or solver
 limits. Key aliases are intentionally user-friendly: `arrival_mode` accepts
-`"rendezvous"`, `"intercept"`, or `"insertion"`; `route` accepts `"direct"`,
-`"immediate"`, `"multi_stage"`, or `"best"`; `timing="optimized"` maps to the
-timed staged search. Structured results include
+`"inject"`, `"intercept"`, `"rendezvous"`, or `"insertion"`. Use `inject` for a
+free-phase departure burn onto a transfer, `intercept` for target position at a
+selected time without velocity match, `rendezvous` for target position and
+velocity at a selected time, and `insertion` for free-phase target-orbit velocity
+match. `route` accepts `"direct"`, `"immediate"`, `"multi_stage"`, or `"best"`;
+`timing="optimized"` maps to the timed staged search. Structured results include
 `diagnostics["problem_schema"] == "ssatk.transfer_problem.v1"`.
 The user-facing maneuver gallery is consolidated in
 `demos/demo_orbital_maneuvers.py`, including staged optimal geometry, burn

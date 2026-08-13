@@ -195,6 +195,10 @@ def transfer_hohmann(
             "two-body impulsive Hohmann transfer",
         ],
         diagnostics={
+            "arrival_mode": "insertion",
+            "timing_constraint": "free",
+            "arrival_velocity_match": True,
+            "arrival_burn": True,
             "radius1": radius1,
             "radius2": radius2,
             "semi_major_axis": semi_major_axis,

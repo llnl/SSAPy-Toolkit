@@ -37,6 +37,47 @@ from ssapy_toolkit.time_functions._gps import _to_gps_seconds
 from ssapy_toolkit.orbital_mechanics._transfer_result import maneuver_burn, trajectory_dict, transfer_boundary_states, transfer_result
 
 
+_ARRIVAL_MODE_ALIASES = {
+    "inject": "inject",
+    "injection": "inject",
+    "intercept": "intercept",
+    "flyby": "intercept",
+    "position": "intercept",
+    "position_only": "intercept",
+    "no_arrival_burn": "intercept",
+    "rendezvous": "rendezvous",
+    "match": "rendezvous",
+    "match_state": "rendezvous",
+    "match_velocity": "rendezvous",
+    "insert": "insertion",
+    "insertion": "insertion",
+    "orbit_insert": "insertion",
+    "orbit_insertion": "insertion",
+    "target_orbit": "insertion",
+}
+
+
+def _normalize_keyword(value, aliases, name):
+    key = str(value).strip().lower().replace("-", "_").replace(" ", "_")
+    try:
+        return aliases[key]
+    except KeyError as exc:
+        valid = ", ".join(sorted(set(aliases.values())))
+        raise ValueError(f"{name} must be one of: {valid}") from exc
+
+
+def _arrival_burn_for_mode(arrival_mode):
+    if arrival_mode in ("rendezvous", "insertion"):
+        return True
+    if arrival_mode in ("inject", "intercept"):
+        return False
+    raise AssertionError(f"Unhandled arrival_mode {arrival_mode!r}")
+
+
+def _arrival_mode_from_fixed_time_flags(arrival_burn):
+    return "rendezvous" if arrival_burn else "intercept"
+
+
 # ---------------------------------------------------------------------------
 # Lambert solver (universal variables, Bate–Mueller–White / Vallado)
 # ---------------------------------------------------------------------------
@@ -294,6 +335,7 @@ def transfer_ssapy(
     mass=None,
     isp=None,
     prograde=True,
+    arrival_mode=None,
     arrival_burn=True,
     propagate=True,
     propagator=None,
@@ -370,15 +412,21 @@ def transfer_ssapy(
         to the summary.
     prograde : bool
         Sense of motion for the Lambert geometry.
+    arrival_mode : {"inject", "intercept", "rendezvous", "insertion"}, optional
+        User-facing terminology for the arrival constraint. ``"inject"`` means
+        perform only the departure burn that places the spacecraft on the
+        transfer conic. ``"intercept"`` means reach the target position at the
+        specified time without matching velocity. ``"rendezvous"`` means reach
+        the target position at the specified time and match velocity.
+        ``"insertion"`` means include the arrival/insertion burn needed to enter
+        the final orbit. This fixed-time solver still requires a target epoch;
+        use ``transfer_optimal(arrival_mode="insertion")`` when target phase is
+        a free search variable.
     arrival_burn : bool
-        If True (default), perform and cost the second burn that matches
-        the arrival velocity (rendezvous/insertion).  If False, plan an
-        *intercept*: only the departure burn is performed, the refinement
-        targets the arrival position only, and the spacecraft coasts
-        through the target point on the Lambert conic without matching
-        its velocity (e.g. flyby or impactor geometries).  The result
-        then contains a single burn and the arrival velocity mismatch is
-        expected.
+        Lower-level compatibility flag used when ``arrival_mode`` is not set. If
+        True (default), perform and cost the second burn that matches the arrival
+        velocity. If False, return a single-burn fixed-time intercept/injection
+        trajectory with expected arrival velocity mismatch.
     propagate : bool
         If True, numerically propagate the burn-inclusive trajectory and
         report the achieved arrival error.
@@ -443,6 +491,12 @@ def transfer_ssapy(
 
     # Gravitational parameter for state inference and the Lambert conic.
     mu = getattr(accel, "mu", EARTH_MU)
+
+    if arrival_mode is None:
+        arrival_mode = _arrival_mode_from_fixed_time_flags(arrival_burn)
+    else:
+        arrival_mode = _normalize_keyword(arrival_mode, _ARRIVAL_MODE_ALIASES, "arrival_mode")
+        arrival_burn = _arrival_burn_for_mode(arrival_mode)
 
     departure_state, arrival_state = transfer_boundary_states(
         *args,
@@ -771,6 +825,7 @@ def transfer_ssapy(
         tof=tof,
         mu=mu,
         prograde=prograde,
+        arrival_mode=arrival_mode,
         arrival_burn=arrival_burn,
         propagate=propagate,
         refine=refine,
@@ -794,6 +849,7 @@ def _transfer_ssapy_to_standard_dict(
     tof,
     mu,
     prograde,
+    arrival_mode,
     arrival_burn,
     propagate,
     refine,
@@ -864,6 +920,9 @@ def _transfer_ssapy_to_standard_dict(
             "dv_budget": result.dv_budget,
             "within_budget": result.within_budget,
             "prograde": bool(prograde),
+            "arrival_mode": arrival_mode,
+            "timing_constraint": "fixed",
+            "arrival_velocity_match": bool(arrival_burn),
             "arrival_burn": bool(arrival_burn),
             "propagate": bool(propagate),
             "refine": bool(refine),

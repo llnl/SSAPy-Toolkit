@@ -2,7 +2,7 @@
 
 This demo exercises the high-level ``transfer_optimal(problem={...})`` schema
 and its section-keyword equivalent. It covers SSAPy Orbit inputs, raw state
-vectors, rendezvous/intercept/insertion arrival modes, total/first/final/time
+vectors, inject/intercept/rendezvous/insertion arrival modes, total/first/final/time
 objectives, direct/immediate/timed/best route selection, burn-count and arrival
 window constraints, engine constraints, and solver controls. Each run saves one
 overview image under ``~/ssatk_figures/demo_gallery/figures`` with exactly three
@@ -182,9 +182,37 @@ def _build_cases(fast=False):
     })
 
     # ------------------------------------------------------------------
-    # 03. Insertion mode: minimize the arrival/insertion burn. With n_phase=1
-    # and the fixed target epoch below, this still reaches the same target state
-    # as the other examples while demonstrating the API knob.
+    # 02b. Inject mode: search a free target-orbit phase for the departure burn
+    # that puts the spacecraft onto a transfer. It does not pay an arrival burn.
+    inject_first_burn_call = {
+        "problem": {
+            "boundary": {
+                "initial": initial,
+                "target": target,
+                "departure_mode": "leave now",
+                "arrival_mode": "inject",
+            },
+            "objective": {
+                "minimize": "first_burn",
+            },
+            "constraints": {
+                "tof_range": DIRECT_TOF_RANGE,
+                "max_burns": 1,
+            },
+            "route": "direct",
+            "solver": _solver(fast=fast, n_phase=3),
+        },
+    }
+    cases.append({
+        "slug": "02b_inject_free_phase_first_burn",
+        "title": "Inject: free-phase first burn only",
+        "call": inject_first_burn_call,
+        "designer": True,
+    })
+
+    # ------------------------------------------------------------------
+    # 03. Insertion mode: match the target-orbit velocity while allowing the
+    # target-orbit phase to be chosen by the solver.
     insertion_arrival_burn_call = {
         "problem": {
             "boundary": {
@@ -206,7 +234,7 @@ def _build_cases(fast=False):
     }
     cases.append({
         "slug": "03_insertion_arrival_burn",
-        "title": "Insertion: fixed target-state arrival burn",
+        "title": "Insertion: free-phase arrival burn",
         "call": insertion_arrival_burn_call,
         "designer": True,
     })

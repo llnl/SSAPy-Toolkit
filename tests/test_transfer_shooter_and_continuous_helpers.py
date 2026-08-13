@@ -7,7 +7,12 @@ from ssapy_toolkit.constants import EARTH_MU
 from ssapy_toolkit.orbital_mechanics.transfer_coplanar_continuous import transfer_coplanar_continuous
 from ssapy_toolkit.orbital_mechanics.transfer_inclination_continuous import transfer_inclination_continuous
 from ssapy_toolkit.orbital_mechanics.transfer_lambertian import transfer_lambertian
-from ssapy_toolkit.orbital_mechanics.transfer_optimal_function import transfer_rendezvous
+from ssapy_toolkit.orbital_mechanics.transfer_optimal_function import (
+    transfer_inject,
+    transfer_insertion,
+    transfer_intercept,
+    transfer_rendezvous,
+)
 from ssapy_toolkit.orbital_mechanics.transfer_shooter import transfer_shooter
 from ssapy_toolkit.orbital_mechanics.transfer_velocity_and_inclination_continuous import (
     transfer_velocity_and_inclination_continuous,
@@ -39,19 +44,24 @@ def test_fixed_time_wrappers_use_standard_schema():
     assert shooter["delta_v_total"] == pytest.approx(lambert["delta_v_total"])
 
 
-def test_transfer_rendezvous_standard_wrapper(monkeypatch):
+def test_transfer_mode_standard_wrappers(monkeypatch):
     rendezvous_module = importlib.import_module("ssapy_toolkit.orbital_mechanics.transfer_optimal_function")
 
     expected = {"schema_version": "ssatk.transfer.v2", "method": "transfer_optimal", "assumptions": [], "burns": [], "trajectory": None, "delta_v_total": 0.0}
+    seen_modes = []
 
-    def fake_optimal(initial, target, rendezvous, **kwargs):
-        assert rendezvous is True
+    def fake_optimal(initial, target, arrival_mode, **kwargs):
+        seen_modes.append(arrival_mode)
         return dict(expected)
 
     monkeypatch.setattr(rendezvous_module, "transfer_optimal", fake_optimal)
+    assert transfer_inject(_state(), _state(theta=0.1), n_grid=(2, 2))["method"] == "transfer_inject"
+    assert transfer_intercept(_state(), _state(theta=0.1), n_grid=(2, 2))["method"] == "transfer_intercept"
     result = transfer_rendezvous(_state(), _state(theta=0.1), n_grid=(2, 2))
     assert result["method"] == "transfer_rendezvous"
     assert "transfer_optimal" in result["assumptions"][-1]
+    assert transfer_insertion(_state(), _state(theta=0.1), n_grid=(2, 2))["method"] == "transfer_insertion"
+    assert seen_modes == ["inject", "intercept", "rendezvous", "insertion"]
 
 
 def test_velocity_continuous_schema():

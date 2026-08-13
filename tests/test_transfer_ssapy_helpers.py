@@ -75,6 +75,9 @@ def test_transfer_ssapy_nonpropagating_modes_and_validation():
     result = tsf.transfer_ssapy(departure, arrival, propagate=False, refine=False, burn_duration=1.0, dv_budget=1e9)
     assert result["schema_version"] == "ssatk.transfer.v2"
     assert len(result["burns"]) == 2
+    assert result["diagnostics"]["arrival_mode"] == "rendezvous"
+    assert result["diagnostics"]["timing_constraint"] == "fixed"
+    assert result["diagnostics"]["arrival_velocity_match"] is True
     assert result["diagnostics"]["within_budget"] is True
     assert result["trajectory"] is None
     assert result["transfer_orbits"][0].r.shape == (3,)
@@ -96,6 +99,16 @@ def test_transfer_ssapy_nonpropagating_modes_and_validation():
 
     intercept = tsf.transfer_ssapy(departure, arrival, propagate=False, refine=False, burn_duration=1.0, arrival_burn=False, burn_accel=100.0)
     assert len(intercept["burns"]) == 1
+    assert intercept["diagnostics"]["arrival_mode"] == "intercept"
+    assert intercept["diagnostics"]["arrival_velocity_match"] is False
+
+    injected = tsf.transfer_ssapy(departure, arrival, propagate=False, refine=False, burn_duration=1.0, arrival_mode="inject")
+    assert len(injected["burns"]) == 1
+    assert injected["diagnostics"]["arrival_mode"] == "inject"
+
+    inserted = tsf.transfer_ssapy(departure, arrival, propagate=False, refine=False, burn_duration=1.0, arrival_mode="insert")
+    assert len(inserted["burns"]) == 2
+    assert inserted["diagnostics"]["arrival_mode"] == "insertion"
 
     with pytest.raises(ValueError, match="after departure"):
         tsf.transfer_ssapy(arrival, departure, propagate=False, refine=False)

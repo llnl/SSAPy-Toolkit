@@ -22,6 +22,8 @@ def test_transfer_bielliptic_matches_scalar_delta_v_helper():
     assert result["schema_version"] == "ssatk.transfer.v2"
     assert result["method"] == "transfer_bielliptic"
     assert len(result["burns"]) == 3
+    assert result["diagnostics"]["arrival_mode"] == "insertion"
+    assert result["diagnostics"]["arrival_burn"] is True
     np.testing.assert_allclose(result["delta_v_magnitudes"], expected[:3], rtol=1e-12)
     assert result["delta_v_total"] == pytest.approx(expected[-1])
     assert result["trajectory"]["r"].shape == (15, 3)

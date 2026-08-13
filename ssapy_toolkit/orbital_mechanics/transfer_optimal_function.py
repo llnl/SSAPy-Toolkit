@@ -4,7 +4,7 @@ Where :func:`transfer_ssapy` solves a fixed boundary-value problem (two
 states, one time of flight -> the unique connecting two-burn transfer),
 :func:`transfer_optimal` searches over the *free* variables of an
 orbit-to-orbit transfer -- departure time along orbit 1, time of flight,
-arrival phase along orbit 2 (insertion mode), and motion sense -- to find
+arrival phase along orbit 2 (inject/insertion modes), and motion sense -- to find
 the transfer that minimizes total, departure, or arrival delta-v, or given a
 delta-v budget, the fastest transfer that fits it.
 
@@ -13,8 +13,8 @@ The search uses a coarse porkchop grid of fast impulsive Lambert solves
 (no zero-revolution solution, or a transfer conic whose perigee dips
 below the Earth plus a safety margin), optionally polishes the winner
 with a Nelder-Mead local search, and finally plans/propagates the chosen
-transfer with :func:`transfer_ssapy` under the full force model --
-including single-burn intercept geometries via ``arrival_burn=False``.
+transfer with :func:`transfer_ssapy` under the full force model -- including
+single-burn inject/intercept geometries via ``arrival_burn=False``.
 
 Set ``visualize=True`` for mission-designer curves (porkchop contour and
 delta-v vs time-of-flight Pareto front) saved via
@@ -137,6 +137,8 @@ _STAGE_TIMING_ALIASES = {
 }
 
 _ARRIVAL_MODE_ALIASES = {
+    "inject": "inject",
+    "injection": "inject",
     "rendezvous": "rendezvous",
     "match": "rendezvous",
     "match_state": "rendezvous",
@@ -146,7 +148,9 @@ _ARRIVAL_MODE_ALIASES = {
     "position": "intercept",
     "position_only": "intercept",
     "no_arrival_burn": "intercept",
+    "insert": "insertion",
     "insertion": "insertion",
+    "orbit_insert": "insertion",
     "orbit_insertion": "insertion",
     "target_orbit": "insertion",
     "free_phase": "insertion",
@@ -240,6 +244,8 @@ def _apply_arrival_mode(overrides, value):
         overrides.update(rendezvous=True, arrival_burn=True)
     elif mode == "intercept":
         overrides.update(rendezvous=True, arrival_burn=False)
+    elif mode == "inject":
+        overrides.update(rendezvous=False, arrival_burn=False)
     elif mode == "insertion":
         overrides.update(rendezvous=False, arrival_burn=True)
     overrides["arrival_mode"] = mode
@@ -442,7 +448,9 @@ def _arrival_mode_from_flags(rendezvous, arrival_burn):
         return "rendezvous"
     if rendezvous and not arrival_burn:
         return "intercept"
-    return "insertion"
+    if not rendezvous and arrival_burn:
+        return "insertion"
+    return "inject"
 
 
 def _apply_structured_diagnostics(result, diagnostics):
@@ -783,6 +791,7 @@ def transfer_optimal(
     stage_timing=None,
     stage_wait_window=None,
     stage_tof_range=None,
+    arrival_mode=None,
     rendezvous=True,
     arrival_burn=True,
     t_window=None,
@@ -861,15 +870,22 @@ def transfer_optimal(
         Wait-time search span after reaching the staging orbit and per-leg
         time-of-flight range.  Defaults to one staging-orbit period and
         ``tof_range``, respectively.
+    arrival_mode : {"inject", "intercept", "rendezvous", "insertion"}, optional
+        User-facing arrival constraint. ``"inject"`` searches a departure burn
+        onto a transfer that crosses the target orbit without matching velocity.
+        ``"intercept"`` reaches the target object's position at the selected
+        arrival time without matching velocity. ``"rendezvous"`` reaches that
+        position and matches velocity. ``"insertion"`` matches target-orbit
+        velocity with the target phase free, i.e. an orbit-insertion search.
     rendezvous : bool
-        If True (default), the arrival state is wherever the *object on
-        orbit 2* is at ``t_depart + tof`` (its phase is set by its
-        epoch).  If False (insertion), the arrival point anywhere along
-        orbit 2 is a free search variable -- generally cheaper.
+        Lower-level phase flag used when ``arrival_mode`` is not set. If True
+        (default), the arrival state is wherever the *object on orbit 2* is at
+        ``t_depart + tof``. If False, the arrival point anywhere along orbit 2
+        is a free search variable.
     arrival_burn : bool
         If True (default), the second burn matching the arrival velocity
         is performed and counted.  If False, optimize the *first burn
-        only* (intercept/flyby): the spacecraft coasts through the
+        only* (intercept/injection/flyby): the spacecraft coasts through the
         target point without matching its velocity.
     t_window : (float, float), optional
         Allowed departure epoch span [GPS s].  Default: one revolution
@@ -883,7 +899,8 @@ def transfer_optimal(
     n_grid : (int, int)
         Porkchop grid resolution (departure x time-of-flight).
     n_phase : int
-        Arrival-phase samples along orbit 2 (insertion mode only).
+        Arrival-phase samples along orbit 2 for free-phase ``"inject"`` and
+        ``"insertion"`` modes.
     dv_budget : float, optional
         Delta-v constraint [m/s]; required for ``objective='min_time'``,
         recorded/warned for ``min_dv`` (via transfer_ssapy).
@@ -891,9 +908,9 @@ def transfer_optimal(
         Candidates whose transfer conic dips below
         ``EARTH_RADIUS + perigee_margin`` are rejected [m].
     max_burns : int, optional
-        Upper bound on the planned burn count.  Direct rendezvous uses two
-        burns, intercept uses one burn, and each explicit staging stop adds up
-        to two burns.
+        Upper bound on the planned burn count. Direct rendezvous/insertion uses
+        two burns, inject/intercept uses one burn, and each explicit staging stop
+        adds up to two burns.
     polish : bool
         Refine the best grid cell with a Nelder-Mead local search over
         the continuous variables.
@@ -923,7 +940,7 @@ def transfer_optimal(
     -------
     dict
         Canonical transfer dictionary. ``diagnostics`` includes the search
-        objective, rendezvous/insertion mode, chosen arrival phase,
+        objective, arrival mode, chosen arrival phase,
         perigee altitude, delta-v budget, porkchop grid, and Pareto curves.
 
     Notes
@@ -993,7 +1010,7 @@ def transfer_optimal(
     stage_tof_range = structured_overrides.pop("stage_tof_range", stage_tof_range)
     rendezvous = structured_overrides.pop("rendezvous", rendezvous)
     arrival_burn = structured_overrides.pop("arrival_burn", arrival_burn)
-    arrival_mode = structured_overrides.pop("arrival_mode", None)
+    arrival_mode = structured_overrides.pop("arrival_mode", arrival_mode)
     t_window = structured_overrides.pop("t_window", t_window)
     tof_range = structured_overrides.pop("tof_range", tof_range)
     arrival_window = structured_overrides.pop("arrival_window", arrival_window)
@@ -1027,6 +1044,12 @@ def transfer_optimal(
         departure_mode = "now" if leave_now else "optimize"
     departure_mode = _normalize_keyword(departure_mode, _DEPARTURE_MODE_ALIASES, "departure_mode")
     stage_mode = _normalize_keyword(stage_mode, _STAGE_MODE_ALIASES, "stage_mode")
+    if arrival_mode is not None:
+        mode_overrides = {}
+        _apply_arrival_mode(mode_overrides, arrival_mode)
+        rendezvous = mode_overrides["rendezvous"]
+        arrival_burn = mode_overrides["arrival_burn"]
+        arrival_mode = mode_overrides["arrival_mode"]
     max_burns = _validate_max_burns(
         max_burns,
         stage_mode=stage_mode,
@@ -1322,7 +1345,7 @@ def transfer_optimal(
             (r1, v1, t_dep), (r2, v2, t_dep + tof),
             accel=accel, propagator=propagator, burn_duration=burn_duration,
             burn_accel=burn_accel, thrust=thrust, mass=mass, isp=isp,
-            prograde=sense, arrival_burn=arrival_burn,
+            prograde=sense, arrival_mode=arrival_mode, arrival_burn=arrival_burn,
             dv_budget=(dv_budget if objective == "min_dv" and delta_v_mode == "total" else None),
             **transfer_kwargs)
         objective_delta_v = _result_delta_v_metric(transfer, delta_v_mode, arrival_burn=arrival_burn)
@@ -1374,6 +1397,7 @@ def transfer_optimal(
         objective=objective,
         delta_v_mode=delta_v_mode,
         departure_mode=departure_mode,
+        arrival_mode=arrival_mode,
         objective_delta_v=objective_delta_v,
         rendezvous=rendezvous,
         arrival_burn=arrival_burn,
@@ -1707,9 +1731,41 @@ def _transfer_optimal_staged(
     return best
 
 
-def transfer_rendezvous(*args, **kwargs):
-    """Search a rendezvous transfer and return the canonical transfer dict."""
-    result = transfer_optimal(*args, rendezvous=True, **kwargs)
-    result["method"] = "transfer_rendezvous"
-    result["assumptions"].append("standardized wrapper around transfer_optimal(rendezvous=True)")
+def _mode_wrapper(args, kwargs, *, arrival_mode, method_name):
+    kwargs = dict(kwargs)
+    supplied_mode = kwargs.pop("arrival_mode", None)
+    if supplied_mode is not None:
+        normalized = _normalize_keyword(supplied_mode, _ARRIVAL_MODE_ALIASES, "arrival_mode")
+        if normalized != arrival_mode:
+            raise ValueError(
+                f"{method_name} fixes arrival_mode={arrival_mode!r}; "
+                f"received arrival_mode={supplied_mode!r}. Use transfer_optimal "
+                "directly to select a different arrival mode."
+            )
+    result = transfer_optimal(*args, arrival_mode=arrival_mode, **kwargs)
+    result["method"] = method_name
+    result["assumptions"].append(f"standardized wrapper around transfer_optimal(arrival_mode={arrival_mode!r})")
     return result
+
+
+def transfer_inject(*args, **kwargs):
+    """Search a free-phase, departure-burn-only transfer injection."""
+    return _mode_wrapper(args, kwargs, arrival_mode="inject", method_name="transfer_inject")
+
+
+def transfer_intercept(*args, **kwargs):
+    """Search a fixed-target-position intercept without arrival velocity match."""
+    return _mode_wrapper(args, kwargs, arrival_mode="intercept", method_name="transfer_intercept")
+
+
+def transfer_rendezvous(*args, **kwargs):
+    """Search a fixed-target-position transfer with arrival velocity match."""
+    return _mode_wrapper(args, kwargs, arrival_mode="rendezvous", method_name="transfer_rendezvous")
+
+
+def transfer_insertion(*args, **kwargs):
+    """Search a free-phase orbit-insertion transfer with arrival velocity match."""
+    return _mode_wrapper(args, kwargs, arrival_mode="insertion", method_name="transfer_insertion")
+
+
+transfer_insert = transfer_insertion

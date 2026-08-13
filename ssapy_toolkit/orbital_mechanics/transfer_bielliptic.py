@@ -343,6 +343,10 @@ def transfer_bielliptic(
             "two-body impulsive bi-elliptic transfer",
         ],
         diagnostics={
+            "arrival_mode": "insertion",
+            "timing_constraint": "free",
+            "arrival_velocity_match": True,
+            "arrival_burn": True,
             "radius1": radius1,
             "radius2": radius2,
             "intermediate_radius": rb,

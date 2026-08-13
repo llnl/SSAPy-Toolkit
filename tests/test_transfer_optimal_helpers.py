@@ -201,6 +201,7 @@ def test_transfer_optimal_rendezvous_and_visualization(monkeypatch, tmp_path):
     )
     assert result["method"] == "transfer_optimal"
     assert result["diagnostics"]["rendezvous"] is True
+    assert result["diagnostics"]["arrival_mode"] == "rendezvous"
     assert result["diagnostics"]["delta_v_mode"] == "total"
     assert result["diagnostics"]["objective_delta_v"] == pytest.approx(12.0)
     assert result["diagnostics"]["arrival_phase"] is None
@@ -432,7 +433,7 @@ def test_transfer_optimal_min_time_budget_uses_selected_delta_v_mode(monkeypatch
         )
 
 
-def test_transfer_optimal_insertion_min_time_and_polish(monkeypatch):
+def test_transfer_optimal_inject_min_time_and_polish(monkeypatch):
     _install_fast_optimal_fakes(monkeypatch, dv=8.0)
     dep = _state(radius=7000e3, theta=0.0, t=0.0)
     r2, v2, t2 = _state(radius=7200e3, theta=0.3, t=15.0)
@@ -442,8 +443,7 @@ def test_transfer_optimal_insertion_min_time_and_polish(monkeypatch):
         arr,
         objective="min_time",
         dv_budget=20.0,
-        rendezvous=False,
-        arrival_burn=False,
+        arrival_mode="inject",
         t_window=(0.0, 10.0),
         tof_range=(10.0, 30.0),
         n_grid=(2, 2),
@@ -452,6 +452,8 @@ def test_transfer_optimal_insertion_min_time_and_polish(monkeypatch):
         refine=False,
     )
     assert result["diagnostics"]["objective"] == "min_time"
+    assert result["diagnostics"]["arrival_mode"] == "inject"
+    assert result["diagnostics"]["rendezvous"] is False
     assert result["diagnostics"]["arrival_phase"] is not None
     assert result["diagnostics"]["arrival_burn"] is False
     assert result["diagnostics"]["grid"]["cost"].shape == (2, 2)
