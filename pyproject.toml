@@ -105,3 +105,4 @@ filterwarnings = [
 
 [project.scripts]
 ssapy-demo-gallery = "ssapy_toolkit.run_all_demos:main"
+ssatk-benchmark = "ssapy_toolkit.benchmark:main"
