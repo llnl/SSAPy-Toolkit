@@ -110,13 +110,6 @@ def main(make_figures=None, fast=None):
     if fast:
         accel = AccelKepler()
     else:
-        sat_kwargs = dict(
-            mass=100.0,
-            area=1.0,
-            CD=2.3,
-            CR=1.3,
-        )
-
         moon = get_body("moon")
         sun = get_body("sun")
         Earth = get_body("earth", model="EGM2008")
@@ -124,8 +117,8 @@ def main(make_figures=None, fast=None):
         aEarth = AccelKepler() + AccelHarmonic(Earth, 140, 140)
         aSun = AccelThirdBody(sun)
         aMoon = AccelThirdBody(moon) + AccelHarmonic(moon, 20, 20)
-        aSolRad = AccelSolRad(**sat_kwargs)
-        aEarthRad = AccelEarthRad(**sat_kwargs)
+        aSolRad = AccelSolRad(mass=100.0, area=1.0, CD=2.3, CR=1.3)
+        aEarthRad = AccelEarthRad(mass=100.0, area=1.0, CD=2.3, CR=1.3)
         accel = aEarth + aMoon + aSun + aSolRad + aEarthRad
 
     prop = SciPyPropagator(accel)

@@ -1,13 +1,22 @@
-"""Structured transfer-problem API demo for SSAPy-Toolkit.
+"""Readable transfer_optimal API walkthrough for SSAPy-Toolkit.
 
-This demo exercises the high-level ``transfer_optimal(problem={...})`` schema
-and its section-keyword equivalent. It covers SSAPy Orbit inputs, raw state
-vectors, inject/intercept/rendezvous/insertion arrival modes, total/first/final/time
-objectives, direct/immediate/timed/best route selection, burn-count and arrival
-window constraints, engine constraints, and solver controls. Each run saves one
-overview image under ``~/ssatk_figures/demo_gallery/figures`` with exactly three
-subplots: all transfer trajectories, all burn events, and the objective/designer
-trade space.
+This demo is intentionally written like a help document.  The important
+``transfer_optimal(...)`` calls are spelled out directly in ``main`` from top to
+bottom.  Plotting and summary helpers are kept below the imports so they do not
+hide how the solver is called.
+
+The examples cover:
+
+1. A nested ``problem={...}`` call with SSAPy ``Orbit`` objects.
+2. ``inject``, ``intercept``, ``rendezvous``, and ``insertion`` arrival modes.
+3. Raw ``r1, v1, r2, v2`` vector inputs.
+4. The section-keyword form using ``boundary=``, ``objective=``,
+   ``constraints=``, ``route=``, and ``solver=``.
+5. Direct, immediate staged, timed staged, best-route, and engine-constrained
+   searches.
+
+Each run saves one three-panel overview image under
+``~/ssatk_figures/demo_gallery/figures`` when figures are enabled.
 """
 
 from __future__ import annotations
@@ -26,7 +35,7 @@ import numpy as np
 from ssapy import Orbit, rv
 from ssapy.propagator import KeplerianPropagator
 
-from ssapy_toolkit.constants import EARTH_MU, EARTH_RADIUS
+from ssapy_toolkit.constants import EARTH_MU
 from ssapy_toolkit.orbital_mechanics.transfer_optimal_function import transfer_optimal
 from ssapy_toolkit.plots.figpath import figpath
 from ssapy_toolkit.plots.plotutils import figsave
@@ -34,15 +43,17 @@ from ssapy_toolkit.plots.plotutils import figsave
 
 TITLE = "Structured Transfer API"
 DESCRIPTION = (
-    "Demonstrates transfer_optimal(problem={...}) boundary, objective, "
-    "constraint, route, and solver sections with transfer plots for each case."
+    "Demonstrates readable transfer_optimal calls for structured boundary, "
+    "objective, constraint, route, and solver controls."
 )
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 FIGDIR = "demo_gallery/figures"
+
 COMPARISON_TOF = 3600.0
 STAGED_LEG_TOF = COMPARISON_TOF / 2.0
 DIRECT_TOF_RANGE = (COMPARISON_TOF, COMPARISON_TOF)
 STAGED_LEG_TOF_RANGE = (STAGED_LEG_TOF, STAGED_LEG_TOF)
+
 TITLE_FONTSIZE = 26
 SUBTITLE_FONTSIZE = 20
 AXIS_LABEL_FONTSIZE = 17
@@ -53,6 +64,7 @@ ANNOTATION_FONTSIZE = 12.5
 
 
 def _circular_state(radius=7000e3, theta=0.0, inclination=0.0, t=0.0):
+    """Return a simple circular state vector in an inclined plane."""
     cos_theta = np.cos(theta)
     sin_theta = np.sin(theta)
     cos_inc = np.cos(inclination)
@@ -63,380 +75,29 @@ def _circular_state(radius=7000e3, theta=0.0, inclination=0.0, t=0.0):
 
 
 def _orbit(state):
+    """Convert an ``(r, v, t)`` tuple into an SSAPy Orbit."""
     r, v, t = state
     return Orbit(r, v, t=t)
 
 
-def _solver(*, fast=False, n_grid=None, n_phase=None):
-    solver = {
-        "n_grid": n_grid or ((1, 2) if fast else (1, 3)),
-        "polish": False,
-        "refine": False,
-        "propagate": False,
-        "samples": 40 if fast else 90,
-        "burn_duration": 1.0,
-    }
-    if n_phase is not None:
-        solver["n_phase"] = n_phase
-    return solver
-
-
-def _build_cases(fast=False):
-    """Build examples that show the supported structured transfer API forms.
-
-    The plotting helpers below are intentionally separated from this function
-    so users can read this block from top to bottom as a set of copyable
-    ``transfer_optimal(...)`` examples. Each ``call`` dictionary is passed to
-    ``transfer_optimal(**case["call"])`` in ``main``.
-    """
-    # All examples use the same start state and the same final target state so
-    # the overview figure compares API options, not different transfers.
-    target_radius = 9000e3
-    target_inclination = np.deg2rad(8.0)
-    target_initial_theta = 0.35
-    target_arrival_theta = target_initial_theta + np.sqrt(EARTH_MU / target_radius ** 3) * COMPARISON_TOF
-    initial_state = _circular_state(7000e3)
-    target_state = _circular_state(
-        target_radius,
-        theta=target_arrival_theta,
-        inclination=target_inclination,
-        t=COMPARISON_TOF,
+def _record_case(cases, results, rows, *, slug, title, result, designer=True):
+    """Store one result for the overview plot and printed summary."""
+    diagnostics = result.get("diagnostics", {})
+    cases.append({"slug": slug, "title": title, "designer": designer})
+    results[slug] = result
+    rows.append(
+        {
+            "case": slug,
+            "title": title,
+            "method": result.get("method"),
+            "arrival_mode": diagnostics.get("arrival_mode"),
+            "route_mode": diagnostics.get("route_mode"),
+            "delta_v_total_m_s": float(result.get("delta_v_total", np.nan)),
+            "burn_count": len(result.get("burns", [])),
+            "tof_s": float(result.get("tof", np.nan)),
+            "problem_schema": diagnostics.get("problem_schema"),
+        }
     )
-
-    initial = _orbit(initial_state)
-    target = _orbit(target_state)
-    r0, v0, _ = initial_state
-    rf, vf, _ = target_state
-
-    # Staged routes search over candidate parking/staging orbits. For a quick
-    # demo, keep this small; for real design work, expand radii, plane fractions,
-    # and phase_count.
-    route_candidates = {
-        "radii": [8500e3],
-        "plane_fractions": [0.0, 0.5, 1.0],
-        "phase_count": 32,
-    }
-
-    cases = []
-
-    # ------------------------------------------------------------------
-    # 01. Full ``problem={...}`` schema with SSAPy Orbit objects.
-    #
-    # This is the recommended pattern for most user code: organize the call
-    # into boundary, objective, constraints, route, and solver sections.
-    direct_rendezvous_call = {
-        "problem": {
-            "boundary": {
-                "initial": initial,
-                "target": target,
-                "departure_mode": "leave now",
-                "arrival_mode": "rendezvous",
-            },
-            "objective": {
-                "minimize": "delta_v",
-                "delta_v_mode": "total",
-            },
-            "constraints": {
-                "tof_range": DIRECT_TOF_RANGE,
-                "perigee_altitude_min": 100e3,
-                "max_burns": 2,
-            },
-            "route": "direct",
-            "solver": _solver(fast=fast),
-        },
-    }
-    cases.append({
-        "slug": "01_direct_rendezvous_orbits",
-        "title": "Orbit objects: direct rendezvous, total delta-v",
-        "call": direct_rendezvous_call,
-        "designer": True,
-    })
-
-    # ------------------------------------------------------------------
-    # 02. Intercept mode: match the target position but do not pay an arrival
-    # burn to match target velocity. This demonstrates a one-burn objective.
-    intercept_first_burn_call = {
-        "problem": {
-            "boundary": {
-                "initial": initial,
-                "target": target,
-                "departure_mode": "leave now",
-                "arrival_mode": "intercept",
-            },
-            "objective": {
-                "minimize": "first_burn",
-            },
-            "constraints": {
-                "tof_range": DIRECT_TOF_RANGE,
-                "max_burns": 1,
-            },
-            "route": "direct",
-            "solver": _solver(fast=fast),
-        },
-    }
-    cases.append({
-        "slug": "02_intercept_first_burn",
-        "title": "Intercept: first burn only, no arrival match",
-        "call": intercept_first_burn_call,
-        "designer": True,
-    })
-
-    # ------------------------------------------------------------------
-    # 02b. Inject mode: search a free target-orbit phase for the departure burn
-    # that puts the spacecraft onto a transfer. It does not pay an arrival burn.
-    inject_first_burn_call = {
-        "problem": {
-            "boundary": {
-                "initial": initial,
-                "target": target,
-                "departure_mode": "leave now",
-                "arrival_mode": "inject",
-            },
-            "objective": {
-                "minimize": "first_burn",
-            },
-            "constraints": {
-                "tof_range": DIRECT_TOF_RANGE,
-                "max_burns": 1,
-            },
-            "route": "direct",
-            "solver": _solver(fast=fast, n_phase=3),
-        },
-    }
-    cases.append({
-        "slug": "02b_inject_free_phase_first_burn",
-        "title": "Inject: free-phase first burn only",
-        "call": inject_first_burn_call,
-        "designer": True,
-    })
-
-    # ------------------------------------------------------------------
-    # 03. Insertion mode: match the target-orbit velocity while allowing the
-    # target-orbit phase to be chosen by the solver.
-    insertion_arrival_burn_call = {
-        "problem": {
-            "boundary": {
-                "initial": initial,
-                "target": target,
-                "departure_mode": "leave now",
-                "arrival_mode": "insertion",
-            },
-            "objective": {
-                "minimize": "arrival_burn",
-            },
-            "constraints": {
-                "tof_range": DIRECT_TOF_RANGE,
-                "max_burns": 2,
-            },
-            "route": "direct",
-            "solver": _solver(fast=fast, n_phase=1),
-        },
-    }
-    cases.append({
-        "slug": "03_insertion_arrival_burn",
-        "title": "Insertion: free-phase arrival burn",
-        "call": insertion_arrival_burn_call,
-        "designer": True,
-    })
-
-    # ------------------------------------------------------------------
-    # 04. Time objective with a delta-v budget. This demo keeps tof_range fixed
-    # for apples-to-apples plotting; in real use, widen tof_range to let the
-    # solver choose the fastest feasible arrival.
-    min_time_budget_call = {
-        "problem": {
-            "boundary": {
-                "initial": initial,
-                "target": target,
-                "departure_mode": "leave now",
-                "arrival_mode": "rendezvous",
-            },
-            "objective": {
-                "minimize": "time",
-                "delta_v_mode": "total",
-            },
-            "constraints": {
-                "tof_range": DIRECT_TOF_RANGE,
-                "dv_budget": 10000.0,
-                "max_burns": 2,
-            },
-            "route": "direct",
-            "solver": _solver(fast=fast),
-        },
-    }
-    cases.append({
-        "slug": "04_min_time_budget",
-        "title": "Time objective at the fixed comparison arrival",
-        "call": min_time_budget_call,
-        "designer": True,
-    })
-
-    # ------------------------------------------------------------------
-    # 05. Raw state-vector input. This is useful when the caller does not have
-    # SSAPy Orbit objects; pass r1/v1/r2/v2 directly and supply the final epoch.
-    raw_vector_call = {
-        "problem": {
-            "r1": r0,
-            "v1": v0,
-            "r2": rf,
-            "v2": vf,
-            "t2": COMPARISON_TOF,
-            "departure_mode": "now",
-            "arrival_mode": "rendezvous",
-            "objective": {
-                "minimize": "delta_v",
-            },
-            "constraints": {
-                "tof_range": DIRECT_TOF_RANGE,
-                "arrival_window": (COMPARISON_TOF, COMPARISON_TOF),
-                "max_burns": 2,
-            },
-            "route": "direct",
-            "solver": _solver(fast=fast, n_grid=(1, 1)),
-        },
-    }
-    cases.append({
-        "slug": "05_raw_vectors_arrival_window",
-        "title": "Raw vectors: fixed arrival window constraint",
-        "call": raw_vector_call,
-        "designer": True,
-    })
-
-    # ------------------------------------------------------------------
-    # 06. Section-keyword form. Instead of nesting everything under
-    # ``problem={...}``, pass boundary/objective/constraints/route/solver as
-    # top-level keyword sections. This is equivalent to the problem schema.
-    immediate_staged_call = {
-        "boundary": {
-            "initial": initial,
-            "target": target,
-            "departure_mode": "now",
-            "arrival_mode": "rendezvous",
-        },
-        "objective": {
-            "minimize": "delta_v",
-            "delta_v_mode": "total",
-        },
-        "constraints": {
-            "tof_range": STAGED_LEG_TOF_RANGE,
-            "max_burns": 4,
-        },
-        "route": {
-            "mode": "immediate",
-            "n_stage_stops": 1,
-            "stage_candidates": route_candidates,
-        },
-        "solver": _solver(fast=fast, n_grid=(2, 2)),
-    }
-    cases.append({
-        "slug": "06_immediate_staged_sections",
-        "title": "Section kwargs: immediate staged transfer",
-        "call": immediate_staged_call,
-        "designer": False,
-    })
-
-    # ------------------------------------------------------------------
-    # 07. Timed multi-stage route inside the nested problem schema. The route
-    # section tells ssatk to insert one staging orbit and optimize stage timing.
-    timed_multistage_call = {
-        "problem": {
-            "boundary": {
-                "initial": initial,
-                "target": target,
-                "departure_mode": "now",
-                "arrival_mode": "rendezvous",
-            },
-            "objective": {
-                "minimize": "delta_v",
-                "delta_v_mode": "total",
-            },
-            "constraints": {
-                "tof_range": STAGED_LEG_TOF_RANGE,
-                "max_burns": 4,
-            },
-            "route": {
-                "mode": "multi_stage",
-                "timing": "optimized",
-                "n_stage_stops": 1,
-                "stage_candidates": route_candidates,
-            },
-            "solver": _solver(fast=fast, n_grid=(2, 2)),
-        },
-    }
-    cases.append({
-        "slug": "07_timed_multistage",
-        "title": "Problem schema: timed multi-stage route",
-        "call": timed_multistage_call,
-        "designer": False,
-    })
-
-    # ------------------------------------------------------------------
-    # 08. Best-route mode. Here max_burns=2 prevents a four-burn staged route,
-    # so the solver records that it chose the direct fallback.
-    best_route_call = {
-        "problem": {
-            "boundary": {
-                "initial": initial,
-                "target": target,
-                "departure_mode": "leave now",
-                "arrival_mode": "rendezvous",
-            },
-            "objective": {
-                "minimize": "delta_v",
-                "delta_v_mode": "total",
-            },
-            "constraints": {
-                "tof_range": DIRECT_TOF_RANGE,
-                "max_burns": 2,
-            },
-            "route": {
-                "mode": "best",
-                "n_stage_stops": 1,
-            },
-            "solver": _solver(fast=fast, n_grid=(2, 2)),
-        },
-    }
-    cases.append({
-        "slug": "08_best_route_burn_limit",
-        "title": "Best route: direct fallback under max_burns",
-        "call": best_route_call,
-        "designer": True,
-    })
-
-    # ------------------------------------------------------------------
-    # 09. Engine constraints. Supplying thrust/mass/isp lets ssatk size finite
-    # burn timing and propellant mass while preserving the same boundary format.
-    engine_constraints_call = {
-        "problem": {
-            "boundary": {
-                "initial": initial,
-                "target": target,
-                "departure_mode": "leave now",
-                "arrival_mode": "rendezvous",
-            },
-            "objective": {
-                "minimize": "delta_v",
-                "delta_v_mode": "total",
-            },
-            "constraints": {
-                "tof_range": DIRECT_TOF_RANGE,
-                "max_burns": 2,
-                "thrust": 10000.0,
-                "mass": 1000.0,
-                "isp": 300.0,
-            },
-            "route": "direct",
-            "solver": _solver(fast=fast, n_grid=(1, 2)),
-        },
-    }
-    cases.append({
-        "slug": "09_engine_constraints",
-        "title": "Engine constraints: thrust, mass, and specific impulse",
-        "call": engine_constraints_call,
-        "designer": True,
-    })
-
-    return cases
 
 
 def _burn_value(burn, key, default=None):
@@ -472,26 +133,6 @@ def _burn_acceleration(burn):
     duration = _burn_duration(burn)
     delta_v = float(_burn_value(burn, "delta_v_mag", _burn_value(burn, "dv_mag", 0.0)))
     return delta_v / duration if duration > 0.0 else 0.0
-
-
-def _cumulative_delta_v_curve(result, t0):
-    burns = result.get("burns", [])
-    if not burns:
-        return np.array([0.0]), np.array([0.0])
-    t_end = _transfer_time_bounds(result)[1]
-    times = [0.0]
-    cumulative = [0.0]
-    total = 0.0
-    for burn in burns:
-        start = float(_burn_value(burn, "t_start", _burn_value(burn, "t", t0)))
-        end = float(_burn_value(burn, "t_end", start))
-        delta_v = float(_burn_value(burn, "delta_v_mag", _burn_value(burn, "dv_mag", 0.0)))
-        times.extend([(start - t0) / 3600.0, (end - t0) / 3600.0])
-        cumulative.extend([total, total + delta_v])
-        total += delta_v
-    times.append((t_end - t0) / 3600.0)
-    cumulative.append(total)
-    return np.asarray(times, dtype=float), np.asarray(cumulative, dtype=float)
 
 
 def _case_number(case):
@@ -565,62 +206,37 @@ def _planned_trajectory_samples(result, samples_per_leg=90):
 
 
 def _draw_trajectory_overview(ax, results, cases, colors):
-    theta = np.linspace(0.0, 2.0 * np.pi, 181)
-    earth_radius_km = EARTH_RADIUS / 1e3
-    ax.fill(
-        earth_radius_km * np.cos(theta),
-        earth_radius_km * np.sin(theta),
-        color="0.86",
-        label="Earth",
-        zorder=0,
-    )
-    max_extent = earth_radius_km
-    common_initial_km = None
-    common_final_km = None
-
     for index, case in enumerate(cases):
         result = results[case["slug"]]
-        t, r = _planned_trajectory_samples(result, 90)
-        if t is None or r is None:
+        times, positions = _planned_trajectory_samples(result, samples_per_leg=120)
+        if positions is None:
             continue
         color = colors(index % 10)
-        r_km = np.asarray(r, dtype=float) / 1e3
-        t = np.asarray(t, dtype=float)
-        if common_initial_km is None:
-            common_initial_km = np.asarray(result["initial"]["r"], dtype=float).reshape(3) / 1e3
-            common_final_km = np.asarray(result["final"]["r"], dtype=float).reshape(3) / 1e3
-        ax.plot(r_km[:, 0], r_km[:, 1], color=color, lw=2.6, label=_case_number(case))
-        max_extent = max(max_extent, float(np.nanmax(np.abs(r_km[:, :2]))))
-        for burn in result.get("burns", []):
-            burn_time = float(_burn_value(burn, "t_start", _burn_value(burn, "t", t[0])))
-            burn_xy = np.array([np.interp(burn_time, t, r_km[:, axis]) for axis in range(2)])
-            ax.plot(burn_xy[0], burn_xy[1], marker="*", color="k", ms=10, zorder=4)
-
-    if common_initial_km is not None and common_final_km is not None:
-        ax.plot(
-            common_initial_km[0], common_initial_km[1], marker="o", ms=13,
-            color="#1f77b4", mec="k", mew=1.0, label="common start", zorder=5,
+        ax.plot(positions[:, 0] / 1e3, positions[:, 1] / 1e3, color=color, lw=2.0, label=_case_number(case))
+        ax.scatter(positions[0, 0] / 1e3, positions[0, 1] / 1e3, color="blue", s=55, zorder=4)
+        ax.scatter(positions[-1, 0] / 1e3, positions[-1, 1] / 1e3, color="green", s=55, zorder=4)
+        mid_index = len(positions) // 2
+        ax.annotate(
+            _case_number(case),
+            (positions[mid_index, 0] / 1e3, positions[mid_index, 1] / 1e3),
+            textcoords="offset points",
+            xytext=(5, 5),
+            fontsize=ANNOTATION_FONTSIZE,
+            color=color,
+            weight="bold",
         )
-        ax.plot(
-            common_final_km[0], common_final_km[1], marker="X", ms=14,
-            color="#2ca02c", mec="k", mew=1.0, label="common target", zorder=5,
-        )
-        max_extent = max(max_extent, float(np.nanmax(np.abs([common_initial_km[:2], common_final_km[:2]]))))
 
-    padding = 1.12 * max_extent
-    ax.set_xlim(-padding, padding)
-    ax.set_ylim(-padding, padding)
-    ax.set_aspect("equal")
-    ax.set_xlabel("x [km]", fontsize=AXIS_LABEL_FONTSIZE)
-    ax.set_ylabel("y [km]", fontsize=AXIS_LABEL_FONTSIZE)
-    ax.set_title(
-        "Planned Transfer Trajectories\n(stars mark burns; markers show common endpoints)",
-        fontsize=SUBTITLE_FONTSIZE,
-    )
+    from matplotlib.patches import Circle
+
+    earth = Circle((0.0, 0.0), 6378.137, color="0.70", alpha=0.35)
+    ax.add_patch(earth)
+    ax.set_aspect("equal", adjustable="box")
+    ax.set_xlabel("GCRF x [km]", fontsize=AXIS_LABEL_FONTSIZE)
+    ax.set_ylabel("GCRF y [km]", fontsize=AXIS_LABEL_FONTSIZE)
+    ax.set_title("Transfer Trajectories\nblue=start, green=end", fontsize=SUBTITLE_FONTSIZE)
     ax.tick_params(labelsize=TICK_LABEL_FONTSIZE)
     ax.grid(alpha=0.25)
-    ax.legend(title="case", fontsize=LEGEND_FONTSIZE, title_fontsize=LEGEND_FONTSIZE, ncol=3, loc="lower left")
-
+    ax.legend(title="case", title_fontsize=LEGEND_FONTSIZE, fontsize=LEGEND_FONTSIZE, ncol=3, loc="lower left")
 
 def _draw_burn_event_overview(ax, results, cases, colors):
     all_burns = [burn for case in cases for burn in results[case["slug"]].get("burns", [])]
@@ -682,16 +298,16 @@ def _draw_objective_overview(ax, results, cases, colors):
         pareto = diagnostics.get("pareto") if case.get("designer") else None
         if pareto is not None:
             tof = np.asarray(pareto.get("tof", []), dtype=float) / 3600.0
-            dv = np.asarray(pareto.get("dv", []), dtype=float)
-            if tof.size and dv.size:
-                ax.plot(tof, dv, color=color, lw=2.0, alpha=0.55)
+            delta_v = np.asarray(pareto.get("dv", []), dtype=float)
+            if tof.size and delta_v.size:
+                ax.plot(tof, delta_v, color=color, lw=2.0, alpha=0.55)
         selected_tof = float(result.get("tof", 0.0)) / 3600.0
-        selected_dv = float(diagnostics.get("objective_delta_v", result.get("delta_v_total", 0.0)))
+        selected_delta_v = float(diagnostics.get("objective_delta_v", result.get("delta_v_total", 0.0)))
         marker = "s" if result.get("method") == "transfer_optimal_staged" else "o"
-        ax.scatter(selected_tof, selected_dv, color=color, marker=marker, s=135, edgecolor="k", linewidth=0.8, zorder=4)
+        ax.scatter(selected_tof, selected_delta_v, color=color, marker=marker, s=135, edgecolor="k", linewidth=0.8, zorder=4)
         ax.annotate(
             _case_number(case),
-            (selected_tof, selected_dv),
+            (selected_tof, selected_delta_v),
             textcoords="offset points",
             xytext=(5, 5),
             fontsize=ANNOTATION_FONTSIZE + 1,
@@ -719,6 +335,7 @@ def _save_three_panel_overview(results, cases, *, make_figures=True):
         return None
 
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -741,34 +358,473 @@ def _save_three_panel_overview(results, cases, *, make_figures=True):
     figsave(fig, save_rel)
     return figpath(save_rel)
 
+
 def main(make_figures=None, fast=None):
     if make_figures is None:
         make_figures = not UNDER_PYTEST
     if fast is None:
         fast = UNDER_PYTEST
 
-    cases = _build_cases(fast=fast)
+    solver_samples = 40 if fast else 90
+    direct_grid = (1, 2) if fast else (1, 3)
+    direct_single_cell_grid = (1, 1)
+    staged_grid = (2, 2)
+
+    # ------------------------------------------------------------------
+    # Build one common scenario used by every example below.
+    # ------------------------------------------------------------------
+    target_radius = 9000e3
+    target_inclination = np.deg2rad(8.0)
+    target_initial_theta = 0.35
+    target_arrival_theta = target_initial_theta + np.sqrt(EARTH_MU / target_radius**3) * COMPARISON_TOF
+
+    initial_state = _circular_state(7000e3)
+    target_state = _circular_state(
+        target_radius,
+        theta=target_arrival_theta,
+        inclination=target_inclination,
+        t=COMPARISON_TOF,
+    )
+
+    initial_orbit = _orbit(initial_state)
+    target_orbit = _orbit(target_state)
+    r1, v1, _t1 = initial_state
+    r2, v2, _t2 = target_state
+
+    stage_candidates = {
+        "radii": [8500e3],
+        "plane_fractions": [0.0, 0.5, 1.0],
+        "phase_count": 32,
+    }
+
+    cases = []
     results = {}
     rows = []
     output_paths = []
 
-    for case in cases:
-        result = transfer_optimal(**case["call"])
-        diagnostics = result.get("diagnostics", {})
-        results[case["slug"]] = result
-        rows.append(
-            {
-                "case": case["slug"],
-                "title": case["title"],
-                "method": result.get("method"),
-                "arrival_mode": diagnostics.get("arrival_mode"),
-                "route_mode": diagnostics.get("route_mode"),
-                "delta_v_total_m_s": float(result.get("delta_v_total", np.nan)),
-                "burn_count": len(result.get("burns", [])),
-                "tof_s": float(result.get("tof", np.nan)),
-                "problem_schema": diagnostics.get("problem_schema"),
-            }
-        )
+    # ------------------------------------------------------------------
+    # 01. Nested problem schema with SSAPy Orbit objects.
+    # ------------------------------------------------------------------
+    direct_rendezvous = transfer_optimal(
+        problem={
+            "boundary": {
+                "initial": initial_orbit,
+                "target": target_orbit,
+                "departure_mode": "leave now",
+                "arrival_mode": "rendezvous",
+            },
+            "objective": {
+                "minimize": "delta_v",
+                "delta_v_mode": "total",
+            },
+            "constraints": {
+                "tof_range": DIRECT_TOF_RANGE,
+                "perigee_altitude_min": 100e3,
+                "max_burns": 2,
+            },
+            "route": "direct",
+            "solver": {
+                "n_grid": direct_grid,
+                "polish": False,
+                "refine": False,
+                "propagate": False,
+                "samples": solver_samples,
+                "burn_duration": 1.0,
+            },
+        }
+    )
+    _record_case(
+        cases,
+        results,
+        rows,
+        slug="01_direct_rendezvous_orbits",
+        title="Orbit objects: direct rendezvous, total delta-v",
+        result=direct_rendezvous,
+        designer=True,
+    )
+
+    # ------------------------------------------------------------------
+    # 02. Intercept: reach target position at the chosen time, but do not
+    # match target velocity.  This is a one-burn result.
+    # ------------------------------------------------------------------
+    intercept_first_burn = transfer_optimal(
+        problem={
+            "boundary": {
+                "initial": initial_orbit,
+                "target": target_orbit,
+                "departure_mode": "leave now",
+                "arrival_mode": "intercept",
+            },
+            "objective": {
+                "minimize": "first_burn",
+            },
+            "constraints": {
+                "tof_range": DIRECT_TOF_RANGE,
+                "max_burns": 1,
+            },
+            "route": "direct",
+            "solver": {
+                "n_grid": direct_grid,
+                "polish": False,
+                "refine": False,
+                "propagate": False,
+                "samples": solver_samples,
+                "burn_duration": 1.0,
+            },
+        }
+    )
+    _record_case(
+        cases,
+        results,
+        rows,
+        slug="02_intercept_first_burn",
+        title="Intercept: first burn only, no arrival match",
+        result=intercept_first_burn,
+        designer=True,
+    )
+
+    # ------------------------------------------------------------------
+    # 02b. Inject: search a free target-orbit phase for the departure burn
+    # that places the spacecraft onto a transfer. No final burn is included.
+    # ------------------------------------------------------------------
+    inject_first_burn = transfer_optimal(
+        problem={
+            "boundary": {
+                "initial": initial_orbit,
+                "target": target_orbit,
+                "departure_mode": "leave now",
+                "arrival_mode": "inject",
+            },
+            "objective": {
+                "minimize": "first_burn",
+            },
+            "constraints": {
+                "tof_range": DIRECT_TOF_RANGE,
+                "max_burns": 1,
+            },
+            "route": "direct",
+            "solver": {
+                "n_grid": direct_grid,
+                "n_phase": 3,
+                "polish": False,
+                "refine": False,
+                "propagate": False,
+                "samples": solver_samples,
+                "burn_duration": 1.0,
+            },
+        }
+    )
+    _record_case(
+        cases,
+        results,
+        rows,
+        slug="02b_inject_free_phase_first_burn",
+        title="Inject: free-phase first burn only",
+        result=inject_first_burn,
+        designer=True,
+    )
+
+    # ------------------------------------------------------------------
+    # 03. Insertion: search the target-orbit phase and include the final burn
+    # that matches target-orbit velocity.
+    # ------------------------------------------------------------------
+    insertion_arrival_burn = transfer_optimal(
+        problem={
+            "boundary": {
+                "initial": initial_orbit,
+                "target": target_orbit,
+                "departure_mode": "leave now",
+                "arrival_mode": "insertion",
+            },
+            "objective": {
+                "minimize": "arrival_burn",
+            },
+            "constraints": {
+                "tof_range": DIRECT_TOF_RANGE,
+                "max_burns": 2,
+            },
+            "route": "direct",
+            "solver": {
+                "n_grid": direct_grid,
+                "n_phase": 1,
+                "polish": False,
+                "refine": False,
+                "propagate": False,
+                "samples": solver_samples,
+                "burn_duration": 1.0,
+            },
+        }
+    )
+    _record_case(
+        cases,
+        results,
+        rows,
+        slug="03_insertion_arrival_burn",
+        title="Insertion: free-phase arrival burn",
+        result=insertion_arrival_burn,
+        designer=True,
+    )
+
+    # ------------------------------------------------------------------
+    # 04. Time objective with a delta-v budget.  The fixed TOF range keeps this
+    # demo comparable with the other cases; widen it in real design trades.
+    # ------------------------------------------------------------------
+    min_time_budget = transfer_optimal(
+        problem={
+            "boundary": {
+                "initial": initial_orbit,
+                "target": target_orbit,
+                "departure_mode": "leave now",
+                "arrival_mode": "rendezvous",
+            },
+            "objective": {
+                "minimize": "time",
+                "delta_v_mode": "total",
+            },
+            "constraints": {
+                "tof_range": DIRECT_TOF_RANGE,
+                "dv_budget": 10000.0,
+                "max_burns": 2,
+            },
+            "route": "direct",
+            "solver": {
+                "n_grid": direct_grid,
+                "polish": False,
+                "refine": False,
+                "propagate": False,
+                "samples": solver_samples,
+                "burn_duration": 1.0,
+            },
+        }
+    )
+    _record_case(
+        cases,
+        results,
+        rows,
+        slug="04_min_time_budget",
+        title="Time objective at the fixed comparison arrival",
+        result=min_time_budget,
+        designer=True,
+    )
+
+    # ------------------------------------------------------------------
+    # 05. Raw vector input.  Use this when you have state vectors instead of
+    # SSAPy Orbit objects.
+    # ------------------------------------------------------------------
+    raw_vectors_arrival_window = transfer_optimal(
+        problem={
+            "r1": r1,
+            "v1": v1,
+            "r2": r2,
+            "v2": v2,
+            "t2": COMPARISON_TOF,
+            "departure_mode": "now",
+            "arrival_mode": "rendezvous",
+            "objective": {
+                "minimize": "delta_v",
+            },
+            "constraints": {
+                "tof_range": DIRECT_TOF_RANGE,
+                "arrival_window": (COMPARISON_TOF, COMPARISON_TOF),
+                "max_burns": 2,
+            },
+            "route": "direct",
+            "solver": {
+                "n_grid": direct_single_cell_grid,
+                "polish": False,
+                "refine": False,
+                "propagate": False,
+                "samples": solver_samples,
+                "burn_duration": 1.0,
+            },
+        }
+    )
+    _record_case(
+        cases,
+        results,
+        rows,
+        slug="05_raw_vectors_arrival_window",
+        title="Raw vectors: fixed arrival window constraint",
+        result=raw_vectors_arrival_window,
+        designer=True,
+    )
+
+    # ------------------------------------------------------------------
+    # 06. Section-keyword form.  This is equivalent to the nested problem
+    # schema, but each section is passed as its own top-level keyword.
+    # ------------------------------------------------------------------
+    immediate_staged_sections = transfer_optimal(
+        boundary={
+            "initial": initial_orbit,
+            "target": target_orbit,
+            "departure_mode": "now",
+            "arrival_mode": "rendezvous",
+        },
+        objective={
+            "minimize": "delta_v",
+            "delta_v_mode": "total",
+        },
+        constraints={
+            "tof_range": STAGED_LEG_TOF_RANGE,
+            "max_burns": 4,
+        },
+        route={
+            "mode": "immediate",
+            "n_stage_stops": 1,
+            "stage_candidates": stage_candidates,
+        },
+        solver={
+            "n_grid": staged_grid,
+            "polish": False,
+            "refine": False,
+            "propagate": False,
+            "samples": solver_samples,
+            "burn_duration": 1.0,
+        },
+    )
+    _record_case(
+        cases,
+        results,
+        rows,
+        slug="06_immediate_staged_sections",
+        title="Section keywords: immediate staged transfer",
+        result=immediate_staged_sections,
+        designer=False,
+    )
+
+    # ------------------------------------------------------------------
+    # 07. Timed staged route.  The route section lets the post-stage leg wait
+    # for an optimized departure phase instead of leaving immediately.
+    # ------------------------------------------------------------------
+    timed_multistage = transfer_optimal(
+        problem={
+            "boundary": {
+                "initial": initial_orbit,
+                "target": target_orbit,
+                "departure_mode": "now",
+                "arrival_mode": "rendezvous",
+            },
+            "objective": {
+                "minimize": "delta_v",
+                "delta_v_mode": "total",
+            },
+            "constraints": {
+                "tof_range": STAGED_LEG_TOF_RANGE,
+                "max_burns": 4,
+            },
+            "route": {
+                "mode": "multi_stage",
+                "timing": "optimized",
+                "n_stage_stops": 1,
+                "stage_candidates": stage_candidates,
+            },
+            "solver": {
+                "n_grid": staged_grid,
+                "polish": False,
+                "refine": False,
+                "propagate": False,
+                "samples": solver_samples,
+                "burn_duration": 1.0,
+            },
+        }
+    )
+    _record_case(
+        cases,
+        results,
+        rows,
+        slug="07_timed_multistage",
+        title="Problem schema: timed multi-stage route",
+        result=timed_multistage,
+        designer=False,
+    )
+
+    # ------------------------------------------------------------------
+    # 08. Best-route mode.  Here max_burns=2 prevents a four-burn staged route,
+    # so the solver falls back to a direct transfer.
+    # ------------------------------------------------------------------
+    best_route_burn_limit = transfer_optimal(
+        problem={
+            "boundary": {
+                "initial": initial_orbit,
+                "target": target_orbit,
+                "departure_mode": "leave now",
+                "arrival_mode": "rendezvous",
+            },
+            "objective": {
+                "minimize": "delta_v",
+                "delta_v_mode": "total",
+            },
+            "constraints": {
+                "tof_range": DIRECT_TOF_RANGE,
+                "max_burns": 2,
+            },
+            "route": {
+                "mode": "best",
+                "n_stage_stops": 1,
+            },
+            "solver": {
+                "n_grid": staged_grid,
+                "polish": False,
+                "refine": False,
+                "propagate": False,
+                "samples": solver_samples,
+                "burn_duration": 1.0,
+            },
+        }
+    )
+    _record_case(
+        cases,
+        results,
+        rows,
+        slug="08_best_route_burn_limit",
+        title="Best route: direct fallback under max_burns",
+        result=best_route_burn_limit,
+        designer=True,
+    )
+
+    # ------------------------------------------------------------------
+    # 09. Engine constraints.  Supplying thrust/mass/isp sizes finite burns and
+    # adds propellant estimates while preserving the same boundary format.
+    # ------------------------------------------------------------------
+    engine_constraints = transfer_optimal(
+        problem={
+            "boundary": {
+                "initial": initial_orbit,
+                "target": target_orbit,
+                "departure_mode": "leave now",
+                "arrival_mode": "rendezvous",
+            },
+            "objective": {
+                "minimize": "delta_v",
+                "delta_v_mode": "total",
+            },
+            "constraints": {
+                "tof_range": DIRECT_TOF_RANGE,
+                "max_burns": 2,
+                "thrust": 10000.0,
+                "mass": 1000.0,
+                "isp": 300.0,
+            },
+            "route": "direct",
+            "solver": {
+                "n_grid": direct_grid,
+                "polish": False,
+                "refine": False,
+                "propagate": False,
+                "samples": solver_samples,
+                "burn_duration": 1.0,
+            },
+        }
+    )
+    _record_case(
+        cases,
+        results,
+        rows,
+        slug="09_engine_constraints",
+        title="Engine constraints: thrust, mass, and specific impulse",
+        result=engine_constraints,
+        designer=True,
+    )
 
     overview_path = _save_three_panel_overview(results, cases, make_figures=make_figures)
     if overview_path is not None:

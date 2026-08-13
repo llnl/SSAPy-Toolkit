@@ -134,8 +134,8 @@ all-in-one summary. Put solver-specific regression coverage in
 Prefer correctly spelled module paths in new code:
 `coordinates.equatorial_and_ecliptic`, `coordinates.local_and_equatorial`,
 `accelerations.accel_equatorial`, and
-`orbital_mechanics.all_orbit_quantities`. Legacy misspelled modules remain as
-compatibility aliases and should not be removed without a deprecation cycle.
+`orbital_mechanics.all_orbit_quantities`. Do not add misspelled compatibility
+modules or aliases for new APIs.
 `ssapy_toolkit.launch_pads` is the canonical launch/test-site metadata module;
 `ssapy_toolkit.orbital_mechanics.launch_pads` re-exports the same dictionaries.
 

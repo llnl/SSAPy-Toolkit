@@ -513,14 +513,38 @@ def _build_maneuver_results(fast):
         "Bi-elliptic lower": transfer_bielliptic(9000e3, 7000e3, intermediate_radius=20_000e3, samples_per_arc=samples // 2),
     }
 
-    fixed_time_kwargs = {"propagate": False, "refine": False, "burn_duration": 1.0}
     departure = (r0, v0, 0.0)
     arrival = (r_target, v_target, tof)
     fixed_time = {
-        "transfer_ssapy": transfer_ssapy(departure, arrival, **fixed_time_kwargs),
-        "Lambert wrapper": transfer_lambertian(departure, arrival, **fixed_time_kwargs),
-        "Shooter wrapper": transfer_shooter(departure, arrival, **fixed_time_kwargs),
-        "Coplanar wrapper": transfer_coplanar(departure, arrival, coplanar_tol=1e-9, **fixed_time_kwargs),
+        "transfer_ssapy": transfer_ssapy(
+            departure,
+            arrival,
+            propagate=False,
+            refine=False,
+            burn_duration=1.0,
+        ),
+        "Lambert wrapper": transfer_lambertian(
+            departure,
+            arrival,
+            propagate=False,
+            refine=False,
+            burn_duration=1.0,
+        ),
+        "Shooter wrapper": transfer_shooter(
+            departure,
+            arrival,
+            propagate=False,
+            refine=False,
+            burn_duration=1.0,
+        ),
+        "Coplanar wrapper": transfer_coplanar(
+            departure,
+            arrival,
+            coplanar_tol=1e-9,
+            propagate=False,
+            refine=False,
+            burn_duration=1.0,
+        ),
     }
 
     velocity_delta_v = 10.0 if fast else 300.0
@@ -547,181 +571,499 @@ def _build_maneuver_results(fast):
     optimized_radius = 9000e3
     optimized_angle = 0.4
     r_short, v_short, _ = _circular_state(optimized_radius, optimized_angle)
-    optimal_kwargs = {
-        "t_window": (0.0, 1000.0),
-        "tof_range": (1000.0, 6000.0),
-        "n_grid": (2, 2) if fast else (8, 8),
-        "polish": False,
-        "propagate": False,
-        "refine": False,
-        "burn_duration": 1.0,
-    }
     optimal = {
-        "Optimal total Δv": transfer_optimal((r0, v0, 0.0), (r_short, v_short, 0.0), delta_v_mode="total", **optimal_kwargs),
+        "Optimal total Δv": transfer_optimal(
+            (r0, v0, 0.0),
+            (r_short, v_short, 0.0),
+            delta_v_mode="total",
+            t_window=(0.0, 1000.0),
+            tof_range=(1000.0, 6000.0),
+            n_grid=(2, 2) if fast else (8, 8),
+            polish=False,
+            propagate=False,
+            refine=False,
+            burn_duration=1.0,
+        ),
         "Optimal first burn": transfer_optimal(
             (r0, v0, 0.0),
             (r_short, v_short, 0.0),
             delta_v_mode="first",
             arrival_burn=False,
-            **optimal_kwargs,
+            t_window=(0.0, 1000.0),
+            tof_range=(1000.0, 6000.0),
+            n_grid=(2, 2) if fast else (8, 8),
+            polish=False,
+            propagate=False,
+            refine=False,
+            burn_duration=1.0,
         ),
-        "Optimal last burn": transfer_optimal((r0, v0, 0.0), (r_short, v_short, 0.0), delta_v_mode="last", **optimal_kwargs),
+        "Optimal last burn": transfer_optimal(
+            (r0, v0, 0.0),
+            (r_short, v_short, 0.0),
+            delta_v_mode="last",
+            t_window=(0.0, 1000.0),
+            tof_range=(1000.0, 6000.0),
+            n_grid=(2, 2) if fast else (8, 8),
+            polish=False,
+            propagate=False,
+            refine=False,
+            burn_duration=1.0,
+        ),
         "Min time under cap": transfer_optimal(
             (r0, v0, 0.0),
             (r_short, v_short, 0.0),
             objective="time",
             dv_budget=5000.0,
-            **optimal_kwargs,
+            t_window=(0.0, 1000.0),
+            tof_range=(1000.0, 6000.0),
+            n_grid=(2, 2) if fast else (8, 8),
+            polish=False,
+            propagate=False,
+            refine=False,
+            burn_duration=1.0,
         ),
-        "Rendezvous wrapper": transfer_rendezvous((r0, v0, 0.0), (r_short, v_short, 0.0), **optimal_kwargs),
+        "Rendezvous wrapper": transfer_rendezvous(
+            (r0, v0, 0.0),
+            (r_short, v_short, 0.0),
+            t_window=(0.0, 1000.0),
+            tof_range=(1000.0, 6000.0),
+            n_grid=(2, 2) if fast else (8, 8),
+            polish=False,
+            propagate=False,
+            refine=False,
+            burn_duration=1.0,
+        ),
     }
 
     staged_angle = 0.2
     staged_inclination = np.deg2rad(90.0)
     r_staged_target, v_staged_target, _ = _circular_state(15_000e3, staged_angle, staged_inclination)
-    staged_kwargs = {
-        "departure_mode": "now",
-        "tof_range": (1800.0, 15_000.0),
-        "n_grid": (3, 3) if fast else (5, 5),
-        "polish": False,
-        "propagate": False,
-        "refine": False,
-        "burn_duration": 1.0,
-    }
-    staged_search_kwargs = {
-        "stage_radii": [20_000e3, 40_000e3, 80_000e3],
-        "stage_plane_fractions": [0.0, 0.5, 1.0],
-        "n_stage_phase": 2,
-        "stage_beam_width": 3 if fast else 5,
-        "stage_wait_window": 25_000.0,
-    }
-    staged_boundary = ((r0, v0, 0.0), (r_staged_target, v_staged_target, 0.0))
+    staged_departure = (r0, v0, 0.0)
+    staged_arrival = (r_staged_target, v_staged_target, 0.0)
     staged_optimal = {
-        "Direct leave-now": transfer_optimal(*staged_boundary, **staged_kwargs),
+        "Direct leave-now": transfer_optimal(
+            staged_departure,
+            staged_arrival,
+            departure_mode="now",
+            tof_range=(1800.0, 15_000.0),
+            n_grid=(3, 3) if fast else (5, 5),
+            polish=False,
+            propagate=False,
+            refine=False,
+            burn_duration=1.0,
+        ),
         "Immediate one-stop": transfer_optimal(
-            *staged_boundary,
+            staged_departure,
+            staged_arrival,
             stage_mode="immediate",
             n_stage_stops=1,
-            **staged_kwargs,
-            **staged_search_kwargs,
+            departure_mode="now",
+            tof_range=(1800.0, 15_000.0),
+            n_grid=(3, 3) if fast else (5, 5),
+            polish=False,
+            propagate=False,
+            refine=False,
+            burn_duration=1.0,
+            stage_radii=[20_000e3, 40_000e3, 80_000e3],
+            stage_plane_fractions=[0.0, 0.5, 1.0],
+            n_stage_phase=2,
+            stage_beam_width=3 if fast else 5,
+            stage_wait_window=25_000.0,
         ),
         "Timed one-stop": transfer_optimal(
-            *staged_boundary,
+            staged_departure,
+            staged_arrival,
             stage_mode="timed",
             stage_timing="appropriately timed",
             n_stage_stops=1,
-            **staged_kwargs,
-            **staged_search_kwargs,
+            departure_mode="now",
+            tof_range=(1800.0, 15_000.0),
+            n_grid=(3, 3) if fast else (5, 5),
+            polish=False,
+            propagate=False,
+            refine=False,
+            burn_duration=1.0,
+            stage_radii=[20_000e3, 40_000e3, 80_000e3],
+            stage_plane_fractions=[0.0, 0.5, 1.0],
+            n_stage_phase=2,
+            stage_beam_width=3 if fast else 5,
+            stage_wait_window=25_000.0,
         ),
         "Timed two-stop min-time": transfer_optimal(
-            *staged_boundary,
+            staged_departure,
+            staged_arrival,
             stage_mode="timed",
             stage_timing="appropriately timed",
             n_stage_stops=2,
             objective="time",
             dv_budget=50_000.0,
-            **staged_kwargs,
-            **staged_search_kwargs,
+            departure_mode="now",
+            tof_range=(1800.0, 15_000.0),
+            n_grid=(3, 3) if fast else (5, 5),
+            polish=False,
+            propagate=False,
+            refine=False,
+            burn_duration=1.0,
+            stage_radii=[20_000e3, 40_000e3, 80_000e3],
+            stage_plane_fractions=[0.0, 0.5, 1.0],
+            n_stage_phase=2,
+            stage_beam_width=3 if fast else 5,
+            stage_wait_window=25_000.0,
         ),
     }
 
-    split_plane_change_cases = {
-        "LEO to GEO, 28.5° plane change": {
-            "r1": 7000e3,
-            "r2": 42_164e3,
-            "inclination": np.deg2rad(28.5),
-        },
-        "LEO to MEO, 20° plane change": {
-            "r1": 7000e3,
-            "r2": 15_000e3,
-            "inclination": np.deg2rad(20.0),
-        },
-    }
+    samples_for_split_plane = 96 if fast else 240
     split_plane_change = {}
-    for case_name, case in split_plane_change_cases.items():
-        samples_for_case = 96 if fast else 240
-        all_departure = _inclined_hohmann_result(
-            case["r1"],
-            case["r2"],
-            case["inclination"],
-            case["inclination"],
-            samples=samples_for_case,
-            label="inclined_hohmann_all_departure",
-        )
-        all_arrival = _inclined_hohmann_result(
-            case["r1"],
-            case["r2"],
-            case["inclination"],
-            0.0,
-            samples=samples_for_case,
-            label="inclined_hohmann_all_arrival",
-        )
-        optimized_split = _optimized_inclined_hohmann(
-            case["r1"],
-            case["r2"],
-            case["inclination"],
-            samples=samples_for_case,
-        )
-        split_plane_change[f"{case_name} all departure"] = all_departure
-        split_plane_change[f"{case_name} all arrival"] = all_arrival
-        split_plane_change[f"{case_name} split"] = optimized_split
 
-    elliptical_cases = {
-        "Aligned sub-GEO ellipses": {
-            "initial": (7000e3, 11_000e3, 0.0, 0.0, 0.0, 0.0),
-            "target": (9000e3, 16_000e3, np.pi, 0.0, 0.0, 0.0),
-        },
-        "Slightly inclined MEO ellipses": {
-            "initial": (9000e3, 18_000e3, 0.0, np.deg2rad(5.0), 0.0, 0.0),
-            "target": (12_000e3, 26_000e3, np.pi, np.deg2rad(7.0), 0.0, 0.0),
-        },
-        "Near-GEO aligned ellipses": {
-            "initial": (12_000e3, 26_000e3, 0.0, 0.0, 0.0, 0.0),
-            "target": (22_000e3, 42_164e3, np.pi, 0.0, 0.0, 0.0),
-        },
-    }
+    # Plane-change example 1: LEO to GEO with a 28.5 degree inclination change.
+    leo_geo_r1 = 7000e3
+    leo_geo_r2 = 42_164e3
+    leo_geo_inclination = np.deg2rad(28.5)
+    split_plane_change["LEO to GEO, 28.5° plane change all departure"] = _inclined_hohmann_result(
+        leo_geo_r1,
+        leo_geo_r2,
+        leo_geo_inclination,
+        leo_geo_inclination,
+        samples=samples_for_split_plane,
+        label="inclined_hohmann_all_departure",
+    )
+    split_plane_change["LEO to GEO, 28.5° plane change all arrival"] = _inclined_hohmann_result(
+        leo_geo_r1,
+        leo_geo_r2,
+        leo_geo_inclination,
+        0.0,
+        samples=samples_for_split_plane,
+        label="inclined_hohmann_all_arrival",
+    )
+    split_plane_change["LEO to GEO, 28.5° plane change split"] = _optimized_inclined_hohmann(
+        leo_geo_r1,
+        leo_geo_r2,
+        leo_geo_inclination,
+        samples=samples_for_split_plane,
+    )
+
+    # Plane-change example 2: LEO to MEO with a 20 degree inclination change.
+    leo_meo_r1 = 7000e3
+    leo_meo_r2 = 15_000e3
+    leo_meo_inclination = np.deg2rad(20.0)
+    split_plane_change["LEO to MEO, 20° plane change all departure"] = _inclined_hohmann_result(
+        leo_meo_r1,
+        leo_meo_r2,
+        leo_meo_inclination,
+        leo_meo_inclination,
+        samples=samples_for_split_plane,
+        label="inclined_hohmann_all_departure",
+    )
+    split_plane_change["LEO to MEO, 20° plane change all arrival"] = _inclined_hohmann_result(
+        leo_meo_r1,
+        leo_meo_r2,
+        leo_meo_inclination,
+        0.0,
+        samples=samples_for_split_plane,
+        label="inclined_hohmann_all_arrival",
+    )
+    split_plane_change["LEO to MEO, 20° plane change split"] = _optimized_inclined_hohmann(
+        leo_meo_r1,
+        leo_meo_r2,
+        leo_meo_inclination,
+        samples=samples_for_split_plane,
+    )
+
     elliptical_two_burn = {}
-    for case_name, case in elliptical_cases.items():
-        rp1, ra1, nu1, inc1, raan1, argp1 = case["initial"]
-        rp2, ra2, nu2, inc2, raan2, argp2 = case["target"]
-        r_elliptic0, v_elliptic0, _, e0 = _elliptical_state(rp1, ra1, nu1, inc1, raan1, argp1)
-        r_elliptic1, v_elliptic1, _, e1 = _elliptical_state(rp2, ra2, nu2, inc2, raan2, argp2)
-        max_period = max(_period_from_rpra(rp1, ra1), _period_from_rpra(rp2, ra2))
-        elliptical_kwargs = {
-            "departure_mode": "now",
-            "tof_range": (0.10 * max_period, 1.20 * max_period),
-            "n_grid": (4, 4) if fast else (6, 6),
-            "polish": False,
-            "propagate": False,
-            "refine": False,
-            "burn_duration": 1.0,
+
+    # Elliptical example 1: aligned sub-GEO ellipses.
+    aligned_initial_rp = 7000e3
+    aligned_initial_ra = 11_000e3
+    aligned_initial_true_anomaly = 0.0
+    aligned_initial_inclination = 0.0
+    aligned_initial_raan = 0.0
+    aligned_initial_arg_perigee = 0.0
+    aligned_target_rp = 9000e3
+    aligned_target_ra = 16_000e3
+    aligned_target_true_anomaly = np.pi
+    aligned_target_inclination = 0.0
+    aligned_target_raan = 0.0
+    aligned_target_arg_perigee = 0.0
+    r_aligned_initial, v_aligned_initial, _, e_aligned_initial = _elliptical_state(
+        aligned_initial_rp,
+        aligned_initial_ra,
+        aligned_initial_true_anomaly,
+        aligned_initial_inclination,
+        aligned_initial_raan,
+        aligned_initial_arg_perigee,
+    )
+    r_aligned_target, v_aligned_target, _, e_aligned_target = _elliptical_state(
+        aligned_target_rp,
+        aligned_target_ra,
+        aligned_target_true_anomaly,
+        aligned_target_inclination,
+        aligned_target_raan,
+        aligned_target_arg_perigee,
+    )
+    aligned_max_period = max(
+        _period_from_rpra(aligned_initial_rp, aligned_initial_ra),
+        _period_from_rpra(aligned_target_rp, aligned_target_ra),
+    )
+    aligned_stage_radii = sorted(
+        {
+            float(np.sqrt(min(aligned_initial_rp, aligned_target_rp) * max(aligned_initial_ra, aligned_target_ra))),
+            float(0.5 * (min(aligned_initial_rp, aligned_target_rp) + max(aligned_initial_ra, aligned_target_ra))),
+            float(min(42_164e3, 1.2 * max(aligned_initial_ra, aligned_target_ra))),
+            42_164e3,
         }
-        stage_radii = sorted(
-            {
-                float(np.sqrt(min(rp1, rp2) * max(ra1, ra2))),
-                float(0.5 * (min(rp1, rp2) + max(ra1, ra2))),
-                float(min(42_164e3, 1.2 * max(ra1, ra2))),
-                42_164e3,
-            }
-        )
-        elliptical_stage_kwargs = {
-            "stage_radii": stage_radii,
-            "stage_plane_fractions": [0.0, 0.5, 1.0],
-            "n_stage_phase": 1 if fast else 2,
-            "stage_beam_width": 2 if fast else 4,
-            "stage_wait_window": 0.5 * max_period,
+    )
+    aligned_departure = (r_aligned_initial, v_aligned_initial, 0.0)
+    aligned_arrival = (r_aligned_target, v_aligned_target, 0.0)
+    aligned_direct = transfer_optimal(
+        aligned_departure,
+        aligned_arrival,
+        departure_mode="now",
+        tof_range=(0.10 * aligned_max_period, 1.20 * aligned_max_period),
+        n_grid=(4, 4) if fast else (6, 6),
+        polish=False,
+        propagate=False,
+        refine=False,
+        burn_duration=1.0,
+    )
+    aligned_staged_candidates = [
+        transfer_optimal(
+            aligned_departure,
+            aligned_arrival,
+            stage_mode="immediate",
+            n_stage_stops=1,
+            departure_mode="now",
+            tof_range=(0.10 * aligned_max_period, 1.20 * aligned_max_period),
+            n_grid=(4, 4) if fast else (6, 6),
+            polish=False,
+            propagate=False,
+            refine=False,
+            burn_duration=1.0,
+            stage_radii=aligned_stage_radii,
+            stage_plane_fractions=[0.0, 0.5, 1.0],
+            n_stage_phase=1 if fast else 2,
+            stage_beam_width=2 if fast else 4,
+            stage_wait_window=0.5 * aligned_max_period,
+        ),
+        transfer_optimal(
+            aligned_departure,
+            aligned_arrival,
+            stage_mode="timed",
+            n_stage_stops=1,
+            departure_mode="now",
+            tof_range=(0.10 * aligned_max_period, 1.20 * aligned_max_period),
+            n_grid=(4, 4) if fast else (6, 6),
+            polish=False,
+            propagate=False,
+            refine=False,
+            burn_duration=1.0,
+            stage_radii=aligned_stage_radii,
+            stage_plane_fractions=[0.0, 0.5, 1.0],
+            n_stage_phase=1 if fast else 2,
+            stage_beam_width=2 if fast else 4,
+            stage_wait_window=0.5 * aligned_max_period,
+        ),
+    ]
+    aligned_best_staged = _best_delta_v_result(aligned_staged_candidates)
+    aligned_direct["case_description"] = f"e₀={e_aligned_initial:.2f}, e_f={e_aligned_target:.2f}; both apogees below GEO"
+    aligned_best_staged["case_description"] = aligned_direct["case_description"]
+    elliptical_two_burn["Aligned sub-GEO ellipses direct"] = aligned_direct
+    elliptical_two_burn["Aligned sub-GEO ellipses best staged"] = aligned_best_staged
+
+    # Elliptical example 2: mildly inclined MEO ellipses.
+    meo_initial_rp = 9000e3
+    meo_initial_ra = 18_000e3
+    meo_initial_true_anomaly = 0.0
+    meo_initial_inclination = np.deg2rad(5.0)
+    meo_initial_raan = 0.0
+    meo_initial_arg_perigee = 0.0
+    meo_target_rp = 12_000e3
+    meo_target_ra = 26_000e3
+    meo_target_true_anomaly = np.pi
+    meo_target_inclination = np.deg2rad(7.0)
+    meo_target_raan = 0.0
+    meo_target_arg_perigee = 0.0
+    r_meo_initial, v_meo_initial, _, e_meo_initial = _elliptical_state(
+        meo_initial_rp,
+        meo_initial_ra,
+        meo_initial_true_anomaly,
+        meo_initial_inclination,
+        meo_initial_raan,
+        meo_initial_arg_perigee,
+    )
+    r_meo_target, v_meo_target, _, e_meo_target = _elliptical_state(
+        meo_target_rp,
+        meo_target_ra,
+        meo_target_true_anomaly,
+        meo_target_inclination,
+        meo_target_raan,
+        meo_target_arg_perigee,
+    )
+    meo_max_period = max(
+        _period_from_rpra(meo_initial_rp, meo_initial_ra),
+        _period_from_rpra(meo_target_rp, meo_target_ra),
+    )
+    meo_stage_radii = sorted(
+        {
+            float(np.sqrt(min(meo_initial_rp, meo_target_rp) * max(meo_initial_ra, meo_target_ra))),
+            float(0.5 * (min(meo_initial_rp, meo_target_rp) + max(meo_initial_ra, meo_target_ra))),
+            float(min(42_164e3, 1.2 * max(meo_initial_ra, meo_target_ra))),
+            42_164e3,
         }
-        boundary = ((r_elliptic0, v_elliptic0, 0.0), (r_elliptic1, v_elliptic1, 0.0))
-        direct = transfer_optimal(*boundary, **elliptical_kwargs)
-        staged_candidates = [
-            transfer_optimal(*boundary, stage_mode="immediate", n_stage_stops=1, **elliptical_kwargs, **elliptical_stage_kwargs),
-            transfer_optimal(*boundary, stage_mode="timed", n_stage_stops=1, **elliptical_kwargs, **elliptical_stage_kwargs),
-        ]
-        best_staged = _best_delta_v_result(staged_candidates)
-        direct["case_description"] = f"e₀={e0:.2f}, e_f={e1:.2f}; both apogees below GEO"
-        best_staged["case_description"] = direct["case_description"]
-        elliptical_two_burn[f"{case_name} direct"] = direct
-        elliptical_two_burn[f"{case_name} best staged"] = best_staged
+    )
+    meo_departure = (r_meo_initial, v_meo_initial, 0.0)
+    meo_arrival = (r_meo_target, v_meo_target, 0.0)
+    meo_direct = transfer_optimal(
+        meo_departure,
+        meo_arrival,
+        departure_mode="now",
+        tof_range=(0.10 * meo_max_period, 1.20 * meo_max_period),
+        n_grid=(4, 4) if fast else (6, 6),
+        polish=False,
+        propagate=False,
+        refine=False,
+        burn_duration=1.0,
+    )
+    meo_staged_candidates = [
+        transfer_optimal(
+            meo_departure,
+            meo_arrival,
+            stage_mode="immediate",
+            n_stage_stops=1,
+            departure_mode="now",
+            tof_range=(0.10 * meo_max_period, 1.20 * meo_max_period),
+            n_grid=(4, 4) if fast else (6, 6),
+            polish=False,
+            propagate=False,
+            refine=False,
+            burn_duration=1.0,
+            stage_radii=meo_stage_radii,
+            stage_plane_fractions=[0.0, 0.5, 1.0],
+            n_stage_phase=1 if fast else 2,
+            stage_beam_width=2 if fast else 4,
+            stage_wait_window=0.5 * meo_max_period,
+        ),
+        transfer_optimal(
+            meo_departure,
+            meo_arrival,
+            stage_mode="timed",
+            n_stage_stops=1,
+            departure_mode="now",
+            tof_range=(0.10 * meo_max_period, 1.20 * meo_max_period),
+            n_grid=(4, 4) if fast else (6, 6),
+            polish=False,
+            propagate=False,
+            refine=False,
+            burn_duration=1.0,
+            stage_radii=meo_stage_radii,
+            stage_plane_fractions=[0.0, 0.5, 1.0],
+            n_stage_phase=1 if fast else 2,
+            stage_beam_width=2 if fast else 4,
+            stage_wait_window=0.5 * meo_max_period,
+        ),
+    ]
+    meo_best_staged = _best_delta_v_result(meo_staged_candidates)
+    meo_direct["case_description"] = f"e₀={e_meo_initial:.2f}, e_f={e_meo_target:.2f}; both apogees below GEO"
+    meo_best_staged["case_description"] = meo_direct["case_description"]
+    elliptical_two_burn["Slightly inclined MEO ellipses direct"] = meo_direct
+    elliptical_two_burn["Slightly inclined MEO ellipses best staged"] = meo_best_staged
+
+    # Elliptical example 3: near-GEO aligned ellipses.
+    geo_initial_rp = 12_000e3
+    geo_initial_ra = 26_000e3
+    geo_initial_true_anomaly = 0.0
+    geo_initial_inclination = 0.0
+    geo_initial_raan = 0.0
+    geo_initial_arg_perigee = 0.0
+    geo_target_rp = 22_000e3
+    geo_target_ra = 42_164e3
+    geo_target_true_anomaly = np.pi
+    geo_target_inclination = 0.0
+    geo_target_raan = 0.0
+    geo_target_arg_perigee = 0.0
+    r_geo_initial, v_geo_initial, _, e_geo_initial = _elliptical_state(
+        geo_initial_rp,
+        geo_initial_ra,
+        geo_initial_true_anomaly,
+        geo_initial_inclination,
+        geo_initial_raan,
+        geo_initial_arg_perigee,
+    )
+    r_geo_target, v_geo_target, _, e_geo_target = _elliptical_state(
+        geo_target_rp,
+        geo_target_ra,
+        geo_target_true_anomaly,
+        geo_target_inclination,
+        geo_target_raan,
+        geo_target_arg_perigee,
+    )
+    geo_max_period = max(
+        _period_from_rpra(geo_initial_rp, geo_initial_ra),
+        _period_from_rpra(geo_target_rp, geo_target_ra),
+    )
+    geo_stage_radii = sorted(
+        {
+            float(np.sqrt(min(geo_initial_rp, geo_target_rp) * max(geo_initial_ra, geo_target_ra))),
+            float(0.5 * (min(geo_initial_rp, geo_target_rp) + max(geo_initial_ra, geo_target_ra))),
+            float(min(42_164e3, 1.2 * max(geo_initial_ra, geo_target_ra))),
+            42_164e3,
+        }
+    )
+    geo_departure = (r_geo_initial, v_geo_initial, 0.0)
+    geo_arrival = (r_geo_target, v_geo_target, 0.0)
+    geo_direct = transfer_optimal(
+        geo_departure,
+        geo_arrival,
+        departure_mode="now",
+        tof_range=(0.10 * geo_max_period, 1.20 * geo_max_period),
+        n_grid=(4, 4) if fast else (6, 6),
+        polish=False,
+        propagate=False,
+        refine=False,
+        burn_duration=1.0,
+    )
+    geo_staged_candidates = [
+        transfer_optimal(
+            geo_departure,
+            geo_arrival,
+            stage_mode="immediate",
+            n_stage_stops=1,
+            departure_mode="now",
+            tof_range=(0.10 * geo_max_period, 1.20 * geo_max_period),
+            n_grid=(4, 4) if fast else (6, 6),
+            polish=False,
+            propagate=False,
+            refine=False,
+            burn_duration=1.0,
+            stage_radii=geo_stage_radii,
+            stage_plane_fractions=[0.0, 0.5, 1.0],
+            n_stage_phase=1 if fast else 2,
+            stage_beam_width=2 if fast else 4,
+            stage_wait_window=0.5 * geo_max_period,
+        ),
+        transfer_optimal(
+            geo_departure,
+            geo_arrival,
+            stage_mode="timed",
+            n_stage_stops=1,
+            departure_mode="now",
+            tof_range=(0.10 * geo_max_period, 1.20 * geo_max_period),
+            n_grid=(4, 4) if fast else (6, 6),
+            polish=False,
+            propagate=False,
+            refine=False,
+            burn_duration=1.0,
+            stage_radii=geo_stage_radii,
+            stage_plane_fractions=[0.0, 0.5, 1.0],
+            n_stage_phase=1 if fast else 2,
+            stage_beam_width=2 if fast else 4,
+            stage_wait_window=0.5 * geo_max_period,
+        ),
+    ]
+    geo_best_staged = _best_delta_v_result(geo_staged_candidates)
+    geo_direct["case_description"] = f"e₀={e_geo_initial:.2f}, e_f={e_geo_target:.2f}; both apogees below GEO"
+    geo_best_staged["case_description"] = geo_direct["case_description"]
+    elliptical_two_burn["Near-GEO aligned ellipses direct"] = geo_direct
+    elliptical_two_burn["Near-GEO aligned ellipses best staged"] = geo_best_staged
 
     orbit = Orbit(r0, v0, t=0.0)
     burn_times = np.arange(0.0, 30.0 if fast else 600.0, 1.0)

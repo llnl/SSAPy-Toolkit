@@ -7,7 +7,7 @@ from ssapy_toolkit.compute.lyapunov_exponent import lyapunov_exponent_from_state
 from ssapy_toolkit.compute.proper_motions import proper_motion, proper_motion_ra_dec
 from ssapy_toolkit.compute.segment_intersection import segment_intersects_sphere
 from ssapy_toolkit.constants import EARTH_MU
-from ssapy_toolkit.coordinates import equatorial_and_ecliptic, equitorial_and_ecliptic as eqecl
+from ssapy_toolkit.coordinates import equatorial_and_ecliptic
 from ssapy_toolkit.coordinates.cartesian_to_cylindrical import cart_to_cyl
 from ssapy_toolkit.coordinates.cartesian_to_spherical import cart2sph_deg
 from ssapy_toolkit.coordinates.gcrf_to_ntw import gcrf_to_ntw
@@ -26,6 +26,7 @@ from ssapy_toolkit.orbital_mechanics import misc
 
 rk4_module = importlib.import_module("ssapy_toolkit.integrators.rk4")
 leapfrog_module = importlib.import_module("ssapy_toolkit.integrators.leap_frog")
+eqecl = equatorial_and_ecliptic
 
 
 def test_orbital_misc_formula_helpers():

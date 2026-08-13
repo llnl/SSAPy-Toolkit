@@ -230,14 +230,12 @@ def test_j2000_validation_and_time_parsing():
 
 
 def test_local_equatorial_and_earth_trojan_helpers():
-    from ssapy_toolkit.coordinates import local_and_equatorial, local_and_equitorial as local
+    from ssapy_toolkit.coordinates import local_and_equatorial as local
 
-    assert local_and_equatorial.horizontal_to_equatorial is local.horizontal_to_equatorial
     from ssapy_toolkit.coordinates.earth_trojan_sim import inert2rot, sim_lonlatrad
 
-    assert local.rightasension2hourangle("23:00:00", "01:00:00") == "30:0:0"
     assert local.rightascension2hourangle("23:00:00", "01:00:00") == "30:0:0"
-    assert isinstance(local.rightasension2hourangle(15.0, 2.0), str)
+    assert isinstance(local.rightascension2hourangle(15.0, 2.0), str)
     az, alt = local.equatorial_to_horizontal(30.0, 10.0, hour_angle="01:00:00")
     assert np.isfinite(az)
     assert np.isfinite(alt)

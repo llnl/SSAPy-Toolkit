@@ -127,7 +127,6 @@ _TOOLKIT_DUPLICATE_ALIASES = {
     "ra_dec": ".coordinates.sky_angles",
     "rad0to2pi": ".coordinates.unit_conversions",
     "rightascension2hourangle": ".coordinates.local_and_equatorial",
-    "rightasension2hourangle": ".coordinates.local_and_equatorial",
     "sim_lonlatrad": ".coordinates.earth_trojan_sim",
     "ssatk_load_cache": ".io.ssatk_cache",
     "ssatk_save_cache": ".io.ssatk_cache",

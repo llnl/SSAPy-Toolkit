@@ -67,12 +67,6 @@ def _supports_kwarg(func, kw):
     return False
 
 
-def _call_with_optional_labels(func, *args, labels=None, **kwargs):
-    if labels is not None and _supports_kwarg(func, "labels"):
-        return func(*args, labels=labels, **kwargs)
-    return func(*args, **kwargs)
-
-
 def main(make_figures=None, fast=None, verbose=None):
     if make_figures is None:
         make_figures = not UNDER_PYTEST
@@ -158,24 +152,38 @@ def main(make_figures=None, fast=None, verbose=None):
 
     if make_figures:
         save_path = figpath("demo_gallery/figures/testing_ellipse_fit_vs_ssapy.jpg")
-        _call_with_optional_labels(
-            orbit_plot,
-            r_list,
-            t_list,
-            title="Ellipse-fit vs SSAPy (keplerian, ssapy_prop, best_prop, backward)",
-            save_path=save_path,
-            frame="gcrf",
-            labels=labels,
-        )
+        if _supports_kwarg(orbit_plot, "labels"):
+            orbit_plot(
+                r_list,
+                t_list,
+                title="Ellipse-fit vs SSAPy (keplerian, ssapy_prop, best_prop, backward)",
+                save_path=save_path,
+                frame="gcrf",
+                labels=labels,
+            )
+        else:
+            orbit_plot(
+                r_list,
+                t_list,
+                title="Ellipse-fit vs SSAPy (keplerian, ssapy_prop, best_prop, backward)",
+                save_path=save_path,
+                frame="gcrf",
+            )
 
         save_dash = figpath("demo_gallery/figures/testing_ellipse_fit_vs_ssapy_dashboard.jpg")
-        _call_with_optional_labels(
-            groundtrack_dashboard,
-            r_list,
-            t_list,
-            save_path=save_dash,
-            labels=labels,
-        )
+        if _supports_kwarg(groundtrack_dashboard, "labels"):
+            groundtrack_dashboard(
+                r_list,
+                t_list,
+                save_path=save_dash,
+                labels=labels,
+            )
+        else:
+            groundtrack_dashboard(
+                r_list,
+                t_list,
+                save_path=save_dash,
+            )
 
         t_minutes = t_grid / 60.0
         curves = [

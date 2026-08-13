@@ -16,7 +16,6 @@ from ssapy_toolkit.accelerations.accel_earth_harmonics import (
     accel_earth_harmonics,
 )
 from ssapy_toolkit.accelerations.accel_equatorial import accel_equatorial
-from ssapy_toolkit.accelerations.accel_equitorial import accel_equatorial as legacy_accel_equatorial
 from ssapy_toolkit.accelerations.accel_inclination import accel_inclination
 from ssapy_toolkit.accelerations.accel_plane import accel_plane
 from ssapy_toolkit.accelerations.accel_radial import accel_radial
@@ -50,7 +49,6 @@ def test_directional_acceleration_helpers_and_zero_cases():
     np.testing.assert_allclose(accel_plane(r, v, 0.5), v / np.linalg.norm(v) * 0.5)
     np.testing.assert_allclose(accel_plane(r, r, 0.5), np.zeros(3))
 
-    assert accel_equatorial is legacy_accel_equatorial
     np.testing.assert_allclose(accel_equatorial([1.0, 0.0, 0.0], v, 0.25), [0.0, 0.25, 0.0])
     np.testing.assert_allclose(accel_equatorial([0.0, 0.0, 1.0], v, 0.25), np.zeros(3))
 

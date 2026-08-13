@@ -133,8 +133,14 @@ def _phase_sweep(n=61, d=1000e3 + R_EARTH, time=T0):
 def _ours_vs_analytic(n=61):
     """Run the model and the analytic reference over the sweep."""
     pos, r_sun = _phase_sweep(n)
-    out = dict(ours_frac=[], ours_mag=[], ref_frac=[], ref_mag=[],
-               phase_deg=[], sun_vis=[])
+    out = {
+        "ours_frac": [],
+        "ours_mag": [],
+        "ref_frac": [],
+        "ref_mag": [],
+        "phase_deg": [],
+        "sun_vis": [],
+    }
     for r_sat in pos:
         o = lambertian_reflection(
             r_sat, observer=GEOCENTER, radius_m=1.0, albedo=0.2,
@@ -229,12 +235,36 @@ def test_thermal_matches_stefan_boltzmann():
 
 def test_reflection_plus_emission_equals_combined():
     pos, _ = _phase_sweep(n=5)
-    kw = dict(observer=GEOCENTER, radius_m=1.0, albedo=0.3,
-              time=T0, band="SWIR", k_extinction=0.0)
     for r_sat in pos:
-        c = lambertian_sphere_brightness(r_sat, temperature_K=290.0, **kw)
-        r = lambertian_reflection(r_sat, **kw)
-        e = thermal_emission(r_sat, temperature_K=290.0, **kw)
+        c = lambertian_sphere_brightness(
+            r_sat,
+            observer=GEOCENTER,
+            temperature_K=290.0,
+            radius_m=1.0,
+            albedo=0.3,
+            time=T0,
+            band="SWIR",
+            k_extinction=0.0,
+        )
+        r = lambertian_reflection(
+            r_sat,
+            observer=GEOCENTER,
+            radius_m=1.0,
+            albedo=0.3,
+            time=T0,
+            band="SWIR",
+            k_extinction=0.0,
+        )
+        e = thermal_emission(
+            r_sat,
+            observer=GEOCENTER,
+            temperature_K=290.0,
+            radius_m=1.0,
+            albedo=0.3,
+            time=T0,
+            band="SWIR",
+            k_extinction=0.0,
+        )
         assert np.isclose(
             r["irradiance_inband_total_W_m2"] + e["irradiance_inband_total_W_m2"],
             c["irradiance_inband_total_W_m2"], rtol=1e-12)

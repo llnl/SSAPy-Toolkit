@@ -159,7 +159,12 @@ def main(make_figures=None, fast=None, output_dir=None):
         r=orbit_initial.r,
         v=orbit_initial.v,
         t=t0_gps,
-        propkw=dict(CD=sc_Cd, CR=sc_Cr, area=sc_area_m2, mass=sc_mass_kg),
+        propkw={
+            "CD": sc_Cd,
+            "CR": sc_Cr,
+            "area": sc_area_m2,
+            "mass": sc_mass_kg,
+        },
     )
     r_pert, v_pert = compute.rv(orbit_perturbed, times_gps, scipy_prop)
     print(f"      Shape: r_pert = {r_pert.shape}, v_pert = {v_pert.shape}")
