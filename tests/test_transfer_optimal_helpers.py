@@ -77,7 +77,7 @@ def test_structured_problem_parser_aliases_and_limits():
                     "phase_count": 3,
                 },
             },
-            "solver": {"n_grid": (2, 3), "refine": False},
+            "solver": {"n_grid": (2, 3), "refine": False, "samples": 42},
         },
     )
 
@@ -96,7 +96,7 @@ def test_structured_problem_parser_aliases_and_limits():
     assert overrides["perigee_margin"] == pytest.approx(250e3)
     assert overrides["max_burns"] == 6
     assert overrides["n_grid"] == (2, 3)
-    assert overrides["transfer_kwargs"] == {"refine": False}
+    assert overrides["transfer_kwargs"] == {"refine": False, "n_samples": 42}
 
     with pytest.raises(TypeError, match="mapping"):
         tof._structured_problem_overrides(problem={"constraints": 5})

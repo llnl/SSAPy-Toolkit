@@ -184,9 +184,11 @@ _BOUNDARY_STATE_ALIASES = {
 _TRANSFER_KWARG_KEYS = {
     "propagate",
     "refine",
-    "samples",
-    "tol",
-    "max_iter",
+    "n_samples",
+    "rk_step",
+    "refine_tol",
+    "max_refine_iter",
+    "raise_on_budget",
     "prograde",
     "dv_budget",
 }
@@ -335,6 +337,8 @@ def _parse_solver_section(section):
     section = _mapping(section, "solver")
     for key in ("n_grid", "n_phase", "polish", "visualize", "fig_prefix", "burn_duration", "burn_accel", "thrust", "mass", "isp"):
         _update_if_present(overrides, section, key, key)
+    if "samples" in section and "n_samples" not in section:
+        transfer_kwargs["n_samples"] = section["samples"]
     for key in _TRANSFER_KWARG_KEYS:
         if key in section:
             transfer_kwargs[key] = section[key]
