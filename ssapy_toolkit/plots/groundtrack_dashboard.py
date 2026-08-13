@@ -9,14 +9,8 @@ from ssapy import groundTrack
 from ..compute import find_smallest_bounding_cube
 from ..constants import EARTH_RADIUS
 from ..time_functions import to_gps
-from .plotutils import save_plot, valid_orbits
-
-
-def clean_lonlat(lon, lat):
-    wraps = np.abs(np.diff(lon)) > 180
-    lon_nan = np.insert(lon, np.where(wraps)[0] + 1, np.nan)
-    lat_nan = np.insert(lat, np.where(wraps)[0] + 1, np.nan)
-    return lon_nan, lat_nan
+from .plotutils import save_plot, valid_orbits, _pop_save_path_aliases, _raise_unrecognized_kwargs
+from ._groundtrack_helpers import clean_lonlat, force_title
 
 
 def groundtrack_dashboard(
@@ -30,6 +24,7 @@ def groundtrack_dashboard(
     limit=None,
     fontsize=18,
     labels=None,
+    **save_kwargs,
 ):
     """
     Visualizes multiple satellite ground tracks, altitude/velocity over time, and 3D trajectories.
@@ -64,26 +59,19 @@ def groundtrack_dashboard(
 
     Author: Travis Yeager
     """
-
-    def force_title(ax, text, size, y=1.02):
-        ax.set_title("")
-        if hasattr(ax, "text2D"):
-            ax.text2D(0.5, y, text, transform=ax.transAxes,
-                      ha="center", va="bottom", fontsize=size)
-        else:
-            ax.text(0.5, y, text, transform=ax.transAxes,
-                    ha="center", va="bottom", fontsize=size)
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "groundtrack_dashboard")
 
     r, t = valid_orbits(r, t)
     n_orbits = len(r)
 
     # Normalize labels
     if labels is None:
-        labels_norm = [f"Orbit {i+1}" for i in range(n_orbits)]
+        labels_norm = [f"Orbit {i + 1}" for i in range(n_orbits)]
     else:
         labels_arr = list(labels)
         if len(labels_arr) < n_orbits:
-            labels_arr = labels_arr + [f"Orbit {i+1}" for i in range(len(labels_arr), n_orbits)]
+            labels_arr = labels_arr + [f"Orbit {i + 1}" for i in range(len(labels_arr), n_orbits)]
         labels_norm = labels_arr[:n_orbits]
 
     # Ensure times are converted to GPS and normalized
@@ -162,7 +150,7 @@ def groundtrack_dashboard(
         ]
         leg1 = ax_ground.legend(handles=legend_elements, loc='lower left', fontsize=fontsize)
         ax_ground.add_artist(leg1)
-        ax_ground.legend(handles=ground_handles, loc='lower right', fontsize=fontsize-2, title="Orbits")
+        ax_ground.legend(handles=ground_handles, loc='lower right', fontsize=fontsize - 2, title="Orbits")
 
     # Altitude plot
     ax_alt = fig.add_subplot(gs[1, 0])

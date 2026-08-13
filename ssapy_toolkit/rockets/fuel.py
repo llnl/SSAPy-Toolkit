@@ -1,15 +1,9 @@
 import numpy as np
-from astropy.time import Time
 
 from ssapy.accel import AccelConstNTW
+from ssapy_toolkit.time_functions._gps import _to_gps_seconds
 
 G0 = 9.80665  # m/s^2
-
-
-def _to_gps_seconds(t):
-    if isinstance(t, Time):
-        return float(t.gps)
-    return float(t)
 
 
 def _finite_on_intervals(time_breakpoints, t_min=None, t_max=None):

@@ -39,8 +39,12 @@ def moon_normal_vector(t):
     elif isinstance(t, Time):
         t = t.gps
     r = get_body("moon").position(t).T
-    r_random = get_body("moon").position(t.gps + 604800).T
-    return np.cross(r, r_random) / np.linalg.norm(r, axis=-1)
+    r_random = get_body("moon").position(np.asarray(t) + 604800).T
+    normal = np.cross(r, r_random)
+    normal_norm = np.linalg.norm(normal, axis=-1)
+    if np.ndim(normal_norm) == 0:
+        return normal / normal_norm
+    return normal / normal_norm[..., np.newaxis]
 
 
 def lunar_lagrange_points(t):

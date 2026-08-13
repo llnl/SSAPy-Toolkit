@@ -98,7 +98,7 @@ def save_dict_to_hdf5(
             # storing thousands of individual scalar datasets as groups.
             try:
                 arr = np.asarray(value)
-                if arr.dtype.kind in ('i', 'u', 'f', 'c') and arr.ndim >= 1:
+                if arr.size > 0 and arr.dtype.kind in ('i', 'u', 'f', 'c') and arr.ndim >= 1:
                     if key in h5group:
                         del h5group[key]
                     if arr.shape == ():

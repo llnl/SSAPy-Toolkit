@@ -114,30 +114,11 @@ def get_image_paths(folder_path: str, sort_by_number: bool = True) -> list:
     if sort_by_number:
         def extract_last_number(path: str):
             filename = os.path.basename(path)
-            numbers = re.findall(r'\d+', filename)
-            if not numbers:
-                return (float('inf'), path)
-
-            dir_path = os.path.dirname(path)
-            dir_files = [f for f in image_paths if os.path.dirname(f) == dir_path]
-
-            all_numbers = [re.findall(r'\d+', os.path.basename(f)) for f in dir_files]
-            max_numbers = max((len(nums) for nums in all_numbers), default=0)
-            if max_numbers == 0:
-                return (float('inf'), path)
-
-            all_numbers = [nums + [None] * (max_numbers - len(nums)) for nums in all_numbers]
-
-            last_varying_pos = -1
-            for pos in range(max_numbers - 1, -1, -1):
-                values = {nums[pos] for nums in all_numbers if nums[pos] is not None}
-                if len(values) > 1:
-                    last_varying_pos = pos
-                    break
-
-            sort_pos = last_varying_pos if last_varying_pos >= 0 else len(numbers) - 1
-            sort_value = int(numbers[sort_pos]) if sort_pos < len(numbers) else float('inf')
-            return (sort_value, path)
+            parts = re.split(r'(\d+)', filename)
+            if len(parts) == 1:
+                return (1, filename)
+            natural_parts = tuple((1, int(part)) if part.isdigit() else (0, part) for part in parts)
+            return (0, natural_parts)
 
         image_paths.sort(key=extract_last_number)
 
@@ -171,7 +152,9 @@ def pdstr_to_arrays(df) -> np.ndarray:
     """
     Apply `str_to_array` to each element of a DataFrame and convert it to a NumPy array of arrays.
     """
-    return df.apply(str_to_array).to_numpy()
+    if hasattr(df, "map"):
+        return df.map(str_to_array).to_numpy()
+    return df.applymap(str_to_array).to_numpy()
 
 
 def allfiles(dirName: str = os.getcwd()) -> list:

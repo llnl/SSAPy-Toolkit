@@ -6,7 +6,7 @@ from PIL import Image as PILImage
 from ssapy import groundTrack
 from ssapy.utils import find_file, norm
 from ..constants import RGEO, EARTH_RADIUS
-from .plotutils import save_plot, make_black, valid_orbits
+from .plotutils import save_plot, make_black, valid_orbits, _pop_save_path_aliases, _raise_unrecognized_kwargs
 
 
 def tracking_plot(
@@ -17,7 +17,8 @@ def tracking_plot(
     title: str = '',
     figsize=(12, 8),
     save_path=None,
-    scale: float = 1
+    scale: float = 1,
+    **save_kwargs,
 ) -> None:
     """
     Create a 3D tracking plot of satellite positions over time on Earth's surface.
@@ -48,6 +49,9 @@ def tracking_plot(
     -------
     None
     """
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "tracking_plot")
+
     r, t = valid_orbits(r, t)
 
     def _make_plot(r_one, t_one, ground_stations, limits_val, title, figsize, save_path, scale):

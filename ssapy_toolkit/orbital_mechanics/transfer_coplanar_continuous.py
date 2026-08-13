@@ -3,12 +3,16 @@ from scipy.integrate import solve_ivp
 
 from ..constants import EARTH_MU
 from ..time_functions import Time
+from ._transfer_result import maneuver_burn, trajectory_dict, transfer_result, transfer_state
 
 
-def transfer_coplanar_continuous(r1,
-                                 v1,
-                                 r2,
+def transfer_coplanar_continuous(r1=None,
+                                 v1=None,
+                                 r2=None,
                                  v2=None,
+                                 *,
+                                 initial=None,
+                                 target=None,
                                  a_thrust=1,
                                  mu=EARTH_MU,
                                  t0=None,
@@ -24,6 +28,15 @@ def transfer_coplanar_continuous(r1,
     # Epoch
     if t0 is None:
         t0 = Time("2025-01-01", format="iso")
+
+    if initial is not None:
+        state1 = transfer_state(state=initial, mu=mu)
+        r1, v1, t0 = state1["r"], state1["v"], state1["t"]
+    if target is not None:
+        state2 = transfer_state(state=target, mu=mu)
+        r2, v2 = state2["r"], state2["v"]
+    if r1 is None or v1 is None or r2 is None:
+        raise ValueError("transfer_coplanar_continuous requires initial/target or r1/v1/r2")
 
     # Default circular target if v2 omitted
     r2 = np.asarray(r2)
@@ -98,23 +111,41 @@ def transfer_coplanar_continuous(r1,
     v_final = yf[3:6]
     dv1_vec = yf[6:9]
     total_dv1 = np.linalg.norm(dv1_vec)
-
-    result = {
-        "r_final": r_final,
-        "v_final": v_final,
-        "t_final": t_final,
-        "delta_v1_vec": dv1_vec,
-        "delta_v1": total_dv1,
-    }
+    initial_state = transfer_state(state={"r": r1, "v": v1, "t": t0}, mu=mu)
+    sample_times = np.linspace(0.0, t_final, 300)
+    sampled = sol.sol(sample_times)
+    r_traj = sampled[0:3].T
+    v_traj = sampled[3:6].T
+    t_abs = initial_state["t"] + sample_times
+    result = transfer_result(
+        method="transfer_coplanar_continuous",
+        initial=initial_state,
+        target={"r": r2, "v": v2, "t": initial_state["t"] + t_final},
+        final={"r": r_final, "v": v_final, "t": initial_state["t"] + t_final},
+        burns=[
+            maneuver_burn(
+                name="steered_coplanar_continuous_burn",
+                kind="continuous_steered_coplanar_burn",
+                state=initial_state,
+                delta_v=dv1_vec,
+                t_start=initial_state["t"],
+                t_end=initial_state["t"] + t_final,
+                notes="Acceleration direction is steered inside the initial orbital plane.",
+            )
+        ],
+        trajectory=trajectory_dict(t=t_abs, r=r_traj, v=v_traj),
+        tof=t_final,
+        success=total_dv1 >= 0.0,
+        assumptions=["continuous steered acceleration in initial orbital plane", "two-body gravity"],
+        diagnostics={"position_tolerance": tol, "a_thrust": a_thrust, "max_time": max_time},
+    )
 
     if plot:
-        times = np.linspace(0.0, t_final, 300)
-        arc = sol.sol(times)[0:3].T
         from ..plots import transfer_plot
-        fig = transfer_plot(r1, v1, arc, None, r2, v2,
+        fig = transfer_plot(r1, v1, r_traj, v_traj, r2, v2,
                             title=(f"t={t_final/60:.1f} min "
                                    f"|Δv₁|={total_dv1:.3f} m/s"),
                             show=False)
-        result["fig"] = fig
+        result["figure"] = fig
 
     return result

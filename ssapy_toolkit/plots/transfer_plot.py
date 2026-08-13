@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401; required for 3D projection
 from matplotlib.lines import Line2D
-from .plotutils import save_plot
+from .plotutils import save_plot, _pop_save_path_aliases, _raise_unrecognized_kwargs
 from ..constants import EARTH_MU, EARTH_RADIUS
 from ..integrators import leapfrog
 from ssapy import Orbit
@@ -17,7 +17,7 @@ def find_intersection_time(r_start, v_start, r_ref, t_max):
 
 
 def transfer_plot(r0, v0, rtransfer, vtransfer, rf, vf, show=False, c='black',
-                  figsize=(7, 7), save_path=False, title=''):
+                  figsize=(7, 7), save_path=False, title='', **save_kwargs):
     """Plots a 3D orbital transfer with transfer orbit from departure to arrival.
 
     Args:
@@ -35,6 +35,9 @@ def transfer_plot(r0, v0, rtransfer, vtransfer, rf, vf, show=False, c='black',
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "transfer_plot")
+
     from ..orbital_mechanics import period, a_from_periap
 
     r0, v0 = np.array(r0), np.array(v0)

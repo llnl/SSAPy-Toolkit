@@ -23,9 +23,7 @@ def to_gps(t):
             try:
                 t = t.gps
             except AttributeError:
-                # fallback: convert to ISO strings and rebuild
-                t = [time.iso for time in t]
-                t = Time(t, format='iso').gps
+                t = np.array([time.gps for time in t])
     else:
         if isinstance(t, Time):
             t = t.gps

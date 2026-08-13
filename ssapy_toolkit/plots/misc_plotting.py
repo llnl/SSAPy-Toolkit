@@ -6,7 +6,7 @@ import numpy as np
 from ssapy.body import get_body
 from ..constants import RGEO, EARTH_MU, MOON_MU
 from ..time_functions import Time
-from .plotutils import make_black, make_white, save_plot
+from .plotutils import make_black, make_white, save_plot, _pop_save_path_aliases, _raise_unrecognized_kwargs
 
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -16,7 +16,7 @@ lunar_semi_major = 384399000  # m
 
 
 def koe_plot(r: np.ndarray, v: np.ndarray, t=None,
-             elements=None, save_path=None, body: str = 'Earth'):
+             elements=None, save_path=None, body: str = 'Earth', **save_kwargs):
     """
     Generates a plot of orbital elements (eccentricity, inclination, and semi-major axis)
     for a given position and velocity vectors.
@@ -40,6 +40,9 @@ def koe_plot(r: np.ndarray, v: np.ndarray, t=None,
     -------
     (plt.Figure, plt.Axes)
     """
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "koe_plot")
+
     if elements is None:
         elements = ['a', 'e', 'i']
 
@@ -84,7 +87,9 @@ def koe_plot(r: np.ndarray, v: np.ndarray, t=None,
     if 'i' in elements and 'i' in orbital_elements:
         fig.text(xlab, ylab - 0.025, 'Inclination [Radians]', color='C2', rotation=90)
 
-    ax1.legend(loc='upper left')
+    handles, labels = ax1.get_legend_handles_labels()
+    if handles:
+        ax1.legend(handles, labels, loc='upper left')
 
     # Semi-major axis on right axis
     if 'a' in elements and 'a' in orbital_elements:
@@ -99,17 +104,21 @@ def koe_plot(r: np.ndarray, v: np.ndarray, t=None,
 
     # Optionally save the plot
     if save_path:
-        fig.savefig(save_path)
+        from .plotutils import figsave
+        figsave(fig, save_path)
 
     return fig, ax1
 
 
 def koe_2dhist(stable_data, title: str = "Initial orbital elements of\n1 year stable cislunar orbits",
                limits: list = [1, 50], bins: int = 200, logscale: bool = False, cmap: str = 'coolwarm',
-               save_path: str = None) -> plt.Figure:
+               save_path: str = None, **save_kwargs) -> plt.Figure:
     """
     Generates a 2D histogram plot of orbital elements for a set of stable orbital data.
     """
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "koe_2dhist")
+
     # Validate angle data ranges
     if not (np.all((0 <= stable_data.i) & (stable_data.i <= 2 * np.pi))):
         raise ValueError("Inclination (`i`) must be in the range [0, 2π] radians.")
@@ -212,7 +221,10 @@ def koe_2dhist(stable_data, title: str = "Initial orbital elements of\n1 year st
 
 def scatter2d(x: list, y: list, cs: list, xlabel: str = 'x', ylabel: str = 'y', title: str = '',
               cbar_label: str = '', dotsize: int = 1, colorsMap: str = 'jet', colorscale: str = 'linear',
-              colormin: float = None, colormax: float = None, save_path: str = None) -> None:
+              colormin: float = None, colormax: float = None, save_path: str = None, **save_kwargs) -> None:
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "scatter2d")
+
     fig = plt.figure()
     ax = fig.add_subplot(111)
 
@@ -236,7 +248,7 @@ def scatter2d(x: list, y: list, cs: list, xlabel: str = 'x', ylabel: str = 'y', 
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     scalarMap.set_array(cs_arr)
-    fig.colorbar(scalarMap, shrink=.5, label=f'{cbar_label}', pad=0.04)
+    fig.colorbar(scalarMap, ax=ax, shrink=.5, label=f'{cbar_label}', pad=0.04)
     plt.tight_layout()
     fig, ax = make_black(fig, ax)
     plt.show(block=False)
@@ -247,12 +259,15 @@ def scatter2d(x: list, y: list, cs: list, xlabel: str = 'x', ylabel: str = 'y', 
 
 def scatter3d(x: list, y: list = None, z: list = None, cs: list = None,
               xlabel: str = 'x', ylabel: str = 'y', zlabel: str = 'z', cbar_label: str = '', dotsize: int = 1,
-              colorsMap: str = 'jet', title: str = '', save_path: str = None):
+              colorsMap: str = 'jet', title: str = '', save_path: str = None, **save_kwargs):
     """
     Returns
     -------
     (plt.Figure, matplotlib.axes._subplots.Axes3DSubplot)
     """
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "scatter3d")
+
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
@@ -271,7 +286,7 @@ def scatter3d(x: list, y: list = None, z: list = None, cs: list = None,
         scalarMap = cm.ScalarMappable(norm=cNorm, cmap=cmap)
         ax.scatter(x, y, z, c=scalarMap.to_rgba(cs_arr), s=dotsize)
         scalarMap.set_array(cs_arr)
-        fig.colorbar(scalarMap, shrink=.5, label=f'{cbar_label}', pad=0.075)
+        fig.colorbar(scalarMap, ax=ax, shrink=.5, label=f'{cbar_label}', pad=0.075)
 
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
@@ -291,7 +306,11 @@ def dotcolors_scaled(num_colors: int) -> list:
 
 # Make a plot of multiple cislunar orbit in GCRF frame.
 def orbit_divergence_plot(rs: np.ndarray, r_moon: np.ndarray = None, t=None,
-                          limits: float = None, title: str = '', save_path: str = None) -> None:
+                          limits: float = None, title: str = '', save_path: str = None,
+                          show: bool = True, **save_kwargs):
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "orbit_divergence_plot")
+
     if limits is None:
         limits = np.nanmax(np.linalg.norm(rs, axis=1) / RGEO) * 1.2
         print(f'limits: {limits}')
@@ -365,7 +384,9 @@ def orbit_divergence_plot(rs: np.ndarray, r_moon: np.ndarray = None, t=None,
         plt.text(y[-1], z[-1], '$\\leftarrow$ end')
 
     plt.tight_layout()
-    plt.show(block=False)
+    if show:
+        plt.show(block=False)
     if save_path:
         save_plot(fig, save_path)
-    return
+        return None
+    return fig

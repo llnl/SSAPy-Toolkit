@@ -6,35 +6,66 @@ chosen transfer starred.  Right: the delta-v versus time-of-flight trade
 (Pareto front) broken out per burn -- total, departure burn, and arrival
 burn -- with the chosen transfer and the delta-v budget line.
 
-Takes the ``OptimalTransferResult`` returned by ``transfer_optimal``;
-all curves are recreated from the stored search grid, so this plot can
-be regenerated at any time from the result object alone.
+Takes the canonical dictionary returned by ``transfer_optimal``; all
+curves are recreated from the stored search grid in
+``result["diagnostics"]``, so this plot can be regenerated at any time
+from the result dictionary alone.
 """
 
 import numpy as np
 
+from .plotutils import _pop_save_path_aliases, _raise_unrecognized_kwargs
 
-def transfer_designer_curves_plot(result, save_path=None):
+
+def transfer_designer_curves_plot(result, title=None, save_path=None, **save_kwargs):
     """Plot porkchop + per-burn Pareto curves from a transfer_optimal
     result.
 
     Parameters
     ----------
-    result : OptimalTransferResult
+    result : dict
+        Canonical ``transfer_optimal`` result dictionary.
     save_path : str, optional
-        If given, save via ``ssapy_toolkit.plots.yufig`` and close;
+        If given, save via ``ssapy_toolkit.plots.figsave`` and close;
         otherwise the figure is returned.
     """
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "transfer_designer_curves_plot")
+    should_save = save_path is not None and save_path is not False
+
     import matplotlib
-    if save_path is not None:
+    if should_save:
         matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib.colors import LogNorm
 
-    g = result.grid
+    if isinstance(result, dict):
+        diagnostics = result.get("diagnostics", {})
+        g = diagnostics["grid"]
+        pareto = diagnostics["pareto"]
+        t_depart = result["initial"]["t"]
+        tof = result["tof"]
+        dv_total = result["delta_v_total"]
+        dv_budget = diagnostics.get("dv_budget")
+        objective = diagnostics.get("objective", "min_dv")
+        delta_v_mode = diagnostics.get("delta_v_mode", "total")
+        rendezvous = diagnostics.get("rendezvous", True)
+        arrival_burn = diagnostics.get("arrival_burn", len(result.get("burns", [])) > 1)
+        arrival_mode = diagnostics.get("arrival_mode")
+    else:
+        g = result.grid
+        pareto = result.pareto
+        t_depart = result.t_depart
+        tof = result.tof
+        dv_total = result.dv_total
+        dv_budget = getattr(result, "dv_budget", None)
+        objective = result.objective
+        delta_v_mode = getattr(result, "delta_v_mode", "total")
+        rendezvous = result.rendezvous
+        arrival_burn = result.arrival_burn
+        arrival_mode = getattr(result, "arrival_mode", None)
     dep_h = (g["t_dep"] - g["t_dep"][0]) / 3600.0
     tof_h = g["tof"] / 3600.0
-    dv_budget = getattr(result, "dv_budget", None)
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13.5, 5.5))
 
@@ -43,9 +74,9 @@ def transfer_designer_curves_plot(result, save_path=None):
                         norm=LogNorm(vmin=max(cost.min(), 1e-1),
                                      vmax=cost.max()), cmap="viridis")
     fig.colorbar(pc, ax=ax1, label="objective delta-v [m/s]")
-    ax1.plot((result.t_depart - g["t_dep"][0]) / 3600.0,
-             result.tof / 3600.0, "r*", ms=16, mec="w",
-             label=f"chosen: {result.dv_total:.1f} m/s")
+    ax1.plot((t_depart - g["t_dep"][0]) / 3600.0,
+             tof / 3600.0, "r*", ms=16, mec="w",
+             label=f"chosen: {dv_total:.1f} m/s")
     ax1.set_xlabel("departure time into window [h]")
     ax1.set_ylabel("time of flight [h]")
     ax1.set_title("Porkchop (grey = infeasible: no 0-rev solution,\n"
@@ -53,15 +84,15 @@ def transfer_designer_curves_plot(result, save_path=None):
     ax1.set_facecolor("0.85")
     ax1.legend(loc="upper right", fontsize=9)
 
-    p = result.pareto
+    p = pareto
     ax2.plot(tof_h, p["dv"], "k.-", lw=2, label="total (best per TOF)")
     if "dv1" in p:
         ax2.plot(tof_h, p["dv1"], "C0.--", lw=1.2,
                  label="burn 1 (departure)")
-    if "dv2" in p and result.arrival_burn:
+    if "dv2" in p and arrival_burn:
         ax2.plot(tof_h, p["dv2"], "C1.--", lw=1.2,
                  label="burn 2 (arrival)")
-    ax2.plot(result.tof / 3600.0, result.dv_total, "r*", ms=16, mec="w",
+    ax2.plot(tof / 3600.0, dv_total, "r*", ms=16, mec="w",
              label="chosen transfer")
     if dv_budget is not None:
         ax2.axhline(dv_budget, color="k", ls="--", lw=1,
@@ -73,15 +104,15 @@ def transfer_designer_curves_plot(result, save_path=None):
     ax2.grid(alpha=0.3, which="both")
     ax2.legend(fontsize=8)
 
-    mode = "rendezvous" if result.rendezvous else "insertion"
-    burns = "both burns" if result.arrival_burn else "first burn only"
-    fig.suptitle(f"transfer_optimal: {result.objective}, {mode}, {burns}",
+    mode = arrival_mode or ("rendezvous" if rendezvous else ("insertion" if arrival_burn else "inject"))
+    burns = "both burns" if arrival_burn else "first burn only"
+    fig.suptitle(title or f"transfer_optimal: {objective}, {mode}, {burns}, {delta_v_mode} dv",
                  fontsize=12)
     fig.tight_layout()
 
-    if save_path is not None:
-        from ssapy_toolkit.plots import yufig
-        yufig(fig, save_path)
+    if should_save:
+        from ssapy_toolkit.plots import figsave
+        figsave(fig, save_path)
         plt.close(fig)
         return None
     return fig

@@ -1,8 +1,7 @@
 from astropy.time import Time
-from astropy.coordinates import EarthLocation, ITRS, GCRS
-from astropy import units as u
 import numpy as np
-from . import astropy_llh_to_gcrf
+
+from .astropy_llh_to_gcrf import astropy_llh_to_gcrf
 
 
 def astropy_surface_rv(lon, lat, elevation=0.0, t=Time(0, format="gps", scale="utc")):
@@ -11,10 +10,10 @@ def astropy_surface_rv(lon, lat, elevation=0.0, t=Time(0, format="gps", scale="u
 
     Parameters
     ----------
-    lat : float
-        Geodetic latitude in degrees.
     lon : float
         Geodetic longitude in degrees.
+    lat : float
+        Geodetic latitude in degrees.
     elevation : float, optional
         Elevation above sea level in meters (default is 0).
     t : Time

@@ -124,7 +124,7 @@ def nan_array(size: int = 1) -> np.ndarray:
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     x = np.zeros(size)
-    x[:] = np.NaN
+    x[:] = np.nan
     return x
 
 
@@ -226,18 +226,15 @@ def sortbynum(files: list) -> list:
         list: Sorted list of file paths.
     Author: Travis Yeager (yeager7@llnl.gov)
     """
-    if len(files[0].split('/')) > 1:
-        files_shortened = []
-        file_prefix = '/'.join(files[0].split('/')[:-1])
-        for file in files:
-            files_shortened.append(file.split('/')[-1])
-        files_sorted = sorted(files_shortened, key=lambda x: float(re.findall(r"(\d+)", x)[0]))
-        sorted_files = []
-        for file in files_sorted:
-            sorted_files.append(f'{file_prefix}/{file}')
-    else:
-        sorted_files = sorted(files, key=lambda x: float(re.findall(r"(\d+)", x)[0]))
-    return sorted_files
+    def sort_key(path):
+        name = str(path).split('/')[-1]
+        parts = re.split(r"(\d+)", name)
+        if len(parts) == 1:
+            return (1, name)
+        natural_parts = tuple((1, int(part)) if part.isdigit() else (0, part) for part in parts)
+        return (0, natural_parts)
+
+    return sorted(files, key=sort_key)
 
 
 def issorted(test_list: list) -> bool:

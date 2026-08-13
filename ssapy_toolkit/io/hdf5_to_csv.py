@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
-h5_to_csv.py
+hdf5_to_csv.py
 
 Library + script:
 
 - Import and call: hdf5_to_csv_per_key("input.h5")
-- Or run directly: python h5_to_csv.py
-  (uses the hard-coded path in main()).
+- Or run directly: python hdf5_to_csv.py input.h5
 """
 
 from __future__ import annotations
 
 import csv
+import argparse
 import re
-import sys
+import warnings
 from pathlib import Path
 from typing import Any, List, Tuple
 
@@ -26,7 +26,7 @@ def _stringify(x: Any) -> str:
     if isinstance(x, (bytes, bytearray)):
         try:
             return x.decode("utf-8")
-        except Exception:
+        except UnicodeDecodeError:
             return repr(x)
     return str(x)
 
@@ -149,15 +149,17 @@ def hdf5_to_csv_per_key(h5_filename: str | Path, *, encoding: str = "utf-8") -> 
 
             written, warning = write_dataset_csv(out_csv, key, data, encoding=encoding)
             if warning:
-                print("WARNING:", warning, file=sys.stderr)
+                warnings.warn(warning, UserWarning, stacklevel=2)
 
     return out_dir
 
 
-def main() -> None:
-    # Hard-coded example path for running this file directly.
-    # Change this to your real file:
-    h5_path = Path("/home/yeager7/HP__Subset_10MHz_500ns/HP__Subset_10MHz_500ns/3_3_26_500nsPulse_10MHzSeparation_HDF5/rep_1/Limiter=DUT2__Amp=DUT6.h5")
+def main(argv=None) -> None:
+    parser = argparse.ArgumentParser(description="Write one CSV file per dataset in an HDF5 file.")
+    parser.add_argument("h5_path", type=Path, help="Input HDF5 file.")
+    args = parser.parse_args(argv)
+
+    h5_path = args.h5_path
 
     if not h5_path.exists():
         raise SystemExit(f"HDF5 file not found: {h5_path}")

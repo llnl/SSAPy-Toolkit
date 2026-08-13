@@ -7,7 +7,14 @@ from astropy.time import Time
 from erfa import gst94
 
 from ssapy.utils import find_file
-from .plotutils import make_black, make_white, save_plot, valid_orbits
+from .plotutils import (
+    make_black,
+    make_white,
+    save_plot,
+    valid_orbits,
+    _pop_save_path_aliases,
+    _raise_unrecognized_kwargs,
+)
 from ..constants import RGEO, EARTH_RADIUS
 
 
@@ -36,7 +43,6 @@ def _earth_lon0_from_time(t):
     mjd_tt = 44244.0 + (t_gps + 51.184) / 86400.0
     gst = gst94(2400000.5, mjd_tt)  # radians
     return np.degrees(gst)
-
 
 
 def _view_unit_vector(el_deg, az_deg):
@@ -95,6 +101,8 @@ def globe_plot(
     legend_kwargs=None,   # kwargs passed to ax.legend()
     lon0=0.0,             # manual rotation of globe about z-axis in degrees
     globe_time=None,      # optional time to orient globe based on Earth rotation
+    ax=None,
+    **save_kwargs,
 ):
     """
     Plot a textured Earth and scatter satellite positions in 3D.
@@ -125,6 +133,9 @@ def globe_plot(
     -------
     fig, ax : Matplotlib Figure and 3D Axes.
     """
+
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "globe_plot")
 
     # ---- Normalize/validate inputs ----
     r_list, t_list = valid_orbits(r, t)  # t_list kept for consistency [1]
@@ -174,8 +185,13 @@ def globe_plot(
     mesh_z = np.sin(lat_grid) * scale_fac
 
     # ---------- Figure and axes ----------
-    fig = plt.figure(dpi=100, figsize=figsize)
-    ax = fig.add_subplot(111, projection="3d")
+    if ax is None:
+        fig = plt.figure(dpi=100, figsize=figsize)
+        ax = fig.add_subplot(111, projection="3d")
+    else:
+        if not hasattr(ax, "zaxis"):
+            raise ValueError("globe_plot ax must be a 3D Matplotlib axis")
+        fig = ax.figure
     fig.patch.set_facecolor(plotcolor)
     ax.set_facecolor(plotcolor)
     ax.view_init(elev=float(el), azim=float(az))
@@ -318,9 +334,11 @@ def globe_plot(
 
     # Apply theme helpers
     if c in ("black", "b"):
-        fig, ax = make_black(fig, ax)
+        fig, axes = make_black(fig, ax)
+        ax = axes[0]
     elif c in ("white", "w"):
-        fig, ax = make_white(fig, ax)
+        fig, axes = make_white(fig, ax)
+        ax = axes[0]
 
     if save_path:
         save_plot(fig, save_path)

@@ -39,6 +39,8 @@ from ..constants import EARTH_MU
 # =============================================================================
 # Time helpers (used only by calculate_accel_comparisons)
 # =============================================================================
+
+
 def _is_astropy_time(x):
     return x.__class__.__module__.startswith("astropy.time") and x.__class__.__name__ == "Time"
 
@@ -80,6 +82,8 @@ def _coerce_times_for_ssapy(times, orbit_epoch_gps_s, assume="auto"):
         if _is_astropy_time(sample):
             return sample.__class__(times)
         if hasattr(sample, "year") or isinstance(sample, np.datetime64):
+            if isinstance(sample, np.datetime64):
+                times = np.asarray(times, dtype="datetime64[ns]")
             return _to_astropy_time(times)
 
     t = np.asarray(times, dtype=float).ravel()
@@ -239,9 +243,31 @@ def _ntw_components(r_ref, v_ref, dr):
     return np.stack([n, t, w], axis=-1)
 
 
+def _small_accel_ladder(max_rungs):
+    from ssapy.accel import AccelKepler
+    from ssapy.body import get_body
+    from ssapy.gravity import AccelHarmonic, AccelThirdBody
+
+    a_kepler = AccelKepler()
+    suite = {"Kep": a_kepler}
+    if max_rungs <= 1:
+        return suite
+
+    moon = get_body("moon")
+    a_moon_point = AccelThirdBody(moon)
+    suite["Kep+Moon"] = a_kepler + a_moon_point
+    if max_rungs <= 2:
+        return suite
+
+    earth = get_body("Earth", model="EGM2008")
+    a_earth_j2 = AccelHarmonic(earth, 2, 0)
+    suite["Kep+Moon+J2"] = suite["Kep+Moon"] + a_earth_j2
+    return suite
 # =============================================================================
 # The ONE calculation function you asked for
 # =============================================================================
+
+
 def calculate_accel_comparisons(
     orbit=None,
     r=None,
@@ -252,6 +278,7 @@ def calculate_accel_comparisons(
     ode_kwargs=None,
     reference=None,
     mu_m3s2=3.986004418e14,
+    max_rungs=None,
 ):
     """
     All propagation + all divergence math in ONE function.
@@ -288,7 +315,16 @@ def calculate_accel_comparisons(
     oe_text = _format_oe_text(oe)
 
     # Ladder models
-    ladder = ssapy_accel_ladder()
+    if max_rungs is not None:
+        max_rungs = int(max_rungs)
+        if max_rungs < 2:
+            raise ValueError("max_rungs must be at least 2 when provided.")
+        if max_rungs <= 3:
+            ladder = _small_accel_ladder(max_rungs)
+        else:
+            ladder = dict(list(ssapy_accel_ladder().items())[:max_rungs])
+    else:
+        ladder = ssapy_accel_ladder()
     labels = list(ladder.keys())
 
     if reference is None:
@@ -519,7 +555,6 @@ def make_accel_ladder_dashboard_figures(
     ax[1].set_ylabel("||dr_inc|| (m)", fontsize=12)
     ax[1].grid(True, which="both", alpha=0.3)
 
-
     ax[2].set_title("Worst rung NTW components (worst = %s)" % labels[worst_idx], fontsize=13)
     ax[2].plot(t_rel_s, ntw_worst[:, 0], label="N")
     ax[2].plot(t_rel_s, ntw_worst[:, 1], label="T")
@@ -676,6 +711,7 @@ def compare_models(
     epsilon_m=1e-3,
     max_error_m=1e7,
     mu_m3s2=EARTH_MU,
+    max_rungs=None,
 ):
     """
     Workflow wrapper:
@@ -695,6 +731,7 @@ def compare_models(
         ode_kwargs=ode_kwargs,
         reference=reference,
         mu_m3s2=mu_m3s2,
+        max_rungs=max_rungs,
     )
 
     figs = make_accel_ladder_dashboard_figures(

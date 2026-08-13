@@ -13,6 +13,7 @@ from ssapy_toolkit.data import (
     data_package_available,
     data_path,
     data_resource,
+    open_data,
     read_data_binary,
     read_data_text,
 )
@@ -34,6 +35,11 @@ def _make_data_package(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, package:
 
 def test_traversable_type_is_available_for_supported_python_versions():
     assert data_module.Traversable is not None
+
+
+def test_default_data_package_uses_installed_ssapy_data():
+    assert data_package_available()
+    assert "SSAPy Data Payload Directory" in read_data_text("README.md")
 
 
 def test_data_resource_reads_from_installed_package(tmp_path, monkeypatch):
@@ -59,6 +65,16 @@ def test_read_helpers_return_text_and_binary(tmp_path, monkeypatch):
 
     assert read_data_text("catalogs/sample.txt", package=package) == "object_id,value\nA,1\n"
     assert read_data_binary("catalogs/sample.bin", package=package) == b"\x00\x01ssapy"
+    with open_data("catalogs/sample.txt", package=package, mode="r", encoding="utf-8") as handle:
+        assert handle.readline() == "object_id,value\n"
+
+
+def test_resource_lookup_can_skip_existence_check(tmp_path, monkeypatch):
+    package = _make_data_package(tmp_path, monkeypatch)
+
+    missing = data_resource("catalogs/not-yet-created.txt", package=package, must_exist=False)
+
+    assert not missing.exists()
 
 
 def test_missing_package_error_is_actionable():
@@ -74,6 +90,10 @@ def test_missing_resource_error_names_requested_path(tmp_path, monkeypatch):
 
     with pytest.raises(DataResourceNotFoundError, match="data/catalogs/missing.txt"):
         data_resource("catalogs/missing.txt", package=package)
+
+    with pytest.raises(DataResourceNotFoundError, match="is not a file"):
+        with data_path("catalogs", package=package):
+            pass
 
 
 def test_absolute_and_parent_paths_are_rejected(tmp_path, monkeypatch):

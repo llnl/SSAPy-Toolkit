@@ -148,7 +148,12 @@ def hohmann_transfer_delta_v(r1: float, r2: float, mu: float) -> Tuple[float, fl
 
 
 def bi_elliptic_transfer_delta_v(r1: float, r2: float, rb: float, mu: float) -> Tuple[float, float, float, float]:
-    """Return (dv1, dv2, dv3, total_dv) for bi-elliptic transfer via intermediate apoapsis rb"""
+    """Return (dv1, dv2, dv3, total_dv) for bi-elliptic transfer via intermediate apoapsis rb."""
+    if r1 <= 0 or r2 <= 0 or rb <= 0:
+        raise ValueError("r1, r2, and rb must be positive radii")
+    if rb <= max(r1, r2):
+        raise ValueError("rb must be larger than both circular-orbit radii")
+
     a1 = (r1 + rb) / 2.0
     a2 = (r2 + rb) / 2.0
     v1 = circular_velocity(mu, r1)

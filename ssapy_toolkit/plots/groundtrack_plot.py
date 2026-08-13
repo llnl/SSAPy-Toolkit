@@ -15,27 +15,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from ssapy import groundTrack
-from .plotutils import load_earth_file, save_plot
-
-
-def _as_list(x):
-    """Ensure input is a list-like container."""
-    return x if isinstance(x, (list, tuple)) else [x]
-
-
-def _broadcast_time_list(r_list, t):
-    """
-    Return a time list matching r_list length.
-
-    If t is a single time array, it is reused for all tracks.
-    """
-    if isinstance(t, (list, tuple)):
-        if len(t) != len(r_list):
-            raise ValueError(
-                "When passing a list of times, its length must match the number of orbits."
-            )
-        return list(t)
-    return [t for _ in r_list]
+from ._groundtrack_helpers import as_list as _as_list
+from ._groundtrack_helpers import broadcast_time_list as _broadcast_time_list
+from ._groundtrack_helpers import clean_lonlat_wrap as _clean_lonlat_wrap
+from .plotutils import load_earth_file, save_plot, _pop_save_path_aliases, _raise_unrecognized_kwargs
 
 
 def _wrap_longitudes(lon_deg, central_longitude=0.0):
@@ -58,22 +41,6 @@ def _display_to_standard_lon(lon_disp):
     """
     lon_disp = np.asarray(lon_disp, dtype=float)
     return ((lon_disp + 180.0) % 360.0) - 180.0
-
-
-def _clean_lonlat_wrap(lon_disp_deg, lat_deg, threshold=179.0):
-    """
-    Insert NaNs at longitude wrap crossings so lines do not jump across the map.
-    """
-    lon_disp_deg = np.asarray(lon_disp_deg, dtype=float)
-    lat_deg = np.asarray(lat_deg, dtype=float)
-
-    jumps = np.where(np.abs(np.diff(lon_disp_deg)) > threshold)[0]
-    if jumps.size == 0:
-        return lon_disp_deg, lat_deg
-
-    lon_out = np.insert(lon_disp_deg, jumps + 1, np.nan)
-    lat_out = np.insert(lat_deg, jumps + 1, np.nan)
-    return lon_out, lat_out
 
 
 def _normalize_central_longitude(central_longitude):
@@ -172,6 +139,9 @@ def groundtrack_plot(
     legend_kwargs=None,
     central_longitude=0.0,
     relabel_xticks=True,
+    figsize=(14, 8),
+    ax=None,
+    **save_kwargs,
 ):
     """
     Plot one or more orbit ground tracks on an Earth map.
@@ -214,6 +184,9 @@ def groundtrack_plot(
     -------
     fig : matplotlib.figure.Figure
     """
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "groundtrack_plot")
+
     # Normalize inputs
     r_list = _as_list(r)
     t_list = _broadcast_time_list(r_list, t)
@@ -229,8 +202,11 @@ def groundtrack_plot(
         raise ValueError("linestyles must have same length as number of orbits (tracks)")
 
     # Figure
-    fig = plt.figure(figsize=(14, 8))
-    ax = fig.add_subplot(111)
+    if ax is None:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+    else:
+        fig = ax.figure
 
     xmin = central_longitude - 180.0
     xmax = central_longitude + 180.0

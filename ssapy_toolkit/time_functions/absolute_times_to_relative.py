@@ -39,7 +39,7 @@ def time_abs_to_rel(times, anchor='start'):
         # Try parsing as UTC-like strings first; if that fails, try GPS seconds
         try:
             t = Time(times, scale='utc')
-        except Exception:
+        except (TypeError, ValueError):
             t = Time(times, format='gps', scale='utc')
 
     # Choose reference sample based on anchor

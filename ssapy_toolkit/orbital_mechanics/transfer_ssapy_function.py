@@ -23,7 +23,7 @@ Example
 >>> dep = Orbit(r1, v1, t=0.0)
 >>> # ... build an arrival Orbit `arr` at a later time ...
 >>> result = transfer_ssapy(dep, arr)
->>> print(result.summary())
+>>> print(result["delta_v_total"])
 """
 
 import numpy as np
@@ -33,11 +33,49 @@ from ssapy.orbit import Orbit
 from ssapy.propagator import RK78Propagator
 from ssapy.utils import normed, rv_to_ntw
 from ssapy.constants import EARTH_MU
+from ssapy_toolkit.time_functions._gps import _to_gps_seconds
+from ssapy_toolkit.orbital_mechanics._transfer_result import maneuver_burn, trajectory_dict, transfer_boundary_states, transfer_result
 
-try:  # astropy is an SSAPy dependency, used only for time conversion
-    from astropy.time import Time
-except ImportError:  # pragma: no cover
-    Time = None
+
+_ARRIVAL_MODE_ALIASES = {
+    "inject": "inject",
+    "injection": "inject",
+    "intercept": "intercept",
+    "flyby": "intercept",
+    "position": "intercept",
+    "position_only": "intercept",
+    "no_arrival_burn": "intercept",
+    "rendezvous": "rendezvous",
+    "match": "rendezvous",
+    "match_state": "rendezvous",
+    "match_velocity": "rendezvous",
+    "insert": "insertion",
+    "insertion": "insertion",
+    "orbit_insert": "insertion",
+    "orbit_insertion": "insertion",
+    "target_orbit": "insertion",
+}
+
+
+def _normalize_keyword(value, aliases, name):
+    key = str(value).strip().lower().replace("-", "_").replace(" ", "_")
+    try:
+        return aliases[key]
+    except KeyError as exc:
+        valid = ", ".join(sorted(set(aliases.values())))
+        raise ValueError(f"{name} must be one of: {valid}") from exc
+
+
+def _arrival_burn_for_mode(arrival_mode):
+    if arrival_mode in ("rendezvous", "insertion"):
+        return True
+    if arrival_mode in ("inject", "intercept"):
+        return False
+    raise AssertionError(f"Unhandled arrival_mode {arrival_mode!r}")
+
+
+def _arrival_mode_from_fixed_time_flags(arrival_burn):
+    return "rendezvous" if arrival_burn else "intercept"
 
 
 # ---------------------------------------------------------------------------
@@ -274,16 +312,21 @@ class TransferResult:
 # Main entry point
 # ---------------------------------------------------------------------------
 
-def _to_gps_seconds(t):
-    """Accept floats (GPS seconds) or astropy Time and return GPS seconds."""
-    if Time is not None and isinstance(t, Time):
-        return float(t.gps)
-    return float(t)
-
-
 def transfer_ssapy(
-    departure,
-    arrival,
+    *args,
+    orbit1=None,
+    orbit2=None,
+    departure=None,
+    arrival=None,
+    initial=None,
+    target=None,
+    r1=None,
+    v1=None,
+    r2=None,
+    v2=None,
+    t1=0.0,
+    t2=None,
+    tof=None,
     accel=None,
     dv_budget=None,
     burn_duration=10.0,
@@ -292,6 +335,7 @@ def transfer_ssapy(
     mass=None,
     isp=None,
     prograde=True,
+    arrival_mode=None,
     arrival_burn=True,
     propagate=True,
     propagator=None,
@@ -313,15 +357,20 @@ def transfer_ssapy(
 
     Parameters
     ----------
-    departure : ssapy.orbit.Orbit or tuple
+    departure, initial, orbit1 : ssapy.orbit.Orbit or tuple
         Pre-burn state: an SSAPy ``Orbit``, or a ``(r, v, t)`` tuple with
         ``r`` and ``v`` in meters / meters-per-second (inertial frame) and
         ``t`` in GPS seconds or as an ``astropy.time.Time``.
-    arrival : ssapy.orbit.Orbit or tuple
+    arrival, target, orbit2 : ssapy.orbit.Orbit or tuple
         Target state in the same formats.  Its epoch must be later than
         the departure epoch; the difference sets the time of flight.  The
         target velocity defines the second (circularization/matching)
         burn.
+    r1, v1, r2, v2 : array_like, optional
+        Raw state-vector form for the same boundary conditions.  Equivalent
+        positional form ``transfer_ssapy(r1, v1, r2, v2, tof=...)`` is also
+        accepted.  Raw vector calls require ``tof`` or ``t2`` because Lambert
+        transfers are fixed-time boundary-value problems.
     accel : ssapy.accel.Accel or list of Accel, optional
         Force model for propagation.  Default ``AccelKepler()`` (two-body
         gravity).  A list is summed.  Note the burn solution itself is the
@@ -363,15 +412,21 @@ def transfer_ssapy(
         to the summary.
     prograde : bool
         Sense of motion for the Lambert geometry.
+    arrival_mode : {"inject", "intercept", "rendezvous", "insertion"}, optional
+        User-facing terminology for the arrival constraint. ``"inject"`` means
+        perform only the departure burn that places the spacecraft on the
+        transfer conic. ``"intercept"`` means reach the target position at the
+        specified time without matching velocity. ``"rendezvous"`` means reach
+        the target position at the specified time and match velocity.
+        ``"insertion"`` means include the arrival/insertion burn needed to enter
+        the final orbit. This fixed-time solver still requires a target epoch;
+        use ``transfer_optimal(arrival_mode="insertion")`` when target phase is
+        a free search variable.
     arrival_burn : bool
-        If True (default), perform and cost the second burn that matches
-        the arrival velocity (rendezvous/insertion).  If False, plan an
-        *intercept*: only the departure burn is performed, the refinement
-        targets the arrival position only, and the spacecraft coasts
-        through the target point on the Lambert conic without matching
-        its velocity (e.g. flyby or impactor geometries).  The result
-        then contains a single burn and the arrival velocity mismatch is
-        expected.
+        Lower-level compatibility flag used when ``arrival_mode`` is not set. If
+        True (default), perform and cost the second burn that matches the arrival
+        velocity. If False, return a single-burn fixed-time intercept/injection
+        trajectory with expected arrival velocity mismatch.
     propagate : bool
         If True, numerically propagate the burn-inclusive trajectory and
         report the achieved arrival error.
@@ -409,10 +464,12 @@ def transfer_ssapy(
         Initial RK78 step size [s].
     raise_on_budget : bool
         If True and the budget is exceeded, raise ``ValueError``.
-
     Returns
     -------
-    TransferResult
+    dict
+        Canonical transfer dictionary with ``initial``, ``target``,
+        ``burns``, ``trajectory``, ``delta_v_total``, hardware metadata,
+        assumptions, and diagnostics.
 
     Notes
     -----
@@ -427,18 +484,40 @@ def transfer_ssapy(
       target to ``refine_tol``.
     """
     # --- normalize inputs ------------------------------------------------
-    def as_state(s):
-        if isinstance(s, Orbit):
-            return (np.asarray(s.r, dtype=float).ravel(),
-                    np.asarray(s.v, dtype=float).ravel(),
-                    _to_gps_seconds(s.t))
-        r, v, t = s
-        return (np.asarray(r, dtype=float).ravel(),
-                np.asarray(v, dtype=float).ravel(),
-                _to_gps_seconds(t))
+    if accel is None:
+        accel = AccelKepler()
+    elif isinstance(accel, (list, tuple)):
+        accel = sum(accel[1:], accel[0])
 
-    r1, v1, t1 = as_state(departure)
-    r2, v2, t2 = as_state(arrival)
+    # Gravitational parameter for state inference and the Lambert conic.
+    mu = getattr(accel, "mu", EARTH_MU)
+
+    if arrival_mode is None:
+        arrival_mode = _arrival_mode_from_fixed_time_flags(arrival_burn)
+    else:
+        arrival_mode = _normalize_keyword(arrival_mode, _ARRIVAL_MODE_ALIASES, "arrival_mode")
+        arrival_burn = _arrival_burn_for_mode(arrival_mode)
+
+    departure_state, arrival_state = transfer_boundary_states(
+        *args,
+        orbit1=orbit1,
+        orbit2=orbit2,
+        departure=departure,
+        arrival=arrival,
+        initial=initial,
+        target=target,
+        r1=r1,
+        v1=v1,
+        r2=r2,
+        v2=v2,
+        t1=t1,
+        t2=t2,
+        tof=tof,
+        mu=mu,
+        name="transfer_ssapy",
+    )
+    r1, v1, t1 = departure_state["r"], departure_state["v"], departure_state["t"]
+    r2, v2, t2 = arrival_state["r"], arrival_state["v"], arrival_state["t"]
     tof = t2 - t1
     if tof <= 0:
         raise ValueError("Arrival epoch must be after departure epoch.")
@@ -452,14 +531,6 @@ def transfer_ssapy(
             "isp requires mass and thrust (propellant estimates are "
             "unavailable with burn_accel alone).")
     a_spec = (thrust / mass) if thrust is not None else burn_accel
-
-    if accel is None:
-        accel = AccelKepler()
-    elif isinstance(accel, (list, tuple)):
-        accel = sum(accel[1:], accel[0])
-
-    # Gravitational parameter for the Lambert conic.
-    mu = getattr(accel, "mu", EARTH_MU)
 
     # --- Lambert solution and burns --------------------------------------
     v1_req, v2_req = solve_lambert(r1, r2, tof, mu=mu, prograde=prograde)
@@ -742,7 +813,122 @@ def transfer_ssapy(
         import warnings
         warnings.warn(msg)
 
-    return result
+    return _transfer_ssapy_to_standard_dict(
+        result,
+        r1=r1,
+        v1=v1,
+        t1=t1,
+        r2=r2,
+        v2=v2,
+        t2=t2,
+        v2_req=v2_req,
+        tof=tof,
+        mu=mu,
+        prograde=prograde,
+        arrival_mode=arrival_mode,
+        arrival_burn=arrival_burn,
+        propagate=propagate,
+        refine=refine,
+        burn_accel=burn_accel,
+        thrust=thrust,
+        mass=mass,
+        isp=isp,
+    )
+
+
+def _transfer_ssapy_to_standard_dict(
+    result,
+    *,
+    r1,
+    v1,
+    t1,
+    r2,
+    v2,
+    t2,
+    v2_req,
+    tof,
+    mu,
+    prograde,
+    arrival_mode,
+    arrival_burn,
+    propagate,
+    refine,
+    burn_accel,
+    thrust,
+    mass,
+    isp,
+):
+    initial_state = {"r": r1, "v": v1, "t": t1}
+    target_state = {"r": r2, "v": v2, "t": t2}
+    if result.trajectory is not None:
+        final_state = {
+            "r": result.trajectory["r"][-1],
+            "v": result.trajectory["v"][-1],
+            "t": result.trajectory["t"][-1],
+        }
+        trajectory = trajectory_dict(
+            t=result.trajectory["t"],
+            r=result.trajectory["r"],
+            v=result.trajectory["v"],
+        )
+    else:
+        final_state = target_state
+        trajectory = None
+
+    burn_states = [initial_state]
+    if len(result.burns) > 1:
+        burn_states.append({"r": r2, "v": v2_req, "t": t2})
+    burns = []
+    for index, burn in enumerate(result.burns):
+        state = burn_states[index]
+        burn_dict = maneuver_burn(
+            name="departure" if index == 0 else "arrival_match",
+            kind="constant_ntw_finite_burn",
+            state=state,
+            delta_v=burn.dv,
+            t=burn.t_start,
+            t_start=burn.t_start,
+            t_end=burn.t_end,
+            burn_accel=burn_accel,
+            thrust=thrust,
+            mass=mass if thrust is not None else None,
+            isp=isp,
+        )
+        if getattr(burn, "propellant_mass", None) is not None:
+            burn_dict["propellant_mass"] = burn.propellant_mass
+        burn_dict["delta_v_ntw"] = burn.dv_ntw
+        burn_dict["acceleration_ntw"] = burn.dv_ntw / max(burn.t_end - burn.t_start, 1e-12)
+        burns.append(burn_dict)
+
+    return transfer_result(
+        method="transfer_ssapy",
+        initial=initial_state,
+        target=target_state,
+        final=final_state,
+        burns=burns,
+        trajectory=trajectory,
+        transfer_orbits=[result.transfer_orbit],
+        tof=tof,
+        success=(result.arrival_error is None or result.arrival_error < np.inf),
+        assumptions=[
+            "zero-revolution Lambert solution",
+            "two-body Lambert geometry",
+            "constant NTW finite burns for propagation/refinement",
+        ],
+        diagnostics={
+            "arrival_error": result.arrival_error,
+            "dv_budget": result.dv_budget,
+            "within_budget": result.within_budget,
+            "prograde": bool(prograde),
+            "arrival_mode": arrival_mode,
+            "timing_constraint": "fixed",
+            "arrival_velocity_match": bool(arrival_burn),
+            "arrival_burn": bool(arrival_burn),
+            "propagate": bool(propagate),
+            "refine": bool(refine),
+            "mu": mu,
+        },
+    )
 
 
 def _attach_engine_info(burns, thrust, mass, isp):
@@ -768,4 +954,3 @@ def _ntw_to_inertial(r, v, ntw):
     wvec = normed(np.cross(r, v))
     nvec = normed(np.cross(tvec, wvec))
     return ntw[0] * nvec + ntw[1] * tvec + ntw[2] * wvec
-

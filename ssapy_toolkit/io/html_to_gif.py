@@ -1,30 +1,45 @@
 #!/usr/bin/env python3
 
 import os
-import sys
+import argparse
 import time
 import math
 import pathlib
+import warnings
 from io import BytesIO
 
-missing = []
 try:
     from PIL import Image, ImageChops
-except ImportError:
-    missing.append("Pillow (PIL) is required. Install with:\n  pip install pillow")
+except ImportError as exc:
+    Image = None
+    ImageChops = None
+    _PIL_IMPORT_ERROR = exc
+else:
+    _PIL_IMPORT_ERROR = None
 
 try:
     from selenium import webdriver
     from selenium.webdriver.chrome.options import Options
-except ImportError:
-    missing.append("Selenium is required. Install with:\n  pip install selenium")
+except ImportError as exc:
+    webdriver = None
+    Options = None
+    _SELENIUM_IMPORT_ERROR = exc
+else:
+    _SELENIUM_IMPORT_ERROR = None
 
-if missing:
-    print("Missing required dependencies:\n")
-    for msg in missing:
-        print(msg + "\n")
-    print("After installing the above packages, re-run this script.")
-    sys.exit(1)
+
+def _require_html_to_gif_dependencies():
+    missing = []
+    if _PIL_IMPORT_ERROR is not None:
+        missing.append("Pillow (PIL)")
+    if _SELENIUM_IMPORT_ERROR is not None:
+        missing.append("Selenium")
+    if missing:
+        raise ImportError(
+            "html_to_gif requires optional dependencies: "
+            + ", ".join(missing)
+            + ". Install the package with its normal dependencies or install pillow and selenium."
+        )
 
 
 def _auto_crop_bbox(img, bg_color=None, fuzz=0):
@@ -34,6 +49,7 @@ def _auto_crop_bbox(img, bg_color=None, fuzz=0):
     bg_color: (R, G, B) or None to auto-detect from top-left pixel.
     fuzz: tolerance for color differences, 0 = exact match.
     """
+    _require_html_to_gif_dependencies()
     img = img.convert("RGB")
     w, h = img.size
 
@@ -64,7 +80,18 @@ def html_to_gif(
     forced_height: int = 2000,   # big enough to capture entire animation
     bg_color=None,               # None = auto-detect from top-left
     fuzz: int = 0,               # increase if background not perfectly uniform
+    chrome_binary: str | None = None,
+    verbose: bool = False,
 ):
+    """Render a local HTML page to an animated GIF.
+
+    ``chrome_binary`` overrides the browser executable used by Selenium. If it
+    is not provided, the ``SSATK_CHROME_BINARY`` environment variable is used
+    when set; otherwise Selenium chooses its default browser.
+
+    Set ``verbose=True`` to print crop and output progress messages.
+    """
+    _require_html_to_gif_dependencies()
     html_path = pathlib.Path(html_path).resolve()
     if not html_path.exists():
         raise FileNotFoundError(str(html_path))
@@ -78,7 +105,9 @@ def html_to_gif(
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--hide-scrollbars")
     chrome_options.add_argument(f"--window-size={viewport[0]},{viewport[1]}")
-    chrome_options.binary_location = "/usr/bin/chromium-browser"  # adjust if needed
+    chrome_binary = chrome_binary or os.environ.get("SSATK_CHROME_BINARY")
+    if chrome_binary:
+        chrome_options.binary_location = chrome_binary
 
     driver = None
     try:
@@ -124,10 +153,11 @@ def html_to_gif(
     if global_bbox is None:
         # No difference from background; just use original frames
         frames = raw_frames
-        print("Warning: no non-background pixels detected; skipping auto-crop.")
+        warnings.warn("No non-background pixels detected; skipping auto-crop.", UserWarning, stacklevel=2)
     else:
         frames = [img.crop(global_bbox) for img in raw_frames]
-        print("Cropped to bbox:", global_bbox, "-> size", frames[0].size)
+        if verbose:
+            print("Cropped to bbox:", global_bbox, "-> size", frames[0].size)
 
     # --- Save GIF ---
     os.makedirs(os.path.dirname(out_gif) or ".", exist_ok=True)
@@ -140,19 +170,38 @@ def html_to_gif(
         optimize=False,
         disposal=2,
     )
-    print(f"Wrote GIF: {out_gif}  ({len(frames)} frames @ {fps} fps)")
+    if verbose:
+        print(f"Wrote GIF: {out_gif}  ({len(frames)} frames @ {fps} fps)")
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Render a local HTML animation to GIF using Selenium.")
+    parser.add_argument("html_path", help="Path to the input HTML file.")
+    parser.add_argument("out_gif", help="Path for the output GIF.")
+    parser.add_argument("--duration-s", type=float, default=18.0)
+    parser.add_argument("--fps", type=int, default=20)
+    parser.add_argument("--viewport", nargs=2, type=int, metavar=("WIDTH", "HEIGHT"), default=(1280, 720))
+    parser.add_argument("--wait-after-load-s", type=float, default=0.8)
+    parser.add_argument("--forced-height", type=int, default=2000)
+    parser.add_argument("--fuzz", type=int, default=5)
+    parser.add_argument("--chrome-binary", default=None, help="Optional Chrome/Chromium binary path.")
+    parser.add_argument("--verbose", action="store_true")
+    args = parser.parse_args(argv)
+
+    html_to_gif(
+        html_path=args.html_path,
+        out_gif=args.out_gif,
+        duration_s=args.duration_s,
+        fps=args.fps,
+        viewport=tuple(args.viewport),
+        wait_after_load_s=args.wait_after_load_s,
+        forced_height=args.forced_height,
+        bg_color=None,  # or (255, 255, 255) if you know background is white
+        fuzz=args.fuzz,
+        chrome_binary=args.chrome_binary,
+        verbose=args.verbose,
+    )
 
 
 if __name__ == "__main__":
-    home = os.path.expanduser("~")
-    html_to_gif(
-        html_path="/home/yeager7/smart-hpm/scripts/agent/animation.html",
-        out_gif=os.path.join(home, "animation.gif"),
-        duration_s=18.0,
-        fps=20,
-        viewport=(1280, 720),
-        wait_after_load_s=0.8,
-        forced_height=2000,
-        bg_color=None,  # or (255, 255, 255) if you know background is white
-        fuzz=5,         # tweak if background has slight gradients/antialiasing
-    )
+    main()

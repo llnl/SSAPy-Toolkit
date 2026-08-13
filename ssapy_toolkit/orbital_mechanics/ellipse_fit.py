@@ -31,7 +31,9 @@ dict
 """
 
 from ..plots import save_plot
+from ..plots.plotutils import _pop_save_path_aliases, _raise_unrecognized_kwargs
 import numpy as np
+import warnings
 
 
 def ellipse_fit(
@@ -50,7 +52,11 @@ def ellipse_fit(
     save_path=False,
     time_of_departure=None,
     time_of_arrival=None,
+    **save_kwargs,
 ):
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "ellipse_fit")
+
     from ..constants import EARTH_MU, EARTH_RADIUS  # [m³ s⁻²], [m]
 
     mu_m3_s2 = EARTH_MU
@@ -168,13 +174,24 @@ def ellipse_fit(
             for x0 in guesses:
                 for method in ("trust-constr", "SLSQP"):
                     try:
-                        sol = minimize(
-                            obj_min_e,
-                            x0,
-                            constraints=[constraint],
-                            method=method,
-                            tol=tol,
-                        )
+                        with warnings.catch_warnings():
+                            warnings.filterwarnings(
+                                "ignore",
+                                message="delta_grad == 0.0.*",
+                                category=UserWarning,
+                            )
+                            warnings.filterwarnings(
+                                "ignore",
+                                message="Singular Jacobian matrix.*",
+                                category=UserWarning,
+                            )
+                            sol = minimize(
+                                obj_min_e,
+                                x0,
+                                constraints=[constraint],
+                                method=method,
+                                tol=tol,
+                            )
                         eq_res = abs(float(equal_sum(sol.x))) if hasattr(sol, "x") else np.inf
                         obj_val = float(obj_min_e(sol.x)) if hasattr(sol, "x") else np.inf
                         debug_attempts.append(
@@ -230,8 +247,8 @@ def ellipse_fit(
         if (a_m is None) == (e is None):
             raise ValueError("Provide exactly one of {a_m, e, F2_m}.")
 
-        if e is not None and float(e) == 0.0:
-            raise ValueError("e=0 (circular) is not supported by the current focus solver path.")
+        if e is not None and not (0.0 < float(e) < 1.0):
+            raise ValueError("e must satisfy 0 < e < 1 for ellipse fitting.")
 
         def residual(xy_m):
             F_m = _to_3d_m(xy_m, u_hat, v_hat)
@@ -704,7 +721,7 @@ def ellipse_fit(
         ax_dist = fig.add_subplot(gs[1])
         ax_speed = fig.add_subplot(gs[2])
 
-        colors = cm.get_cmap("RdYlGn_r")(np.linspace(0, 1, len(arc3d_m)))
+        colors = plt.get_cmap("RdYlGn_r")(np.linspace(0, 1, len(arc3d_m)))
 
         if arc3d_comp_m is not None:
             ax3d.scatter(
@@ -925,4 +942,3 @@ def delta_v_transfer(
         "pos_residual_p1": res_p1,      # [m]  |r_depart − P1|, or None if no Orbit given
         "pos_residual_p2": res_p2,      # [m]  |r_arrive − P2|, or None if no Orbit given
     }
-

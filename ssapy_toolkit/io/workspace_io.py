@@ -1,6 +1,7 @@
 import json
 import inspect
 import numpy as np
+from ssapy_toolkit._paths import ensure_file_parent
 from datetime import datetime
 from pathlib import Path
 
@@ -19,6 +20,14 @@ try:
     HAS_ASTROPY = True
 except ImportError:
     HAS_ASTROPY = False
+
+
+def _representation_type_name(representation_type):
+    name = getattr(representation_type, "name", None)
+    if name is not None:
+        return name
+
+    return str(representation_type)
 
 
 def save_workspace(filename='workspace.json', exclude=None):
@@ -71,7 +80,13 @@ def save_workspace(filename='workspace.json', exclude=None):
         
         try:
             # Handle different types
-            if isinstance(value, np.ndarray):
+            if HAS_ASTROPY and isinstance(value, u.Quantity):
+                workspace[name] = {
+                    '__type__': 'astropy.Quantity',
+                    'value': value.value.tolist() if hasattr(value.value, 'tolist') else float(value.value),
+                    'unit': str(value.unit)
+                }
+            elif isinstance(value, np.ndarray):
                 workspace[name] = {
                     '__type__': 'numpy.ndarray',
                     'data': value.tolist(),
@@ -100,17 +115,11 @@ def save_workspace(filename='workspace.json', exclude=None):
                     'colnames': value.colnames,
                     'meta': dict(value.meta) if value.meta else {}
                 }
-            elif HAS_ASTROPY and isinstance(value, u.Quantity):
-                workspace[name] = {
-                    '__type__': 'astropy.Quantity',
-                    'value': value.value.tolist() if hasattr(value.value, 'tolist') else float(value.value),
-                    'unit': str(value.unit)
-                }
             elif HAS_ASTROPY and isinstance(value, Time):
                 workspace[name] = {
                     '__type__': 'astropy.Time',
-                    'value': value.iso,
-                    'format': value.format,
+                    'value': value.isot,
+                    'format': 'isot',
                     'scale': value.scale
                 }
             elif HAS_ASTROPY and isinstance(value, SkyCoord):
@@ -119,7 +128,7 @@ def save_workspace(filename='workspace.json', exclude=None):
                     'ra': value.ra.deg,
                     'dec': value.dec.deg,
                     'frame': value.frame.name,
-                    'representation_type': value.representation_type.get_name()
+                    'representation_type': _representation_type_name(value.representation_type)
                 }
             elif isinstance(value, (datetime,)):
                 workspace[name] = {
@@ -153,7 +162,8 @@ def save_workspace(filename='workspace.json', exclude=None):
     }
     
     # Save to file
-    with open(filename, 'w') as f:
+    path = ensure_file_parent(filename)
+    with path.open('w', encoding='utf-8') as f:
         json.dump(result, f, indent=2)
     
     print(f"✓ Workspace saved to '{filename}'")
@@ -181,7 +191,7 @@ def load_workspace(filename='workspace.json', into_globals=True):
     dict : Dictionary of loaded variables
     """
     # Load from file
-    with open(filename, 'r') as f:
+    with Path(filename).open('r', encoding='utf-8') as f:
         data = json.load(f)
     
     variables = data.get('variables', {})
@@ -202,8 +212,14 @@ def load_workspace(filename='workspace.json', into_globals=True):
                     df.columns.name = value['columns_name']
                 loaded_vars[name] = df
             elif type_name == 'pandas.Series' and HAS_PANDAS:
+                series_data = value['data']
+                if isinstance(series_data, dict):
+                    series_data = [
+                        series_data.get(idx, series_data.get(str(idx)))
+                        for idx in value['index']
+                    ]
                 loaded_vars[name] = pd.Series(
-                    value['data'],
+                    series_data,
                     index=value['index'],
                     name=value.get('name')
                 ).astype(value['dtype'])

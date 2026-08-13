@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use SSAPy-Toolkit in your work, please cite it using the metadata from this file."
+title: "SSAPy-Toolkit"
+type: software
+authors:
+  - family-names: "Yeager"
+    given-names: "Travis R."
+    email: "yeagerastro@gmail.com"
+    affiliation: "Lawrence Livermore National Laboratory"
+abstract: "SSAPy-Toolkit provides higher-level orbital mechanics, plotting, data I/O, coordinate/time conversion, transfer-design, and workflow utilities built on LLNL SSAPy."
+keywords:
+  - orbital mechanics
+  - astrodynamics
+  - space situational awareness
+  - visualization
+  - SSAPy
+license: "BSD-3-Clause"
+repository-code: "https://github.com/llnl/SSAPy-Toolkit"
+url: "https://github.com/llnl/SSAPy-Toolkit"
+version: "1.0.5"
+date-released: "2026-08-11"

@@ -1,23 +1,13 @@
 from pathlib import Path
 from os import PathLike
 from glob import glob
-import re
 import warnings
 
 import numpy as np
 import imageio.v2 as imageio
 from PIL import Image
 
-
-def _natural_key(s: str):
-    """
-    Split a string into a list of ints and lowercased text to enable natural sorting.
-    Example: 'frame_10.png' -> ['frame_', 10, '.png']
-    """
-    return [
-        int(tok) if tok.isdigit() else tok.lower()
-        for tok in re.split(r"(\d+)", s)
-    ]
+from ssapy_toolkit._sorting import natural_key
 
 
 def _sort_frames(paths, warn_on_ambiguous: bool = True) -> list:
@@ -29,7 +19,7 @@ def _sort_frames(paths, warn_on_ambiguous: bool = True) -> list:
         return []
 
     try:
-        keys = [_natural_key(p) for p in paths]
+        keys = [natural_key(p) for p in paths]
     except Exception as e:
         if warn_on_ambiguous:
             warnings.warn(
@@ -139,6 +129,7 @@ def write_gif(
     uniform_size: bool = True,          # make all frames the same size
     target_size: tuple = None,          # if None, use size of first frame
     bg_color=(255, 255, 255, 0),        # padding color if sizes differ (RGBA)
+    verbose: bool = False,
 ) -> None:
     """
     Write frames to an animated GIF with robust sorting and size normalization.
@@ -168,6 +159,8 @@ def write_gif(
         If None, use the size of the first image as the canvas.
     bg_color : tuple
         RGBA background for padding (when uniform_size is True).
+    verbose : bool
+        If True, print progress messages while writing.
     """
     out = Path(gif_name)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -195,7 +188,8 @@ def write_gif(
             target_size = first_img.size
 
     # Write GIF
-    print(f"Writing gif: {out}")
+    if verbose:
+        print(f"Writing gif: {out}")
     with imageio.get_writer(out, mode="I", duration=frame_duration, loop=loop) as writer:
         for p in paths:
             arr = imageio.imread(p)
@@ -209,7 +203,8 @@ def write_gif(
 
             writer.append_data(arr)
 
-    print(f"Wrote {out}")
+    if verbose:
+        print(f"Wrote {out}")
 
 
 if __name__ == "__main__":

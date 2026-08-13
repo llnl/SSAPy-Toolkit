@@ -30,7 +30,7 @@ Use the existing top-level structure for new work:
 | --- | --- |
 | `ssapy_toolkit/` | Importable package code. |
 | `tests/` | Automated regression and behavior tests. |
-| `demos/` | Runnable, lightweight demonstrations of user-facing workflows. |
+| `demos/` | Categorized, runnable demonstrations of user-facing workflows. |
 | `docs/` | Narrative documentation and API documentation. |
 | `scripts/` | Maintainer/development utilities, not importable package code. |
 | `.github/` | GitHub Actions, issue/PR templates, and ownership policy. |
@@ -48,7 +48,7 @@ new tests, but the pull request should state that explicitly.
 
 New user-facing workflows, plotting utilities, data-ingest utilities, command
 line behavior, or analysis recipes must also add or update a runnable demo under
-`demos/`. Demos should be small Python or Markdown examples that generate their
+the appropriate `demos/` subfolder. Demos should be small Python or Markdown examples that generate their
 outputs locally. Do not commit generated demo outputs; the gallery workflow
 builds media artifacts from source during CI.
 
@@ -57,7 +57,7 @@ Before requesting review, run the focused checks that match the change:
 ```bash
 pip install -e .[dev]
 pytest tests
-python -m ssapy_toolkit.run_all_demos --no-open
+python -m ssapy_toolkit.run_all_demos
 python scripts/check_repository_policy.py
 ```
 

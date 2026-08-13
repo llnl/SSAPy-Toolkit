@@ -4,6 +4,7 @@ import os
 import re
 from enum import Enum, auto
 from numbers import Real
+from pathlib import Path
 
 # --- Third-party ---
 import numpy as np
@@ -11,8 +12,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.colors import cnames, to_rgb, rgb2hex
 from PIL import Image as PILImage
-from pypdf import PdfWriter, PdfReader
-from IPython.display import Image as IPythonImage, display as ipython_display
+from pypdf import PdfWriter
 from astropy.time import Time
 from erfa import gst94
 
@@ -20,6 +20,16 @@ from erfa import gst94
 from ssapy.utils import find_file
 from ..constants import EARTH_RADIUS, MOON_RADIUS
 from ..vectors import rotation_matrix_from_vectors
+
+
+_SAVE_PATH_ALIAS_KEYS = (
+    "save",
+    "savefig",
+    "save_fig",
+    "save_figure",
+    "savepath",
+    "save_path",
+)
 
 
 class VarType(Enum):
@@ -248,6 +258,8 @@ def valid_orbits(r, t, drop_empty=True, warn=True):
         )
 
     return r_list, t_list
+
+
 def load_earth_file():
     earth = PILImage.open(find_file("earth", ext=".png"))
     earth = earth.resize((5400 // 5, 2700 // 5))
@@ -404,37 +416,84 @@ def save_plot_to_pdf(figure, pdf_path):
     print(f"Saved figure {save_plot_to_pdf_call_count} to {pdf_path}")
 
 
-def save_plot(figure, save_path, dpi=200):
-    """
-    Save a Matplotlib figure as JPG (or append to PDF if save_path ends with .pdf).
-    """
-    if save_path.lower().endswith('.pdf'):
-        save_plot_to_pdf(figure, save_path)
-        return
-    try:
-        base_name, extension = os.path.splitext(save_path)
-        if extension.lower() != '.jpg':
-            save_path = base_name + '.jpg'
-        figure.savefig(save_path, dpi=dpi, bbox_inches=None)
-        plt.close(figure)
-        print(f"Figure saved at: {save_path}")
-    except Exception as e:
-        print(f"Error occurred while saving the figure: {e}")
+def _figure_save_path(save_path=None, default_name="figure"):
+    if save_path is False:
+        return None
+    if save_path is None or save_path is True:
+        save_path = default_name
+
+    path = Path(save_path).expanduser()
+    if path.is_absolute():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return str(path)
+
+    from .figpath import figpath
+    return figpath(path)
 
 
-def yufig(figure, save_path, dpi=200):
+def _save_alias_explicit(value):
+    return value is not None and value is not False
+
+
+def _save_alias_values_equal(left, right):
+    if left is True or right is True:
+        return left is True and right is True
+    if (left is None or left is False) and (right is None or right is False):
+        return True
+    return left == right or str(left) == str(right)
+
+
+def _pop_save_path_aliases(kwargs=None, save_path=None):
+    """Resolve standard save-path aliases from a keyword dictionary."""
+    kwargs = dict(kwargs or {})
+    provided = []
+
+    if _save_alias_explicit(save_path):
+        provided.append(("save_path", save_path))
+
+    for key in _SAVE_PATH_ALIAS_KEYS:
+        if key in kwargs:
+            provided.append((key, kwargs.pop(key)))
+
+    if not provided:
+        return save_path, kwargs
+
+    first_key, first_value = provided[0]
+    for key, value in provided[1:]:
+        if not _save_alias_values_equal(first_value, value):
+            raise TypeError(
+                "Conflicting figure save aliases: "
+                f"{first_key}={first_value!r} and {key}={value!r}"
+            )
+
+    return provided[-1][1], kwargs
+
+
+def _raise_unrecognized_kwargs(kwargs, func_name):
+    if kwargs:
+        names = ", ".join(sorted(kwargs))
+        raise TypeError(f"{func_name}() got unexpected keyword argument(s): {names}")
+
+
+def figsave(figure, save_path=None, dpi=200, default_name="figure", **save_kwargs):
     """
-    Save a Matplotlib figure.
+    Save a Matplotlib figure through the SSATK figure-output policy.
 
     Behavior:
+      * If save_path is None or True -> save under figpath(default_name).
+      * If save_path is False -> do not save and return None.
+      * Relative paths are rooted under ~/ssatk_figures via figpath().
+      * Absolute paths are treated as explicit user requests and used directly.
       * If save_path has no extension -> save as JPG ('.jpg' is appended).
       * If save_path ends with '.pdf' (case-insensitive) -> append/write to PDF
         via save_plot_to_pdf.
       * If save_path has any other extension -> use it directly with figure.savefig().
     """
-    from .figpath import figpath
-
-    save_path = figpath(save_path)
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "figsave")
+    save_path = _figure_save_path(save_path, default_name=default_name)
+    if save_path is None:
+        return None
 
     # Split into base and extension
     base_name, extension = os.path.splitext(save_path)
@@ -447,20 +506,34 @@ def yufig(figure, save_path, dpi=200):
     # PDF: use custom handler
     if extension.lower() == ".pdf":
         save_plot_to_pdf(figure, save_path)
-        return
+        return save_path
 
     # All other extensions: save as-is
     try:
         figure.savefig(save_path, dpi=dpi, bbox_inches=None)
         plt.close(figure)
         print(f"Figure saved at: {save_path}")
+        return save_path
     except Exception as e:
         print(f"Error occurred while saving the figure: {e}")
+        return None
+
+
+ssatk_fig = figsave
+fsave = figsave
+
+
+def save_plot(figure, save_path=None, dpi=200, default_name="figure", **save_kwargs):
+    """Compatibility wrapper for :func:`figsave`."""
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    return figsave(figure, save_path=save_path, dpi=dpi, default_name=default_name, **save_kwargs)
 
 
 def display_figure(figname, display='IPython'):
     def open_image(filename):
         if display == 'IPython':
+            from IPython.display import Image as IPythonImage, display as ipython_display
+
             img = IPythonImage(filename=filename)
             ipython_display(img)
         elif display == 'PIL':
@@ -648,6 +721,3 @@ def generate_rainbow_colors(num_iterations):
     cmap = plt.get_cmap('rainbow')
     colors = [rgb2hex(cmap(i / num_iterations)) for i in range(num_iterations)]
     return colors
-
-
-

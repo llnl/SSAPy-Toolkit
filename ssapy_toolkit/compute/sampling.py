@@ -77,7 +77,7 @@ def rand_num(low: float = 0.0, high: float = 1.0) -> float:
     float
         Uniform random number in [low, high).
     """
-    return float(np.random.uniform(low, high, 1).astype("float64"))
+    return float(np.random.uniform(low, high))
 
 
 def shuffle(x: list) -> None:
@@ -165,7 +165,7 @@ def normal_scalar(mean: float = 0.0, std: float = 1.0) -> float:
     -------
     float
     """
-    return float(np.random.normal(loc=mean, scale=std, size=1))
+    return float(np.random.normal(loc=mean, scale=std))
 
 
 def normal_array(
@@ -345,7 +345,7 @@ def get_sigmas(n: int = 25, path: Optional[str] = None) -> np.ndarray:
         Array of shape (n, 6).
     """
     if path is None:
-        from .io import yudata  # type: ignore  # kept as in original
+        from ssapy_toolkit.io.datapath import datapath
 
         # Prefer env-provided directory, then fallback to ~/.cache/ssapy_toolkit
         env_dir = os.environ.get(ENV_VAR, "").strip()
@@ -355,7 +355,7 @@ def get_sigmas(n: int = 25, path: Optional[str] = None) -> np.ndarray:
         dirs.append(Path.home() / ".cache" / "ssapy_toolkit")
 
         # Use datapath to choose/create the first usable directory
-        path = Path(yudata(DEFAULT_FILE, dirs=dirs))
+        path = Path(datapath(DEFAULT_FILE, dirs=dirs))
     else:
         path = Path(path)
 
@@ -371,7 +371,7 @@ def get_sigmas(n: int = 25, path: Optional[str] = None) -> np.ndarray:
             compute_new = not (
                 sigmas.ndim == 2 and sigmas.shape[0] == n and sigmas.shape[1] == 6
             )
-        except Exception:
+        except (OSError, ValueError, EOFError):
             # Corrupt or incompatible file -> recompute
             compute_new = True
 

@@ -51,10 +51,26 @@ def rotation_matrix_from_vectors(vec1, vec2):
     :param vec2: A 3d "destination" vector
     :return mat: A transform matrix (3x3) which when applied to vec1, aligns it with vec2.
     """
-    a, b = (vec1 / np.linalg.norm(vec1)).reshape(3), (vec2 / np.linalg.norm(vec2)).reshape(3)
+    vec1 = np.asarray(vec1, dtype=float)
+    vec2 = np.asarray(vec2, dtype=float)
+    vec1_norm = np.linalg.norm(vec1)
+    vec2_norm = np.linalg.norm(vec2)
+    if vec1_norm == 0 or vec2_norm == 0:
+        raise ValueError("Cannot align zero-length vectors.")
+
+    a, b = (vec1 / vec1_norm).reshape(3), (vec2 / vec2_norm).reshape(3)
     v = np.cross(a, b)
-    c = np.dot(a, b)
+    c = np.clip(np.dot(a, b), -1.0, 1.0)
     s = np.linalg.norm(v)
+
+    if np.isclose(s, 0.0):
+        if c > 0:
+            return np.eye(3)
+        basis = np.eye(3)[np.argmin(np.abs(a))]
+        axis = np.cross(a, basis)
+        axis /= np.linalg.norm(axis)
+        return 2.0 * np.outer(axis, axis) - np.eye(3)
+
     kmat = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
     rotation_matrix = np.eye(3) + kmat + kmat.dot(kmat) * ((1 - c) / (s**2))
     return rotation_matrix
@@ -77,7 +93,7 @@ def norm(arr):
     return np.sqrt(np.einsum("...i,...i", arr, arr))
 
 
-def rotate_vector(v_unit, theta, phi, save_path=False):
+def rotate_vector(v_unit, theta, phi, save_path=False, **save_kwargs):
     v_unit = v_unit / np.linalg.norm(v_unit, axis=-1)
     if np.all(np.abs(v_unit) != np.max(np.abs(v_unit))):
         perp_vector = np.cross(v_unit, np.array([1, 0, 0]))
@@ -120,6 +136,11 @@ def rotate_vector(v_unit, theta, phi, save_path=False):
 
     v2 = np.dot(R2, v1)
 
+    from .plots.plotutils import _pop_save_path_aliases, _raise_unrecognized_kwargs
+
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "rotate_vector")
+
     if save_path:
         plt.rcParams.update({'font.size': 9, 'figure.facecolor': 'black'})
         fig = plt.figure()
@@ -145,7 +166,7 @@ def rotate_vector(v_unit, theta, phi, save_path=False):
     return v2 / np.linalg.norm(v2, axis=-1)
 
 
-def rotate_points_3d(points, axis=np.array([0, 0, 1]), theta=-np.pi / 2):
+def rotate_points_3d(points, axis=None, theta=-np.pi / 2):
     """
     Rotate a set of 3D points about a 3D axis by an angle theta in radians.
 
@@ -157,8 +178,17 @@ def rotate_points_3d(points, axis=np.array([0, 0, 1]), theta=-np.pi / 2):
     Returns:
         np.ndarray: The rotated set of 3D points, as an Nx3 array.
     """
+    if axis is None:
+        axis = np.array([0.0, 0.0, 1.0])
+    else:
+        axis = np.asarray(axis, dtype=float)
+
+    axis_norm = np.linalg.norm(axis)
+    if axis_norm == 0:
+        raise ValueError("Rotation axis cannot be the zero vector.")
+
     # Normalize the axis to be a unit vector
-    axis = axis / np.linalg.norm(axis)
+    axis = axis / axis_norm
 
     # Compute the quaternion representing the rotation
     qw = np.cos(theta / 2)

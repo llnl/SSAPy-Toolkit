@@ -1,7 +1,14 @@
+import os
 from pathlib import Path
 
-HOME_FIG_DIR = Path.home() / "yu_figures"
-FALLBACK_DIR = Path.cwd() / "yu_figures"
+from ssapy_toolkit._paths import safe_relative_parts
+
+DEFAULT_FIG_DIR_NAME = "ssatk_figures"
+SSATK_FIGURES_ENV = "SSATK_FIGURES_DIR"
+HOME_FIG_DIR = Path.home() / DEFAULT_FIG_DIR_NAME
+FALLBACK_DIR = None  # Deprecated compatibility name; CWD fallback is intentionally disabled.
+
+__all__ = ["ssatk_path", "figpath", "fpath"]
 
 # You can keep this around if you like, but it's no longer used for extension logic.
 _KNOWN_EXTS = {
@@ -20,52 +27,30 @@ _KNOWN_EXTS = {
 }
 
 
-def _safe_rel_parts(p: Path):
+def ssatk_path(filename="figure"):
     """
-    Normalize a user path into a safe relative path:
-      - strip any drive / root / leading slashes,
-      - collapse '.' and '..' without allowing traversal outside the root,
-      - keep intermediate subfolders intact.
-    """
-    parts = []
-    for part in p.parts:
-        # Skip anchors/roots (e.g., 'C:\\', '/', '//server')
-        if part in (p.anchor, "/", "\\", ""):
-            continue
-        if part == ".":
-            continue
-        if part == "..":
-            if parts:
-                parts.pop()
-            continue
-        parts.append(part)
-    return parts
-
-
-def figpath(filename):
-    """
-    Build a path under yu_figures that *respects requested subfolders*.
+    Build a path under the SSATK figure directory.
 
     Rules:
-      - The path is always rooted under ~/yu_figures (fallback: ./yu_figures).
+      - The path is rooted under ~/ssatk_figures by default.
+      - Set SSATK_FIGURES_DIR to choose an explicit alternate root.
       - Subfolders in `filename` are preserved and created as needed.
       - The basename is used exactly as given (no automatic extension added).
-      - Absolute paths and '..' are normalized to stay under yu_figures.
+      - Absolute paths and '..' are normalized to stay under the output root.
 
     Examples
     --------
-    figpath("plot")                          -> ~/yu_figures/plot
-    figpath("demo_gallery/figures/burn_to_dv")              -> ~/yu_figures/demo_gallery/figures/burn_to_dv
-    figpath("demo_gallery/figures/burn_to_dv.png")          -> ~/yu_figures/demo_gallery/figures/burn_to_dv.png
-    figpath("/abs/path/ignored/name.svg")    -> ~/yu_figures/name.svg
-    figpath("weird/name.foo")                -> ~/yu_figures/weird/name.foo
+    ssatk_path("plot")                          -> ~/ssatk_figures/plot
+    ssatk_path("demo_gallery/figures/burn_to_dv")              -> ~/ssatk_figures/demo_gallery/figures/burn_to_dv
+    ssatk_path("demo_gallery/figures/burn_to_dv.png")          -> ~/ssatk_figures/demo_gallery/figures/burn_to_dv.png
+    ssatk_path("/abs/path/ignored/name.svg")    -> ~/ssatk_figures/abs/path/ignored/name.svg
+    ssatk_path("weird/name.foo")                -> ~/ssatk_figures/weird/name.foo
     """
     if not isinstance(filename, (str, Path)):
-        raise TypeError("figpath(filename): filename must be str or pathlib.Path")
+        raise TypeError("ssatk_path(filename): filename must be str or pathlib.Path")
 
     # Normalize to a safe relative path (no drive, no leading slash, no traversal)
-    user_p = Path(filename)
-    rel_parts = _safe_rel_parts(user_p)
+    rel_parts = safe_relative_parts(filename)
     if not rel_parts:
         rel_parts = ["figure"]
 
@@ -73,15 +58,26 @@ def figpath(filename):
     basename = rel_parts[-1]
     final_name = basename
 
-    # Choose base directory (home first, then CWD)
-    for base in (HOME_FIG_DIR, FALLBACK_DIR):
-        try:
-            # Construct full subdir path and ensure it exists
-            subdir = Path(*rel_parts[:-1]) if len(rel_parts) > 1 else Path()
-            target_dir = base / subdir
-            target_dir.mkdir(parents=True, exist_ok=True)
-            return str(target_dir / final_name)
-        except (OSError, PermissionError):
-            continue
+    base = _figure_root()
+    try:
+        # Construct full subdir path and ensure it exists
+        subdir = Path(*rel_parts[:-1]) if len(rel_parts) > 1 else Path()
+        target_dir = base / subdir
+        target_dir.mkdir(parents=True, exist_ok=True)
+        return str(target_dir / final_name)
+    except (OSError, PermissionError) as exc:
+        raise RuntimeError(
+            f"Could not create or access {base}. Set {SSATK_FIGURES_ENV} "
+            "to an explicit writable output directory."
+        ) from exc
 
-    raise RuntimeError("Could not create or access yu_figures in HOME or CWD.")
+
+def _figure_root():
+    override = os.environ.get(SSATK_FIGURES_ENV)
+    if override:
+        return Path(override).expanduser()
+    return HOME_FIG_DIR
+
+
+figpath = ssatk_path
+fpath = ssatk_path

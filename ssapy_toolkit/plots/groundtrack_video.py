@@ -7,6 +7,13 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FFMpegWriter
 from matplotlib import rcParams
 
+from ssapy_toolkit._paths import ensure_file_parent
+from ._groundtrack_helpers import as_list as _as_list
+from ._groundtrack_helpers import broadcast_time_list as _broadcast_time_list
+from ._groundtrack_helpers import clean_lonlat_wrap as _clean_lonlat_wrap
+from ._groundtrack_helpers import ensure_nx3 as _ensure_Nx3
+from .plotutils import _pop_save_path_aliases, _raise_unrecognized_kwargs
+
 # ssapy ground track (geodetic/cartesian converters)
 from ssapy import groundTrack
 
@@ -16,14 +23,14 @@ def _try_load_earth():
         # adjust if your helper lives elsewhere
         from ssapy_toolkit.plots.plotutils import load_earth_file
         return load_earth_file()
-    except Exception:
+    except (FileNotFoundError, OSError):
         return None
 
 # Optional pretty progress
 try:
     from tqdm import tqdm
     _HAS_TQDM = True
-except Exception:
+except ImportError:
     _HAS_TQDM = False
 
 
@@ -38,49 +45,12 @@ def _ensure_ffmpeg_path():
     try:
         import imageio_ffmpeg
         return imageio_ffmpeg.get_ffmpeg_exe()
-    except Exception:
+    except (ImportError, OSError, RuntimeError):
         return None
 
 
-def _as_list(x):
-    return x if isinstance(x, (list, tuple)) else [x]
-
-
-def _broadcast_time_list(r_list, t):
-    # Same semantics as your 2D plot: allow single t reused or list matching r_list
-    if isinstance(t, (list, tuple)):
-        if len(t) != len(r_list):
-            raise ValueError("When passing a list of times, its length must match the number of orbits.")
-        return list(t)
-    return [t for _ in r_list]
-
-
 def _ensure_dir(path):
-    d = os.path.dirname(str(path))
-    if d:
-        os.makedirs(d, exist_ok=True)
-
-
-def _ensure_Nx3(a):
-    A = np.asarray(a, dtype=float)
-    if A.ndim != 2:
-        raise ValueError("Each 'r' must be 2D; got shape {}".format(A.shape))
-    if 3 in A.shape:
-        if A.shape[1] == 3:
-            return A
-        if A.shape[0] == 3:
-            return A.T
-    raise ValueError("Each 'r' must have a dimension of size 3; got shape {}".format(A.shape))
-
-
-def _clean_lonlat_wrap(lon_deg, lat_deg, threshold=179.0):
-    """Insert NaNs at 180° crossings so lines do not jump across the map."""
-    jumps = np.where(np.abs(np.diff(lon_deg)) > threshold)[0]
-    if jumps.size == 0:
-        return lon_deg, lat_deg
-    lon_out = np.insert(lon_deg, jumps + 1, np.nan)
-    lat_out = np.insert(lat_deg, jumps + 1, np.nan)
-    return lon_out, lat_out
+    ensure_file_parent(path)
 
 
 def groundtrack_video(
@@ -97,6 +67,7 @@ def groundtrack_video(
     max_frames=2000,
     progress=True,
     mode="map",              # <<< NEW: "map" (2D lon/lat; matches your plot), "surface3d", "eci3d"
+    **save_kwargs,
 ):
     """
     Create an MP4 animation of satellite ground tracks.
@@ -119,6 +90,9 @@ def groundtrack_video(
     fps, bitrate, max_frames, progress : controls
     mode : "map" | "surface3d" | "eci3d"
     """
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "groundtrack_video")
+
     if not save_path or not str(save_path).lower().endswith(".mp4"):
         raise ValueError("Please provide save_path ending with '.mp4'.")
 
