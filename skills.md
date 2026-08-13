@@ -112,6 +112,15 @@ wait/phase before each post-stage leg, and `stage_mode="best"` to compare direct
 versus staged routes. The default `n_stage_stops=1` searches one intermediate
 staging orbit; increase `n_stage_stops` with a bounded `stage_beam_width` for
 multi-stop searches.
+For broad transfer-design requests, prefer the structured `transfer_optimal`
+schema over long flat argument lists. Use `problem={"boundary": ..., "objective":
+..., "constraints": ..., "route": ..., "solver": ...}` when the user gives
+multiple boundary conditions, burn objectives, route preferences, or solver
+limits. Key aliases are intentionally user-friendly: `arrival_mode` accepts
+`"rendezvous"`, `"intercept"`, or `"insertion"`; `route` accepts `"direct"`,
+`"immediate"`, `"multi_stage"`, or `"best"`; `timing="optimized"` maps to the
+timed staged search. Structured results include
+`diagnostics["problem_schema"] == "ssatk.transfer_problem.v1"`.
 The user-facing maneuver gallery is consolidated in
 `demos/demo_orbital_maneuvers.py`, including staged optimal geometry, burn
 timeline figures, and elliptical GEO-or-below direct-vs-staged comparisons.

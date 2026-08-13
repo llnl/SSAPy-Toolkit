@@ -22,6 +22,7 @@ delta-v vs time-of-flight Pareto front) saved via
 """
 
 import warnings
+from collections.abc import Mapping
 
 import numpy as np
 
@@ -135,6 +136,63 @@ _STAGE_TIMING_ALIASES = {
     "phased": "timed",
 }
 
+_ARRIVAL_MODE_ALIASES = {
+    "rendezvous": "rendezvous",
+    "match": "rendezvous",
+    "match_state": "rendezvous",
+    "match_velocity": "rendezvous",
+    "intercept": "intercept",
+    "flyby": "intercept",
+    "position": "intercept",
+    "position_only": "intercept",
+    "no_arrival_burn": "intercept",
+    "insertion": "insertion",
+    "orbit_insertion": "insertion",
+    "target_orbit": "insertion",
+    "free_phase": "insertion",
+}
+
+_ROUTE_MODE_ALIASES = {
+    **_STAGE_MODE_ALIASES,
+    "stage": "timed",
+    "stages": "timed",
+    "multi": "timed",
+    "multi_leg": "timed",
+    "multi_stop": "timed",
+    "multi_stop_stage": "timed",
+    "multi_stop_staged": "timed",
+}
+
+_MINIMIZE_ALIASES = {
+    **_OBJECTIVE_ALIASES,
+    "fuel": "min_dv",
+    "propellant": "min_dv",
+    "mass": "min_dv",
+    "first_burn": "first",
+    "departure_burn": "first",
+    "depart_burn": "first",
+    "last_burn": "last",
+    "arrival_burn": "last",
+    "insertion_burn": "last",
+}
+
+_BOUNDARY_STATE_ALIASES = {
+    "initial": ("initial", "departure", "start", "from", "orbit1", "state1", "initial_state"),
+    "target": ("target", "arrival", "final", "to", "orbit2", "state2", "target_state"),
+}
+
+_TRANSFER_KWARG_KEYS = {
+    "propagate",
+    "refine",
+    "samples",
+    "tol",
+    "max_iter",
+    "prograde",
+    "dv_budget",
+}
+
+_TRANSFER_PROBLEM_SCHEMA = "ssatk.transfer_problem.v1"
+
 
 def _normalize_keyword(value, aliases, name):
     key = str(value).strip().lower().replace("-", "_").replace(" ", "_")
@@ -143,6 +201,270 @@ def _normalize_keyword(value, aliases, name):
     except KeyError as exc:
         valid = ", ".join(sorted(set(aliases.values())))
         raise ValueError(f"{name} must be one of: {valid}") from exc
+
+
+def _mapping(value, name):
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise TypeError(f"{name} must be a mapping/dict")
+    return dict(value)
+
+
+def _take(mapping, *names, default=None):
+    for name in names:
+        if name in mapping:
+            return mapping[name]
+    return default
+
+
+def _update_if_present(overrides, mapping, target, *names):
+    value = _take(mapping, *names, default=None)
+    if value is not None:
+        overrides[target] = value
+
+
+def _normalize_time_window(value, name):
+    if value is None:
+        return None
+    if len(value) != 2:
+        raise ValueError(f"{name} must be a two-value time window")
+    return (_to_gps_seconds(value[0]), _to_gps_seconds(value[1]))
+
+
+def _apply_arrival_mode(overrides, value):
+    mode = _normalize_keyword(value, _ARRIVAL_MODE_ALIASES, "arrival_mode")
+    if mode == "rendezvous":
+        overrides.update(rendezvous=True, arrival_burn=True)
+    elif mode == "intercept":
+        overrides.update(rendezvous=True, arrival_burn=False)
+    elif mode == "insertion":
+        overrides.update(rendezvous=False, arrival_burn=True)
+    overrides["arrival_mode"] = mode
+
+
+def _parse_objective_section(section):
+    overrides = {}
+    section = _mapping(section, "objective")
+    minimize = _take(section, "minimize", "objective", "mode", "cost", "goal")
+    if minimize is not None:
+        normalized = _normalize_keyword(minimize, _MINIMIZE_ALIASES, "objective.minimize")
+        if normalized in ("first", "last"):
+            overrides["objective"] = "min_dv"
+            overrides["delta_v_mode"] = normalized
+        else:
+            overrides["objective"] = normalized
+    _update_if_present(overrides, section, "delta_v_mode", "delta_v_mode", "dv_mode", "burn", "burn_mode")
+    _update_if_present(overrides, section, "dv_budget", "dv_budget", "delta_v_budget", "budget")
+    return overrides
+
+
+def _parse_boundary_section(section):
+    overrides = {}
+    section = _mapping(section, "boundary")
+    for target, aliases in _BOUNDARY_STATE_ALIASES.items():
+        value = _take(section, *aliases)
+        if value is not None:
+            overrides[target] = value
+    for key in ("r1", "v1", "r2", "v2", "t1", "t2"):
+        _update_if_present(overrides, section, key, key)
+    _update_if_present(overrides, section, "departure_mode", "departure_mode", "leave", "depart")
+    _update_if_present(overrides, section, "leave_now", "leave_now")
+    _update_if_present(overrides, section, "t_window", "departure_window", "departure_time_window", "t_window", "time_window")
+    _update_if_present(overrides, section, "tof_range", "tof_range", "time_of_flight_range", "tof_window")
+    _update_if_present(overrides, section, "arrival_window", "arrival_window", "arrival_time_window")
+    arrival_mode = _take(section, "arrival_mode", "mode")
+    if arrival_mode is not None:
+        _apply_arrival_mode(overrides, arrival_mode)
+    _update_if_present(overrides, section, "rendezvous", "rendezvous")
+    _update_if_present(overrides, section, "arrival_burn", "arrival_burn")
+    return overrides
+
+
+def _parse_constraints_section(section):
+    overrides = {}
+    section = _mapping(section, "constraints")
+    _update_if_present(overrides, section, "tof_range", "tof_range", "time_of_flight_range", "tof_window")
+    _update_if_present(overrides, section, "t_window", "departure_window", "departure_time_window", "t_window")
+    _update_if_present(overrides, section, "arrival_window", "arrival_window", "arrival_time_window")
+    _update_if_present(overrides, section, "dv_budget", "dv_budget", "delta_v_budget", "budget")
+    _update_if_present(overrides, section, "max_burns", "max_burns", "burn_limit")
+    if "perigee_min" in section:
+        overrides["perigee_margin"] = float(section["perigee_min"]) - EARTH_RADIUS
+    for key in ("perigee_radius_min", "min_perigee_radius"):
+        if key in section:
+            overrides["perigee_margin"] = float(section[key]) - EARTH_RADIUS
+    _update_if_present(overrides, section, "perigee_margin", "perigee_margin")
+    _update_if_present(overrides, section, "perigee_margin", "perigee_altitude_min", "min_perigee_altitude")
+    for key in ("burn_duration", "burn_accel", "thrust", "mass", "isp", "accel", "propagator"):
+        _update_if_present(overrides, section, key, key)
+    return overrides
+
+
+def _parse_route_section(section):
+    overrides = {}
+    if section is None:
+        return overrides
+    if not isinstance(section, Mapping):
+        overrides["stage_mode"] = _normalize_keyword(section, _ROUTE_MODE_ALIASES, "route")
+        return overrides
+    section = dict(section)
+    mode = _take(section, "mode", "route", "type")
+    if mode is not None:
+        overrides["stage_mode"] = _normalize_keyword(mode, _ROUTE_MODE_ALIASES, "route.mode")
+    timing = _take(section, "timing", "stage_timing", "wait", "wait_mode")
+    if timing is not None:
+        overrides["stage_timing"] = _normalize_keyword(timing, _STAGE_TIMING_ALIASES, "route.timing")
+    _update_if_present(overrides, section, "n_stage_stops", "n_stage_stops", "stage_stops", "stops", "n_stops")
+    _update_if_present(overrides, section, "stage_beam_width", "stage_beam_width", "beam_width")
+    _update_if_present(overrides, section, "stage_wait_window", "stage_wait_window", "wait_window")
+    _update_if_present(overrides, section, "stage_tof_range", "stage_tof_range", "leg_tof_range", "leg_time_of_flight_range")
+    stage_candidates = _mapping(_take(section, "stage_candidates", "candidates", default={}), "route.stage_candidates")
+    _update_if_present(overrides, stage_candidates, "stage_radii", "radii", "stage_radii")
+    _update_if_present(overrides, stage_candidates, "stage_plane_fractions", "plane_fractions", "stage_plane_fractions")
+    _update_if_present(overrides, stage_candidates, "n_stage_phase", "phase_count", "n_phase", "n_stage_phase")
+    _update_if_present(overrides, section, "stage_radii", "stage_radii")
+    _update_if_present(overrides, section, "stage_plane_fractions", "stage_plane_fractions")
+    _update_if_present(overrides, section, "n_stage_phase", "phase_count", "n_stage_phase")
+    return overrides
+
+
+def _parse_solver_section(section):
+    overrides = {}
+    transfer_kwargs = {}
+    section = _mapping(section, "solver")
+    for key in ("n_grid", "n_phase", "polish", "visualize", "fig_prefix", "burn_duration", "burn_accel", "thrust", "mass", "isp"):
+        _update_if_present(overrides, section, key, key)
+    for key in _TRANSFER_KWARG_KEYS:
+        if key in section:
+            transfer_kwargs[key] = section[key]
+    if transfer_kwargs:
+        overrides["transfer_kwargs"] = transfer_kwargs
+    return overrides
+
+
+def _structured_problem_overrides(*, problem=None, boundary=None, objective=None, constraints=None, route=None, solver=None):
+    problem_map = _mapping(problem, "problem") if problem is not None else {}
+    overrides = {}
+    used = bool(problem_map or boundary is not None or isinstance(objective, Mapping) or constraints is not None or route is not None or solver is not None)
+
+    boundary_section = {}
+    boundary_section.update(_mapping(problem_map.get("boundary"), "problem.boundary") if problem_map.get("boundary") is not None else {})
+    for key in ("initial", "departure", "start", "from", "orbit1", "target", "arrival", "final", "to", "orbit2", "r1", "v1", "r2", "v2", "t1", "t2", "departure_mode", "arrival_mode", "tof_range", "t_window", "departure_window", "arrival_window"):
+        if key in problem_map:
+            boundary_section[key] = problem_map[key]
+    boundary_section.update(_mapping(boundary, "boundary"))
+    overrides.update(_parse_boundary_section(boundary_section))
+
+    objective_section = {}
+    if problem_map.get("objective") is not None:
+        objective_section.update(_mapping(problem_map.get("objective"), "problem.objective"))
+    elif any(key in problem_map for key in ("minimize", "cost", "goal")):
+        for key in ("minimize", "cost", "goal", "delta_v_mode", "dv_budget"):
+            if key in problem_map:
+                objective_section[key] = problem_map[key]
+    if isinstance(objective, Mapping):
+        objective_section.update(objective)
+    overrides.update(_parse_objective_section(objective_section))
+
+    constraints_section = {}
+    if problem_map.get("constraints") is not None:
+        constraints_section.update(_mapping(problem_map.get("constraints"), "problem.constraints"))
+    constraints_section.update(_mapping(constraints, "constraints"))
+    overrides.update(_parse_constraints_section(constraints_section))
+
+    route_section = problem_map.get("route", None)
+    if route is not None:
+        if isinstance(route_section, Mapping) and isinstance(route, Mapping):
+            merged_route = dict(route_section)
+            merged_route.update(route)
+            route_section = merged_route
+        else:
+            route_section = route
+    overrides.update(_parse_route_section(route_section))
+
+    solver_section = {}
+    if problem_map.get("solver") is not None:
+        solver_section.update(_mapping(problem_map.get("solver"), "problem.solver"))
+    solver_section.update(_mapping(solver, "solver"))
+    solver_overrides = _parse_solver_section(solver_section)
+    transfer_kwargs = dict(overrides.pop("transfer_kwargs", {}))
+    transfer_kwargs.update(solver_overrides.pop("transfer_kwargs", {}))
+    overrides.update(solver_overrides)
+    if transfer_kwargs:
+        overrides["transfer_kwargs"] = transfer_kwargs
+    return overrides, used
+
+
+def _set_state_override(current, overrides, name):
+    if name not in overrides:
+        return current
+    value = overrides.pop(name)
+    if current is not None:
+        raise TypeError(f"Specify {name} either directly or through boundary/problem, not both")
+    return value
+
+
+def _structured_diagnostics(*, arrival_mode, objective, delta_v_mode, stage_mode,
+                            stage_timing, departure_mode, t_window, tof_range,
+                            arrival_window, dv_budget, perigee_margin, max_burns):
+    diagnostics = {
+        "problem_schema": _TRANSFER_PROBLEM_SCHEMA,
+        "arrival_mode": arrival_mode,
+        "route_mode": stage_mode,
+        "objective_spec": {
+            "objective": objective,
+            "delta_v_mode": delta_v_mode,
+        },
+        "boundary_spec": {
+            "departure_mode": departure_mode,
+            "departure_window": t_window,
+            "time_of_flight_range": tof_range,
+            "arrival_window": arrival_window,
+        },
+        "constraint_spec": {
+            "delta_v_budget": dv_budget,
+            "perigee_margin": perigee_margin,
+            "max_burns": max_burns,
+        },
+    }
+    if stage_timing is not None:
+        diagnostics["route_timing"] = stage_timing
+    return diagnostics
+
+
+def _arrival_mode_from_flags(rendezvous, arrival_burn):
+    if rendezvous and arrival_burn:
+        return "rendezvous"
+    if rendezvous and not arrival_burn:
+        return "intercept"
+    return "insertion"
+
+
+def _apply_structured_diagnostics(result, diagnostics):
+    result["diagnostics"] = dict(result.get("diagnostics", {}))
+    result["diagnostics"].update(diagnostics)
+    return result
+
+
+def _validate_max_burns(max_burns, *, stage_mode, n_stage_stops, arrival_burn):
+    if max_burns is None:
+        return None
+    max_burns = int(max_burns)
+    final_leg_burns = 2 if arrival_burn else 1
+    if max_burns < final_leg_burns:
+        raise ValueError(
+            "max_burns is too small for the requested arrival mode "
+            f"(minimum {final_leg_burns})"
+        )
+    if stage_mode != "direct":
+        required = 2 * int(n_stage_stops) + final_leg_burns
+        if required > max_burns and stage_mode != "best":
+            raise ValueError(
+                f"stage_mode='{stage_mode}' with n_stage_stops={n_stage_stops} "
+                f"requires up to {required} burns, exceeding max_burns={max_burns}"
+            )
+    return max_burns
 
 
 def _delta_v_metric(delta_v1, delta_v2, mode, arrival_burn=True):
@@ -439,7 +761,12 @@ def transfer_optimal(
     v2=None,
     t1=0.0,
     t2=None,
+    problem=None,
+    boundary=None,
     objective="min_dv",
+    constraints=None,
+    route=None,
+    solver=None,
     delta_v_mode="total",
     departure_mode="optimize",
     leave_now=None,
@@ -456,10 +783,12 @@ def transfer_optimal(
     arrival_burn=True,
     t_window=None,
     tof_range=None,
+    arrival_window=None,
     n_grid=(32, 32),
     n_phase=24,
     dv_budget=None,
     perigee_margin=100e3,
+    max_burns=None,
     polish=True,
     visualize=False,
     fig_prefix="demo_gallery/figures/transfer_optimal",
@@ -485,6 +814,14 @@ def transfer_optimal(
         ``transfer_optimal(r1, v1, r2, v2, ...)`` is accepted.  These vectors
         define the osculating departure and target orbits; the optimizer still
         searches departure time, time of flight, and optionally target phase.
+    problem, boundary, objective, constraints, route, solver : mapping, optional
+        Structured transfer-problem interface.  ``problem`` may contain
+        ``boundary`` (initial/target states, departure/arrival modes),
+        ``objective`` (``minimize`` and burn cost), ``constraints`` (time,
+        delta-v, perigee, burn-count, and engine limits), ``route`` (direct,
+        immediate staged, timed/multi-stage, or best), and ``solver`` (grid,
+        polish, propagation/refinement options).  Separate section keywords
+        override matching sections inside ``problem``.
     objective : {"min_dv", "min_time"}
         ``min_dv`` (default) minimizes the objective delta-v within the
         allowed windows.  ``min_time`` minimizes time of flight among
@@ -536,6 +873,9 @@ def transfer_optimal(
     tof_range : (float, float), optional
         Allowed time-of-flight span [s].  Default: 2% to 150% of the
         larger orbital period.
+    arrival_window : (float, float), optional
+        Optional allowed final-arrival epoch span [GPS s].  Candidates outside
+        this window are rejected.
     n_grid : (int, int)
         Porkchop grid resolution (departure x time-of-flight).
     n_phase : int
@@ -546,6 +886,10 @@ def transfer_optimal(
     perigee_margin : float
         Candidates whose transfer conic dips below
         ``EARTH_RADIUS + perigee_margin`` are rejected [m].
+    max_burns : int, optional
+        Upper bound on the planned burn count.  Direct rendezvous uses two
+        burns, intercept uses one burn, and each explicit staging stop adds up
+        to two burns.
     polish : bool
         Refine the best grid cell with a Nelder-Mead local search over
         the continuous variables.
@@ -614,17 +958,101 @@ def transfer_optimal(
                 delta_v_mode = args[3]
             args = args[:2]
 
+    structured_overrides, structured_used = _structured_problem_overrides(
+        problem=problem,
+        boundary=boundary,
+        objective=objective if isinstance(objective, Mapping) else None,
+        constraints=constraints,
+        route=route,
+        solver=solver,
+    )
+    initial = _set_state_override(initial, structured_overrides, "initial")
+    target = _set_state_override(target, structured_overrides, "target")
+    r1 = _set_state_override(r1, structured_overrides, "r1")
+    v1 = _set_state_override(v1, structured_overrides, "v1")
+    r2 = _set_state_override(r2, structured_overrides, "r2")
+    v2 = _set_state_override(v2, structured_overrides, "v2")
+    t1 = structured_overrides.pop("t1", t1)
+    t2 = structured_overrides.pop("t2", t2)
+    objective = structured_overrides.pop("objective", objective)
+    delta_v_mode = structured_overrides.pop("delta_v_mode", delta_v_mode)
+    departure_mode = structured_overrides.pop("departure_mode", departure_mode)
+    leave_now = structured_overrides.pop("leave_now", leave_now)
+    stage_mode = structured_overrides.pop("stage_mode", stage_mode)
+    stage_radii = structured_overrides.pop("stage_radii", stage_radii)
+    stage_plane_fractions = structured_overrides.pop("stage_plane_fractions", stage_plane_fractions)
+    n_stage_phase = structured_overrides.pop("n_stage_phase", n_stage_phase)
+    n_stage_stops = structured_overrides.pop("n_stage_stops", n_stage_stops)
+    stage_beam_width = structured_overrides.pop("stage_beam_width", stage_beam_width)
+    stage_timing = structured_overrides.pop("stage_timing", stage_timing)
+    stage_wait_window = structured_overrides.pop("stage_wait_window", stage_wait_window)
+    stage_tof_range = structured_overrides.pop("stage_tof_range", stage_tof_range)
+    rendezvous = structured_overrides.pop("rendezvous", rendezvous)
+    arrival_burn = structured_overrides.pop("arrival_burn", arrival_burn)
+    arrival_mode = structured_overrides.pop("arrival_mode", None)
+    t_window = structured_overrides.pop("t_window", t_window)
+    tof_range = structured_overrides.pop("tof_range", tof_range)
+    arrival_window = structured_overrides.pop("arrival_window", arrival_window)
+    n_grid = structured_overrides.pop("n_grid", n_grid)
+    n_phase = structured_overrides.pop("n_phase", n_phase)
+    dv_budget = structured_overrides.pop("dv_budget", dv_budget)
+    perigee_margin = structured_overrides.pop("perigee_margin", perigee_margin)
+    max_burns = structured_overrides.pop("max_burns", max_burns)
+    polish = structured_overrides.pop("polish", polish)
+    visualize = structured_overrides.pop("visualize", visualize)
+    fig_prefix = structured_overrides.pop("fig_prefix", fig_prefix)
+    accel = structured_overrides.pop("accel", accel)
+    propagator = structured_overrides.pop("propagator", propagator)
+    burn_duration = structured_overrides.pop("burn_duration", burn_duration)
+    burn_accel = structured_overrides.pop("burn_accel", burn_accel)
+    thrust = structured_overrides.pop("thrust", thrust)
+    mass = structured_overrides.pop("mass", mass)
+    isp = structured_overrides.pop("isp", isp)
+    structured_transfer_kwargs = structured_overrides.pop("transfer_kwargs", {})
+    if structured_overrides:
+        raise RuntimeError(f"Unhandled structured transfer fields: {sorted(structured_overrides)}")
+    merged_transfer_kwargs = dict(structured_transfer_kwargs)
+    merged_transfer_kwargs.update(transfer_kwargs)
+    transfer_kwargs = merged_transfer_kwargs
+    if isinstance(objective, Mapping):
+        objective = "min_dv"
+
     objective = _normalize_keyword(objective, _OBJECTIVE_ALIASES, "objective")
     delta_v_mode = _normalize_keyword(delta_v_mode, _DELTA_V_MODE_ALIASES, "delta_v_mode")
     if leave_now is not None:
         departure_mode = "now" if leave_now else "optimize"
     departure_mode = _normalize_keyword(departure_mode, _DEPARTURE_MODE_ALIASES, "departure_mode")
     stage_mode = _normalize_keyword(stage_mode, _STAGE_MODE_ALIASES, "stage_mode")
+    max_burns = _validate_max_burns(
+        max_burns,
+        stage_mode=stage_mode,
+        n_stage_stops=n_stage_stops,
+        arrival_burn=arrival_burn,
+    )
+    if arrival_mode is None:
+        arrival_mode = _arrival_mode_from_flags(rendezvous, arrival_burn)
     if delta_v_mode == "last" and not arrival_burn:
         raise ValueError("delta_v_mode='last' requires arrival_burn=True")
 
+    structured_diag = None
+    if structured_used:
+        structured_diag = _structured_diagnostics(
+            arrival_mode=arrival_mode,
+            objective=objective,
+            delta_v_mode=delta_v_mode,
+            stage_mode=stage_mode,
+            stage_timing=stage_timing,
+            departure_mode=departure_mode,
+            t_window=t_window,
+            tof_range=tof_range,
+            arrival_window=arrival_window,
+            dv_budget=dv_budget,
+            perigee_margin=perigee_margin,
+            max_burns=max_burns,
+        )
+
     if stage_mode != "direct":
-        return _transfer_optimal_staged(
+        result = _transfer_optimal_staged(
             *args,
             orbit1=orbit1,
             orbit2=orbit2,
@@ -652,10 +1080,12 @@ def transfer_optimal(
             arrival_burn=arrival_burn,
             t_window=t_window,
             tof_range=tof_range,
+            arrival_window=arrival_window,
             n_grid=n_grid,
             n_phase=n_phase,
             dv_budget=dv_budget,
             perigee_margin=perigee_margin,
+            max_burns=max_burns,
             polish=polish,
             visualize=visualize,
             fig_prefix=fig_prefix,
@@ -668,6 +1098,9 @@ def transfer_optimal(
             isp=isp,
             **transfer_kwargs,
         )
+        if structured_diag is not None:
+            _apply_structured_diagnostics(result, structured_diag)
+        return result
 
     mu = EARTH_MU
     departure_state, arrival_state = transfer_boundary_states(
@@ -706,6 +1139,7 @@ def transfer_optimal(
     t_window = (_to_gps_seconds(t_window[0]), _to_gps_seconds(t_window[1]))
     if tof_range is None:
         tof_range = (0.02 * max(p1, p2), 1.5 * max(p1, p2))
+    arrival_window = _normalize_time_window(arrival_window, "arrival_window")
 
     n_dep, n_tof = n_grid
     if departure_mode == "now":
@@ -760,6 +1194,12 @@ def transfer_optimal(
                 best, best_sense = (c, dv1, dv2), sense
         return best, best_sense
 
+    def arrival_in_window(t_depart, tof_seconds):
+        if arrival_window is None:
+            return True
+        t_arrive = float(t_depart) + float(tof_seconds)
+        return arrival_window[0] <= t_arrive <= arrival_window[1]
+
     # --- porkchop grid ---------------------------------------------------
     if rendezvous:
         cost = np.full((n_dep, n_tof), np.nan)
@@ -768,6 +1208,8 @@ def transfer_optimal(
         sense_grid = np.ones((n_dep, n_tof), dtype=bool)
         for i in range(n_dep):
             for j in range(n_tof):
+                if not arrival_in_window(t_deps[i], tofs[j]):
+                    continue
                 (cost[i, j], dv1g[i, j], dv2g[i, j]), sense_grid[i, j] = \
                     candidate_cost(dep_r[i], dep_v[i],
                                    arr_r[i, j], arr_v[i, j], tofs[j])
@@ -781,6 +1223,8 @@ def transfer_optimal(
         sense3 = np.ones((n_dep, n_tof, n_phase), dtype=bool)
         for i in range(n_dep):
             for j in range(n_tof):
+                if not arrival_in_window(t_deps[i], tofs[j]):
+                    continue
                 for k in range(n_phase):
                     (cost3[i, j, k], dv1g3[i, j, k], dv2g3[i, j, k]), \
                         sense3[i, j, k] = candidate_cost(
@@ -798,6 +1242,7 @@ def transfer_optimal(
             "No feasible transfer found on the search grid: every "
             "candidate either lacked a zero-revolution Lambert solution, "
             "dipped its transfer conic below the perigee margin"
+            + (", fell outside arrival_window" if arrival_window is not None else "")
             + (", or could not fit the hardware-sized burns (accel "
                f"{a_burn:.4f} m/s^2) into a third of the time of flight"
                if a_burn is not None else "")
@@ -833,6 +1278,8 @@ def transfer_optimal(
 
         # --- continuous polish (Nelder-Mead) ---------------------------------
         def eval_point(t_dep, tof, phase=None):
+            if not arrival_in_window(t_dep, tof):
+                return np.nan, True, (None, None, None, None)
             (r1,), (v1,) = _ephemeris(o1, [t_dep])
             if rendezvous:
                 (r2,), (v2,) = _ephemeris(o2, [t_dep + tof])
@@ -930,6 +1377,7 @@ def transfer_optimal(
         prograde=bool(sense),
         t_depart=t_dep,
         t_arrive=t_dep + tof,
+        arrival_window=arrival_window,
         perigee_altitude=perigee_altitude,
         dv_budget=dv_budget,
         within_delta_v_budget=(None if dv_budget is None else bool(objective_delta_v <= dv_budget)),
@@ -939,6 +1387,8 @@ def transfer_optimal(
         pareto=dict(tof=tofs, dv=pareto_dv,
                     dv1=pareto_dv1, dv2=pareto_dv2),
     )
+    if structured_diag is not None:
+        _apply_structured_diagnostics(standard, structured_diag)
 
     if visualize:
         from ssapy_toolkit.plots.transfer_designer_curves_plot import (
@@ -976,10 +1426,12 @@ def _transfer_optimal_staged(
     arrival_burn=True,
     t_window=None,
     tof_range=None,
+    arrival_window=None,
     n_grid=(32, 32),
     n_phase=24,
     dv_budget=None,
     perigee_margin=100e3,
+    max_burns=None,
     polish=True,
     visualize=False,
     fig_prefix="demo_gallery/figures/transfer_optimal",
@@ -1047,10 +1499,12 @@ def _transfer_optimal_staged(
             arrival_burn=arrival_burn,
             t_window=t_window,
             tof_range=tof_range,
+            arrival_window=arrival_window,
             n_grid=n_grid,
             n_phase=n_phase,
             dv_budget=dv_budget,
             perigee_margin=perigee_margin,
+            max_burns=max_burns,
             polish=polish,
             visualize=False,
             fig_prefix=fig_prefix,
@@ -1064,6 +1518,19 @@ def _transfer_optimal_staged(
             stage_mode="direct",
             **transfer_kwargs,
         )
+        required_staged_burns = 2 * int(n_stage_stops) + (2 if arrival_burn else 1)
+        if max_burns is not None and required_staged_burns > max_burns:
+            direct_result = dict(direct_result)
+            direct_result["diagnostics"] = dict(direct_result.get("diagnostics", {}))
+            direct_result["diagnostics"].update(
+                stage_mode="best",
+                selected_stage_mode="direct",
+                staged_search_skipped=True,
+                staged_skip_reason="max_burns",
+                staged_required_burns=required_staged_burns,
+                max_burns=max_burns,
+            )
+            return direct_result
 
     best = None
     best_key = None
@@ -1087,7 +1554,9 @@ def _transfer_optimal_staged(
         }
     ]
 
-    def run_leg(departure_state, arrival_state, *, leg_delta_v_mode, leg_departure_mode, leg_t_window, leg_rendezvous, leg_arrival_burn):
+    def run_leg(departure_state, arrival_state, *, leg_delta_v_mode,
+                leg_departure_mode, leg_t_window, leg_rendezvous,
+                leg_arrival_burn, leg_arrival_window=None):
         return transfer_optimal(
             departure_state,
             arrival_state,
@@ -1098,6 +1567,7 @@ def _transfer_optimal_staged(
             arrival_burn=leg_arrival_burn,
             t_window=leg_t_window,
             tof_range=leg_tof_range,
+            arrival_window=leg_arrival_window,
             n_grid=n_grid,
             n_phase=n_phase,
             perigee_margin=perigee_margin,
@@ -1177,6 +1647,7 @@ def _transfer_optimal_staged(
                 leg_t_window=final_t_window,
                 leg_rendezvous=rendezvous,
                 leg_arrival_burn=arrival_burn,
+                leg_arrival_window=arrival_window,
             )
             stage_summary = {
                 "stops": partial["stage_infos"],

@@ -124,6 +124,41 @@ the direct and staged routes. Timed staging allows each post-stage leg to wait
 for an appropriate phase instead of leaving the staging orbit immediately. The
 default `n_stage_stops=1` searches one intermediate staging orbit; increase
 `n_stage_stops` and set `stage_beam_width` for bounded multi-stop searches.
+For larger design trades, `transfer_optimal` also accepts a structured
+`problem={...}` schema that groups boundary conditions, objective, constraints,
+route, and solver controls in one call:
+
+```
+from ssapy_toolkit.orbital_mechanics import transfer_optimal
+
+result = transfer_optimal(
+    problem={
+        "boundary": {
+            "initial": orbit1,              # or r1/v1/r2/v2 at top level
+            "target": orbit2,
+            "departure_mode": "leave now", # or "leave whenever"
+            "arrival_mode": "rendezvous",  # "intercept" or "insertion"
+        },
+        "objective": {"minimize": "delta_v", "delta_v_mode": "total"},
+        "constraints": {
+            "tof_range": (1800.0, 86400.0),
+            "dv_budget": None,
+            "perigee_altitude_min": 100e3,
+            "max_burns": 4,
+        },
+        "route": {
+            "mode": "multi_stage",         # direct, immediate, multi_stage, best
+            "timing": "optimized",         # immediate or optimized/timed
+            "n_stage_stops": 1,
+            "stage_candidates": {"radii": [20_000e3, 40_000e3]},
+        },
+        "solver": {"n_grid": (8, 8), "polish": False, "refine": False},
+    },
+)
+```
+
+The result diagnostics include `problem_schema="ssatk.transfer_problem.v1"`
+when the structured interface is used.
 
 `orbit_plot` is the main entry point for in-space trajectory plots. It keeps the
 legacy four-panel orbit view by default, and also accepts compact selectors for

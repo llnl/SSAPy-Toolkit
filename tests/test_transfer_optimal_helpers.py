@@ -55,6 +55,59 @@ def test_transfer_optimal_early_validation_branches():
         tof.transfer_optimal(dep, arr, delta_v_mode="last", arrival_burn=False, n_grid=(2, 2), polish=False)
 
 
+def test_structured_problem_parser_aliases_and_limits():
+    overrides, used = tof._structured_problem_overrides(
+        problem={
+            "boundary": {
+                "leave_now": True,
+                "arrival_mode": "orbit insertion",
+                "tof_window": (10.0, 20.0),
+            },
+            "objective": {"minimize": "arrival burn"},
+            "constraints": {
+                "min_perigee_altitude": 250e3,
+                "max_burns": 6,
+            },
+            "route": {
+                "mode": "multi stage",
+                "timing": "optimized",
+                "stage_candidates": {
+                    "radii": [8000e3],
+                    "plane_fractions": [0.0, 1.0],
+                    "phase_count": 3,
+                },
+            },
+            "solver": {"n_grid": (2, 3), "refine": False},
+        },
+    )
+
+    assert used is True
+    assert overrides["leave_now"] is True
+    assert overrides["rendezvous"] is False
+    assert overrides["arrival_burn"] is True
+    assert overrides["arrival_mode"] == "insertion"
+    assert overrides["objective"] == "min_dv"
+    assert overrides["delta_v_mode"] == "last"
+    assert overrides["stage_mode"] == "timed"
+    assert overrides["stage_timing"] == "timed"
+    assert overrides["stage_radii"] == [8000e3]
+    assert overrides["stage_plane_fractions"] == [0.0, 1.0]
+    assert overrides["n_stage_phase"] == 3
+    assert overrides["perigee_margin"] == pytest.approx(250e3)
+    assert overrides["max_burns"] == 6
+    assert overrides["n_grid"] == (2, 3)
+    assert overrides["transfer_kwargs"] == {"refine": False}
+
+    with pytest.raises(TypeError, match="mapping"):
+        tof._structured_problem_overrides(problem={"constraints": 5})
+
+    with pytest.raises(ValueError, match="max_burns"):
+        tof.transfer_optimal(
+            route={"mode": "multi_stage", "n_stage_stops": 2},
+            constraints={"max_burns": 4},
+        )
+
+
 class FakeOrbit:
     def __init__(self, r, v, t=0.0, mu=EARTH_MU):
         self.r = np.asarray(r, dtype=float)
@@ -92,7 +145,11 @@ def _install_fast_optimal_fakes(monkeypatch, dv=10.0, dv1=None, dv2=0.0):
         arrival_burn = kwargs.get("arrival_burn", True)
         magnitudes = [dv1] + ([dv2] if arrival_burn else [])
         burns = [
-            {"delta_v_mag": value, "delta_v": np.array([value, 0.0, 0.0])}
+            {
+                "delta_v_mag": value,
+                "delta_v": np.array([value, 0.0, 0.0]),
+                "delta_v_ntw": np.array([value, 0.0, 0.0]),
+            }
             for value in magnitudes
         ]
         return {
@@ -150,6 +207,139 @@ def test_transfer_optimal_rendezvous_and_visualization(monkeypatch, tmp_path):
     assert result["diagnostics"]["grid"]["cost"].shape == (2, 3)
     assert result["diagnostics"]["pareto"]["dv"].shape == (3,)
     assert plotted == [str(tmp_path / "optimal") + "_designer_curves.jpg"]
+
+
+def test_transfer_optimal_structured_problem_intercept(monkeypatch):
+    _install_fast_optimal_fakes(monkeypatch, dv1=30.0, dv2=7.0)
+    dep = _state(radius=7000e3, theta=0.0, t=0.0)
+    arr = _state(radius=7200e3, theta=0.3, t=15.0)
+
+    result = tof.transfer_optimal(
+        problem={
+            "boundary": {
+                "initial": dep,
+                "target": arr,
+                "leave_now": True,
+                "arrival_mode": "intercept",
+            },
+            "objective": {"minimize": "first burn"},
+            "constraints": {
+                "tof_range": (20.0, 30.0),
+                "max_burns": 1,
+            },
+            "solver": {
+                "n_grid": (2, 2),
+                "polish": False,
+                "refine": False,
+            },
+        },
+    )
+
+    assert result["method"] == "transfer_optimal"
+    assert len(result["burns"]) == 1
+    assert result["diagnostics"]["problem_schema"] == "ssatk.transfer_problem.v1"
+    assert result["diagnostics"]["arrival_mode"] == "intercept"
+    assert result["diagnostics"]["rendezvous"] is True
+    assert result["diagnostics"]["arrival_burn"] is False
+    assert result["diagnostics"]["delta_v_mode"] == "first"
+    assert result["diagnostics"]["objective_delta_v"] == pytest.approx(30.0)
+    assert result["diagnostics"]["constraint_spec"]["max_burns"] == 1
+
+
+def test_transfer_optimal_structured_raw_vectors_and_arrival_window(monkeypatch):
+    _install_fast_optimal_fakes(monkeypatch, dv=12.0)
+    r0, v0, _ = _state(radius=7000e3, theta=0.0, t=0.0)
+    r1, v1, _ = _state(radius=7100e3, theta=0.2, t=0.0)
+
+    result = tof.transfer_optimal(
+        problem={
+            "r1": r0,
+            "v1": v0,
+            "r2": r1,
+            "v2": v1,
+            "departure_mode": "now",
+            "arrival_mode": "rendezvous",
+            "constraints": {
+                "tof_range": (25.0, 25.0),
+                "arrival_window": (24.0, 26.0),
+            },
+            "solver": {"n_grid": (1, 1), "polish": False, "refine": False},
+        },
+    )
+
+    assert result["diagnostics"]["problem_schema"] == "ssatk.transfer_problem.v1"
+    assert result["diagnostics"]["arrival_mode"] == "rendezvous"
+    assert result["diagnostics"]["t_arrive"] == pytest.approx(25.0)
+    assert result["diagnostics"]["arrival_window"] == (24.0, 26.0)
+
+    with pytest.raises(RuntimeError, match="No feasible"):
+        tof.transfer_optimal(
+            r0,
+            v0,
+            r1,
+            v1,
+            boundary={"departure_mode": "now"},
+            constraints={"tof_range": (25.0, 25.0), "arrival_window": (30.0, 40.0)},
+            solver={"n_grid": (1, 1), "polish": False, "refine": False},
+        )
+
+
+def test_transfer_optimal_structured_multi_stage_route(monkeypatch):
+    _install_fast_optimal_fakes(monkeypatch, dv1=10.0, dv2=2.0)
+    r0, v0, _ = _state(radius=7000e3, theta=0.0, t=0.0)
+    r1, v1, _ = _state(radius=7600e3, theta=0.4, t=0.0)
+
+    result = tof.transfer_optimal(
+        r0,
+        v0,
+        r1,
+        v1,
+        boundary={"departure_mode": "now", "arrival_mode": "rendezvous"},
+        constraints={"tof_range": (20.0, 30.0), "max_burns": 4},
+        route={
+            "mode": "multi_stage",
+            "timing": "optimized",
+            "n_stage_stops": 1,
+            "stage_candidates": {
+                "radii": [7300e3],
+                "plane_fractions": [0.0],
+                "phase_count": 1,
+            },
+        },
+        solver={"n_grid": (1, 1), "polish": False, "refine": False},
+    )
+
+    assert result["method"] == "transfer_optimal_staged"
+    assert result["diagnostics"]["problem_schema"] == "ssatk.transfer_problem.v1"
+    assert result["diagnostics"]["route_mode"] == "timed"
+    assert result["diagnostics"]["route_timing"] == "timed"
+    assert result["diagnostics"]["stage_mode"] == "timed"
+    assert result["diagnostics"]["stage_timing"] == "timed"
+    assert result["diagnostics"]["stage_stop_count"] == 1
+    assert result["diagnostics"]["leg_count"] == 2
+    assert len(result["burns"]) == 4
+
+
+def test_transfer_optimal_best_route_honors_max_burns_with_direct_fallback(monkeypatch):
+    _install_fast_optimal_fakes(monkeypatch, dv1=10.0, dv2=2.0)
+    dep = _state(radius=7000e3, theta=0.0, t=0.0)
+    arr = _state(radius=7600e3, theta=0.4, t=0.0)
+
+    result = tof.transfer_optimal(
+        dep,
+        arr,
+        boundary={"departure_mode": "now"},
+        constraints={"tof_range": (20.0, 30.0), "max_burns": 2},
+        route={"mode": "best", "n_stage_stops": 1},
+        solver={"n_grid": (1, 1), "polish": False, "refine": False},
+    )
+
+    assert result["method"] == "transfer_optimal"
+    assert result["diagnostics"]["stage_mode"] == "best"
+    assert result["diagnostics"]["selected_stage_mode"] == "direct"
+    assert result["diagnostics"]["staged_search_skipped"] is True
+    assert result["diagnostics"]["staged_skip_reason"] == "max_burns"
+    assert len(result["burns"]) == 2
 
 
 def test_transfer_optimal_orbit_workflow_burn_cost_modes(monkeypatch):
@@ -265,6 +455,26 @@ def test_transfer_optimal_insertion_min_time_and_polish(monkeypatch):
     assert result["diagnostics"]["arrival_phase"] is not None
     assert result["diagnostics"]["arrival_burn"] is False
     assert result["diagnostics"]["grid"]["cost"].shape == (2, 2)
+
+
+def test_transfer_optimal_structured_insertion_mode(monkeypatch):
+    _install_fast_optimal_fakes(monkeypatch, dv=8.0)
+    dep = _state(radius=7000e3, theta=0.0, t=0.0)
+    arr = _state(radius=7200e3, theta=0.3, t=15.0)
+
+    result = tof.transfer_optimal(
+        dep,
+        arr,
+        boundary={"arrival_mode": "target orbit"},
+        constraints={"departure_window": (0.0, 10.0), "tof_range": (10.0, 30.0)},
+        solver={"n_grid": (2, 2), "n_phase": 3, "polish": False, "refine": False},
+    )
+
+    assert result["diagnostics"]["problem_schema"] == "ssatk.transfer_problem.v1"
+    assert result["diagnostics"]["arrival_mode"] == "insertion"
+    assert result["diagnostics"]["rendezvous"] is False
+    assert result["diagnostics"]["arrival_burn"] is True
+    assert result["diagnostics"]["arrival_phase"] is not None
 
 
 def test_transfer_optimal_no_feasible_and_budget_branches(monkeypatch):
