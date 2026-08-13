@@ -83,6 +83,73 @@ def _period_from_rpra(rp, ra):
     return 2.0 * np.pi * np.sqrt(semimajor_axis**3 / EARTH_MU)
 
 
+def _inclined_hohmann_result(r1, r2, inclination, split_inclination, *, samples=240, label="inclined_hohmann"):
+    transfer_semimajor = 0.5 * (r1 + r2)
+    transfer_eccentricity = (r2 - r1) / (r1 + r2)
+    transfer_semilatus = transfer_semimajor * (1.0 - transfer_eccentricity**2)
+    transfer_tof = np.pi * np.sqrt(transfer_semimajor**3 / EARTH_MU)
+
+    v_initial = np.sqrt(EARTH_MU / r1)
+    v_final = np.sqrt(EARTH_MU / r2)
+    v_transfer_depart = np.sqrt(EARTH_MU * (2.0 / r1 - 1.0 / transfer_semimajor))
+    v_transfer_arrive = np.sqrt(EARTH_MU * (2.0 / r2 - 1.0 / transfer_semimajor))
+
+    depart_direction = np.array([0.0, np.cos(split_inclination), np.sin(split_inclination)])
+    arrive_transfer_direction = np.array([0.0, -np.cos(split_inclination), -np.sin(split_inclination)])
+    arrive_final_direction = np.array([0.0, -np.cos(inclination), -np.sin(inclination)])
+
+    r_depart = np.array([r1, 0.0, 0.0])
+    v_depart_initial = np.array([0.0, v_initial, 0.0])
+    v_depart_transfer = v_transfer_depart * depart_direction
+    r_arrive = np.array([-r2, 0.0, 0.0])
+    v_arrive_transfer = v_transfer_arrive * arrive_transfer_direction
+    v_arrive_final = v_final * arrive_final_direction
+
+    delta_v0 = v_depart_transfer - v_depart_initial
+    delta_vf = v_arrive_final - v_arrive_transfer
+
+    true_anomaly = np.linspace(0.0, np.pi, samples)
+    transfer_radius = transfer_semilatus / (1.0 + transfer_eccentricity * np.cos(true_anomaly))
+    transfer_path = (_rotation_x(split_inclination) @ np.vstack((
+        transfer_radius * np.cos(true_anomaly),
+        transfer_radius * np.sin(true_anomaly),
+        np.zeros_like(true_anomaly),
+    ))).T
+
+    return {
+        "method": label,
+        "initial": {"r": r_depart, "v": v_depart_initial, "t": 0.0},
+        "target": {"r": r_arrive, "v": v_arrive_final, "t": transfer_tof},
+        "final": {"r": r_arrive, "v": v_arrive_final, "t": transfer_tof},
+        "trajectory": {"r": transfer_path, "t": np.linspace(0.0, transfer_tof, samples)},
+        "burns": [
+            {"state": {"r": r_depart, "v": v_depart_initial, "t": 0.0}, "delta_v": delta_v0, "delta_v_mag": float(np.linalg.norm(delta_v0))},
+            {"state": {"r": r_arrive, "v": v_arrive_transfer, "t": transfer_tof}, "delta_v": delta_vf, "delta_v_mag": float(np.linalg.norm(delta_vf))},
+        ],
+        "delta_v_magnitudes": [float(np.linalg.norm(delta_v0)), float(np.linalg.norm(delta_vf))],
+        "delta_v_total": float(np.linalg.norm(delta_v0) + np.linalg.norm(delta_vf)),
+        "tof": float(transfer_tof),
+        "diagnostics": {
+            "inclination_change": float(inclination),
+            "split_inclination": float(split_inclination),
+            "remaining_inclination": float(inclination - split_inclination),
+            "r1": float(r1),
+            "r2": float(r2),
+        },
+    }
+
+
+def _optimized_inclined_hohmann(r1, r2, inclination, *, samples=240):
+    from scipy.optimize import minimize_scalar
+
+    result = minimize_scalar(
+        lambda split: _inclined_hohmann_result(r1, r2, inclination, split, samples=32)["delta_v_total"],
+        bounds=(0.0, inclination),
+        method="bounded",
+    )
+    return _inclined_hohmann_result(r1, r2, inclination, float(result.x), samples=samples, label="inclined_hohmann_split")
+
+
 def _trajectory(result, samples=300):
     trajectory = result.get("trajectory") if isinstance(result, dict) else None
     if trajectory and trajectory.get("r") is not None:
@@ -558,6 +625,47 @@ def _build_maneuver_results(fast):
         ),
     }
 
+    split_plane_change_cases = {
+        "LEO to GEO, 28.5° plane change": {
+            "r1": 7000e3,
+            "r2": 42_164e3,
+            "inclination": np.deg2rad(28.5),
+        },
+        "LEO to MEO, 20° plane change": {
+            "r1": 7000e3,
+            "r2": 15_000e3,
+            "inclination": np.deg2rad(20.0),
+        },
+    }
+    split_plane_change = {}
+    for case_name, case in split_plane_change_cases.items():
+        samples_for_case = 96 if fast else 240
+        all_departure = _inclined_hohmann_result(
+            case["r1"],
+            case["r2"],
+            case["inclination"],
+            case["inclination"],
+            samples=samples_for_case,
+            label="inclined_hohmann_all_departure",
+        )
+        all_arrival = _inclined_hohmann_result(
+            case["r1"],
+            case["r2"],
+            case["inclination"],
+            0.0,
+            samples=samples_for_case,
+            label="inclined_hohmann_all_arrival",
+        )
+        optimized_split = _optimized_inclined_hohmann(
+            case["r1"],
+            case["r2"],
+            case["inclination"],
+            samples=samples_for_case,
+        )
+        split_plane_change[f"{case_name} all departure"] = all_departure
+        split_plane_change[f"{case_name} all arrival"] = all_arrival
+        split_plane_change[f"{case_name} split"] = optimized_split
+
     elliptical_cases = {
         "Aligned sub-GEO ellipses": {
             "initial": (7000e3, 11_000e3, 0.0, 0.0, 0.0, 0.0),
@@ -630,6 +738,7 @@ def _build_maneuver_results(fast):
         "continuous": continuous,
         "optimal": optimal,
         "staged_optimal": staged_optimal,
+        "split_plane_change": split_plane_change,
         "elliptical_two_burn": elliptical_two_burn,
         "burn_conversion": burn_conversion,
     }
@@ -813,7 +922,7 @@ def _make_elliptical_two_burn_figure(results):
         description = direct.get("case_description", "elliptical boundary orbits")
         direct_title = f"{case_name}: direct two-burn\n{_format_dv(direct)}, {_format_tof(direct)}, {description}"
         staged_title = (
-            f"{case_name}: best staged option\n"
+            f"{case_name}: lowest-Δv staged alternative\n"
             f"{_format_dv(staged)}, {_format_tof(staged)}, {_stage_savings_text(staged, direct)}"
         )
         _plot_transfer_panel(axes[row, 0], direct, direct_title, view="3d")
@@ -821,7 +930,50 @@ def _make_elliptical_two_burn_figure(results):
 
     fig.suptitle(
         "Elliptical GEO-or-below cases where direct two-burn transfers stay cheaper\n"
-        "Earth is rendered to scale. These examples have nonzero eccentricity on both boundary orbits; staging adds burns without enough timing or plane-change benefit.",
+        "Right panels show the lowest-Δv staged alternative found; its higher Δv is the reason direct two-burn is preferred.",
+        fontsize=15,
+    )
+    return fig
+
+
+def _make_split_plane_change_figure(results):
+    split_results = results["split_plane_change"]
+    case_names = [key.removesuffix(" all departure") for key in split_results if key.endswith(" all departure")]
+    fig, axes = plt.subplots(len(case_names), 3, figsize=(21, 7 * len(case_names)), constrained_layout=True, subplot_kw={"projection": "3d"})
+    axes = np.asarray(axes).reshape(len(case_names), 3)
+
+    for row, case_name in enumerate(case_names):
+        all_departure = split_results[f"{case_name} all departure"]
+        all_arrival = split_results[f"{case_name} all arrival"]
+        optimized = split_results[f"{case_name} split"]
+        inclination = np.rad2deg(optimized["diagnostics"]["inclination_change"])
+        split = np.rad2deg(optimized["diagnostics"]["split_inclination"])
+        remaining = np.rad2deg(optimized["diagnostics"]["remaining_inclination"])
+        arrival_savings = all_arrival["delta_v_total"] - optimized["delta_v_total"]
+        departure_savings = all_departure["delta_v_total"] - optimized["delta_v_total"]
+
+        _plot_transfer_panel(
+            axes[row, 0],
+            all_departure,
+            f"{case_name}\nall {inclination:.1f}° plane change in departure burn\n{_format_dv(all_departure)}, {_format_tof(all_departure)}",
+            view="3d",
+        )
+        _plot_transfer_panel(
+            axes[row, 1],
+            all_arrival,
+            f"{case_name}\nall {inclination:.1f}° plane change in arrival burn\n{_format_dv(all_arrival)}, {_format_tof(all_arrival)}",
+            view="3d",
+        )
+        _plot_transfer_panel(
+            axes[row, 2],
+            optimized,
+            f"{case_name}\nsplit plane change: {split:.1f}° + {remaining:.1f}°\n{_format_dv(optimized)}, saves {arrival_savings:.0f} m/s vs arrival-only and {departure_savings:.0f} m/s vs departure-only",
+            view="3d",
+        )
+
+    fig.suptitle(
+        "When two burns beat one concentrated large burn\n"
+        "A complete circular-to-circular radius and inclination transfer needs two burns; splitting the plane-change component can lower total Δv.",
         fontsize=15,
     )
     return fig
@@ -839,10 +991,12 @@ def main(make_figures=None, fast=None):
     staged_output_path = None
     staged_timeline_output_path = None
     elliptical_output_path = None
+    split_plane_change_output_path = None
     fig = None
     staged_fig = None
     staged_timeline_fig = None
     elliptical_fig = None
+    split_plane_change_fig = None
     if make_figures:
         fig = _make_summary_figure(results)
         output_path = figsave(fig, f"{FIGDIR}/orbital_maneuvers_overview.jpg")
@@ -852,6 +1006,8 @@ def main(make_figures=None, fast=None):
         staged_timeline_output_path = figsave(staged_timeline_fig, f"{FIGDIR}/orbital_maneuvers_staged_timeline.jpg")
         elliptical_fig = _make_elliptical_two_burn_figure(results)
         elliptical_output_path = figsave(elliptical_fig, f"{FIGDIR}/orbital_maneuvers_elliptical_two_burn.jpg")
+        split_plane_change_fig = _make_split_plane_change_figure(results)
+        split_plane_change_output_path = figsave(split_plane_change_fig, f"{FIGDIR}/orbital_maneuvers_split_plane_change.jpg")
 
     return {
         "title": "Orbital Maneuvers Overview",
@@ -862,11 +1018,13 @@ def main(make_figures=None, fast=None):
         "staged_figure": staged_fig,
         "staged_timeline_figure": staged_timeline_fig,
         "elliptical_figure": elliptical_fig,
+        "split_plane_change_figure": split_plane_change_fig,
         "output_path": output_path,
         "staged_output_path": staged_output_path,
         "staged_timeline_output_path": staged_timeline_output_path,
         "elliptical_output_path": elliptical_output_path,
-        "output_paths": [path for path in (output_path, staged_output_path, staged_timeline_output_path, elliptical_output_path) if path is not None],
+        "split_plane_change_output_path": split_plane_change_output_path,
+        "output_paths": [path for path in (output_path, staged_output_path, staged_timeline_output_path, elliptical_output_path, split_plane_change_output_path) if path is not None],
     }
 
 

@@ -36,8 +36,8 @@ def test_demo_compare_models():
 def test_demo_orbital_maneuvers():
     demo_orbital_maneuvers = demo_main("demo_orbital_maneuvers")
     out = demo_orbital_maneuvers(make_figures=False, fast=True)
-    assert set(out["results"]) == {"impulsive", "fixed_time", "continuous", "optimal", "staged_optimal", "elliptical_two_burn", "burn_conversion"}
-    assert len(out["summary_delta_v"]) >= 18
+    assert set(out["results"]) == {"impulsive", "fixed_time", "continuous", "optimal", "staged_optimal", "split_plane_change", "elliptical_two_burn", "burn_conversion"}
+    assert len(out["summary_delta_v"]) >= 24
     assert "burn_to_deltav" in out["results"]["burn_conversion"]
     assert "deltav_to_burn" in out["results"]["burn_conversion"]
     staged = out["results"]["staged_optimal"]
@@ -55,6 +55,11 @@ def test_demo_orbital_maneuvers():
     for name in [key.removesuffix(" direct") for key in elliptical if key.endswith(" direct")]:
         assert elliptical[f"{name} direct"]["delta_v_total"] < elliptical[f"{name} best staged"]["delta_v_total"]
         assert "e₀=" in elliptical[f"{name} direct"]["case_description"]
+    split = out["results"]["split_plane_change"]
+    for name in [key.removesuffix(" split") for key in split if key.endswith(" split")]:
+        assert split[f"{name} split"]["delta_v_total"] < split[f"{name} all departure"]["delta_v_total"]
+        assert split[f"{name} split"]["delta_v_total"] < split[f"{name} all arrival"]["delta_v_total"]
+        assert 0.0 < split[f"{name} split"]["diagnostics"]["split_inclination"] < split[f"{name} split"]["diagnostics"]["inclination_change"]
 
 
 def test_demo_coordinate_frames():
