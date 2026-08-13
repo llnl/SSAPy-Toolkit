@@ -81,23 +81,16 @@ def _solver(*, fast=False, n_grid=None, n_phase=None):
     return solver
 
 
-def _direct_problem(initial, target, *, arrival_mode="rendezvous", objective=None,
-                    constraints=None, route="direct", solver=None):
-    return {
-        "boundary": {
-            "initial": initial,
-            "target": target,
-            "departure_mode": "leave now",
-            "arrival_mode": arrival_mode,
-        },
-        "objective": objective or {"minimize": "delta_v", "delta_v_mode": "total"},
-        "constraints": constraints or {"tof_range": DIRECT_TOF_RANGE, "max_burns": 2},
-        "route": route,
-        "solver": solver or _solver(),
-    }
-
-
 def _build_cases(fast=False):
+    """Build examples that show the supported structured transfer API forms.
+
+    The plotting helpers below are intentionally separated from this function
+    so users can read this block from top to bottom as a set of copyable
+    ``transfer_optimal(...)`` examples. Each ``call`` dictionary is passed to
+    ``transfer_optimal(**case["call"])`` in ``main``.
+    """
+    # All examples use the same start state and the same final target state so
+    # the overview figure compares API options, not different transfers.
     target_radius = 9000e3
     target_inclination = np.deg2rad(8.0)
     target_initial_theta = 0.35
@@ -115,177 +108,307 @@ def _build_cases(fast=False):
     r0, v0, _ = initial_state
     rf, vf, _ = target_state
 
+    # Staged routes search over candidate parking/staging orbits. For a quick
+    # demo, keep this small; for real design work, expand radii, plane fractions,
+    # and phase_count.
     route_candidates = {
         "radii": [8500e3],
         "plane_fractions": [0.0, 0.5, 1.0],
         "phase_count": 32,
     }
 
-    return [
-        {
-            "slug": "01_direct_rendezvous_orbits",
-            "title": "Orbit objects: direct rendezvous, total delta-v",
-            "call": {
-                "problem": _direct_problem(
-                    initial,
-                    target,
-                    constraints={
-                        "tof_range": DIRECT_TOF_RANGE,
-                        "perigee_altitude_min": 100e3,
-                        "max_burns": 2,
-                    },
-                    solver=_solver(fast=fast),
-                ),
+    cases = []
+
+    # ------------------------------------------------------------------
+    # 01. Full ``problem={...}`` schema with SSAPy Orbit objects.
+    #
+    # This is the recommended pattern for most user code: organize the call
+    # into boundary, objective, constraints, route, and solver sections.
+    direct_rendezvous_call = {
+        "problem": {
+            "boundary": {
+                "initial": initial,
+                "target": target,
+                "departure_mode": "leave now",
+                "arrival_mode": "rendezvous",
             },
-            "designer": True,
-        },
-        {
-            "slug": "02_intercept_first_burn",
-            "title": "Intercept: first burn only, no arrival match",
-            "call": {
-                "problem": _direct_problem(
-                    initial,
-                    target,
-                    arrival_mode="intercept",
-                    objective={"minimize": "first_burn"},
-                    constraints={"tof_range": DIRECT_TOF_RANGE, "max_burns": 1},
-                    solver=_solver(fast=fast),
-                ),
+            "objective": {
+                "minimize": "delta_v",
+                "delta_v_mode": "total",
             },
-            "designer": True,
-        },
-        {
-            "slug": "03_insertion_arrival_burn",
-            "title": "Insertion: fixed target-state arrival burn",
-            "call": {
-                "problem": _direct_problem(
-                    initial,
-                    target,
-                    arrival_mode="insertion",
-                    objective={"minimize": "arrival_burn"},
-                    constraints={"tof_range": DIRECT_TOF_RANGE, "max_burns": 2},
-                    solver=_solver(fast=fast, n_phase=1),
-                ),
+            "constraints": {
+                "tof_range": DIRECT_TOF_RANGE,
+                "perigee_altitude_min": 100e3,
+                "max_burns": 2,
             },
-            "designer": True,
+            "route": "direct",
+            "solver": _solver(fast=fast),
         },
-        {
-            "slug": "04_min_time_budget",
-            "title": "Time objective at the fixed comparison arrival",
-            "call": {
-                "problem": _direct_problem(
-                    initial,
-                    target,
-                    objective={"minimize": "time", "delta_v_mode": "total"},
-                    constraints={"tof_range": DIRECT_TOF_RANGE, "dv_budget": 10000.0, "max_burns": 2},
-                    solver=_solver(fast=fast),
-                ),
+    }
+    cases.append({
+        "slug": "01_direct_rendezvous_orbits",
+        "title": "Orbit objects: direct rendezvous, total delta-v",
+        "call": direct_rendezvous_call,
+        "designer": True,
+    })
+
+    # ------------------------------------------------------------------
+    # 02. Intercept mode: match the target position but do not pay an arrival
+    # burn to match target velocity. This demonstrates a one-burn objective.
+    intercept_first_burn_call = {
+        "problem": {
+            "boundary": {
+                "initial": initial,
+                "target": target,
+                "departure_mode": "leave now",
+                "arrival_mode": "intercept",
             },
-            "designer": True,
-        },
-        {
-            "slug": "05_raw_vectors_arrival_window",
-            "title": "Raw vectors: fixed arrival window constraint",
-            "call": {
-                "problem": {
-                    "r1": r0,
-                    "v1": v0,
-                    "r2": rf,
-                    "v2": vf,
-                    "t2": COMPARISON_TOF,
-                    "departure_mode": "now",
-                    "arrival_mode": "rendezvous",
-                    "objective": {"minimize": "delta_v"},
-                    "constraints": {
-                        "tof_range": DIRECT_TOF_RANGE,
-                        "arrival_window": (COMPARISON_TOF, COMPARISON_TOF),
-                        "max_burns": 2,
-                    },
-                    "route": "direct",
-                    "solver": _solver(fast=fast, n_grid=(1, 1)),
-                },
+            "objective": {
+                "minimize": "first_burn",
             },
-            "designer": True,
-        },
-        {
-            "slug": "06_immediate_staged_sections",
-            "title": "Section kwargs: immediate staged transfer",
-            "call": {
-                "boundary": {
-                    "initial": initial,
-                    "target": target,
-                    "departure_mode": "now",
-                    "arrival_mode": "rendezvous",
-                },
-                "objective": {"minimize": "delta_v", "delta_v_mode": "total"},
-                "constraints": {"tof_range": STAGED_LEG_TOF_RANGE, "max_burns": 4},
-                "route": {
-                    "mode": "immediate",
-                    "n_stage_stops": 1,
-                    "stage_candidates": route_candidates,
-                },
-                "solver": _solver(fast=fast, n_grid=(2, 2)),
+            "constraints": {
+                "tof_range": DIRECT_TOF_RANGE,
+                "max_burns": 1,
             },
-            "designer": False,
+            "route": "direct",
+            "solver": _solver(fast=fast),
         },
-        {
-            "slug": "07_timed_multistage",
-            "title": "Problem schema: timed multi-stage route",
-            "call": {
-                "problem": {
-                    "boundary": {
-                        "initial": initial,
-                        "target": target,
-                        "departure_mode": "now",
-                        "arrival_mode": "rendezvous",
-                    },
-                    "objective": {"minimize": "delta_v", "delta_v_mode": "total"},
-                    "constraints": {"tof_range": STAGED_LEG_TOF_RANGE, "max_burns": 4},
-                    "route": {
-                        "mode": "multi_stage",
-                        "timing": "optimized",
-                        "n_stage_stops": 1,
-                        "stage_candidates": route_candidates,
-                    },
-                    "solver": _solver(fast=fast, n_grid=(2, 2)),
-                },
+    }
+    cases.append({
+        "slug": "02_intercept_first_burn",
+        "title": "Intercept: first burn only, no arrival match",
+        "call": intercept_first_burn_call,
+        "designer": True,
+    })
+
+    # ------------------------------------------------------------------
+    # 03. Insertion mode: minimize the arrival/insertion burn. With n_phase=1
+    # and the fixed target epoch below, this still reaches the same target state
+    # as the other examples while demonstrating the API knob.
+    insertion_arrival_burn_call = {
+        "problem": {
+            "boundary": {
+                "initial": initial,
+                "target": target,
+                "departure_mode": "leave now",
+                "arrival_mode": "insertion",
             },
-            "designer": False,
-        },
-        {
-            "slug": "08_best_route_burn_limit",
-            "title": "Best route: direct fallback under max_burns",
-            "call": {
-                "problem": _direct_problem(
-                    initial,
-                    target,
-                    constraints={"tof_range": DIRECT_TOF_RANGE, "max_burns": 2},
-                    route={"mode": "best", "n_stage_stops": 1},
-                    solver=_solver(fast=fast, n_grid=(2, 2)),
-                ),
+            "objective": {
+                "minimize": "arrival_burn",
             },
-            "designer": True,
-        },
-        {
-            "slug": "09_engine_constraints",
-            "title": "Engine constraints: thrust, mass, and specific impulse",
-            "call": {
-                "problem": _direct_problem(
-                    initial,
-                    target,
-                    constraints={
-                        "tof_range": DIRECT_TOF_RANGE,
-                        "max_burns": 2,
-                        "thrust": 10000.0,
-                        "mass": 1000.0,
-                        "isp": 300.0,
-                    },
-                    solver=_solver(fast=fast, n_grid=(1, 2)),
-                ),
+            "constraints": {
+                "tof_range": DIRECT_TOF_RANGE,
+                "max_burns": 2,
             },
-            "designer": True,
+            "route": "direct",
+            "solver": _solver(fast=fast, n_phase=1),
         },
-    ]
+    }
+    cases.append({
+        "slug": "03_insertion_arrival_burn",
+        "title": "Insertion: fixed target-state arrival burn",
+        "call": insertion_arrival_burn_call,
+        "designer": True,
+    })
+
+    # ------------------------------------------------------------------
+    # 04. Time objective with a delta-v budget. This demo keeps tof_range fixed
+    # for apples-to-apples plotting; in real use, widen tof_range to let the
+    # solver choose the fastest feasible arrival.
+    min_time_budget_call = {
+        "problem": {
+            "boundary": {
+                "initial": initial,
+                "target": target,
+                "departure_mode": "leave now",
+                "arrival_mode": "rendezvous",
+            },
+            "objective": {
+                "minimize": "time",
+                "delta_v_mode": "total",
+            },
+            "constraints": {
+                "tof_range": DIRECT_TOF_RANGE,
+                "dv_budget": 10000.0,
+                "max_burns": 2,
+            },
+            "route": "direct",
+            "solver": _solver(fast=fast),
+        },
+    }
+    cases.append({
+        "slug": "04_min_time_budget",
+        "title": "Time objective at the fixed comparison arrival",
+        "call": min_time_budget_call,
+        "designer": True,
+    })
+
+    # ------------------------------------------------------------------
+    # 05. Raw state-vector input. This is useful when the caller does not have
+    # SSAPy Orbit objects; pass r1/v1/r2/v2 directly and supply the final epoch.
+    raw_vector_call = {
+        "problem": {
+            "r1": r0,
+            "v1": v0,
+            "r2": rf,
+            "v2": vf,
+            "t2": COMPARISON_TOF,
+            "departure_mode": "now",
+            "arrival_mode": "rendezvous",
+            "objective": {
+                "minimize": "delta_v",
+            },
+            "constraints": {
+                "tof_range": DIRECT_TOF_RANGE,
+                "arrival_window": (COMPARISON_TOF, COMPARISON_TOF),
+                "max_burns": 2,
+            },
+            "route": "direct",
+            "solver": _solver(fast=fast, n_grid=(1, 1)),
+        },
+    }
+    cases.append({
+        "slug": "05_raw_vectors_arrival_window",
+        "title": "Raw vectors: fixed arrival window constraint",
+        "call": raw_vector_call,
+        "designer": True,
+    })
+
+    # ------------------------------------------------------------------
+    # 06. Section-keyword form. Instead of nesting everything under
+    # ``problem={...}``, pass boundary/objective/constraints/route/solver as
+    # top-level keyword sections. This is equivalent to the problem schema.
+    immediate_staged_call = {
+        "boundary": {
+            "initial": initial,
+            "target": target,
+            "departure_mode": "now",
+            "arrival_mode": "rendezvous",
+        },
+        "objective": {
+            "minimize": "delta_v",
+            "delta_v_mode": "total",
+        },
+        "constraints": {
+            "tof_range": STAGED_LEG_TOF_RANGE,
+            "max_burns": 4,
+        },
+        "route": {
+            "mode": "immediate",
+            "n_stage_stops": 1,
+            "stage_candidates": route_candidates,
+        },
+        "solver": _solver(fast=fast, n_grid=(2, 2)),
+    }
+    cases.append({
+        "slug": "06_immediate_staged_sections",
+        "title": "Section kwargs: immediate staged transfer",
+        "call": immediate_staged_call,
+        "designer": False,
+    })
+
+    # ------------------------------------------------------------------
+    # 07. Timed multi-stage route inside the nested problem schema. The route
+    # section tells ssatk to insert one staging orbit and optimize stage timing.
+    timed_multistage_call = {
+        "problem": {
+            "boundary": {
+                "initial": initial,
+                "target": target,
+                "departure_mode": "now",
+                "arrival_mode": "rendezvous",
+            },
+            "objective": {
+                "minimize": "delta_v",
+                "delta_v_mode": "total",
+            },
+            "constraints": {
+                "tof_range": STAGED_LEG_TOF_RANGE,
+                "max_burns": 4,
+            },
+            "route": {
+                "mode": "multi_stage",
+                "timing": "optimized",
+                "n_stage_stops": 1,
+                "stage_candidates": route_candidates,
+            },
+            "solver": _solver(fast=fast, n_grid=(2, 2)),
+        },
+    }
+    cases.append({
+        "slug": "07_timed_multistage",
+        "title": "Problem schema: timed multi-stage route",
+        "call": timed_multistage_call,
+        "designer": False,
+    })
+
+    # ------------------------------------------------------------------
+    # 08. Best-route mode. Here max_burns=2 prevents a four-burn staged route,
+    # so the solver records that it chose the direct fallback.
+    best_route_call = {
+        "problem": {
+            "boundary": {
+                "initial": initial,
+                "target": target,
+                "departure_mode": "leave now",
+                "arrival_mode": "rendezvous",
+            },
+            "objective": {
+                "minimize": "delta_v",
+                "delta_v_mode": "total",
+            },
+            "constraints": {
+                "tof_range": DIRECT_TOF_RANGE,
+                "max_burns": 2,
+            },
+            "route": {
+                "mode": "best",
+                "n_stage_stops": 1,
+            },
+            "solver": _solver(fast=fast, n_grid=(2, 2)),
+        },
+    }
+    cases.append({
+        "slug": "08_best_route_burn_limit",
+        "title": "Best route: direct fallback under max_burns",
+        "call": best_route_call,
+        "designer": True,
+    })
+
+    # ------------------------------------------------------------------
+    # 09. Engine constraints. Supplying thrust/mass/isp lets ssatk size finite
+    # burn timing and propellant mass while preserving the same boundary format.
+    engine_constraints_call = {
+        "problem": {
+            "boundary": {
+                "initial": initial,
+                "target": target,
+                "departure_mode": "leave now",
+                "arrival_mode": "rendezvous",
+            },
+            "objective": {
+                "minimize": "delta_v",
+                "delta_v_mode": "total",
+            },
+            "constraints": {
+                "tof_range": DIRECT_TOF_RANGE,
+                "max_burns": 2,
+                "thrust": 10000.0,
+                "mass": 1000.0,
+                "isp": 300.0,
+            },
+            "route": "direct",
+            "solver": _solver(fast=fast, n_grid=(1, 2)),
+        },
+    }
+    cases.append({
+        "slug": "09_engine_constraints",
+        "title": "Engine constraints: thrust, mass, and specific impulse",
+        "call": engine_constraints_call,
+        "designer": True,
+    })
+
+    return cases
 
 
 def _burn_value(burn, key, default=None):
