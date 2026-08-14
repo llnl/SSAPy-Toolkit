@@ -44,7 +44,7 @@ dependencies = [
   "ipytree",
   "ipyvolume",
   "jplephem",
-  "llnl-ssapy-data>=0.1.0",
+  "llnl-ssapy-data>=0.1.2",
   "llnl-ssapy",
   "lmfit",
   "matplotlib",
@@ -55,6 +55,7 @@ dependencies = [
   "opencv-python",
   "pandas",
   "pillow",
+  "plotly",
   "psutil",
   "pyerfa",
   "pypdf",
@@ -71,6 +72,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+geomagnetics = [
+  "ppigrf",
+  "geopack",
+]
+
+validation = [
+  "netCDF4",
+  "spacepy",
+]
+
 dev = [
   "pytest",
   "pytest-mpi",
@@ -93,6 +104,7 @@ packages = { find = { where = ["."], include = ["ssapy_toolkit*", "demos*"] } }
 
 [tool.setuptools.package-data]
 demos = ["README.md"]
+"ssapy_toolkit.plots" = ["*.js"]
 
 [tool.pytest.ini_options]
 markers = [
@@ -106,3 +118,4 @@ filterwarnings = [
 [project.scripts]
 ssapy-demo-gallery = "ssapy_toolkit.run_all_demos:main"
 ssatk-benchmark = "ssapy_toolkit.benchmark:main"
+ssapy-magnetosphere = "ssapy_toolkit.plots.magfield_plot_3d:main"

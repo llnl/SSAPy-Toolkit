@@ -7,3 +7,8 @@ Reference herein to any specific commercial product, process, or service by trad
 The views and opinions of authors expressed herein do not necessarily state or reflect those of the United States Government or Lawrence Livermore National Security, LLC, and shall not be used for advertising or product endorsement purposes.
 
 LLNL-CODE-2015996
+
+Third-party JavaScript assets included for the optional satellite viewer:
+
+- three.min.js: Three.js r128, Copyright 2010-2021 Three.js Authors, MIT License.
+- satellite.min.js: satellite-js v4.1.4, Copyright 2013 Shashwat Kandadai and UCSC, MIT License.

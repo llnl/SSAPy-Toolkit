@@ -22,12 +22,16 @@ DEMO_MODULES = {
     "demo_groundtrack_accuracy": "demos.plotting.demo_groundtrack_accuracy",
     "demo_groundtrack_plot": "demos.plotting.demo_groundtrack_plot",
     "demo_kepler_vs_harmonics": "demos.orbital_mechanics.demo_kepler_vs_harmonics",
+    "demo_magfield_plot": "demos.plotting.demo_magfield_plot",
+    "demo_moon_plot": "demos.plotting.demo_moon_plot",
     "demo_orbital_stats_dashboard": "demos.plotting.demo_orbital_stats_dashboard",
     "demo_parsing_3le": "demos.getting_started.demo_parsing_3le",
     "demo_photometry_application": "demos.photometry.demo_photometry_application",
     "demo_sampling": "demos.data_io.demo_sampling",
     "demo_sphere_generation": "demos.data_io.demo_sphere_generation",
     "demo_ssapy_ground_lambertian_reflectance": "demos.photometry.demo_ssapy_ground_lambertian_reflectance",
+    "demo_sun_view": "demos.plotting.demo_sun_view",
+    "demo_van_allen": "demos.plotting.demo_van_allen",
 }
 
 
@@ -158,6 +162,19 @@ def test_demo_kepler_vs_harmonics():
     assert len(out["errs_km"]) > 0
 
 
+def test_demo_magfield_plot():
+    demo_magfield_plot = demo_main("demo_magfield_plot")
+    out = demo_magfield_plot(make_figures=False)
+    assert out["skipped"] is True
+
+
+def test_demo_moon_plot():
+    demo_moon_plot = demo_main("demo_moon_plot")
+    out = demo_moon_plot(make_figures=False, fast=True)
+    assert out["r"].shape[1] == 3
+    assert out["figures_created"] is False
+
+
 def test_demo_orbital_stats_dashboard():
     demo_orbital_stats_dashboard = demo_main("demo_orbital_stats_dashboard")
     out = demo_orbital_stats_dashboard(make_figures=False, fast=True)
@@ -201,3 +218,16 @@ def test_demo_ssapy_ground_lambertian_reflectance():
     out = demo_ssapy_ground_lambertian_reflectance(make_figures=False, fast=True)
     assert "mv" in out
     assert len(out["mv"]) > 0
+
+
+def test_demo_sun_view():
+    demo_sun_view = demo_main("demo_sun_view")
+    out = demo_sun_view(make_figures=False, fast=True)
+    assert "sun_hat" in out
+    assert out["n_traces"] > 0
+
+
+def test_demo_van_allen():
+    demo_van_allen = demo_main("demo_van_allen")
+    out = demo_van_allen(make_figures=False)
+    assert out["skipped"] is True

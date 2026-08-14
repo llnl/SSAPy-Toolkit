@@ -69,6 +69,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Do not delete the existing output directory before running",
     )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Run demos in full-quality mode instead of CI-friendly fast mode",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=180.0,
+        help="Per-demo timeout in seconds; use 0 to disable (default: 180)",
+    )
     args = parser.parse_args(argv)
 
     if args.demos_dir is None:
@@ -89,6 +100,8 @@ def main(argv: list[str] | None = None) -> int:
         demos_dir=demos_dir,
         output_root=output_root,
         clean=not args.no_clean,
+        fast=not args.full,
+        timeout_seconds=None if args.timeout <= 0 else args.timeout,
     )
 
     success = sum(r.status == "success" for r in results)

@@ -18,10 +18,11 @@ def test_find_default_demos_dir_finds_packaged_or_repo_demos():
 def test_gallery_cli_runs_from_outside_repo(tmp_path, monkeypatch):
     captured = {}
 
-    def fake_run_all_demos(*, demos_dir, output_root, clean):
+    def fake_run_all_demos(*, demos_dir, output_root, clean, **kwargs):
         captured["demos_dir"] = Path(demos_dir)
         captured["output_root"] = Path(output_root)
         captured["clean"] = clean
+        captured["kwargs"] = kwargs
         output_root.mkdir(parents=True, exist_ok=True)
         (output_root / "index.html").write_text("<html></html>", encoding="utf-8")
         return []
@@ -36,6 +37,7 @@ def test_gallery_cli_runs_from_outside_repo(tmp_path, monkeypatch):
     assert any(captured["demos_dir"].rglob("demo_gifify.py"))
     assert captured["output_root"] == tmp_path / "gallery"
     assert captured["clean"] is True
+    assert captured["kwargs"] == {"fast": True, "timeout_seconds": 180.0}
 
 
 def test_gallery_cli_distribution_fallback_errors_and_open(tmp_path, monkeypatch, capsys):
@@ -67,7 +69,7 @@ def test_gallery_cli_distribution_fallback_errors_and_open(tmp_path, monkeypatch
     (demo_dir / "demo_one.py").write_text("", encoding="utf-8")
     output = tmp_path / "gallery"
 
-    def fake_run_all_demos(*, demos_dir, output_root, clean):
+    def fake_run_all_demos(*, demos_dir, output_root, clean, **kwargs):
         output_root.mkdir(parents=True, exist_ok=True)
         (output_root / "index.html").write_text("<html></html>", encoding="utf-8")
         return [SimpleNamespace(status="success"), SimpleNamespace(status="failed")]

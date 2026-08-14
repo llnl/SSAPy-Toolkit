@@ -7,6 +7,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -71,6 +72,35 @@ class DemoResult:
     stderr: str = ""
     error: str = ""
     category: str = ""
+
+
+class DemoTimeoutError(TimeoutError):
+    """Raised when one demo exceeds the gallery time budget."""
+
+
+class demo_timeout:
+    """Unix SIGALRM timeout wrapper; no-op where alarms are unavailable."""
+
+    def __init__(self, seconds: float | None):
+        self.seconds = seconds
+        self.previous_handler = None
+
+    def __enter__(self):
+        if not self.seconds or not hasattr(signal, "SIGALRM"):
+            return self
+        self.previous_handler = signal.getsignal(signal.SIGALRM)
+        signal.signal(signal.SIGALRM, self._raise_timeout)
+        signal.setitimer(signal.ITIMER_REAL, float(self.seconds))
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if self.seconds and hasattr(signal, "SIGALRM"):
+            signal.setitimer(signal.ITIMER_REAL, 0.0)
+            signal.signal(signal.SIGALRM, self.previous_handler)
+        return False
+
+    def _raise_timeout(self, signum, frame):
+        raise DemoTimeoutError(f"Demo exceeded {self.seconds:g} seconds")
 
 
 def discover_demo_files(demos_dir: Path) -> list[Path]:
@@ -167,7 +197,7 @@ def _write_text_if_nonempty(path: Path, text: str) -> None:
         path.write_text(text, encoding="utf-8")
 
 
-def _invoke_demo(module, path: Path, output_root: Path, cwd: Path | None = None):
+def _invoke_demo(module, path: Path, output_root: Path, cwd: Path | None = None, *, fast: bool = True):
     if hasattr(module, "run"):
         try:
             return module.run(output_root)
@@ -175,11 +205,11 @@ def _invoke_demo(module, path: Path, output_root: Path, cwd: Path | None = None)
             return module.run()
     if hasattr(module, "main"):
         call_variants = [
-            {"make_figures": True, "fast": False, "verbose": True},
-            {"make_figures": True, "fast": False},
+            {"make_figures": True, "fast": fast, "verbose": True},
+            {"make_figures": True, "fast": fast},
             {"make_figures": True},
-            {"fast": False, "verbose": True},
-            {"fast": False},
+            {"fast": fast, "verbose": True},
+            {"fast": fast},
             {},
         ]
         last_exc = None
@@ -215,7 +245,14 @@ def _safe_log_name(name: str) -> str:
     return name.replace("/", "__").replace("\\", "__")
 
 
-def run_demo_script(path: Path, output_root: Path, demos_dir: Path | None = None) -> DemoResult:
+def run_demo_script(
+    path: Path,
+    output_root: Path,
+    demos_dir: Path | None = None,
+    *,
+    fast: bool = True,
+    timeout_seconds: float | None = 180,
+) -> DemoResult:
     relative_path = _demo_relative_path(path, demos_dir)
     name = relative_path.with_suffix("").as_posix()
     category = "" if relative_path.parent == Path(".") else relative_path.parent.as_posix()
@@ -237,8 +274,8 @@ def run_demo_script(path: Path, output_root: Path, demos_dir: Path | None = None
 
         stdout_buf = io.StringIO()
         stderr_buf = io.StringIO()
-        with redirect_stdout(stdout_buf), redirect_stderr(stderr_buf):
-            result = _invoke_demo(module, path, output_root, cwd=demo_cwd)
+        with demo_timeout(timeout_seconds), redirect_stdout(stdout_buf), redirect_stderr(stderr_buf):
+            result = _invoke_demo(module, path, output_root, cwd=demo_cwd, fast=fast)
 
         captured_stdout = stdout_buf.getvalue()
         captured_stderr = stderr_buf.getvalue()
@@ -605,7 +642,14 @@ def build_html_report(results: list[DemoResult], out_root: Path) -> None:
     (out_root / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
 
-def run_all_demos(demos_dir: Path, output_root: Path, clean: bool = True) -> list[DemoResult]:
+def run_all_demos(
+    demos_dir: Path,
+    output_root: Path,
+    clean: bool = True,
+    *,
+    fast: bool = True,
+    timeout_seconds: float | None = 180,
+) -> list[DemoResult]:
     demos_dir = Path(demos_dir).expanduser().resolve()
     output_root = Path(output_root).expanduser().resolve()
 
@@ -617,7 +661,13 @@ def run_all_demos(demos_dir: Path, output_root: Path, clean: bool = True) -> lis
     for path in discover_demo_files(demos_dir):
         rel = path.relative_to(demos_dir)
         print(f"[demo] running {rel.as_posix()}")
-        result = run_demo_script(path, output_root, demos_dir=demos_dir)
+        result = run_demo_script(
+            path,
+            output_root,
+            demos_dir=demos_dir,
+            fast=fast,
+            timeout_seconds=timeout_seconds,
+        )
         print(f"[demo] {rel.as_posix()}: {result.status} ({result.runtime_seconds:.2f}s)")
         results.append(result)
 

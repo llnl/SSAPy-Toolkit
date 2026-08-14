@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-message: "If you use SSAPy-Toolkit in your work, please cite it using the metadata from this file."
+message: "SSAPy-Toolkit was created by Travis R. Yeager. If you use SSAPy-Toolkit in your work, please cite it using the metadata from this file."
 title: "SSAPy-Toolkit"
 type: software
 authors:
@@ -9,6 +9,15 @@ authors:
     affiliation: "Lawrence Livermore National Laboratory"
   - name: "Diamond"
     email: "diamond10@llnl.gov"
+    affiliation: "Lawrence Livermore National Laboratory"
+  - family-names: "Higgins"
+    given-names: "Denvir"
+    email: "higgins30@llnl.gov"
+    affiliation: "Lawrence Livermore National Laboratory"
+contact:
+  - family-names: "Yeager"
+    given-names: "Travis R."
+    email: "yeagerastro@gmail.com"
     affiliation: "Lawrence Livermore National Laboratory"
 abstract: "SSAPy-Toolkit provides higher-level orbital mechanics, plotting, data I/O, coordinate/time conversion, transfer-design, and workflow utilities built on LLNL SSAPy."
 keywords:

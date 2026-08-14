@@ -21,6 +21,7 @@ ALLOWED_TOP_LEVEL = {
     "CITATION.cff",
     "CODE_OF_CONDUCT.md",
     "CONTRIBUTING.md",
+    "codemeta.json",
     "LICENSE",
     "MANIFEST.in",
     "NOTICE",
