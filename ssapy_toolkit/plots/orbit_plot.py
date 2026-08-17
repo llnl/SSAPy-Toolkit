@@ -171,6 +171,12 @@ def orbit_plot(
 
     Parameters
     ----------
+    r : ssapy.Orbit or array-like
+        SSAPy ``Orbit``/``Orbit.at`` object, raw SSAPy position output in
+        metres, or a list/batch of position tracks.  If an ``Orbit`` is passed,
+        ``t`` may optionally specify the GPS seconds/Astropy Time samples to
+        plot; otherwise one orbital period is sampled when the object exposes a
+        finite ``period``.
     view : str or iterable of str, optional
         Plot view selector. A single string may be a compact selector such as
         ``"xy"``, ``"xz"``, ``"yz"``, ``"3d"``, ``"xyxz"``,

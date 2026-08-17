@@ -155,10 +155,11 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
 
     Parameters
     ----------
-    r : numpy array or list, optional
-        Satellite position vectors in GCRF [m].
-    t : numpy array or list, optional
-        Times corresponding to r [GPS seconds].
+    r : ssapy.Orbit, numpy array, or list, optional
+        SSAPy ``Orbit``/``Orbit.at`` object or satellite position vectors in
+        GCRF [m].  Raw ``ssapy.rv`` position output can be passed directly.
+    t : numpy array, astropy Time, or list, optional
+        Times corresponding to r [GPS seconds] or Astropy Time samples.
     title : str
         Plot title.
     figsize : tuple

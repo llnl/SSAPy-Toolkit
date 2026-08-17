@@ -14,10 +14,13 @@ DEMO_MODULES = {
     "demo_orbital_maneuvers": "demos.orbital_mechanics.demo_orbital_maneuvers",
     "demo_coordinate_frames": "demos.coordinates.demo_coordinate_frames",
     "demo_data_package_access": "demos.getting_started.demo_data_package_access",
+    "demo_earth_sun_plot": "demos.plotting.demo_earth_sun_plot",
+    "demo_eclipse_views": "demos.plotting.demo_eclipse_views",
     "demo_ellipse_ae_for_arrival_rv": "demos.orbital_mechanics.demo_ellipse_ae_for_arrival_rv",
     "demo_ellipses": "demos.orbital_mechanics.demo_ellipses",
     "demo_first_user_workflow": "demos.getting_started.demo_first_user_workflow",
     "demo_gcrs_to_itrs_astropy": "demos.coordinates.demo_gcrs_to_itrs_astropy",
+    "demo_globe_orbit_daynight": "demos.plotting.demo_globe_orbit_daynight",
     "demo_globe_plot": "demos.plotting.demo_globe_plot",
     "demo_groundtrack_accuracy": "demos.plotting.demo_groundtrack_accuracy",
     "demo_groundtrack_plot": "demos.plotting.demo_groundtrack_plot",
@@ -30,6 +33,9 @@ DEMO_MODULES = {
     "demo_sampling": "demos.data_io.demo_sampling",
     "demo_sphere_generation": "demos.data_io.demo_sphere_generation",
     "demo_ssapy_ground_lambertian_reflectance": "demos.photometry.demo_ssapy_ground_lambertian_reflectance",
+    "demo_satellite_viewer": "demos.plotting.demo_satellite_viewer",
+    "demo_sensor_fov_plot": "demos.plotting.demo_sensor_fov_plot",
+    "demo_solar_view_plot": "demos.plotting.demo_solar_view_plot",
     "demo_sun_view": "demos.plotting.demo_sun_view",
     "demo_van_allen": "demos.plotting.demo_van_allen",
 }
@@ -107,6 +113,22 @@ def test_demo_data_package_access():
     assert "is not installed" in out["missing_error"]
 
 
+def test_demo_earth_sun_plot():
+    demo_earth_sun_plot = demo_main("demo_earth_sun_plot")
+    out = demo_earth_sun_plot(make_figures=False, fast=True)
+    assert out["n_frames"] >= 180
+    assert out["n_traces"] > 0
+
+
+def test_demo_eclipse_views():
+    demo_eclipse_views = demo_main("demo_eclipse_views")
+    out = demo_eclipse_views(make_figures=False, fast=True)
+    assert out["stats"] is not None
+    assert out["stats"]["mode"] == "lunar"
+    graph_ax, strip_ax = out["search_fig"].axes[:2]
+    assert strip_ax.get_position().y1 < graph_ax.get_position().y0
+
+
 def test_demo_ellipse_ae_for_arrival_rv():
     demo_ellipse_ae_for_arrival_rv = demo_main("demo_ellipse_ae_for_arrival_rv")
     out = demo_ellipse_ae_for_arrival_rv(make_figures=False, verbose=False)
@@ -132,6 +154,13 @@ def test_demo_gcrs_to_itrs_astropy():
     out = demo_gcrs_to_itrs_astropy(verbose=False)
     assert "itrs_coords" in out
     assert "itrs_position" in out
+
+
+def test_demo_globe_orbit_daynight():
+    demo_globe_orbit_daynight = demo_main("demo_globe_orbit_daynight")
+    out = demo_globe_orbit_daynight(make_figures=False, fast=True)
+    assert out["n_traces"] > 0
+    assert out["html"] is None
 
 
 def test_demo_globe_plot():
@@ -218,6 +247,34 @@ def test_demo_ssapy_ground_lambertian_reflectance():
     out = demo_ssapy_ground_lambertian_reflectance(make_figures=False, fast=True)
     assert "mv" in out
     assert len(out["mv"]) > 0
+
+
+def test_demo_satellite_viewer():
+    demo_satellite_viewer = demo_main("demo_satellite_viewer")
+    out = demo_satellite_viewer(make_figures=False, fast=True)
+    assert out["skipped"] is True
+
+
+def test_demo_sensor_fov_plot():
+    demo_sensor_fov_plot = demo_main("demo_sensor_fov_plot")
+    out = demo_sensor_fov_plot(make_figures=False, fast=True)
+    assert out["r_km"].shape[1] == 3
+    assert out["v_kms"].shape == out["r_km"].shape
+    trace_names = {getattr(trace, "name", "") for trace in out["figure"].data}
+    assert "Subsatellite ground track" in trace_names
+    assert "Boresight ground intercept" in trace_names
+    assert any(str(name).startswith("Footprint") for name in trace_names)
+
+
+def test_demo_solar_view_plot():
+    demo_solar_view_plot = demo_main("demo_solar_view_plot")
+    out = demo_solar_view_plot(make_figures=False, fast=True)
+    assert out["n_traces"] > 0
+    assert out["html"] is None
+    trace_names = {getattr(trace, "name", "") for trace in out["figure"].data}
+    assert "Stars" in trace_names
+    assert "Uranus" in trace_names
+    assert "Neptune" in trace_names
 
 
 def test_demo_sun_view():

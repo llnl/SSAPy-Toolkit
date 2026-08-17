@@ -17,8 +17,9 @@ whichever suits the repo -- no particular directory structure is required.
 
 import base64
 import os
+from io import BytesIO
 
-from ssapy_toolkit.data import read_data_binary
+from ssapy_toolkit.data import DataPackageNotFoundError, DataResourceNotFoundError, read_data_binary
 
 HERE = os.path.dirname(os.path.abspath(__file__))          # .../ssapy_toolkit/plots
 PKG_ROOT = os.path.dirname(HERE)                           # .../ssapy_toolkit
@@ -75,9 +76,63 @@ def load_textures():
         "clouds": "earth_clouds_2048.png",
     }
     return {
-        key: base64.b64encode(read_data_binary(filename)).decode("ascii")
+        key: base64.b64encode(_read_texture_binary(filename, key)).decode("ascii")
         for key, filename in files.items()
     }
+
+
+def _read_texture_binary(filename, kind):
+    """Read a texture from SSAPy-Data or return a generated placeholder."""
+    try:
+        return read_data_binary(filename)
+    except (DataPackageNotFoundError, DataResourceNotFoundError):
+        pass
+
+    try:
+        from ssapy_toolkit.plots.starfield import find_data_file
+        path = find_data_file(filename)
+        if path is not None:
+            return path.read_bytes()
+    except Exception:
+        pass
+
+    return _placeholder_texture(kind)
+
+
+def _placeholder_texture(kind):
+    """Small deterministic texture used when optional Earth assets are absent."""
+    try:
+        from PIL import Image, ImageDraw
+    except Exception:
+        # 1x1 black PNG; acceptable for every channel if Pillow is absent.
+        return base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
+
+    mode = "RGB" if kind != "clouds" else "RGBA"
+    image = Image.new(mode, (64, 32), (7, 25, 58, 255) if mode == "RGBA" else (7, 25, 58))
+    draw = ImageDraw.Draw(image)
+    if kind == "day":
+        draw.rectangle((0, 0, 63, 31), fill=(20, 82, 142))
+        draw.ellipse((4, 6, 25, 22), fill=(50, 130, 70))
+        draw.ellipse((32, 4, 58, 24), fill=(60, 145, 75))
+    elif kind == "night":
+        draw.rectangle((0, 0, 63, 31), fill=(2, 8, 24))
+        for x, y in [(8, 9), (15, 14), (35, 8), (48, 20), (55, 12)]:
+            draw.point((x, y), fill=(255, 210, 120))
+    elif kind == "specular":
+        draw.rectangle((0, 0, 63, 31), fill=(45, 45, 45))
+        draw.ellipse((0, 0, 63, 31), fill=(160, 160, 160))
+    else:
+        image = Image.new("RGBA", (64, 32), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(image)
+        draw.ellipse((8, 8, 26, 18), fill=(255, 255, 255, 80))
+        draw.ellipse((30, 5, 58, 19), fill=(255, 255, 255, 65))
+
+    buffer = BytesIO()
+    if kind == "clouds":
+        image.save(buffer, format="PNG")
+    else:
+        image.convert("RGB").save(buffer, format="JPEG", quality=85)
+    return buffer.getvalue()
 
 
 # NOTE: asset loading, template substitution and the file write all used to

@@ -31,6 +31,13 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import numpy as np
+
+try:
+    from .plotutils import normalize_orbit_trajectory, plotly_orbit_trace
+except ImportError:
+    from plotutils import normalize_orbit_trajectory, plotly_orbit_trace
+
 
 # Shared geometry, Earth, sky and texture helpers live in one module so the
 # two plot modules cannot drift apart (they did, repeatedly, when duplicated).
@@ -161,6 +168,15 @@ def plot_van_allen_3d(
     show_pole_labels=True,
     show_stars=True,
     show_atmosphere=False,
+    orbit=None,
+    r=None,
+    v=None,
+    t=None,
+    r_units="auto",
+    v_units="auto",
+    orbit_name="SSAPy orbit",
+    orbit_color="#ff4d4d",
+    orbit_width=5,
     pitch_angle_deg=25.0,
     external_field="t96",
     kp=2,
@@ -187,9 +203,23 @@ def plot_van_allen_3d(
     RE   = EARTH_RADIUS_KM
     axis = _dipole_axis()
 
+    trajectory_r_km = None
+    if orbit is not None or r is not None:
+        trajectory_r_km, _, _ = normalize_orbit_trajectory(
+            orbit=orbit,
+            r=r,
+            v=v,
+            t=t,
+            require_velocity=False,
+            r_units=r_units,
+            v_units=v_units,
+        )
+
     # Framing: box sized to the star sphere (so stars aren't clipped), camera
     # eye scaled down by content/sky so the belts still fill the frame.
     content_r  = outer_max_RE * RE * 1.08 / max(float(zoom), 1e-3)
+    if trajectory_r_km is not None:
+        content_r = max(content_r, float(np.nanmax(np.linalg.norm(trajectory_r_km, axis=1))) * 1.08)
     sky_radius = STAR_SPHERE_FACTOR * content_r
     box        = sky_radius
     eye_dist   = _CAM_FILL * content_r / box
@@ -330,6 +360,15 @@ def plot_van_allen_3d(
                                     night_floor=night_floor))
     if show_atmosphere:
         traces.extend(_atmosphere_traces())
+
+    if trajectory_r_km is not None:
+        traces.append(plotly_orbit_trace(
+            trajectory_r_km,
+            name=orbit_name,
+            color=orbit_color,
+            width=orbit_width,
+            go_module=go,
+        ))
 
     # 4. Dipole axis
     ax_len = outer_max_RE * RE * 1.1

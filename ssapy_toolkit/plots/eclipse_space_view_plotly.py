@@ -284,9 +284,10 @@ def find_and_plot_eclipse(mode="lunar", save_path=None, search_days=None, verbos
         print(f"[{mode}] Peak phase duration: {dur_umbra_hr*60:.1f} min, "
               f"total event duration: {dur_total_hr:.2f} hr")
 
-    fig = plt.figure(figsize=(15, 4.5), dpi=115)
-    ax1 = fig.add_subplot(1, 2, 1)
-    ax2 = fig.add_subplot(1, 2, 2)
+    fig = plt.figure(figsize=(13.5, 7.2), dpi=115)
+    grid = fig.add_gridspec(2, 1, height_ratios=(3.3, 1.15), hspace=0.38)
+    ax1 = fig.add_subplot(grid[0])
+    ax2 = fig.add_subplot(grid[1])
 
     label = "Blood Moon (umbra)" if mode == "lunar" else "Deepest coverage"
     ax1.plot(t_hr, illum_win, color="#222222", linewidth=1.3)
@@ -423,7 +424,7 @@ def find_and_plot_eclipse(mode="lunar", save_path=None, search_days=None, verbos
     # 3D "view from space" now lives only in eclipse_space_view_plotly.py
     # as interactive HTML, not duplicated here as a static matplotlib panel.
 
-    fig.suptitle(f"{'Lunar' if mode=='lunar' else 'Solar'} eclipse simulation", fontsize=13, y=1.0)
+    fig.suptitle(f"{'Lunar' if mode=='lunar' else 'Solar'} eclipse simulation", fontsize=13, y=0.985)
 
     if mode == "lunar":
         caption = ("What this is: a real total/partial lunar eclipse, found by searching actual Moon-Earth-Sun geometry over "
@@ -438,10 +439,10 @@ def find_and_plot_eclipse(mode="lunar", save_path=None, search_days=None, verbos
                   "illumination physics as the lunar case, with occluder and occluded body swapped (Moon casts the "
                   "shadow, Earth's the reference point). Each Sun panel is rasterized from the real Sun/Moon angular "
                   "overlap at that instant, including an actual corona render once coverage is deep enough.")
-    fig.text(0.5, -0.04, caption, ha="center", va="top", fontsize=9.5, wrap=True,
+    fig.text(0.5, 0.02, caption, ha="center", va="bottom", fontsize=9.5, wrap=True,
              transform=fig.transFigure)
 
-    fig.tight_layout()
+    fig.tight_layout(rect=(0.0, 0.11, 1.0, 0.95))
     if save_path:
         fig.savefig(save_path, bbox_inches="tight")
         print(f"Saved -> {save_path}")

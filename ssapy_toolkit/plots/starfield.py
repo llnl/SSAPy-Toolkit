@@ -483,10 +483,10 @@ def _add_milky_way(ax, sky_radius):
 #      SSAPy Toolkit."
 #
 # Resolution order, first hit wins:
-#   1. the installed ssapy_data package   -- the real, supported mechanism
-#   2. $SSAPY_DATA                        -- explicit override for CI / odd layouts
-#   3. a sibling SSAPy-Data checkout      -- what you get developing both repos
+#   1. $SSAPY_DATA                        -- explicit override for CI / odd layouts
+#   2. a sibling SSAPy-Data checkout      -- what you get developing both repos
 #      side by side, before `pip install -e` has been run against the data repo
+#   3. the installed ssapy_data package   -- the real, supported user mechanism
 #   4. alongside this module              -- legacy in-tree assets, so existing
 #                                            working copies keep functioning
 #
@@ -531,10 +531,6 @@ def ssapy_data_dirs():
 
     dirs = []
 
-    pkg = _ssapy_data_package_dir()
-    if pkg is not None:
-        dirs.append(pkg)
-
     env = _os.environ.get("SSAPY_DATA")
     if env:
         dirs.append(_Path(env))
@@ -548,6 +544,10 @@ def ssapy_data_dirs():
             dirs.append(parent / name)
             # the packaged layout, if someone points at a raw checkout
             dirs.append(parent / name / "src" / "ssapy_data" / "data")
+
+    pkg = _ssapy_data_package_dir()
+    if pkg is not None:
+        dirs.append(pkg)
 
     dirs.append(plots_dir)
 

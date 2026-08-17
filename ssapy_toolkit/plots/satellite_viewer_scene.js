@@ -16,6 +16,10 @@
 // ============================================================================
 
 const R_EARTH_KM = 6378.137;
+const R_MOON_KM = 1737.4;
+const CELESTIAL_MARKER_DIST_KM = R_EARTH_KM * 4.4;
+const SUN_MARKER_RADIUS_KM = R_EARTH_KM * 0.18;
+const MOON_MARKER_RADIUS_KM = R_EARTH_KM * 0.13;
 const MU_EARTH = 398600.4418;
 
 // ---------------------------------------------------------------------------
@@ -248,6 +252,7 @@ function resolveDbRecord(record) {
 }
 
 let scene, camera, renderer, earthMesh, cloudMesh, atmosphereMesh, starfield, sunLight, earthShineLight;
+let sunMesh, sunGlowMesh, moonMesh;
 let sunDirection = new THREE.Vector3(1, 0.35, 0.25).normalize();
 let camTheta = 0.9, camPhi = 1.1, camDist = 26000;
 const camTarget = new THREE.Vector3(0, 0, 0);
@@ -382,6 +387,7 @@ function init() {
   buildEarth();
   buildClouds();
   buildAtmosphere();
+  buildCelestialMarkers();
   setupControls();
   setupTimeControls();
   setupDatabaseSearch();
@@ -944,6 +950,58 @@ function computeSunDirectionEci(date) {
     Math.cos(epsilon) * Math.sin(lambda),
     Math.sin(epsilon) * Math.sin(lambda)
   ).normalize();
+}
+
+function computeMoonDirectionEci(date) {
+  const JD = date.getTime() / 86400000 + 2440587.5;
+  const n = JD - 2451545.0;
+  const L = ((218.316 + 13.176396 * n) % 360 + 360) % 360;
+  const Mm = ((134.963 + 13.064993 * n) % 360 + 360) % 360;
+  const F = ((93.272 + 13.229350 * n) % 360 + 360) % 360;
+  const lambda = (L + 6.289 * Math.sin(Mm * Math.PI / 180)) * Math.PI / 180;
+  const beta = (5.128 * Math.sin(F * Math.PI / 180)) * Math.PI / 180;
+  const epsilon = (23.439 - 0.0000004 * n) * Math.PI / 180;
+  const cb = Math.cos(beta);
+  const xEcl = cb * Math.cos(lambda);
+  const yEcl = cb * Math.sin(lambda);
+  const zEcl = Math.sin(beta);
+  return new THREE.Vector3(
+    xEcl,
+    Math.cos(epsilon) * yEcl - Math.sin(epsilon) * zEcl,
+    Math.sin(epsilon) * yEcl + Math.cos(epsilon) * zEcl
+  ).normalize();
+}
+
+function buildCelestialMarkers() {
+  const sunMat = new THREE.MeshBasicMaterial({ color: 0xffc247, transparent: true, opacity: 0.98, depthTest: false });
+  sunMesh = new THREE.Mesh(new THREE.SphereGeometry(SUN_MARKER_RADIUS_KM, 32, 24), sunMat);
+  sunMesh.renderOrder = 20;
+  scene.add(sunMesh);
+
+  const glowMat = new THREE.MeshBasicMaterial({
+    color: 0xffd36a, transparent: true, opacity: 0.22,
+    depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+  });
+  sunGlowMesh = new THREE.Mesh(new THREE.SphereGeometry(SUN_MARKER_RADIUS_KM * 2.6, 32, 24), glowMat);
+  sunGlowMesh.renderOrder = 19;
+  scene.add(sunGlowMesh);
+
+  const moonMat = new THREE.MeshPhongMaterial({
+    color: 0xb8bcc5, emissive: 0x20232a, shininess: 8,
+    specular: 0x222222, depthTest: false,
+  });
+  moonMesh = new THREE.Mesh(new THREE.SphereGeometry(MOON_MARKER_RADIUS_KM, 32, 24), moonMat);
+  moonMesh.renderOrder = 20;
+  scene.add(moonMesh);
+}
+
+function updateCelestialMarkers(date) {
+  if (sunMesh) sunMesh.position.copy(sunDirection).multiplyScalar(CELESTIAL_MARKER_DIST_KM);
+  if (sunGlowMesh) sunGlowMesh.position.copy(sunDirection).multiplyScalar(CELESTIAL_MARKER_DIST_KM);
+  if (moonMesh) {
+    const moonDirection = eciToScene(computeMoonDirectionEci(date));
+    moonMesh.position.copy(moonDirection).multiplyScalar(CELESTIAL_MARKER_DIST_KM * 0.82);
+  }
 }
 
 // Earth's rotation, from the actual current date instead of a static mesh.
@@ -3038,6 +3096,7 @@ function animate() {
   const simDate = new Date(getCurrentSimMs());
   sunDirection.copy(eciToScene(computeSunDirectionEci(simDate)));
   sunLight.position.copy(sunDirection).multiplyScalar(100000);
+  updateCelestialMarkers(simDate);
   updateEarthRotation(simDate);
   cloudDriftAccumulator += 0.00006;
 

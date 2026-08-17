@@ -57,6 +57,13 @@ import astropy.units as u
 from astropy import constants as _const
 from ssapy_toolkit.constants import EARTH_RADIUS
 
+from .plotutils import (
+    _figure_save_path,
+    _pop_save_path_aliases,
+    _raise_unrecognized_kwargs,
+    normalize_orbit_trajectory,
+)
+
 # RE_KM, R_SUN_KM, AU_KM sourced from ssapy_toolkit.constants / astropy
 # (same pattern as sun_view.py) rather than hardcoded literals -- these
 # were independently duplicated (at the same value, by coincidence)
@@ -288,11 +295,36 @@ def _draw_continents(ax):
 
 
 # ── Main plot ────────────────────────────────────────────────────────────────
-def plot_enhanced_groundtrack(r_eci_km: np.ndarray, t: Time,
-                               site_lat: float, site_lon: float, site_name: str,
+def plot_enhanced_groundtrack(r_eci_km: np.ndarray | None = None, t: Time | None = None,
+                               site_lat: float = 0.0, site_lon: float = 0.0,
+                               site_name: str = "Ground Site",
                                sat_name: str = "Satellite",
                                min_elev_deg: float = 10.0,
-                               save_path: str | None = None):
+                               save_path: str | None = None, *, orbit=None,
+                               r=None, v=None, r_units: str = "auto",
+                               v_units: str = "auto", **kwargs):
+    """Plot an enhanced groundtrack from SSAPy or array trajectory output.
+
+    ``r_eci_km`` preserves the original API.  New code can also pass
+    ``orbit=ssapy_orbit`` or ``r=``/``v=``/``t=`` arrays from ``ssapy.rv``.
+    Position arrays may be metres or kilometres; units are auto-detected unless
+    ``r_units`` is set explicitly.
+    """
+    save_path, kwargs = _pop_save_path_aliases(kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(kwargs, "plot_enhanced_groundtrack")
+    if r is not None and r_eci_km is not None:
+        raise ValueError("Use either r_eci_km positional input or r=, not both.")
+
+    r_input = r if r is not None else r_eci_km
+    r_eci_km, _, t = normalize_orbit_trajectory(
+        orbit=orbit,
+        r=r_input,
+        v=v,
+        t=t,
+        require_velocity=False,
+        r_units=r_units,
+        v_units=v_units,
+    )
     r_ecef = gcrf_to_itrf(r_eci_km, t)
     lat, lon, alt = ecef_to_geodetic(r_ecef)
     illum = compute_eclipse(r_eci_km, t)
@@ -369,8 +401,10 @@ def plot_enhanced_groundtrack(r_eci_km: np.ndarray, t: Time,
     ax.grid(alpha=0.25, linewidth=0.5, zorder=0)
 
     if save_path:
-        fig.savefig(save_path, bbox_inches="tight")
-        print(f"Saved -> {save_path}")
+        resolved_path = _figure_save_path(save_path, default_name="enhanced_groundtrack")
+        if resolved_path:
+            fig.savefig(resolved_path, bbox_inches="tight")
+            print(f"Saved -> {resolved_path}")
     return fig, ax, dict(site_visibility_pct=vis_pct)
 
 

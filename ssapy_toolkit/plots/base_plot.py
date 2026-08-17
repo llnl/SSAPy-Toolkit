@@ -70,6 +70,14 @@ _GRID_COLOR    = "#1a2a3a"
 _TEXT_COLOR    = "#C8D8E8"
 
 
+def _coerce_orbital_state(state):
+    if isinstance(state, OrbitalState):
+        return state
+    if all(hasattr(state, attr) for attr in ("r", "v", "t")):
+        return OrbitalState.from_ssapy(state)
+    raise TypeError("state must be an OrbitalState or SSAPy Orbit-like object")
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # BasePlot3D  (matplotlib)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -97,7 +105,7 @@ class BasePlot3D:
     ):
         if not _HAS_MPL:
             raise ImportError("matplotlib is required for BasePlot3D")
-        self.state     = state
+        self.state     = _coerce_orbital_state(state)
         self.dark      = dark
         self.frame     = Frame(frame)
         self.satellite = satellite
@@ -427,7 +435,7 @@ class PlotlyScene:
     ):
         if not _HAS_PLOTLY:
             raise ImportError("plotly is required for PlotlyScene")
-        self.state     = state
+        self.state     = _coerce_orbital_state(state)
         self.frame     = Frame(frame)
         self.dark      = dark
         self.satellite = satellite

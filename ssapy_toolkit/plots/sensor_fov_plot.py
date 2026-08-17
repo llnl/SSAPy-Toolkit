@@ -34,6 +34,17 @@ from pathlib import Path
 import numpy as np
 import plotly.graph_objects as go
 
+try:
+    from .eclipse_brightness_plot import sun_direction_eci
+except ImportError:
+    from eclipse_brightness_plot import sun_direction_eci
+
+from .plotutils import (
+    _pop_save_path_aliases,
+    normalize_orbit_trajectory,
+    save_plotly_figure,
+)
+
 # ---------------------------------------------------------------------------
 # SSAPy imports (confirmed working API from checkpoint)
 # ---------------------------------------------------------------------------
@@ -190,6 +201,64 @@ def _earth_sphere(r_km: float = 6371.0, n: int = 60) -> go.Surface:
     )
 
 
+def _sensor_fov_traces(layer):
+    """Return traces from either the shared layer or the local fallback."""
+    if hasattr(layer, "build_traces"):
+        return layer.build_traces()
+    return layer.traces()
+
+
+def _default_sun_direction_gcrf():
+    return np.asarray(sun_direction_eci(np.array([0.0]))[0], dtype=float)
+
+
+def _satellite_marker(pos):
+    return go.Scatter3d(
+        x=[pos[0]], y=[pos[1]], z=[pos[2]],
+        mode="markers",
+        marker=dict(size=7, color="#FFD700", symbol="circle", line=dict(color="#FFFFFF", width=1)),
+        name="Satellite",
+        showlegend=True,
+    )
+
+
+def _target_marker(pos, earth_radius_km=6371.0):
+    norm = np.linalg.norm(pos)
+    if norm <= earth_radius_km:
+        return go.Scatter3d(x=[], y=[], z=[], mode="markers", showlegend=False)
+    target = np.asarray(pos, dtype=float) / norm * earth_radius_km * 1.012
+    return go.Scatter3d(
+        x=[target[0]], y=[target[1]], z=[target[2]],
+        mode="markers",
+        marker=dict(size=5, color="#FF4D4D", symbol="diamond", line=dict(color="#FFFFFF", width=1)),
+        name="Boresight ground intercept",
+        showlegend=True,
+    )
+
+
+def _surface_track_trace(r_km, earth_radius_km=6371.0):
+    norms = np.linalg.norm(r_km, axis=1)
+    valid = norms > earth_radius_km
+    if not np.any(valid):
+        return go.Scatter3d(x=[], y=[], z=[], mode="lines", showlegend=False)
+    pts = r_km[valid] / norms[valid, None] * earth_radius_km * 1.006
+    return go.Scatter3d(
+        x=pts[:, 0], y=pts[:, 1], z=pts[:, 2],
+        mode="lines",
+        line=dict(color="#FFB000", width=4),
+        name="Subsatellite ground track",
+        showlegend=True,
+    )
+
+
+def _sensor_scene_traces(layer, pos):
+    traces = list(_sensor_fov_traces(layer))
+    if not traces or getattr(traces[0], "name", None) != "Satellite":
+        traces.insert(0, _satellite_marker(pos))
+    traces.append(_target_marker(pos))
+    return traces
+
+
 # ---------------------------------------------------------------------------
 # Build figure
 # ---------------------------------------------------------------------------
@@ -208,6 +277,7 @@ def build_figure(cfg: dict, r_km: np.ndarray, v_kms: np.ndarray) -> go.Figure:
     animate       = bool(cfg.get("fov_animate", False))
     anim_step     = int(cfg.get("fov_anim_step", 10))
     bg_color      = cfg.get("bg_color", "#0a0a14")
+    sun_hat       = np.asarray(cfg.get("sun_direction_gcrf", _default_sun_direction_gcrf()), dtype=float)
 
     N = len(r_km)
     time_index = max(0, min(time_index, N - 1))
@@ -224,17 +294,10 @@ def build_figure(cfg: dict, r_km: np.ndarray, v_kms: np.ndarray) -> go.Figure:
         line=dict(color="#00BFFF", width=2),
         name="Orbit",
     ))
+    fig.add_trace(_surface_track_trace(r_km))
 
-    # Satellite marker at time_index
+    # Satellite marker, sensor cone, boresight, and Earth footprint.
     pos = r_km[time_index]
-    fig.add_trace(go.Scatter3d(
-        x=[pos[0]], y=[pos[1]], z=[pos[2]],
-        mode="markers",
-        marker=dict(size=6, color="#FFD700", symbol="circle"),
-        name="Satellite",
-    ))
-
-    # FOV cone
     fov = SensorFOVLayer(
         r_gcrf_km     = r_km,
         v_gcrf_kms    = v_kms,
@@ -246,8 +309,14 @@ def build_figure(cfg: dict, r_km: np.ndarray, v_kms: np.ndarray) -> go.Figure:
         color         = fov_color,
         opacity       = fov_opacity,
         show_boresight= show_bs,
+        sun_direction_gcrf = sun_hat,
+        show_sun_shading = True,
+        show_footprint = True,
     )
-    for t in fov.traces():
+    dynamic_start = len(fig.data)
+    sensor_traces = _sensor_scene_traces(fov, pos)
+    dynamic_trace_indices = list(range(dynamic_start, dynamic_start + len(sensor_traces)))
+    for t in sensor_traces:
         fig.add_trace(t)
 
     # Animation frames
@@ -257,15 +326,9 @@ def build_figure(cfg: dict, r_km: np.ndarray, v_kms: np.ndarray) -> go.Figure:
         for idx in indices:
             fov.time_index = idx
             pos_f = r_km[idx]
-            frame_data = [
-                go.Scatter3d(x=[pos_f[0]], y=[pos_f[1]], z=[pos_f[2]],
-                             mode="markers",
-                             marker=dict(size=6, color="#FFD700"),
-                             name="Satellite"),
-                *fov.traces(),
-            ]
+            frame_data = _sensor_scene_traces(fov, pos_f)
             frames.append(go.Frame(data=frame_data, name=str(idx),
-                                   traces=[2, 3, 4]))   # indices into fig.data
+                                   traces=dynamic_trace_indices))
         fig.frames = frames
         fig.update_layout(
             updatemenus=[dict(
@@ -306,13 +369,83 @@ def build_figure(cfg: dict, r_km: np.ndarray, v_kms: np.ndarray) -> go.Figure:
         plot_bgcolor=bg_color,
         font=dict(color="#CCCCCC"),
         title=dict(
-            text=(f"Sensor FOV — {pointing_mode.title()} pointing | "
-                  f"Half-angle {half_angle}° | Step {time_index}/{N-1}"),
+            text=(f"Earth-observation Sensor FOV — {pointing_mode.title()} pointing | "
+                  f"Footprint, ground track, and cone | Step {time_index}/{N-1}"),
             x=0.5,
         ),
         legend=dict(bgcolor="rgba(0,0,0,0.4)", bordercolor="#333", borderwidth=1),
         margin=dict(l=0, r=0, t=50, b=0),
     )
+    return fig
+
+
+def plot_sensor_fov(
+    orbit=None,
+    r=None,
+    v=None,
+    t=None,
+    cfg: dict | None = None,
+    save_path=None,
+    show: bool = False,
+    r_units: str = "auto",
+    v_units: str = "auto",
+    **kwargs,
+) -> go.Figure:
+    """Build a sensor field-of-view plot from SSAPy or array trajectory data.
+
+    Parameters
+    ----------
+    orbit : ssapy.Orbit, optional
+        SSAPy orbit object.  If ``t`` is omitted, one orbit is sampled using
+        the configured ``n_orbits``/``dt_s`` behavior.
+    r, v, t : array-like, optional
+        Position, velocity, and time outputs from SSAPy.  Raw SSAPy ``r``/``v``
+        arrays are metres and metres/second; these are auto-detected.  Already
+        converted km and km/s arrays also work.
+    cfg : dict, optional
+        Plot configuration.  Keyword arguments override entries in this dict.
+    save_path : path-like, optional
+        Save as HTML or static image.  Standard aliases such as ``save=`` and
+        ``savefig=`` are also accepted through ``kwargs``.
+    """
+    save_path, kwargs = _pop_save_path_aliases(kwargs, save_path=save_path)
+    plot_cfg = DEFAULT_CFG.copy()
+    if cfg:
+        plot_cfg.update(cfg)
+    plot_cfg.update(kwargs)
+
+    if orbit is not None or r is not None:
+        samples = int(plot_cfg.get("n_steps", 360))
+        if "n_steps" not in plot_cfg and plot_cfg.get("dt_s") and orbit is not None:
+            period = getattr(orbit, "period", None)
+            try:
+                samples = max(2, int(round(float(plot_cfg.get("n_orbits", 1.0)) * float(period) / float(plot_cfg["dt_s"]))))
+            except Exception:
+                samples = 360
+        r_km, v_kms, t_time = normalize_orbit_trajectory(
+            orbit=orbit,
+            r=r,
+            v=v,
+            t=t,
+            require_velocity=True,
+            r_units=r_units,
+            v_units=v_units,
+            n_steps=samples,
+            n_orbits=float(plot_cfg.get("n_orbits", 1.0)),
+        )
+        if "sun_direction_gcrf" not in plot_cfg and len(t_time):
+            plot_cfg["sun_direction_gcrf"] = sun_direction_eci(
+                np.array([0.0]),
+                epoch_jd=float(t_time[0].jd),
+            )[0]
+    else:
+        r_km, v_kms = propagate_orbit(plot_cfg)
+
+    fig = build_figure(plot_cfg, r_km, v_kms)
+    if save_path:
+        save_plotly_figure(fig, save_path=save_path, default_name="sensor_fov_plot")
+    if show:
+        fig.show()
     return fig
 
 

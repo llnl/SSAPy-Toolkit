@@ -79,12 +79,207 @@ def check_type(var):
     return VarType.OTHER
 
 
+def _is_orbit_like(value):
+    return value is not None and all(hasattr(value, attr) for attr in ("r", "v", "t"))
+
+
+def _as_gps_seconds_array(t):
+    """Return numeric GPS seconds from Astropy Time, numeric, or Time-like arrays."""
+    if t is None:
+        return None
+
+    if isinstance(t, Time):
+        return np.atleast_1d(np.asarray(t.gps, dtype=float))
+
+    if hasattr(t, "gps"):
+        return np.atleast_1d(float(t.gps))
+
+    arr = np.asarray(t)
+    if arr.dtype == object:
+        flat = list(arr.flat)
+        if flat and all(isinstance(item, Time) or hasattr(item, "gps") for item in flat):
+            return np.asarray([float(item.gps) for item in flat], dtype=float).reshape(arr.shape)
+
+    return np.atleast_1d(np.asarray(t, dtype=float))
+
+
+def _ensure_nx3(values, name):
+    arr = np.asarray(values, dtype=float).squeeze()
+    if arr.ndim == 1 and arr.size == 3:
+        return arr.reshape(1, 3)
+    if arr.ndim == 2 and arr.shape in [(1, 3), (3, 1)]:
+        return arr.reshape(1, 3)
+    if arr.ndim == 2 and arr.shape[1] == 3:
+        return arr
+    raise ValueError(f"{name} must be a 3-vector or an (N, 3) array; got shape {arr.shape}")
+
+
+def _default_orbit_times_gps(orbit, *, n_steps=360, n_orbits=1.0):
+    r_arr = np.asarray(getattr(orbit, "r"), dtype=float).squeeze()
+    t_attr = _as_gps_seconds_array(getattr(orbit, "t", 0.0))
+    start = float(np.ravel(t_attr)[0]) if t_attr is not None and t_attr.size else 0.0
+
+    if r_arr.ndim == 2 and r_arr.shape[1] == 3:
+        if t_attr is not None and t_attr.size == r_arr.shape[0]:
+            return np.asarray(t_attr, dtype=float).reshape(-1)
+        return start + np.arange(r_arr.shape[0], dtype=float)
+
+    try:
+        period = float(np.ravel(np.asarray(getattr(orbit, "period")))[0])
+    except Exception:
+        period = np.nan
+    if not np.isfinite(period) or period <= 0:
+        return np.asarray([start], dtype=float)
+
+    n_steps = max(2, int(n_steps))
+    return start + np.linspace(0.0, period * float(n_orbits), n_steps)
+
+
+def _sample_orbit_like(orbit, t=None, *, n_steps=360, n_orbits=1.0):
+    """Sample an SSAPy-like Orbit object into r, v, and GPS-second arrays."""
+    t_gps = _as_gps_seconds_array(t)
+    if t_gps is None:
+        t_gps = _default_orbit_times_gps(orbit, n_steps=n_steps, n_orbits=n_orbits)
+    t_gps = np.asarray(t_gps, dtype=float).reshape(-1)
+
+    sampled = orbit
+    if hasattr(orbit, "at"):
+        try:
+            sampled = orbit.at(t_gps)
+        except Exception:
+            sampled = orbit
+
+    r_arr = _ensure_nx3(getattr(sampled, "r"), "orbit.r")
+    v_arr = _ensure_nx3(getattr(sampled, "v"), "orbit.v")
+    sampled_t = _as_gps_seconds_array(getattr(sampled, "t", t_gps))
+    sampled_t = np.asarray(sampled_t, dtype=float).reshape(-1)
+    if sampled_t.size != len(r_arr):
+        if t_gps.size == len(r_arr):
+            sampled_t = t_gps
+        elif sampled_t.size == 1:
+            sampled_t = np.full(len(r_arr), sampled_t[0], dtype=float)
+        else:
+            sampled_t = np.linspace(t_gps[0], t_gps[-1], len(r_arr))
+    return r_arr, v_arr, sampled_t
+
+
+def _orbit_position_tracks(r, t=None):
+    if _is_orbit_like(r):
+        r_arr, _, t_gps = _sample_orbit_like(r, t=t)
+        return [r_arr], [t_gps]
+
+    if isinstance(r, (list, tuple)) and r and all(_is_orbit_like(item) for item in r):
+        if isinstance(t, (list, tuple)) and len(t) == len(r):
+            per_orbit_t = t
+        else:
+            per_orbit_t = [t] * len(r)
+        tracks = []
+        times = []
+        for orbit, orbit_t in zip(r, per_orbit_t):
+            r_arr, _, t_gps = _sample_orbit_like(orbit, t=orbit_t)
+            tracks.append(r_arr)
+            times.append(t_gps)
+        return tracks, times
+
+    return None
+
+
+def _position_scale_to_km(r, units="auto"):
+    key = "auto" if units is None else str(units).strip().lower()
+    if key in {"km", "kilometer", "kilometers"}:
+        return 1.0
+    if key in {"m", "meter", "meters"}:
+        return 1e-3
+    if key != "auto":
+        raise ValueError("r_units must be 'auto', 'm', or 'km'")
+
+    norms = np.linalg.norm(_ensure_nx3(r, "r"), axis=1)
+    typical = float(np.nanmedian(norms)) if norms.size else 0.0
+    # SSAPy native positions are metres (LEO is ~7e6), while Toolkit plotting
+    # arrays are usually kilometres.  Keep the threshold high enough that
+    # cislunar kilometre arrays (~4e5 km) stay in km unless callers explicitly
+    # request metres.
+    return 1e-3 if typical > 1e6 else 1.0
+
+
+def _velocity_scale_to_kms(v, units="auto"):
+    key = "auto" if units is None else str(units).strip().lower().replace(" ", "")
+    if key in {"km/s", "kms", "kmps", "kilometer/second", "kilometers/second"}:
+        return 1.0
+    if key in {"m/s", "ms", "mps", "meter/second", "meters/second"}:
+        return 1e-3
+    if key != "auto":
+        raise ValueError("v_units must be 'auto', 'm/s', or 'km/s'")
+
+    norms = np.linalg.norm(_ensure_nx3(v, "v"), axis=1)
+    typical = float(np.nanmedian(norms)) if norms.size else 0.0
+    return 1e-3 if typical > 100.0 else 1.0
+
+
+def normalize_orbit_trajectory(
+    *,
+    orbit=None,
+    r=None,
+    v=None,
+    t=None,
+    require_velocity=False,
+    r_units="auto",
+    v_units="auto",
+    n_steps=360,
+    n_orbits=1.0,
+):
+    """Normalize SSAPy orbit outputs into ``r_km, v_kms, t`` for Plotly helpers.
+
+    Accepted inputs are an SSAPy-like ``Orbit`` object, a position time series
+    from ``ssapy.rv``/``Orbit.at`` in metres, or already-converted km arrays.
+    Raw arrays use unit auto-detection by default; explicit ``r_units`` and
+    ``v_units`` are available when callers need deterministic conversion.
+    """
+    if orbit is None and _is_orbit_like(r):
+        orbit, r = r, None
+
+    if orbit is not None:
+        r_arr, v_arr, t_gps = _sample_orbit_like(orbit, t=t, n_steps=n_steps, n_orbits=n_orbits)
+        orbit_r_units = "m" if r_units == "auto" else r_units
+        orbit_v_units = "m/s" if v_units == "auto" else v_units
+        r_km = r_arr * _position_scale_to_km(r_arr, orbit_r_units)
+        v_kms = v_arr * _velocity_scale_to_kms(v_arr, orbit_v_units)
+        return r_km, v_kms, Time(t_gps, format="gps")
+
+    if r is None:
+        raise ValueError("Provide either orbit= or r= trajectory input.")
+
+    r_arr = _ensure_nx3(r, "r")
+    r_km = r_arr * _position_scale_to_km(r_arr, r_units)
+
+    v_kms = None
+    if v is not None:
+        v_arr = _ensure_nx3(v, "v")
+        if len(v_arr) != len(r_arr):
+            raise ValueError("v must have the same number of samples as r")
+        v_kms = v_arr * _velocity_scale_to_kms(v_arr, v_units)
+    elif require_velocity:
+        raise ValueError("Velocity input is required; provide v= or an Orbit object.")
+
+    t_gps = _as_gps_seconds_array(t)
+    if t_gps is None:
+        t_gps = np.zeros(len(r_arr), dtype=float)
+    t_gps = np.asarray(t_gps, dtype=float).reshape(-1)
+    if t_gps.size == 1 and len(r_arr) > 1:
+        t_gps = np.full(len(r_arr), t_gps[0], dtype=float)
+    if t_gps.size != len(r_arr):
+        raise ValueError("t must be scalar or have the same number of samples as r")
+
+    return r_km, v_kms, Time(t_gps, format="gps")
+
+
 def valid_orbits(r, t, drop_empty=True, warn=True):
     """
     Normalize r and t into parallel lists of shape-(n,3) ndarrays and astropy Time objects.
 
     Accepts:
       r:
+        - SSAPy-like Orbit object, or list/tuple of Orbit objects
         - (3,), (1,3), (N,3), (B,N,3) ndarray
         - list/tuple of any of the above
       t:
@@ -218,8 +413,13 @@ def valid_orbits(r, t, drop_empty=True, warn=True):
 
         raise TypeError(f"valid_orbits: unsupported type for t: {type(t_in)}")
 
-    # 1) normalize r
-    r_list = _to_track_list_r(r)
+    # 1) normalize r.  SSAPy Orbit inputs are sampled first so the rest of
+    # this long-standing helper keeps returning the same r/t list structure.
+    orbit_tracks = _orbit_position_tracks(r, t)
+    if orbit_tracks is not None:
+        r_list, t = orbit_tracks
+    else:
+        r_list = _to_track_list_r(r)
 
     # 2) optionally drop empty r tracks and corresponding per-track t entries
     if drop_empty:
@@ -527,6 +727,52 @@ def save_plot(figure, save_path=None, dpi=200, default_name="figure", **save_kwa
     """Compatibility wrapper for :func:`figsave`."""
     save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
     return figsave(figure, save_path=save_path, dpi=dpi, default_name=default_name, **save_kwargs)
+
+
+def save_plotly_figure(
+    figure,
+    save_path=None,
+    default_name="figure",
+    width=1400,
+    height=1000,
+    scale=1,
+    **save_kwargs,
+):
+    """Save a Plotly figure using the SSATK figure-output policy."""
+    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(save_kwargs, "save_plotly_figure")
+    save_path = _figure_save_path(save_path, default_name=default_name)
+    if save_path is None:
+        return None
+
+    path = Path(save_path)
+    if not path.suffix:
+        path = path.with_suffix(".html")
+        save_path = str(path)
+
+    if path.suffix.lower() == ".html":
+        figure.write_html(save_path)
+    else:
+        figure.write_image(save_path, width=width, height=height, scale=scale)
+    print(f"Saved -> {save_path}")
+    return save_path
+
+
+def plotly_orbit_trace(r_km, *, name="Orbit", color="#ff4d4d", width=5, go_module=None):
+    """Return a Plotly 3D line trace for an orbit trajectory in kilometres."""
+    if go_module is None:
+        import plotly.graph_objects as go_module
+    r_km = _ensure_nx3(r_km, "r_km")
+    return go_module.Scatter3d(
+        x=r_km[:, 0],
+        y=r_km[:, 1],
+        z=r_km[:, 2],
+        mode="lines",
+        line=dict(color=color, width=width),
+        name=name,
+        hovertemplate="X=%{x:.0f} km<br>Y=%{y:.0f} km<br>Z=%{z:.0f} km<extra></extra>",
+        showlegend=True,
+    )
 
 
 def display_figure(figname, display='IPython'):

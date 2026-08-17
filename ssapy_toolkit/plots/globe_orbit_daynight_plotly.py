@@ -14,6 +14,13 @@ from __future__ import annotations
 import numpy as np
 import plotly.graph_objects as go
 
+from .plotutils import (
+    _pop_save_path_aliases,
+    _raise_unrecognized_kwargs,
+    normalize_orbit_trajectory,
+    save_plotly_figure,
+)
+
 # Needed for the optional Moon-shadow-on-Earth shading (solar eclipse case)
 try:
     from .eclipse_brightness_plot import illumination_fraction, R_SUN_KM, AU_KM
@@ -69,12 +76,23 @@ def propagate_eci(a_km, e, inc_deg, raan_deg, argp_deg, nu0_deg,
 
 
 def sun_direction_eci(t_s, epoch_jd=2_460_500.0):
-    jd = epoch_jd + t_s/86400.0
+    """Low-precision unit vector from Earth toward the Sun in ECI/GCRF axes.
+
+    The solar longitude approximation is ecliptic; rotate by the J2000 mean
+    obliquity so callers using equatorial ``ECI`` coordinates do not silently
+    get a zero-declination Sun except near the equinoxes.
+    """
+    jd = epoch_jd + np.asarray(t_s, dtype=float) / 86400.0
     n_days = jd - 2_451_545.0
     L = np.radians((280.460 + 0.9856474*n_days) % 360)
     g = np.radians((357.528 + 0.9856003*n_days) % 360)
     lam = L + np.radians(1.915*np.sin(g) + 0.020*np.sin(2*g))
-    return np.stack([np.cos(lam), np.sin(lam), np.zeros_like(lam)], axis=1)
+    eps = np.radians(23.439291)
+    return np.stack([
+        np.cos(lam),
+        np.cos(eps) * np.sin(lam),
+        np.sin(eps) * np.sin(lam),
+    ], axis=-1)
 
 
 _earth_texture_cache = None
@@ -576,19 +594,45 @@ def _sun_sphere_traces(pos, radius_km, seed=11):
     return traces
 
 
-def plot_globe_orbit_daynight_plotly(a_km, e, inc_deg, raan_deg=0.0, argp_deg=0.0,
+def plot_globe_orbit_daynight_plotly(a_km=None, e=None, inc_deg=None, raan_deg=0.0, argp_deg=0.0,
                                      nu0_deg=0.0, sat_name="Satellite",
-                                     n_orbits=1.0, n_steps=1500, save_path=None):
-    t_s, r_eci, T_s = propagate_eci(a_km, e, inc_deg, raan_deg, argp_deg, nu0_deg,
-                                     n_orbits=n_orbits, n_steps=n_steps)
-    sun_hat = sun_direction_eci(t_s)[0]
+                                     n_orbits=1.0, n_steps=1500, save_path=None,
+                                     show_sun_body=False, *, orbit=None, r=None,
+                                     v=None, t=None, r_units="auto", v_units="auto",
+                                     **kwargs):
+    """Plot an Earth day/night globe with an orbit trajectory.
+
+    The trajectory may be supplied as Keplerian elements, an SSAPy ``Orbit``
+    object, or time-series arrays from ``ssapy.rv``/``Orbit.at``.  Array inputs
+    may be in metres or kilometres; units are auto-detected unless explicitly
+    set with ``r_units``/``v_units``.
+    """
+    save_path, kwargs = _pop_save_path_aliases(kwargs, save_path=save_path)
+    _raise_unrecognized_kwargs(kwargs, "plot_globe_orbit_daynight_plotly")
+
+    if orbit is not None or r is not None:
+        r_eci, _, t_time = normalize_orbit_trajectory(
+            orbit=orbit,
+            r=r,
+            v=v,
+            t=t,
+            require_velocity=False,
+            r_units=r_units,
+            v_units=v_units,
+            n_steps=n_steps,
+            n_orbits=n_orbits,
+        )
+        epoch_jd = float(t_time[0].jd) if len(t_time) else 2_460_500.0
+        sun_hat = sun_direction_eci(np.array([0.0]), epoch_jd=epoch_jd)[0]
+    else:
+        if a_km is None or e is None or inc_deg is None:
+            raise ValueError("Provide Keplerian a_km/e/inc_deg, orbit=, or r= trajectory input.")
+        t_s, r_eci, _ = propagate_eci(a_km, e, inc_deg, raan_deg, argp_deg, nu0_deg,
+                                      n_orbits=n_orbits, n_steps=n_steps)
+        sun_hat = sun_direction_eci(t_s)[0]
 
     orbit_r = np.max(np.linalg.norm(r_eci, axis=1))
     frame_r = max(orbit_r, RE_KM*1.3)
-    sun_dist = frame_r * 1.55
-    sun_pos = sun_hat * sun_dist
-    sun_radius = frame_r * 0.09
-
     fig = go.Figure()
     fig.add_trace(_earth_mesh(sun_hat))
 
@@ -602,10 +646,17 @@ def plot_globe_orbit_daynight_plotly(a_km, e, inc_deg, raan_deg=0.0, argp_deg=0.
         name=sat_name, hoverinfo="skip",
     ))
 
-    for tr in _sun_sphere_traces(sun_pos, sun_radius):
-        fig.add_trace(tr)
+    if show_sun_body:
+        sun_dist = frame_r * 1.55
+        sun_pos = sun_hat * sun_dist
+        sun_radius = frame_r * 0.09
+        for tr in _sun_sphere_traces(sun_pos, sun_radius):
+            fig.add_trace(tr)
 
     lim = frame_r * 1.9
+    title_text = f"{sat_name} — orbit around Earth with day/night terminator"
+    if show_sun_body:
+        title_text += " and compressed Sun marker"
     fig.update_layout(
         scene=dict(
             xaxis=dict(range=[-lim, lim], title="X [km]", backgroundcolor="black",
@@ -619,18 +670,21 @@ def plot_globe_orbit_daynight_plotly(a_km, e, inc_deg, raan_deg=0.0, argp_deg=0.
         ),
         paper_bgcolor="black",
         font=dict(color="white"),
-        title=dict(text=f"{sat_name} — orbit around Earth, with the Sun shown in frame",
+        title=dict(text=title_text,
                   x=0.5, font=dict(color="white", size=16)),
         margin=dict(l=0, r=0, t=50, b=0),
         showlegend=False,
     )
 
     if save_path:
-        if save_path.endswith(".html"):
-            fig.write_html(save_path)
-        else:
-            fig.write_image(save_path, width=1400, height=1000, scale=1)
-        print(f"Saved -> {save_path}")
+        save_plotly_figure(
+            fig,
+            save_path=save_path,
+            default_name="globe_orbit_daynight_plotly",
+            width=1400,
+            height=1000,
+            scale=1,
+        )
     return fig
 
 

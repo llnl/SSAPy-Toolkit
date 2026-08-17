@@ -143,8 +143,11 @@ def build_figure(cfg: dict) -> go.Figure:
     scale_au      = float(cfg.get("planet_scale",     1.0))
     catalog_path  = cfg.get("star_catalog",
                             str(Path.home() / "bright_stars.csv"))
+    star_mag_limit = float(cfg.get("star_mag_limit", 6.5))
     sphere_res    = int(cfg.get("sphere_resolution",  50))
     bg            = cfg.get("bg_color", "#060810")
+    outer_a = max((p["a"] for n, p in _PLANETS.items() if show_planets.get(n)), default=1.5)
+    star_radius_au = max(outer_a * 1.35, 3.0)
 
     fig = go.Figure()
 
@@ -160,6 +163,14 @@ def build_figure(cfg: dict) -> go.Figure:
             os.path.join(os.path.dirname(__file__), "bright_stars.csv"),
         ]
         try:
+            from ssapy_toolkit.plots.starfield import find_data_file as _find_data_file
+            for _name in ("bright_stars_mag9.csv", "bright_stars.csv"):
+                _found = _find_data_file(_name)
+                if _found is not None:
+                    _star_paths.insert(0, str(_found))
+        except Exception:
+            pass
+        try:
             from ssapy.utils import find_file as _ssapy_find_file
             _star_paths.insert(0, _ssapy_find_file("bright_stars", ext=".csv"))
         except Exception:
@@ -169,15 +180,15 @@ def build_figure(cfg: dict) -> go.Figure:
         _found_path = None
         for _sp in _star_paths:
             if _sp and Path(_sp).exists():
-                res = _load_stars(_sp, mag_limit=5.5)
+                res = _load_stars(_sp, mag_limit=star_mag_limit)
                 if res is not None:
                     _found_path = _sp
                     break
 
-        R_star = 45.0
+        R_star = star_radius_au
         if res is not None:
             cx, cy, cz, mags, spects = res
-            sizes  = np.clip(0.6 * (5.5 - mags)**1.1, 0.3, 3.5)
+            sizes  = np.clip(0.45 * (star_mag_limit - mags)**1.1, 0.25, 3.2)
             colors = [_SPECT_COLORS.get(s, _SPECT_COLORS["G"]) for s in spects]
             print(f"[solar_view_plot] Loaded {len(mags)} stars from {_found_path}")
         else:
@@ -204,7 +215,6 @@ def build_figure(cfg: dict) -> go.Figure:
     # circle) so it doesn't look like unexplained stray lines.
     if show_ecliptic:
         th = np.linspace(0, 2*np.pi, 200)
-        outer_a = max((p["a"] for n, p in _PLANETS.items() if show_planets.get(n)), default=1.5)
         _first_ring = True
         for _r in [1, 5, 10, 20, 30]:
             if _r > outer_a * 1.1:
@@ -278,8 +288,7 @@ def build_figure(cfg: dict) -> go.Figure:
 
     # ── Layout ────────────────────────────────────────────────────────────────
     T_yr = (t_jd - 2_451_545.0) / 365.25
-    outer_a = max((p["a"] for n, p in _PLANETS.items() if show_planets.get(n)), default=1.5)
-    rng = outer_a * 1.25
+    rng = max(outer_a * 1.25, star_radius_au * 1.03 if show_stars else 0.0)
 
     fig.update_layout(
         scene=dict(
@@ -298,7 +307,7 @@ def build_figure(cfg: dict) -> go.Figure:
         paper_bgcolor=bg,
         font=dict(color="#C8D8E8"),
         title=dict(
-            text=f"Heliocentric Solar System — {2000+T_yr:.3f}",
+            text=f"Complete heliocentric Solar System — {2000+T_yr:.3f}",
             x=0.5, font=dict(color="#00FF9C", size=14),
         ),
         legend=dict(bgcolor="rgba(0,0,0,0.5)", bordercolor="#333",
@@ -313,9 +322,10 @@ DEFAULT_CFG = dict(
     sol_year=2025, sol_month=6,
     sol_show_mercury=True, sol_show_venus=True, sol_show_earth=True,
     sol_show_mars=True,    sol_show_jupiter=True, sol_show_saturn=True,
-    sol_show_uranus=False, sol_show_neptune=False,
+    sol_show_uranus=True,  sol_show_neptune=True,
     sol_show_moon=True,    sol_show_trails=True,
     sol_show_stars=True,   sol_show_ecliptic=True, sol_show_labels=True,
+    star_mag_limit=6.5,
     planet_scale=1.0,
     sphere_resolution=50,
     bg_color="#060810",

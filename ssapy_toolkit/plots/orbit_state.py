@@ -34,6 +34,7 @@ import numpy as np
 
 from astropy import units as _u
 from ssapy_toolkit.constants import EARTH_RADIUS, WGS84_EARTH_OMEGA, LD
+from .plotutils import normalize_orbit_trajectory
 
 # ── Optional SSAPy ────────────────────────────────────────────────────────────
 try:
@@ -675,6 +676,27 @@ class OrbitalState:
 
         return cls(a_km=a_km, e=e, inc_deg=inc, raan_deg=raan,
                    argp_deg=argp, nu_deg=nu, epoch=epoch, **kwargs)
+
+    @classmethod
+    def from_ssapy(cls, orbit, t=None, **kwargs) -> "OrbitalState":
+        """Convert an SSAPy ``Orbit`` or vector-valued ``Orbit.at`` result.
+
+        SSAPy stores positions in metres and velocities in metres/second;
+        this class stores kilometres and kilometres/second.  If the supplied
+        orbit contains a propagated time series, the first sample defines the
+        osculating state used by the scene-oriented plotting classes.
+        """
+        r_km, v_km_s, t_time = normalize_orbit_trajectory(
+            orbit=orbit,
+            t=t,
+            require_velocity=True,
+            r_units="m",
+            v_units="m/s",
+        )
+        epoch = kwargs.pop("epoch", None)
+        if epoch is None and len(t_time):
+            epoch = t_time[0].utc.to_datetime(timezone=timezone.utc)
+        return cls.from_rv(r_km[0], v_km_s[0], epoch=epoch, **kwargs)
 
     def clone(self, **overrides) -> "OrbitalState":
         kw = dict(a_km=self.a_km, e=self.e, inc_deg=self.inc_deg,

@@ -173,3 +173,36 @@ def test_groundtrack_video_earth_texture_fallback(monkeypatch):
     monkeypatch.setattr("ssapy_toolkit.plots.plotutils.load_earth_file", lambda: (_ for _ in ()).throw(FileNotFoundError("earth")))
 
     assert module._try_load_earth() is None
+
+
+def test_new_plot_sun_direction_eci_uses_equatorial_obliquity():
+    from ssapy_toolkit.plots.eclipse_brightness_plot import sun_direction_eci as eclipse_sun
+    from ssapy_toolkit.plots.globe_orbit_daynight_plotly import sun_direction_eci as globe_sun
+
+    t_s = np.array([0.0, 91.0 * 86400.0, 182.0 * 86400.0])
+    eclipse_vectors = eclipse_sun(t_s)
+    globe_vectors = globe_sun(t_s)
+
+    assert np.allclose(eclipse_vectors, globe_vectors)
+    assert np.allclose(np.linalg.norm(eclipse_vectors, axis=1), 1.0)
+    assert np.max(np.abs(eclipse_vectors[:, 2])) > 0.1
+
+
+def test_satellite_viewer_texture_fallback_without_packaged_assets(monkeypatch):
+    module = importlib.import_module("ssapy_toolkit.plots.build_satellite_viewer")
+
+    def missing_resource(filename):
+        raise module.DataResourceNotFoundError(filename)
+
+    class NoSiblingData:
+        @staticmethod
+        def find_data_file(filename):
+            return None
+
+    monkeypatch.setattr(module, "read_data_binary", missing_resource)
+    monkeypatch.setitem(sys.modules, "ssapy_toolkit.plots.starfield", NoSiblingData)
+
+    textures = module.load_textures()
+
+    assert set(textures) == {"day", "night", "specular", "clouds"}
+    assert all(isinstance(value, str) and len(value) > 20 for value in textures.values())

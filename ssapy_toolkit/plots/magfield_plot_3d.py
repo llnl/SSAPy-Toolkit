@@ -37,6 +37,11 @@ import calendar
 
 import numpy as np
 
+try:
+    from .plotutils import normalize_orbit_trajectory, plotly_orbit_trace
+except ImportError:
+    from plotutils import normalize_orbit_trajectory, plotly_orbit_trace
+
 # Shared geometry, Earth, sky and texture helpers live in one module so the
 # two plot modules cannot drift apart (they did, repeatedly, when duplicated).
 # Imported explicitly rather than with * so static analysis can still see
@@ -733,6 +738,15 @@ def plot_magfield_3d(
     show_provenance=True,
     show_orbits=True,
     show_sun=True,
+    orbit=None,
+    r=None,
+    v=None,
+    t=None,
+    r_units="auto",
+    v_units="auto",
+    orbit_name="SSAPy orbit",
+    orbit_color="#ff4d4d",
+    orbit_width=5,
     split_topology=True,
     sw_bz_nT=0.0,
     sw_dp_nPa=2.0,
@@ -827,6 +841,18 @@ def plot_magfield_3d(
     RE = EARTH_RADIUS_KM
     axis = _dipole_axis()
 
+    trajectory_r_km = None
+    if orbit is not None or r is not None:
+        trajectory_r_km, _, _ = normalize_orbit_trajectory(
+            orbit=orbit,
+            r=r,
+            v=v,
+            t=t,
+            require_velocity=False,
+            r_units=r_units,
+            v_units=v_units,
+        )
+
     # ------------------------------------------------------------------
     # Scene framing.  The box is sized to the STAR sphere so the stars are
     # inside the axis range (they would otherwise be clipped), and the camera
@@ -839,6 +865,8 @@ def plot_magfield_3d(
         content_r = 2.0 * RE
     if show_van_allen:
         content_r = max(content_r, outer_max_RE * RE * 1.06)
+    if trajectory_r_km is not None:
+        content_r = max(content_r, float(np.nanmax(np.linalg.norm(trajectory_r_km, axis=1))) * 1.08)
     content_r = max(content_r, 1.5 * RE) * 1.02 / max(float(zoom), 1e-3)
 
     ortho = str(projection).lower().startswith("ortho")
@@ -1001,6 +1029,15 @@ def plot_magfield_3d(
                                     night_floor=night_floor))
     if show_atmosphere:
         traces.extend(_atmosphere_traces())
+
+    if trajectory_r_km is not None:
+        traces.append(plotly_orbit_trace(
+            trajectory_r_km,
+            name=orbit_name,
+            color=orbit_color,
+            width=orbit_width,
+            go_module=go,
+        ))
 
     if show_magnetopause:
         gpts, mi, mj, mk, r0, alpha = _shue_magnetopause(date, bz_nT=sw_bz_nT,
