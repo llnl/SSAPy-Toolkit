@@ -188,6 +188,23 @@ def test_new_plot_sun_direction_eci_uses_equatorial_obliquity():
     assert np.max(np.abs(eclipse_vectors[:, 2])) > 0.1
 
 
+
+def test_satellite_viewer_scene_uses_physical_sun_moon_defaults():
+    scene = Path("ssapy_toolkit/plots/satellite_viewer_scene.js").read_text()
+
+    assert "const SUN_RENDER_DISTANCE_KM = AU_KM;" in scene
+    assert "const SUN_RENDER_RADIUS_KM = R_SUN_KM;" in scene
+    assert "const MOON_RENDER_DISTANCE_KM = MOON_MEAN_DISTANCE_KM;" in scene
+    assert "const MOON_RENDER_RADIUS_KM = R_MOON_KM;" in scene
+    assert "logarithmicDepthBuffer: true" in scene
+    default_keys = "const DEFAULT_DEMO_SATELLITES = ['iss', 'gps', 'weather_goes', 'cislunar_demo'];"
+    assert default_keys in scene
+    assert "name: 'Cislunar orbit demo'" in scene
+    assert "const SATELLITE_GLYPH_SIZE_KM = 900;" in scene
+    assert "const modelSize = SATELLITE_GLYPH_SIZE_KM;" in scene
+    assert "framingR * 0.11" not in scene
+
+
 def test_satellite_viewer_texture_fallback_without_packaged_assets(monkeypatch):
     module = importlib.import_module("ssapy_toolkit.plots.build_satellite_viewer")
 

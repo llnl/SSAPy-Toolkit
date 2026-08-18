@@ -245,6 +245,52 @@ def _safe_log_name(name: str) -> str:
     return name.replace("/", "__").replace("\\", "__")
 
 
+def _safe_path_part(value: str, default: str = "uncategorized") -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value).strip()).strip("._-")
+    return cleaned or default
+
+
+def _organized_figure_dir(output_root: Path, category: str, name: str) -> Path:
+    category_part = _safe_path_part(category or "misc", default="misc")
+    return output_root / "figures" / category_part
+
+
+def _organize_demo_files(paths: list[Path], output_root: Path, category: str, name: str) -> list[Path]:
+    """Move flat gallery figure outputs into ``figures/<category>/``.
+
+    Demos historically saved everything under ``demo_gallery/figures``.  Category
+    folders keep the gallery browsable without burying files under a second
+    per-demo directory.  Files already in subfolders, logs, and outputs outside
+    ``output_root`` are left untouched.
+    """
+    figures_root = (output_root / "figures").resolve()
+    target_dir = _organized_figure_dir(output_root, category, name)
+    organized: list[Path] = []
+    for path in paths:
+        src = Path(path).resolve()
+        try:
+            rel = src.relative_to(figures_root)
+        except ValueError:
+            organized.append(src)
+            continue
+        if len(rel.parts) != 1:
+            organized.append(src)
+            continue
+        target_dir.mkdir(parents=True, exist_ok=True)
+        dest = target_dir / src.name
+        if dest.exists() and dest.resolve() != src:
+            stem = dest.stem
+            suffix = dest.suffix
+            counter = 2
+            while dest.exists() and dest.resolve() != src:
+                dest = target_dir / f"{stem}_{counter}{suffix}"
+                counter += 1
+        if dest.resolve() != src:
+            shutil.move(str(src), str(dest))
+        organized.append(dest.resolve())
+    return sorted(organized)
+
+
 def run_demo_script(
     path: Path,
     output_root: Path,
@@ -267,6 +313,8 @@ def run_demo_script(
 
     try:
         module = import_module_from_path(path)
+        if hasattr(module, "GALLERY_CATEGORY"):
+            category = str(module.GALLERY_CATEGORY).strip() or category
         if hasattr(module, "TITLE"):
             title = str(module.TITLE)
         if hasattr(module, "DESCRIPTION"):
@@ -297,7 +345,7 @@ def run_demo_script(
             description = str(result.get("description", description))
 
         after = snapshot_figsave_files()
-        touched = changed_files(before, after)
+        touched = _organize_demo_files(changed_files(before, after), output_root, category, name)
         files = sorted({relpath_for_report(p, output_root) for p in touched})
 
         log_dir = output_root / "logs"
@@ -339,7 +387,7 @@ def run_demo_script(
         _write_text_if_nonempty(stderr_file, stderr_text)
 
         after = snapshot_figsave_files()
-        touched = changed_files(before, after)
+        touched = _organize_demo_files(changed_files(before, after), output_root, category, name)
         files = {relpath_for_report(p, output_root) for p in touched}
         files.add(relpath_for_report(err_file, output_root))
         if stdout_text:

@@ -4,7 +4,7 @@ def divergence_gif(
     output_path,
     r_nominal_hist=None,
     v_nominal_hist=None,
-    fps=2,
+    fps=1,
     duration=None,
     vmin=-50,
     vmax=50
@@ -26,10 +26,11 @@ def divergence_gif(
     v_nominal_hist : np.ndarray, optional
         Nominal velocity time series, shape (n_snapshots, 3) in m/s.
         If None, computes velocity from r_nominal_hist using finite differences.
-    fps : int
-        Frames per second (ignored if duration is provided)
+    fps : int or float
+        Frames per second (ignored if duration is provided). The default is
+        intentionally slow enough for divergence growth to be readable.
     duration : float or None
-        Seconds per frame. If provided, overrides fps [3]
+        Seconds per frame. If provided, overrides fps.
     vmin, vmax : float
         Color scale limits for timing difference [seconds]
     
@@ -212,4 +213,4 @@ def divergence_gif(
 #                          r_nominal_hist=r_nom, v_nominal_hist=v_nom)
 
 # Example 3: Custom timing
-# gif_path = divergence_gif(r_histories, times_gps, "output.gif", duration=0.2)
+# gif_path = divergence_gif(r_histories, times_gps, "output.gif", duration=1.0)

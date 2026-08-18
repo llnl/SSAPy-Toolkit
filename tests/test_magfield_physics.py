@@ -221,6 +221,23 @@ def test_wgs84_flattening():
     assert abs(r.min() - core.WGS84_B_KM) < 1e-3
 
 
+
+def test_presampled_earth_shading_is_self_lit():
+    mesh = core._build_earth_mesh(
+        "none",
+        n_lon=24,
+        n_lat=12,
+        sun_shading=True,
+        date=DATE,
+    )
+    assert mesh.lighting.ambient == 1.0
+    assert mesh.lighting.diffuse == 0.0
+
+
+def test_unshaded_earth_mesh_keeps_plotly_lighting():
+    mesh = core._build_earth_mesh("none", n_lon=24, n_lat=12, sun_shading=False)
+    assert mesh.lighting.diffuse > 0.0
+
 def test_surface_radius_is_the_ellipsoid():
     eq = mf._surface_radius_km(np.array([[RE, 0.0, 0.0]]))[0]
     pole = mf._surface_radius_km(np.array([[0.0, 0.0, RE]]))[0]

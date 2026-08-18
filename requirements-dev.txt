@@ -1,4 +1,5 @@
-# Developer tools (install with: pip install -e .[dev])
+# Developer tools (install with: python -m pip install -e .[dev])
 pytest
 ipykernel
 ruff
+nodeenv

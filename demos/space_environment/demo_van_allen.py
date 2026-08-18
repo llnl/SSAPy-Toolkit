@@ -10,8 +10,10 @@ demo_van_allen_polar.html/.png      — polar view
 
 Run
 ---
-    python -m demos.plotting.demo_van_allen
+    python -m demos.space_environment.demo_van_allen
 """
+
+GALLERY_CATEGORY = "space_environment"
 
 import os
 import sys

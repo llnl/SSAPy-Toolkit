@@ -8,8 +8,10 @@ demo_magfield_plot.html  — interactive 3D (rotate/zoom in browser)
 
 Run
 ---
-    python -m demos.plotting.demo_magfield_plot
+    python -m demos.space_environment.demo_magfield_plot
 """
+
+GALLERY_CATEGORY = "space_environment"
 
 import sys
 import os

@@ -187,10 +187,15 @@ def write_gif(
         with Image.open(paths[0]) as first_img:
             target_size = first_img.size
 
+    # ImageIO's Pillow GIF backend expects milliseconds here, even though the
+    # public SSATK API documents `duration` as seconds per frame. Passing the
+    # seconds value directly produces zero-delay GIFs on current ImageIO/Pillow.
+    frame_duration_ms = frame_duration * 1000.0
+
     # Write GIF
     if verbose:
         print(f"Writing gif: {out}")
-    with imageio.get_writer(out, mode="I", duration=frame_duration, loop=loop) as writer:
+    with imageio.get_writer(out, mode="I", duration=frame_duration_ms, loop=loop) as writer:
         for p in paths:
             arr = imageio.imread(p)
             img = Image.fromarray(arr)

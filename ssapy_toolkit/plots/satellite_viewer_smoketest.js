@@ -13,9 +13,10 @@ const path = require('path');
 // back to one directory up so either layout works.
 const fs = require('fs');
 const CANDIDATES = [
+  process.env.SSATK_SATELLITE_VIEWER_HTML,
   path.resolve(__dirname, 'satellite_3d_scene_threejs.html'),
   path.resolve(__dirname, '..', 'satellite_3d_scene_threejs.html'),
-];
+].filter(Boolean);
 const HTML = CANDIDATES.find(p => fs.existsSync(p));
 if (!HTML) {
   console.error('ERROR: satellite_3d_scene_threejs.html not found. Run "python build_satellite_viewer.py" first.');
@@ -44,8 +45,8 @@ function assert(cond, msg) { if (!cond) { console.error('FAIL:', msg); process.e
     defaultName: [...activeSatellites.values()][0].entry.name,
     hasEarth: !!earthMesh,
   }));
-  assert(base.catalog === 20, `catalog should be 20, got ${base.catalog}`);
-  assert(base.active === 1, `one satellite active by default, got ${base.active}`);
+  assert(base.catalog === 21, `catalog should be 21, got ${base.catalog}`);
+  assert(base.active === 4, `four demo satellites active by default, got ${base.active}`);
   assert(/ISS/.test(base.defaultName), `default should be ISS, got ${base.defaultName}`);
   assert(base.hasEarth, 'earthMesh missing');
 

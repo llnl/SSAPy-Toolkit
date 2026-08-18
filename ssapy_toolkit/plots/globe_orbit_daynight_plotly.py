@@ -20,6 +20,7 @@ from .plotutils import (
     normalize_orbit_trajectory,
     save_plotly_figure,
 )
+from .scene_primitives import earth_rotation_deg_from_time, stabilize_sphere_poles, sun_position_and_radius
 
 # Needed for the optional Moon-shadow-on-Earth shading (solar eclipse case)
 try:
@@ -139,7 +140,7 @@ def _land_mask(n_lat, n_lon, seed=7):
     speckle below — one source of truth instead of two separate blob
     generators that could disagree with each other."""
     lat = np.linspace(90, -90, n_lat)
-    lon = np.linspace(-180, 180, n_lon)
+    lon = np.linspace(-180, 180, n_lon, endpoint=False)
     Lon, Lat = np.meshgrid(lon, lat)
     try:
         from global_land_mask import globe
@@ -203,7 +204,7 @@ def _terrain_relief(Lat, Lon, land, seed=17):
     return relief * land
 
 
-def _city_lights(n_lat, n_lon, land, Lat, seed=13):
+def _city_lights(n_lat, n_lon, land, Lat, Lon, seed=13):
     """
     Warm speckled glow on the night side over land, concentrated at
     mid-latitudes (real light pollution is overwhelmingly a mid-latitude,
@@ -218,12 +219,14 @@ def _city_lights(n_lat, n_lon, land, Lat, seed=13):
     clusters = np.zeros_like(Lat)
     for _ in range(220):
         clat, clon = rng.normal(0, 35), rng.uniform(-180, 180)
-        spread = rng.uniform(1.5, 5)
-        d = np.sqrt((Lat - clat) ** 2 + ((rng.uniform(-180, 180) - clon + 180) % 360 - 180) ** 2)
-        clusters += np.exp(-(d ** 2) / (2 * spread ** 2))
-    clusters = clusters / (clusters.max() + 1e-9)
-    lights = land * lat_band * np.clip(clusters * 1.3 + speckle * 0.15, 0, 1)
-    return np.clip(lights, 0, 1)
+        spread_lat = rng.uniform(1.5, 4.5)
+        spread_lon = rng.uniform(2.0, 7.0)
+        dlat = (Lat - clat) / spread_lat
+        dlon = ((Lon - clon + 180) % 360 - 180) / spread_lon
+        clusters += np.exp(-0.5 * (dlat ** 2 + dlon ** 2))
+    clusters = (clusters / (clusters.max() + 1e-9)) ** 2.2
+    lights = land * lat_band * np.clip(clusters * 0.75 + speckle * 0.025, 0, 1)
+    return np.clip(_smooth(lights, sigma=0.18), 0, 1)
 
 
 def _procedural_continents(n_lat, n_lon, seed=7):
@@ -234,7 +237,7 @@ def _procedural_continents(n_lat, n_lon, seed=7):
     if that package genuinely isn't installed either.
     """
     lat = np.linspace(90, -90, n_lat)
-    lon = np.linspace(-180, 180, n_lon)
+    lon = np.linspace(-180, 180, n_lon, endpoint=False)
     Lon, Lat = np.meshgrid(lon, lat)
     land, Lat, Lon = _land_mask(n_lat, n_lon, seed=seed)
 
@@ -305,7 +308,8 @@ def _earth_atmosphere_trace(center=(0.0, 0.0, 0.0), radius_scale=1.0):
 
 
 def _earth_mesh(sun_hat, n_lat=180, n_lon=360, radius_scale=1.0, center=(0.0, 0.0, 0.0),
-                shadow_body_center_km=None, shadow_body_radius_km=None, rotation_deg=0.0):
+                shadow_body_center_km=None, shadow_body_radius_km=None, rotation_deg=0.0,
+                show_city_lights=False, night_lift_strength=0.0):
     """Real 3D sphere mesh, real Earth texture where available (falls back
     to procedural continents only if the real texture truly isn't found),
     with real day/night shading applied to the actual texture pixels —
@@ -329,7 +333,7 @@ def _earth_mesh(sun_hat, n_lat=180, n_lon=360, radius_scale=1.0, center=(0.0, 0.
     rebuilding the land mask / relief every animation frame, and gives
     an identical result to actually rotating the geometry for a sphere."""
     lat = np.linspace(90, -90, n_lat)
-    lon = np.linspace(-180, 180, n_lon)
+    lon = np.linspace(-180, 180, n_lon, endpoint=False)
     Lon, Lat = np.meshgrid(lon, lat)
     latr, lonr = np.radians(Lat), np.radians(Lon)
 
@@ -337,10 +341,11 @@ def _earth_mesh(sun_hat, n_lat=180, n_lon=360, radius_scale=1.0, center=(0.0, 0.
 
     tex = _load_real_earth_texture(n_lat, n_lon)
     if tex is not None:
-        # Longitude wrap fix — same as globe_plot.py's `tc = (c + W//2) % W`:
-        # most equirectangular Earth textures have column 0 at the
-        # antimeridian, not the prime meridian, so shift by half the width.
-        tex = np.roll(tex, n_lon // 2, axis=1)
+        # SSAPy's bundled earth.png is already arranged as an equirectangular
+        # map over [-180°, +180°] longitude, matching the mesh grid below and
+        # the 2D groundtrack helpers' imshow(extent=[-180, 180, -90, 90]).
+        # Do not apply the older half-world roll here: that places North
+        # America under Asia and makes eclipse ground tracks look wrong.
         rgb = tex.astype(float) / 255.0
         base_desc = "real ssapy Earth texture"
     else:
@@ -363,22 +368,18 @@ def _earth_mesh(sun_hat, n_lat=180, n_lon=360, radius_scale=1.0, center=(0.0, 0.
     # with a thin gradient, not a broad soft blend.
     day_core = np.clip(dot, 0, 1) ** 0.92
     twilight = 1.0 / (1.0 + np.exp(-dot / 0.045))   # steep sigmoid, ~few deg wide
-    # Floor raised twice now: originally 0.045 (indistinguishable from
-    # black at any brightness), then 0.15 (still too close to black for
-    # naturally dark colors like ocean — 15% of an already-dark navy
-    # albedo is still ~black on screen). Settled on 0.30: strong day/night
-    # contrast is still obvious, but land/ocean texture actually stays
-    # legible on the night side, which matters more here than matching
-    # a real photo's true darkness — this is a diagnostic visualization,
-    # not a photorealistic renderer.
-    day_night_brightness = np.clip(0.22 + 0.78 * day_core * twilight, 0.22, 1.0)
+    # Keep the unlit hemisphere visible without letting it masquerade as
+    # daylight.  A lower floor plus a night-only lift later avoids the
+    # over-bright, banded dark side that made some Plotly scenes look like a
+    # gas giant instead of Earth.
+    day_night_brightness = np.clip(0.10 + 0.90 * day_core * twilight, 0.10, 1.0)
 
     # Twilight glow: real sunrise/sunset bands look blue/orange from
     # Rayleigh scattering in the atmosphere, brightest exactly where the
     # surface itself is darkest (grazing sun). Added as a color tint
     # layered in below, not just a brightness multiplier, since real
     # twilight visibly shifts hue, not just dims.
-    twilight_band = np.exp(-(dot / 0.06) ** 2) * (1 - np.clip(dot, 0, 1))
+    twilight_band = np.exp(-(dot / 0.045) ** 2) * np.clip((dot + 0.02) / 0.08, 0, 1)
     twilight_color = np.array([1.00, 0.55, 0.30])  # warm sunset-orange near the terminator
 
     # Real geometric terrain relief (mountain ridges on land, flat ocean),
@@ -402,10 +403,10 @@ def _earth_mesh(sun_hat, n_lat=180, n_lon=360, radius_scale=1.0, center=(0.0, 0.
             # every mountain locked to the same patch of rotating color.
             relief = np.roll(relief, shift, axis=1)
             land_for_lights = np.roll(land_for_lights, shift, axis=1)
-        R_disp = 1.0 + relief * 0.006    # bumped up (was 0.0022) — the
-        # smaller value was true-to-scale but visually imperceptible;
-        # this is a deliberate exaggeration, same spirit as the Moon's
-        # boosted crater displacement, purely so relief actually reads.
+        R_disp = 1.0 + relief * 0.0025   # subtle relief; larger values caused
+        # distracting dark ridges and band-like artifacts in low-resolution
+        # Plotly scenes such as the sensor-FOV demo.
+        R_disp = stabilize_sphere_poles(R_disp)
         Xn, Yn, Zn = R_disp*nx, R_disp*ny, R_disp*nz
         nxr, nyr, nzr = _vertex_normals(Xn, Yn, Zn)
         terrain_diffuse = np.clip(nxr*sun_hat[0] + nyr*sun_hat[1] + nzr*sun_hat[2], 0, 1)
@@ -413,14 +414,14 @@ def _earth_mesh(sun_hat, n_lat=180, n_lon=360, radius_scale=1.0, center=(0.0, 0.
         # scale lighting), modulated more strongly than before by the
         # local terrain normal so mountains actually catch/lose light
         # instead of being flat color patches.
-        terrain_shade = np.clip(0.65 + 0.70*(terrain_diffuse - np.clip(dot, 0, 1)), 0.55, 1.5)
+        terrain_shade = np.clip(0.85 + 0.35*(terrain_diffuse - np.clip(dot, 0, 1)), 0.75, 1.18)
     else:
         if shift:
             land_for_lights = np.roll(land_for_lights, shift, axis=1)
         R_disp = np.ones_like(Lat)
         terrain_shade = np.ones_like(Lat)
 
-    night_lights = _city_lights(n_lat, n_lon, land_for_lights, Lat_ll)
+    night_lights = stabilize_sphere_poles(_city_lights(n_lat, n_lon, land_for_lights, Lat_ll, Lon_ll))
     night_factor = np.clip(1 - np.clip(dot, 0, 1) * 3.0, 0, 1)  # only near/past the terminator
     light_color = np.array([1.0, 0.78, 0.45])
 
@@ -469,26 +470,32 @@ def _earth_mesh(sun_hat, n_lat=180, n_lon=360, radius_scale=1.0, center=(0.0, 0.
     # — the eclipse is exactly what's blocking the light that creates
     # either effect.
     rgb_shaded = np.clip(
-        rgb_shaded + twilight_band[..., None] * twilight_color[None, None, :] * 0.35 * (eclipse_brightness[..., None] ** 3),
+        rgb_shaded + twilight_band[..., None] * twilight_color[None, None, :] * 0.12 * (eclipse_brightness[..., None] ** 3),
         0, 1)
     rgb_shaded = np.clip(
-        rgb_shaded + (glint * ocean_mask)[..., None] * glint_color[None, None, :] * 0.5 * (eclipse_brightness[..., None] ** 3),
+        rgb_shaded + (glint * ocean_mask)[..., None] * glint_color[None, None, :] * 0.25 * (eclipse_brightness[..., None] ** 3),
         0, 1)
 
-    light_add = (night_lights * night_factor)[..., None] * light_color[None, None, :] * 0.9
-    rgb_shaded = np.clip(rgb_shaded + light_add, 0, 1)
+    if show_city_lights:
+        light_add = (night_lights * night_factor)[..., None] * light_color[None, None, :] * 0.10
+        rgb_shaded = np.clip(rgb_shaded + light_add, 0, 1)
 
-    # Shadow-lift curve — NOT a naive global gamma. The previous version
-    # (rgb**(1/1.9) applied to every pixel) did fix the night side's
-    # visibility, but it also brightened the already well-exposed DAY
-    # side by the same amount, washing out continent contrast and
-    # saturation into the flat, hazy look seen in the animated renders.
-    # This curve (1-(1-x)^gamma) lifts dark values substantially while
-    # leaving values near 1.0 almost untouched — e.g. a night-side 0.22
-    # lifts to ~0.39, while a bright daytime 0.90 only moves to ~0.99,
-    # instead of both being pushed upward by the same multiplicative
-    # amount.
-    rgb_shaded = 1.0 - (1.0 - np.clip(rgb_shaded, 0, 1)) ** 1.9
+    # Night-only shadow lift. A global gamma brightens the dayside too and
+    # washes continents into a flat haze; blending this curve in only where
+    # dot <= 0 keeps the unlit hemisphere readable without creating a bright,
+    # banded dark side.
+    lift_strength = max(0.0, min(float(night_lift_strength), 1.0))
+    if lift_strength:
+        night_lift = np.clip(1.0 - np.clip(dot, 0, 1) * 4.0, 0.0, 1.0)
+        lifted = 1.0 - (1.0 - np.clip(rgb_shaded, 0, 1)) ** 1.18
+        rgb_shaded = np.clip(
+            rgb_shaded * (1.0 - lift_strength * night_lift[..., None])
+            + lifted * (lift_strength * night_lift[..., None]),
+            0,
+            1,
+        )
+
+    rgb_shaded = stabilize_sphere_poles(rgb_shaded)
 
     R = RE_KM * radius_scale
     X, Y, Z = center[0] + R*R_disp*nx, center[1] + R*R_disp*ny, center[2] + R*R_disp*nz
@@ -500,8 +507,9 @@ def _earth_mesh(sun_hat, n_lat=180, n_lon=360, radius_scale=1.0, center=(0.0, 0.
 
     ii, jj, kk = [], [], []
     for r in range(n_lat - 1):
-        for c in range(n_lon - 1):
-            v0 = r*n_lon + c; v1 = v0+1; v2 = (r+1)*n_lon + c; v3 = v2+1
+        for c in range(n_lon):
+            cn = (c + 1) % n_lon
+            v0 = r*n_lon + c; v1 = r*n_lon + cn; v2 = (r+1)*n_lon + c; v3 = (r+1)*n_lon + cn
             ii += [v0, v1]; jj += [v1, v3]; kk += [v2, v2]
 
     return go.Mesh3d(
@@ -599,6 +607,8 @@ def plot_globe_orbit_daynight_plotly(a_km=None, e=None, inc_deg=None, raan_deg=0
                                      n_orbits=1.0, n_steps=1500, save_path=None,
                                      show_sun_body=False, *, orbit=None, r=None,
                                      v=None, t=None, r_units="auto", v_units="auto",
+                                     earth_time=None, reference_index=-1,
+                                     highlight_reference=True,
                                      **kwargs):
     """Plot an Earth day/night globe with an orbit trajectory.
 
@@ -610,6 +620,7 @@ def plot_globe_orbit_daynight_plotly(a_km=None, e=None, inc_deg=None, raan_deg=0
     save_path, kwargs = _pop_save_path_aliases(kwargs, save_path=save_path)
     _raise_unrecognized_kwargs(kwargs, "plot_globe_orbit_daynight_plotly")
 
+    default_epoch_jd = 2_460_500.0
     if orbit is not None or r is not None:
         r_eci, _, t_time = normalize_orbit_trajectory(
             orbit=orbit,
@@ -622,19 +633,34 @@ def plot_globe_orbit_daynight_plotly(a_km=None, e=None, inc_deg=None, raan_deg=0
             n_steps=n_steps,
             n_orbits=n_orbits,
         )
-        epoch_jd = float(t_time[0].jd) if len(t_time) else 2_460_500.0
+        ref_idx = int(reference_index) % len(r_eci)
+        reference_time = earth_time if earth_time is not None else (t_time[ref_idx] if len(t_time) else None)
+        epoch_jd = float(reference_time.jd) if hasattr(reference_time, "jd") else default_epoch_jd
         sun_hat = sun_direction_eci(np.array([0.0]), epoch_jd=epoch_jd)[0]
+        rotation_deg = earth_rotation_deg_from_time(reference_time) if reference_time is not None else 0.0
     else:
         if a_km is None or e is None or inc_deg is None:
             raise ValueError("Provide Keplerian a_km/e/inc_deg, orbit=, or r= trajectory input.")
         t_s, r_eci, _ = propagate_eci(a_km, e, inc_deg, raan_deg, argp_deg, nu0_deg,
                                       n_orbits=n_orbits, n_steps=n_steps)
-        sun_hat = sun_direction_eci(t_s)[0]
+        ref_idx = int(reference_index) % len(r_eci)
+        if earth_time is not None:
+            reference_time = earth_time
+            epoch_jd = float(reference_time.jd) if hasattr(reference_time, "jd") else default_epoch_jd
+            sun_hat = sun_direction_eci(np.array([0.0]), epoch_jd=epoch_jd)[0]
+            rotation_deg = earth_rotation_deg_from_time(reference_time)
+        else:
+            reference_time = None
+            sun_hat = sun_direction_eci(np.array([t_s[ref_idx]]))[0]
+            rotation_deg = earth_rotation_deg_from_time(
+                epoch_jd=default_epoch_jd,
+                relative_seconds=float(t_s[ref_idx]),
+            )
 
     orbit_r = np.max(np.linalg.norm(r_eci, axis=1))
     frame_r = max(orbit_r, RE_KM*1.3)
     fig = go.Figure()
-    fig.add_trace(_earth_mesh(sun_hat))
+    fig.add_trace(_earth_mesh(sun_hat, rotation_deg=rotation_deg))
 
     # Orbit path, colour-mapped along its length
     n_pts = len(r_eci)
@@ -645,18 +671,36 @@ def plot_globe_orbit_daynight_plotly(a_km=None, e=None, inc_deg=None, raan_deg=0
         line=dict(color=colors, colorscale="Plasma", width=6),
         name=sat_name, hoverinfo="skip",
     ))
+    if highlight_reference and n_pts > 1:
+        hover_label = f"Earth orientation sample {ref_idx + 1}/{n_pts}"
+        fig.add_trace(go.Scatter3d(
+            x=[r_eci[ref_idx, 0]], y=[r_eci[ref_idx, 1]], z=[r_eci[ref_idx, 2]],
+            mode="markers",
+            marker=dict(size=7, color="#FFD700", symbol="diamond", line=dict(color="white", width=1)),
+            name="Earth orientation point",
+            hovertemplate=(hover_label + "<br>X=%{x:.0f} km<br>Y=%{y:.0f} km<br>Z=%{z:.0f} km<extra></extra>"),
+            showlegend=False,
+        ))
 
+    sun_pos = None
+    sun_radius = 0.0
     if show_sun_body:
-        sun_dist = frame_r * 1.55
-        sun_pos = sun_hat * sun_dist
-        sun_radius = frame_r * 0.09
+        sun_pos, sun_radius = sun_position_and_radius(
+            scene_radius_km=frame_r,
+            sun_hat=sun_hat,
+            distance_mode="angular",
+            distance_factor=1.55,
+            radius_mode="angular",
+        )
         for tr in _sun_sphere_traces(sun_pos, sun_radius):
             fig.add_trace(tr)
 
     lim = frame_r * 1.9
+    if sun_pos is not None:
+        lim = max(lim, float(np.linalg.norm(sun_pos)) + sun_radius * 2.5)
     title_text = f"{sat_name} — orbit around Earth with day/night terminator"
     if show_sun_body:
-        title_text += " and compressed Sun marker"
+        title_text += " and angular-correct Sun marker"
     fig.update_layout(
         scene=dict(
             xaxis=dict(range=[-lim, lim], title="X [km]", backgroundcolor="black",

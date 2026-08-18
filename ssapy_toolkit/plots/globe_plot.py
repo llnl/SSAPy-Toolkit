@@ -3,8 +3,6 @@ from matplotlib.lines import Line2D
 from PIL import Image as PILImage
 import numpy as np
 
-from astropy.time import Time
-from erfa import gst94
 
 from ssapy.utils import find_file
 from .plotutils import (
@@ -16,33 +14,12 @@ from .plotutils import (
     _raise_unrecognized_kwargs,
 )
 from ..constants import RGEO, EARTH_RADIUS
+from .scene_primitives import earth_rotation_deg_from_time
 
 
 def _earth_lon0_from_time(t):
-    """
-    Compute a z-axis rotation angle (degrees) for the globe texture
-    using the same GPS→TT→GST mapping as drawEarth [1].
-
-    Parameters
-    ----------
-    t : astropy.time.Time or float
-        Time at which to compute Earth's rotation. If float, interpreted
-        as GPS seconds since 1980-01-06 00:00:00 UTC.
-
-    Returns
-    -------
-    lon0 : float
-        Rotation angle in degrees.
-    """
-    if isinstance(t, Time):
-        t_gps = t.gps
-    else:
-        t_gps = float(t)
-
-    # Same mapping as drawEarth: GPS seconds -> TT MJD [1]
-    mjd_tt = 44244.0 + (t_gps + 51.184) / 86400.0
-    gst = gst94(2400000.5, mjd_tt)  # radians
-    return np.degrees(gst)
+    """Compute the globe texture rotation angle in degrees for ``t``."""
+    return earth_rotation_deg_from_time(t)
 
 
 def _view_unit_vector(el_deg, az_deg):
@@ -101,6 +78,9 @@ def globe_plot(
     legend_kwargs=None,   # kwargs passed to ax.legend()
     lon0=0.0,             # manual rotation of globe about z-axis in degrees
     globe_time=None,      # optional time to orient globe based on Earth rotation
+    reference_index=-1,   # sample whose time/orbit point matches the Earth texture
+    highlight_reference=True,
+    highlight_kwargs=None,
     ax=None,
     **save_kwargs,
 ):
@@ -127,7 +107,14 @@ def globe_plot(
         values rotate longitudes eastward.
     globe_time : astropy.time.Time or float, optional
         If provided, overrides lon0 by computing the Earth-rotation angle
-        from this time using gst94 (same as drawEarth) [1].
+        from this time using gst94 (same as drawEarth) [1].  If omitted and
+        a time series is supplied, the final sample time is used so the Earth
+        texture is accurate at the highlighted reference point.
+    reference_index : int
+        Orbit sample to highlight as the instant represented by the Earth
+        texture orientation.  Defaults to the last sample.
+    highlight_reference : bool
+        Draw a larger marker at ``reference_index`` for each orbit track.
 
     Returns
     -------
@@ -149,7 +136,10 @@ def globe_plot(
     if orbit_colors is not None and len(orbit_colors) != n_tracks:
         raise ValueError("orbit_colors must have same length as number of orbits (tracks)")
 
-    # --- If globe_time is provided, override lon0 based on Earth rotation ---
+    # --- Orient globe at an explicit time, or the final supplied sample time ---
+    if globe_time is None and t_list and len(t_list[0]):
+        ref_idx = int(reference_index) % len(t_list[0])
+        globe_time = t_list[0][ref_idx]
     if globe_time is not None:
         lon0 = _earth_lon0_from_time(globe_time)
 
@@ -252,6 +242,22 @@ def globe_plot(
                 ri_vis[:, 0], ri_vis[:, 1], ri_vis[:, 2],
                 color=color, s=1,
             )
+
+        if highlight_reference and len(ri_scaled) > 1:
+            ref_idx = int(reference_index) % len(ri_scaled)
+            ref_point = ri_scaled[ref_idx]
+            marker_kwargs = dict(
+                color="#FFD700",
+                edgecolors="black" if textcolor == "black" else "white",
+                linewidths=0.8,
+                s=45,
+                marker="*",
+                label=None,
+                zorder=10,
+            )
+            if highlight_kwargs:
+                marker_kwargs.update(highlight_kwargs)
+            ax.scatter([ref_point[0]], [ref_point[1]], [ref_point[2]], **marker_kwargs)
 
     # ---------- Axis limits: scalar or explicit ----------
     # limits can be:

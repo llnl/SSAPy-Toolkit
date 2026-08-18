@@ -102,6 +102,63 @@ def test_run_demo_script_success_failure_and_subprocess(tmp_path, monkeypatch):
     assert "Subprocess exited" in child_failed.error
 
 
+def test_run_demo_script_gallery_category_override_organizes_files(tmp_path, monkeypatch):
+    module = importlib.import_module("ssapy_toolkit.demo_gallery")
+    output_root = tmp_path / "gallery"
+    fig_root = output_root / "figures"
+    fig_root.mkdir(parents=True)
+    monkeypatch.setattr(module, "FIGSAVE_ROOT", fig_root)
+
+    demos_dir = tmp_path / "demos"
+    demo_dir = demos_dir / "legacy_bucket"
+    demo_dir.mkdir(parents=True)
+    demo = demo_dir / "demo_sensor.py"
+    demo.write_text(
+        "GALLERY_CATEGORY = 'sensor_coverage'\n"
+        "from pathlib import Path\n"
+        "def run(output_root):\n"
+        "    Path(output_root, 'figures', 'demo_sensor.html').write_text('html')\n",
+        encoding="utf-8",
+    )
+
+    result = module.run_demo_script(demo, output_root, demos_dir=demos_dir)
+
+    assert result.status == "success"
+    assert result.name == "legacy_bucket/demo_sensor"
+    assert result.category == "sensor_coverage"
+    assert result.files == ["figures/sensor_coverage/demo_sensor.html"]
+    assert not (fig_root / "demo_sensor.html").exists()
+    assert (fig_root / "sensor_coverage" / "demo_sensor.html").exists()
+
+
+def test_organize_demo_files_moves_flat_figure_outputs(tmp_path):
+    module = importlib.import_module("ssapy_toolkit.demo_gallery")
+    output_root = tmp_path / "gallery"
+    figures = output_root / "figures"
+    figures.mkdir(parents=True)
+    flat = figures / "demo.png"
+    flat.write_text("png", encoding="utf-8")
+    nested = figures / "orbit_visualization" / "old" / "already.png"
+    nested.parent.mkdir(parents=True)
+    nested.write_text("png", encoding="utf-8")
+    outside = tmp_path / "outside.png"
+    outside.write_text("png", encoding="utf-8")
+
+    moved = module._organize_demo_files(
+        [flat, nested, outside],
+        output_root,
+        category="orbit_visualization",
+        name="orbit_visualization/demo_globe_plot",
+    )
+
+    dest = figures / "orbit_visualization" / "demo.png"
+    assert dest.exists()
+    assert not flat.exists()
+    assert nested.resolve() in moved
+    assert outside.resolve() in moved
+    assert dest.resolve() in moved
+
+
 def test_render_previews_report_and_run_all(tmp_path, monkeypatch):
     module = importlib.import_module("ssapy_toolkit.demo_gallery")
     assert "<img" in module.render_file_preview("figures/demo.png")

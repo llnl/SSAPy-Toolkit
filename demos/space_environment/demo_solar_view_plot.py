@@ -6,12 +6,13 @@ The call sequence is intentionally top-to-bottom: configure the date and visible
 bodies, build the Plotly figure, then save the HTML artifact.
 """
 
+GALLERY_CATEGORY = "space_environment"
+
 import os
 import sys
 from pathlib import Path
 
 from ssapy_toolkit.plots.figpath import figpath
-from ssapy_toolkit.plots.starfield import find_data_file
 from ssapy_toolkit.plots.solar_view_plot import DEFAULT_CFG, build_figure
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
@@ -38,9 +39,6 @@ def main(make_figures=None, fast=None):
     cfg["sol_show_trails"] = True
     cfg["sol_show_stars"] = True
     cfg["star_mag_limit"] = 5.5 if fast else 6.5
-    star_catalog = find_data_file("bright_stars_mag9.csv") or find_data_file("bright_stars.csv")
-    if star_catalog is not None:
-        cfg["star_catalog"] = str(star_catalog)
     cfg["sphere_resolution"] = 16 if fast else 50
 
     fig = build_figure(cfg)

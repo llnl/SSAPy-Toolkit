@@ -17,6 +17,7 @@ from ssapy_toolkit.coordinates.lunar_position import get_lunar_rv
 from ssapy_toolkit.plots.figpath import figpath
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
+GALLERY_CATEGORY = "video_animation"
 
 
 def _set_axes_equal_3d(ax, lim):

@@ -260,14 +260,24 @@ def _spect_fallback_rgb(spect):
 # Catalogue
 # ===========================================================================
 
-def _catalog_path():
+def _catalog_path(catalog_path=None):
+    if catalog_path and os.path.exists(os.path.expanduser(str(catalog_path))):
+        return os.path.expanduser(str(catalog_path))
+
+    for name in ("bright_stars_mag9.csv", "bright_stars.csv"):
+        try:
+            path = find_data_file(name)
+        except NameError:
+            path = None
+        if path is not None:
+            return str(path)
     for p in _HYG_PATHS:
         if os.path.exists(p):
             return p
     return None
 
 
-def _load_stars(mag_limit=6.5, when=None, frame="gcrf"):
+def _load_stars(mag_limit=6.5, when=None, frame="gcrf", catalog_path=None):
     """
     Load, transform and cache the star catalogue.
 
@@ -275,11 +285,15 @@ def _load_stars(mag_limit=6.5, when=None, frame="gcrf"):
     magnitudes, marker sizes and RGB colours — or None if no catalogue is
     installed.
     """
-    key = (mag_limit, None if when is None else _julian_date(when), frame)
+    catalog_key = (
+        None if catalog_path is None
+        else os.path.abspath(os.path.expanduser(str(catalog_path)))
+    )
+    key = (mag_limit, None if when is None else _julian_date(when), frame, catalog_key)
     if key in _STAR_CACHE:
         return _STAR_CACHE[key]
 
-    path = _catalog_path()
+    path = _catalog_path(catalog_path)
     if path is None:
         return None
     try:
@@ -334,8 +348,19 @@ def star_directions(mag_limit=6.5, when=None, frame="gcrf"):
 # Plotly
 # ===========================================================================
 
+def _hemisphere_mask(vectors, away_from):
+    if away_from is None:
+        return np.ones(len(vectors), dtype=bool)
+    direction = np.asarray(away_from, dtype=float).reshape(3)
+    norm = np.linalg.norm(direction)
+    if norm == 0.0:
+        return np.ones(len(vectors), dtype=bool)
+    return (vectors @ (direction / norm)) < 0.0
+
+
 def starfield_traces(sky_radius, when=None, frame="ecef", mag_limit=6.5,
-                     opacity=0.92, fallback_random=True):
+                     opacity=0.92, fallback_random=True, catalog_path=None,
+                     hemisphere_away_from=None):
     """
     Star markers for a Plotly 3D scene, as a list of traces.
 
@@ -346,7 +371,7 @@ def starfield_traces(sky_radius, when=None, frame="ecef", mag_limit=6.5,
     """
     import plotly.graph_objects as go
     d = _to_datetime(when)
-    s = _load_stars(mag_limit=mag_limit, when=d, frame=frame)
+    s = _load_stars(mag_limit=mag_limit, when=d, frame=frame, catalog_path=catalog_path)
     if s is None:
         if not fallback_random:
             return []
@@ -356,15 +381,26 @@ def starfield_traces(sky_radius, when=None, frame="ecef", mag_limit=6.5,
         ph = np.arccos(rng.uniform(-1, 1, n))
         mags = rng.uniform(1.0, mag_limit, n)
         print("[starfield] catalogue not found — random placeholder sky")
+        v = np.column_stack((
+            np.sin(ph) * np.cos(th),
+            np.sin(ph) * np.sin(th),
+            np.cos(ph),
+        ))
+        mask = _hemisphere_mask(v, hemisphere_away_from)
+        v = v[mask]
+        mags = mags[mask]
         return [go.Scatter3d(
-            x=sky_radius*np.sin(ph)*np.cos(th),
-            y=sky_radius*np.sin(ph)*np.sin(th),
-            z=sky_radius*np.cos(ph), mode='markers',
+            x=sky_radius*v[:, 0], y=sky_radius*v[:, 1], z=sky_radius*v[:, 2],
+            mode='markers',
             marker=dict(size=np.clip(0.9*(mag_limit-mags)**1.25, 0.4, 5.0),
                         color='white', opacity=0.75),
             hoverinfo='none', showlegend=False, name='Stars')]
     v = s['v']
-    cstrs = [f'rgb({int(r*255)},{int(g*255)},{int(b*255)})' for r, g, b in s['rgb']]
+    mask = _hemisphere_mask(v, hemisphere_away_from)
+    v = v[mask]
+    rgb = s['rgb'][mask]
+    sizes = s['sizes'][mask]
+    cstrs = [f'rgb({int(r*255)},{int(g*255)},{int(b*255)})' for r, g, b in rgb]
     if d is not None:
         print(f"  starfield: {s['n']} stars, {frame.upper()} at "
               f"{d.strftime('%Y-%m-%d %H:%M')} UT "
@@ -373,7 +409,7 @@ def starfield_traces(sky_radius, when=None, frame="ecef", mag_limit=6.5,
     return [go.Scatter3d(
         x=v[:, 0]*sky_radius, y=v[:, 1]*sky_radius, z=v[:, 2]*sky_radius,
         mode='markers',
-        marker=dict(size=s['sizes'], color=cstrs, opacity=opacity),
+        marker=dict(size=sizes, color=cstrs, opacity=opacity),
         hoverinfo='none', showlegend=False, name='Stars')]
 
 

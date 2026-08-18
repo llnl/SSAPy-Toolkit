@@ -2,6 +2,8 @@
 Demo script showing how to call synthetic_orbit_population and orbit_stats_dashboard.
 """
 
+GALLERY_CATEGORY = "analysis_dashboards"
+
 import os
 import sys
 import matplotlib.pyplot as plt

@@ -43,6 +43,8 @@ Typical usage inside moon_plot_3d.py
 from __future__ import annotations
 
 import numpy as np
+
+from ssapy_toolkit.constants import SUN_EARTH_AVERAGE_DISTANCE_KM, SUN_RADIUS_KM
 from matplotlib.colors import to_rgb
 
 
@@ -260,7 +262,18 @@ def background_sun_position(sun_hat, plot_range: float, distance_factor: float =
     return sun_hat * (plot_range * distance_factor)
 
 
-def background_sun_radius(plot_range: float, size_factor: float = 0.045) -> float:
-    """Display radius for a Sun placed via background_sun_position — kept
-    small relative to plot_range so distance reads visually correctly."""
-    return max(plot_range * size_factor, 1.0)
+def background_sun_radius(
+    plot_range: float,
+    size_factor: float | None = None,
+    distance_factor: float = 2.5,
+) -> float:
+    """Display radius for a background Sun.
+
+    By default the radius preserves the Sun's real angular radius at the
+    background display distance.  Pass ``size_factor`` for legacy/stylized
+    scene-fraction sizing.
+    """
+    if size_factor is not None:
+        return max(plot_range * size_factor, 1.0)
+    angular_ratio = SUN_RADIUS_KM / SUN_EARTH_AVERAGE_DISTANCE_KM
+    return max(plot_range * distance_factor * angular_ratio, 1.0)

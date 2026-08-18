@@ -10,6 +10,7 @@ from ssapy_toolkit.constants import EARTH_RADIUS
 from ssapy_toolkit.plots.orbit_plot import orbit_plot
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
+GALLERY_CATEGORY = "orbit_visualization"
 FIGDIR = "demo_gallery/figures"
 
 
@@ -83,7 +84,7 @@ def main(make_figures=None, make_video=None, fast=None):
             c="black",
             labels=["ISS-like LEO", "GPS-like MEO"],
             orbit_colors=["cyan", "magenta"],
-            globe_time=Time(times_gps[0], format="gps"),
+            globe_time=Time(times_gps[-1], format="gps"),
             scale=globe_scale,
             save=static_path,
         )

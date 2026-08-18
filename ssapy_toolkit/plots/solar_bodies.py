@@ -34,25 +34,22 @@ from io import BytesIO
 import numpy as np
 import plotly.graph_objects as go
 
+from ssapy_toolkit.constants import AU_KM, MOON_RADIUS, PLANET_RADIUS_KM, SUN_RADIUS_AU
 from ssapy_toolkit.data import read_data_binary
+from ssapy_toolkit.plots.scene_primitives import earth_rotation_deg_from_time
 
 
-# ── Display radii in AU (exaggerated but proportional to real sizes) ──────────
-# Real equatorial radii (km): Merc 2439, Ven 6052, Ear 6378, Mar 3396,
-#   Jup 71492, Sat 60268, Ura 25559, Nep 24764
-# Scale factor ≈ 500×  (Jupiter = 0.238 AU display)
+# ── Display radii in AU ──────────────────────────────────────────────────────
+# Planets and the Moon remain exaggerated for visibility in full-system views.
+# The Sun defaults to its physical AU radius; callers can pass a sun_scale if a
+# teaching/demo plot needs a deliberately enlarged Sun.
+_PLANET_DISPLAY_SCALE = 500.0
 _R_AU = {
-    "Mercury":  0.008,
-    "Venus":    0.020,
-    "Earth":    0.021,
-    "Mars":     0.011,
-    "Jupiter":  0.238,
-    "Saturn":   0.200,
-    "Uranus":   0.085,
-    "Neptune":  0.082,
-    "Sun":      0.045,    # inner glow radius — NOT to scale
-    "Moon":     0.0057,   # ≈ 0.27 × Earth's exaggerated size (real ratio)
+    name: PLANET_RADIUS_KM[name] / AU_KM * _PLANET_DISPLAY_SCALE
+    for name in PLANET_RADIUS_KM
 }
+_R_AU["Sun"] = SUN_RADIUS_AU
+_R_AU["Moon"] = (MOON_RADIUS / 1000.0) / AU_KM * _PLANET_DISPLAY_SCALE
 
 # Axial tilts (degrees, prograde unless noted)
 _TILT = {
@@ -70,7 +67,7 @@ _TILT = {
 
 # 1 AU in km — used to convert the Moon's real geocentric ephemeris (km)
 # into the same AU-based display coordinates as everything else here.
-_AU_KM = 149_597_870.7
+_AU_KM = AU_KM
 
 # Sphere mesh resolution (lat × lon)
 _N = 50
@@ -176,10 +173,16 @@ def _load_earth_texture():
 
 
 def _sample_earth_texture(lat: np.ndarray, lon: np.ndarray, tex: np.ndarray) -> np.ndarray:
-    """Bilinear-sample the (H, W) classification array at given lat/lon (radians)."""
+    """Bilinear-sample the (H, W) classification array at given lat/lon (radians).
+
+    The packaged map follows the same native equirectangular convention as
+    SSAPy's earth.png: column 0 is -180° longitude and the centre column is
+    0°.  The sphere mesh uses 0 radians on +X as 0° longitude, so shift by
+    pi before wrapping into texture-column space.
+    """
     H, W = tex.shape
     row_f = (np.pi / 2 - lat) / np.pi * (H - 1)
-    col_f = (lon % (2 * np.pi)) / (2 * np.pi) * W   # periodic in longitude
+    col_f = ((lon + np.pi) % (2 * np.pi)) / (2 * np.pi) * W
 
     row0 = np.clip(np.floor(row_f).astype(int), 0, H - 2)
     row1 = row0 + 1
@@ -223,7 +226,7 @@ def _color_earth_blobs(n=_N):
     return np.clip(c, 0.0, 1.0), _EARTH_COLORSCALE
 
 
-def _color_earth(n=_N):
+def _color_earth(n=_N, rotation_deg=0.0):
     """
     Earth's surface classification (ocean / land / ice), sampled at the
     requested mesh resolution `n`.
@@ -238,9 +241,10 @@ def _color_earth(n=_N):
     """
     tex = _load_earth_texture()
     if tex is None:
-        return _color_earth_blobs(n)
+        c, cs = _color_earth_blobs(n)
+        return np.roll(c, int(round((float(rotation_deg) % 360.0) / 360.0 * n)), axis=1), cs
     U, V, lat, lon = _uv_mesh(n)
-    c = _sample_earth_texture(lat, lon, tex)
+    c = _sample_earth_texture(lat, lon - np.radians(float(rotation_deg)), tex)
     return c, _EARTH_COLORSCALE
 
 
@@ -395,6 +399,19 @@ def _sun_lightposition(pos_au):
     return dict(x=-px/d * 1e5, y=-py/d * 1e5, z=-pz/d * 1e5)
 
 
+
+def _earth_rotation_from_plot_time(time):
+    """Solar-view helpers pass numeric times as Julian dates, not GPS seconds."""
+    if time is None:
+        return 0.0
+    if hasattr(time, "gps"):
+        return earth_rotation_deg_from_time(time)
+    try:
+        return earth_rotation_deg_from_time(epoch_jd=float(np.asarray(time).reshape(-1)[0]))
+    except Exception:
+        return earth_rotation_deg_from_time(time)
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def make_planet_traces(
@@ -403,6 +420,8 @@ def make_planet_traces(
     scale_au: float = 1.0,
     show_label: bool = True,
     n: int = _N,
+    time=None,
+    rotation_deg=None,
 ) -> list:
     """
     Return a list of Plotly traces for a single planet.
@@ -414,6 +433,8 @@ def make_planet_traces(
     scale_au : multiplier on the display radius (1.0 = default)
     show_label : add a text label above the sphere
     n        : sphere mesh resolution (default 50)
+    time     : optional time used to orient Earth's surface texture
+    rotation_deg : optional explicit Earth texture rotation in degrees
 
     Returns
     -------
@@ -428,6 +449,9 @@ def make_planet_traces(
     color_fn = _COLOR_FN.get(name)
     if color_fn is None:
         surf_c, cs = np.ones((n, n)) * 0.5, [[0, "#888"], [1, "#ccc"]]
+    elif name == "Earth":
+        earth_rot = _earth_rotation_from_plot_time(time) if rotation_deg is None else float(rotation_deg)
+        surf_c, cs = _color_earth(n, rotation_deg=earth_rot)
     else:
         surf_c, cs = color_fn(n)
 
@@ -533,7 +557,7 @@ def make_saturn_ring_traces(
     return traces
 
 
-def make_sun_traces(r_display_au: float = 0.045) -> list:
+def make_sun_traces(r_display_au: float = SUN_RADIUS_AU) -> list:
     """
     Return traces for the Sun — a bright inner sphere + two soft glow layers.
     """

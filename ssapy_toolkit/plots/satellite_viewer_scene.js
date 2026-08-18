@@ -17,9 +17,20 @@
 
 const R_EARTH_KM = 6378.137;
 const R_MOON_KM = 1737.4;
-const CELESTIAL_MARKER_DIST_KM = R_EARTH_KM * 4.4;
-const SUN_MARKER_RADIUS_KM = R_EARTH_KM * 0.18;
-const MOON_MARKER_RADIUS_KM = R_EARTH_KM * 0.13;
+const R_SUN_KM = 695700.0;
+const AU_KM = 149597870.7;
+const MOON_MEAN_DISTANCE_KM = 384400.0;
+// Render the Sun and Moon at physical Earth-centered distances and radii. This
+// preserves their nearly equal angular diameters (~0.5 deg) instead of using
+// oversized nearby markers that look like scene props.
+const SUN_RENDER_DISTANCE_KM = AU_KM;
+const SUN_RENDER_RADIUS_KM = R_SUN_KM;
+const SUN_GLOW_RADIUS_KM = R_SUN_KM * 1.15;
+const MOON_RENDER_DISTANCE_KM = MOON_MEAN_DISTANCE_KM;
+const MOON_RENDER_RADIUS_KM = R_MOON_KM;
+const STARFIELD_INNER_RADIUS_KM = AU_KM * 1.35;
+const STARFIELD_OUTER_RADIUS_KM = AU_KM * 1.50;
+const CAMERA_FAR_KM = STARFIELD_OUTER_RADIUS_KM * 1.08;
 const MU_EARTH = 398600.4418;
 
 // ---------------------------------------------------------------------------
@@ -77,7 +88,7 @@ const SATELLITE_CATALOG = {
     name: 'James Webb Space Telescope', type: 'JWST', mode: 'fixed', noradId: 50463,
     note: 'JWST orbits the Sun-Earth L2 point (~1.5 million km from Earth) ' +
           'in a halo orbit, not a near-Earth ellipse -- SGP4 cannot ' +
-          'meaningfully propagate it. Shown at a fixed, scaled-down ' +
+          'meaningfully propagate it. Shown at a fixed, real-distance ' +
           'illustrative position along the anti-sunward direction, not a ' +
           'real-time-propagated one.',
   },
@@ -183,18 +194,27 @@ const SATELLITE_CATALOG = {
           'not circularized, since the whole point of this orbit design is the ' +
           'huge apogee for near-continuous sky viewing.',
   },
+  cislunar_demo: {
+    name: 'Cislunar orbit demo', type: 'TESS', mode: 'keplerian',
+    a: 205000, e: 0.86, inc: 28.5, raan: 45, argPerigee: 180,
+    note: 'Representative Earth-centered cislunar transfer-class orbit with ' +
+          'perigee ~28,700 km and apogee ~381,300 km near lunar distance. This ' +
+          'is an idealized SSATK viewer example, not a mission ephemeris.',
+  },
 };
+
+const DEFAULT_DEMO_SATELLITES = ['iss', 'gps', 'weather_goes', 'cislunar_demo'];
 
 // ---------------------------------------------------------------------------
 // Support for searching/selecting from a user's full local satellite
 // database (loaded from tle_updater.py's ssapy_satellites.json), not just
-// the 20 curated entries above. Any of those ~31,000 real satellites can be
-// searched and added -- but only the 20 above have a bespoke or archetype
+// the curated entries above. Any of those ~31,000 real satellites can be
+// searched and added -- but only the curated examples above have a bespoke or archetype
 // model built for them specifically. For everything else, this classifies
 // by name (mirroring tle_updater.py's own _classify_object() exactly, for
 // consistency between the Python tooling and this viewer) and falls back to
 // a generic payload / rocket-body / debris model. If a searched satellite's
-// NORAD ID happens to match one of the 20 curated ones, it reuses that
+// NORAD ID happens to match one of the curated ones, it reuses that
 // entry's real bespoke model and real note instead of the generic fallback.
 // ---------------------------------------------------------------------------
 function noradFromTle(line1) {
@@ -245,7 +265,7 @@ function resolveDbRecord(record) {
     name: record.name, type, mode: 'tle',
     tle1: record.line1, tle2: record.line2,
     note: 'From your local satellite database (tle_updater.py) -- not one ' +
-          'of the 20 curated types above, so this uses a generic model ' +
+          'of the curated types above, so this uses a generic model ' +
           `classified by name as "${type.toLowerCase().replace('_', ' ')}".`,
   };
   return { key, entry };
@@ -324,6 +344,10 @@ function togglePause() {
 }
 let loadedDatabase = null; // array of {name, type, line1, line2} once the user loads their JSON file
 const MAX_ACTIVE_SATELLITES = 1000; // raised from 300. Detailed multi-mesh models don't scale to this many, so LOD kicks in automatically -- see SIMPLE_MODEL_ABOVE / ORBIT_LINE_ABOVE below.
+// Satellite models are deliberately stylized display glyphs, but their size is
+// fixed across LEO/MEO/GEO/cislunar regimes so a distant orbit does not turn
+// into a giant spacecraft. Labels and orbit lines carry the scale context.
+const SATELLITE_GLYPH_SIZE_KM = 900;
 // Level of detail. A detailed model is ~4 meshes (ISS is 21) and each orbit
 // line is another draw call, so 1000 fully-detailed satellites would be ~5,000
 // draw calls -- enough to stutter on integrated graphics. Past these
@@ -362,8 +386,8 @@ const CONJ_LINE_SHOW_MIN = 12;            // draw the connector within +/- this 
 function init() {
   const container = document.getElementById('scene-container');
   scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 10, 1200000);
-  renderer = new THREE.WebGLRenderer({ antialias: true });
+  camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 10, CAMERA_FAR_KM);
+  renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(container.clientWidth, container.clientHeight);
   container.innerHTML = '';
@@ -392,7 +416,7 @@ function init() {
   setupTimeControls();
   setupDatabaseSearch();
   setupAnalysisControls();
-  addSatellite('iss'); // default: just one satellite active
+  DEFAULT_DEMO_SATELLITES.forEach(key => addSatellite(key));
   reframeCamera();
   updateInfoPanel();
   animate();
@@ -402,8 +426,8 @@ function init() {
 // ---------------------------------------------------------------------------
 // Search across a user-loaded satellite database (tle_updater.py's
 // ssapy_satellites.json) -- this is now the only selection mechanism (the
-// original 20-entry curated dropdown was removed once search could resolve
-// every one of those 20 by NORAD ID/name -- see CURATED_NORAD_TO_KEY and
+// original curated dropdown was removed once search could resolve
+// those examples by NORAD ID/name -- see CURATED_NORAD_TO_KEY and
 // classifyByName above -- plus everything else in the loaded database).
 // above. A standalone HTML file can't fetch() a local file directly, so
 // this uses a file picker + FileReader instead.
@@ -690,7 +714,7 @@ function buildStarfield() {
   const n = 4000;
   const positions = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) {
-    const r = R_EARTH_KM * (40 + Math.random() * 60);
+    const r = STARFIELD_INNER_RADIUS_KM + Math.random() * (STARFIELD_OUTER_RADIUS_KM - STARFIELD_INNER_RADIUS_KM);
     const phi = Math.random() * Math.PI * 2;
     const costheta = Math.random() * 2 - 1;
     const theta = Math.acos(costheta);
@@ -701,7 +725,7 @@ function buildStarfield() {
   const geom = new THREE.BufferGeometry();
   geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   const mat = new THREE.PointsMaterial({
-    color: 0xffffff, size: R_EARTH_KM * 0.0055, sizeAttenuation: true,
+    color: 0xffffff, size: 1.35, sizeAttenuation: false,
     transparent: true, opacity: 0.9,
   });
   starfield = new THREE.Points(geom, mat);
@@ -748,31 +772,34 @@ function buildEarth() {
       varying vec3 vPositionW;
       void main() {
         vec3 normal = normalize(vNormalW);
-        float NdotL = dot(normal, sunDirection);
-        float dayNightMix = smoothstep(-0.15, 0.15, NdotL);
+        float NdotL = dot(normal, normalize(sunDirection));
+        // Keep the dark side visually stable: a narrow physical terminator,
+        // not a broad grey blend that drags day texture onto night-side pixels.
+        float dayNightMix = smoothstep(-0.015, 0.075, NdotL);
 
         vec3 dayColor = texture2D(dayTexture, vUv).rgb;
         vec3 nightColor = texture2D(nightTexture, vUv).rgb;
         float specMask = texture2D(specularTexture, vUv).r;
 
         vec3 viewDir = normalize(cameraPosition - vPositionW);
-        vec3 halfDir = normalize(sunDirection + viewDir);
+        vec3 halfDir = normalize(normalize(sunDirection) + viewDir);
         float specAngle = max(dot(normal, halfDir), 0.0);
-        float specStrength = pow(specAngle, 28.0) * specMask * dayNightMix;
+        float specStrength = pow(specAngle, 32.0) * specMask * smoothstep(0.05, 0.25, NdotL);
 
-        vec3 ambient = vec3(0.035, 0.04, 0.05);
-        vec3 base = mix(nightColor * 1.6 + ambient, dayColor, dayNightMix);
+        // Treat the night texture as emissive city lights plus a tiny blue-black
+        // surface floor. This avoids the blotchy, shadow-like dark-side artifact
+        // caused by amplifying the entire night raster as if it were albedo.
+        vec3 nightEmission = max(nightColor - vec3(0.020), vec3(0.0)) * 0.95;
+        vec3 nightBase = vec3(0.008, 0.011, 0.022) + nightEmission;
+        vec3 base = mix(nightBase, dayColor, dayNightMix);
 
-        // Golden-hour terminator band: real terminators show warm reddish
-        // atmospheric scattering where sunlight grazes the surface at a
-        // shallow angle. Peaks in the narrow zone where NdotL is near zero
-        // (the day/night boundary) and fades to nothing on the full day and
-        // full night sides, so it's a boundary detail, not an overall tint.
-        float termBand = 1.0 - smoothstep(0.0, 0.22, abs(NdotL));
-        vec3 goldenHour = vec3(1.0, 0.55, 0.30) * termBand * 0.28;
-        base += goldenHour * dayNightMix; // only on the lit approach to the terminator, not into deep night
+        // A thin warm terminator only on the sunlit edge; it should not bleed
+        // onto the fully dark hemisphere.
+        float termBand = (1.0 - smoothstep(0.0, 0.09, abs(NdotL))) * smoothstep(0.0, 0.055, NdotL);
+        vec3 goldenHour = vec3(1.0, 0.55, 0.30) * termBand * 0.07;
+        base += goldenHour;
 
-        vec3 color = base + specStrength * vec3(1.0, 0.98, 0.9) * 0.9;
+        vec3 color = clamp(base + specStrength * vec3(1.0, 0.98, 0.9) * 0.55, 0.0, 1.0);
         gl_FragColor = vec4(color, 1.0);
       }
     `,
@@ -973,34 +1000,66 @@ function computeMoonDirectionEci(date) {
 }
 
 function buildCelestialMarkers() {
-  const sunMat = new THREE.MeshBasicMaterial({ color: 0xffc247, transparent: true, opacity: 0.98, depthTest: false });
-  sunMesh = new THREE.Mesh(new THREE.SphereGeometry(SUN_MARKER_RADIUS_KM, 32, 24), sunMat);
+  const sunMat = new THREE.MeshBasicMaterial({ color: 0xffc247, transparent: true, opacity: 0.98, depthTest: true, depthWrite: false });
+  sunMesh = new THREE.Mesh(new THREE.SphereGeometry(SUN_RENDER_RADIUS_KM, 48, 32), sunMat);
   sunMesh.renderOrder = 20;
   scene.add(sunMesh);
 
   const glowMat = new THREE.MeshBasicMaterial({
-    color: 0xffd36a, transparent: true, opacity: 0.22,
-    depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+    color: 0xffd36a, transparent: true, opacity: 0.16,
+    depthWrite: false, depthTest: true, blending: THREE.AdditiveBlending,
   });
-  sunGlowMesh = new THREE.Mesh(new THREE.SphereGeometry(SUN_MARKER_RADIUS_KM * 2.6, 32, 24), glowMat);
+  sunGlowMesh = new THREE.Mesh(new THREE.SphereGeometry(SUN_GLOW_RADIUS_KM, 32, 24), glowMat);
   sunGlowMesh.renderOrder = 19;
   scene.add(sunGlowMesh);
 
-  const moonMat = new THREE.MeshPhongMaterial({
-    color: 0xb8bcc5, emissive: 0x20232a, shininess: 8,
-    specular: 0x222222, depthTest: false,
+  const moonMat = new THREE.ShaderMaterial({
+    uniforms: {
+      sunDirection: { value: sunDirection },
+      dayColor: { value: new THREE.Color(0xbfc3cc) },
+      nightColor: { value: new THREE.Color(0x222833) },
+    },
+    vertexShader: `
+      varying vec3 vNormalW;
+      void main() {
+        vNormalW = normalize(mat3(modelMatrix) * normal);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 sunDirection;
+      uniform vec3 dayColor;
+      uniform vec3 nightColor;
+      varying vec3 vNormalW;
+      void main() {
+        vec3 normal = normalize(vNormalW);
+        float NdotL = dot(normal, normalize(sunDirection));
+        float phase = smoothstep(-0.04, 0.08, NdotL);
+        float diffuse = 0.10 + 0.90 * pow(max(NdotL, 0.0), 0.78);
+        vec3 color = mix(nightColor, dayColor * diffuse, phase);
+        gl_FragColor = vec4(color, 1.0);
+      }
+    `,
+    depthTest: true,
+    depthWrite: false,
   });
-  moonMesh = new THREE.Mesh(new THREE.SphereGeometry(MOON_MARKER_RADIUS_KM, 32, 24), moonMat);
+  moonMesh = new THREE.Mesh(new THREE.SphereGeometry(MOON_RENDER_RADIUS_KM, 48, 32), moonMat);
   moonMesh.renderOrder = 20;
   scene.add(moonMesh);
 }
 
 function updateCelestialMarkers(date) {
-  if (sunMesh) sunMesh.position.copy(sunDirection).multiplyScalar(CELESTIAL_MARKER_DIST_KM);
-  if (sunGlowMesh) sunGlowMesh.position.copy(sunDirection).multiplyScalar(CELESTIAL_MARKER_DIST_KM);
+  if (sunMesh) sunMesh.position.copy(sunDirection).multiplyScalar(SUN_RENDER_DISTANCE_KM);
+  if (sunGlowMesh) sunGlowMesh.position.copy(sunDirection).multiplyScalar(SUN_RENDER_DISTANCE_KM);
   if (moonMesh) {
     const moonDirection = eciToScene(computeMoonDirectionEci(date));
-    moonMesh.position.copy(moonDirection).multiplyScalar(CELESTIAL_MARKER_DIST_KM * 0.82);
+    moonMesh.position.copy(moonDirection).multiplyScalar(MOON_RENDER_DISTANCE_KM);
+    if (moonMesh.material.uniforms && moonMesh.material.uniforms.sunDirection) {
+      // Use true near-parallel solar illumination for lunar phase. The
+      // rendered Sun is physically distant, so marker-to-marker geometry is no
+      // longer needed and would make the phase sensitive to display scaling.
+      moonMesh.material.uniforms.sunDirection.value.copy(sunDirection);
+    }
   }
 }
 
@@ -1617,7 +1676,7 @@ function addIndicatorLight(parentGroup, size, position, colorHex) {
 
 // ---------------------------------------------------------------------------
 // Generic fallback models -- for the ~31,000 satellites in a loaded
-// database that aren't one of the 20 curated types above. Classified by
+// database that aren't one of the curated types above. Classified by
 // name only (see classifyByName()). Each takes a seedStr (the satellite's
 // own name, stable across reloads) so a field of many unclassified
 // satellites doesn't render as visibly identical clones of one template.
@@ -2636,10 +2695,10 @@ function addSatellite(key, explicitEntry) {
   if (entry.mode === 'fixed') {
     // JWST special case -- see the long comment on SATELLITE_CATALOG for
     // why this doesn't go through SGP4 or Kepler propagation at all. Shown
-    // at a fixed, compressed-distance illustrative position along the
+    // at a fixed, real-distance illustrative position along the
     // anti-sunward direction (JWST orbits L2, on the far side of Earth
     // from the Sun) rather than a fabricated orbit.
-    const illustrativeDistKm = R_EARTH_KM * 60; // real distance is ~1.5M km / ~235 R_E -- compressed to stay within scene bounds, disclosed in the info panel
+    const illustrativeDistKm = 1500000; // real Sun-Earth L2 distance scale; camera uses logarithmic depth so no compression is needed
     inst.fixedDistKm = illustrativeDistKm;
     r0 = illustrativeDistKm;
     framingR = illustrativeDistKm;
@@ -2690,12 +2749,10 @@ function addSatellite(key, explicitEntry) {
 
   if (inst.orbitLine) scene.add(inst.orbitLine);
 
-  // Absolute glyph size scales with how far out the orbit is (LEO / MEO /
-  // GEO / HEO), so the satellite stays comparably visible once the camera
-  // auto-frames out to match that orbit's much larger real scale. Scaled
-  // off framingR (not raw r0) so this also works for eccentric orbits
-  // framed by their apogee.
-  const modelSize = Math.max(900, framingR * 0.11);
+  // Keep display glyphs a fixed size independent of orbit radius. The
+  // cislunar orbit should look like a distant orbit with a small spacecraft,
+  // not a huge model scaled up by its apogee distance.
+  const modelSize = SATELLITE_GLYPH_SIZE_KM;
   inst.model = simple
     ? buildSimpleGlyph(entry.type, modelSize)
     : buildModelForType(entry.type, modelSize, entry.name);

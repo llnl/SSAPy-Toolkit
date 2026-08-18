@@ -7,6 +7,8 @@ configuration, change only the user-facing values, build the figure, and save
 an interactive HTML file under the standard SSATK figure directory.
 """
 
+GALLERY_CATEGORY = "space_environment"
+
 import os
 import sys
 from pathlib import Path

@@ -38,6 +38,8 @@ def test_write_gif_accepts_glob_and_normalizes_frame_sizes(tmp_path):
     assert output.stat().st_size > 0
     with imageio.get_reader(output) as reader:
         assert reader.get_length() == 3
+    with Image.open(output) as img:
+        assert img.info["duration"] == 200
 
 
 def test_write_video_accepts_explicit_frames_and_resizes(tmp_path):

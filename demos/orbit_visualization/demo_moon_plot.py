@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 """Demo: 3D Moon surface plot with star background."""
+
+GALLERY_CATEGORY = "orbit_visualization"
+
 import os
 import sys
 

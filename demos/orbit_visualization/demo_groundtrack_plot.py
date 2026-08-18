@@ -6,6 +6,8 @@ Pytest-safe mode:
 - does not save figures by default
 """
 
+GALLERY_CATEGORY = "orbit_visualization"
+
 import os
 import sys
 

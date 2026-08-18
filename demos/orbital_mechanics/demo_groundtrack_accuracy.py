@@ -18,6 +18,7 @@ from ssapy_toolkit.plots.groundtrack_plot import groundtrack_plot
 from ssapy_toolkit.plots.groundtrack_video import groundtrack_video
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
+GALLERY_CATEGORY = "orbital_mechanics"
 
 
 def main(make_figures=None, make_video=None, fast=None):

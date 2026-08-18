@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """
-demos/demo_sun_view.py
+demos/space_environment/demo_sun_view.py
 -----------------------
 Demo for ssapy_toolkit.plots.sun_view: builds a Plotly figure with a
 Sun model, Earth day/night shading, and Moon day/night shading.
 """
+
+GALLERY_CATEGORY = "space_environment"
 import os
 import sys
 from pathlib import Path

@@ -6,6 +6,8 @@ This uses one low-Earth orbit and saves an interactive HTML file showing the
 trajectory, sunlit hemisphere, night side, and satellite marker.
 """
 
+GALLERY_CATEGORY = "orbit_visualization"
+
 import os
 import sys
 from pathlib import Path

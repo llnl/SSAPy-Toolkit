@@ -73,6 +73,93 @@ ERIS_hill = 8.1176e9
 SUN_RADIUS = 696340000.0
 PLUTO_RADIUS = 195000.0
 
+# Uppercase SI aliases for common astronomical units.
+AU = float(au_to_m)
+AU_KM = AU / km_to_m
+SUN_RADIUS_KM = SUN_RADIUS / km_to_m
+SUN_RADIUS_AU = SUN_RADIUS / AU
+SUN_EARTH_AVERAGE_DISTANCE = AU
+SUN_EARTH_AVERAGE_DISTANCE_KM = AU_KM
+SUN_EARTH_AVERAGE_DISTANCE_AU = 1.0
+SUN_ANGULAR_RADIUS_RAD = np.arctan2(SUN_RADIUS, SUN_EARTH_AVERAGE_DISTANCE)
+SUN_ANGULAR_DIAMETER_DEG = 2.0 * SUN_ANGULAR_RADIUS_RAD * 180.0 / np.pi
+
+# Solar-system body convenience aliases.  SSAPy supplies the SI radii, masses,
+# and gravitational parameters for the eight planets; Toolkit adds uppercase
+# semi-major-axis aliases and km/AU forms for plotting and demos.
+PLANET_NAMES = (
+    "Mercury",
+    "Venus",
+    "Earth",
+    "Mars",
+    "Jupiter",
+    "Saturn",
+    "Uranus",
+    "Neptune",
+)
+SOLAR_SYSTEM_BODY_NAMES = ("Sun",) + PLANET_NAMES
+
+_PLANET_SEMI_MAJOR_AXIS_AU = {
+    "MERCURY": MERCURY_a,
+    "VENUS": VENUS_a,
+    "EARTH": EARTH_a,
+    "MARS": MARS_a,
+    "JUPITER": JUPITER_a,
+    "SATURN": SATURN_a,
+    "URANUS": URANUS_a,
+    "NEPTUNE": NEPTUNE_a,
+}
+_SOLAR_SYSTEM_CONSTANT_NAMES = [
+    "AU",
+    "AU_KM",
+    "SUN_RADIUS_KM",
+    "SUN_RADIUS_AU",
+    "SUN_EARTH_AVERAGE_DISTANCE",
+    "SUN_EARTH_AVERAGE_DISTANCE_KM",
+    "SUN_EARTH_AVERAGE_DISTANCE_AU",
+    "SUN_ANGULAR_RADIUS_RAD",
+    "SUN_ANGULAR_DIAMETER_DEG",
+    "PLANET_NAMES",
+    "SOLAR_SYSTEM_BODY_NAMES",
+]
+
+for _body, _a_au in _PLANET_SEMI_MAJOR_AXIS_AU.items():
+    globals()[f"{_body}_SEMI_MAJOR_AXIS_AU"] = float(_a_au)
+    globals()[f"{_body}_SEMI_MAJOR_AXIS"] = float(_a_au) * AU
+    globals()[f"{_body}_SEMI_MAJOR_AXIS_KM"] = float(_a_au) * AU_KM
+    globals()[f"{_body}_RADIUS_KM"] = globals()[f"{_body}_RADIUS"] / km_to_m
+    _SOLAR_SYSTEM_CONSTANT_NAMES.extend([
+        f"{_body}_SEMI_MAJOR_AXIS_AU",
+        f"{_body}_SEMI_MAJOR_AXIS",
+        f"{_body}_SEMI_MAJOR_AXIS_KM",
+        f"{_body}_RADIUS_KM",
+    ])
+
+PLANET_SEMI_MAJOR_AXIS_AU = {
+    name.title(): globals()[f"{name}_SEMI_MAJOR_AXIS_AU"]
+    for name in _PLANET_SEMI_MAJOR_AXIS_AU
+}
+PLANET_SEMI_MAJOR_AXIS = {
+    name.title(): globals()[f"{name}_SEMI_MAJOR_AXIS"]
+    for name in _PLANET_SEMI_MAJOR_AXIS_AU
+}
+PLANET_SEMI_MAJOR_AXIS_KM = {
+    name.title(): globals()[f"{name}_SEMI_MAJOR_AXIS_KM"]
+    for name in _PLANET_SEMI_MAJOR_AXIS_AU
+}
+PLANET_RADIUS_KM = {
+    name.title(): globals()[f"{name}_RADIUS_KM"]
+    for name in _PLANET_SEMI_MAJOR_AXIS_AU
+}
+SOLAR_SYSTEM_RADIUS_KM = {"Sun": SUN_RADIUS_KM, **PLANET_RADIUS_KM}
+_SOLAR_SYSTEM_CONSTANT_NAMES.extend([
+    "PLANET_SEMI_MAJOR_AXIS_AU",
+    "PLANET_SEMI_MAJOR_AXIS",
+    "PLANET_SEMI_MAJOR_AXIS_KM",
+    "PLANET_RADIUS_KM",
+    "SOLAR_SYSTEM_RADIUS_KM",
+])
+
 
 _TOOLKIT_CONSTANT_NAMES = (
     "W_rho",
@@ -121,6 +208,10 @@ _TOOLKIT_CONSTANT_NAMES = (
     "PLUTO_RADIUS",
 )
 
-__all__ = sorted(set(_SSAPY_CONSTANT_NAMES + _TOOLKIT_CONSTANT_NAMES))
+__all__ = sorted(set(_SSAPY_CONSTANT_NAMES + _TOOLKIT_CONSTANT_NAMES + tuple(_SOLAR_SYSTEM_CONSTANT_NAMES)))
 
 del _name
+try:
+    del _body, _a_au
+except NameError:
+    pass

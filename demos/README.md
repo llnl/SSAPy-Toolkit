@@ -33,11 +33,16 @@ The `demos/` package is organized by workflow area:
 | Folder | Contents |
 |--------|----------|
 | `getting_started/` | first workflow, packaged data access, time helpers, optional 3LE parsing |
-| `orbital_mechanics/` | orbit quantities, propagation/model comparisons, ellipse fitting, maneuvers, transfers, station keeping |
 | `coordinates/` | frame transforms, surface state vectors, NTW/GCRF checks, rotation utilities |
-| `plotting/` | dashboards, orbit/globe/ground-track plots, GIF/video, divergence plots |
-| `photometry/` | Lambertian brightness, thermal/reflection models, ground-observer examples |
 | `data_io/` | sampling, sphere generation, and dictionary/HDF5 round-trip examples |
+| `orbital_mechanics/` | orbit quantities, propagation/model comparisons, ellipse fitting, maneuvers, transfers, station keeping |
+| `orbit_visualization/` | orbit, cislunar, globe, Moon, and ground-track visualization workflows |
+| `sensor_coverage/` | satellite viewer and sensor field-of-view coverage demos |
+| `space_environment/` | Sun/Earth/Moon scenes, solar-system views, magnetic fields, and Van Allen belts |
+| `eclipse/` | solar and lunar eclipse geometry and animation demos |
+| `analysis_dashboards/` | dashboards, divergence plots, and population summary visualizations |
+| `video_animation/` | GIF and video generation workflows |
+| `photometry/` | Lambertian brightness, thermal/reflection models, ground-observer examples |
 
 The gallery runner searches these subfolders recursively, so adding a new
 `demo_*.py` file under the right category is enough for it to appear unless the

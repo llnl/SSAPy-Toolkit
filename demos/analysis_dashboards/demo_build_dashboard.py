@@ -8,6 +8,7 @@ from ssapy_toolkit.plots.build_dashboard import build_dashboard  # [2]
 from ssapy_toolkit.plots.plotutils import figsave
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
+GALLERY_CATEGORY = "analysis_dashboards"
 
 
 def panel_altitude(ax, fig, t_min, alt_km):

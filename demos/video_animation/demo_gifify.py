@@ -11,6 +11,7 @@ import imageio.v2 as imageio
 import matplotlib.pyplot as plt
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
+GALLERY_CATEGORY = "video_animation"
 
 
 def _count_gif_frames(path):

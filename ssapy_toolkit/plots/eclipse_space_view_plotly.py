@@ -12,11 +12,12 @@ Usage
 -----
     from eclipse_space_view_plotly import find_and_plot_eclipse, plot_space_view_plotly, plot_space_view_animated
 
-    fig, stats = find_and_plot_eclipse(mode="lunar", save_path="lunar.png")
-    plot_space_view_plotly(mode="lunar", save_path="lunar_space.html")
+    fig, stats = find_and_plot_eclipse(mode="lunar", event="2014-04-15", save_path="lunar.png")
+    plot_space_view_plotly(mode="lunar", event="2014-04-15", save_path="lunar_space.html")
     plot_space_view_animated(mode="solar", save_path="solar_space_animated.html")
 """
 from __future__ import annotations
+import json
 import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
@@ -26,16 +27,925 @@ try:
     from .moon_render import moon_mesh_plotly
     from .eclipse_brightness_plot import propagate_eci, sun_direction_eci, illumination_fraction, R_SUN_KM, AU_KM
     from .eclipse_appearance_strip import render_lunar_panel, render_solar_panel
+    from .scene_primitives import earth_rotation_deg_from_time
 except ImportError:
     from globe_orbit_daynight_plotly import _earth_mesh, _sun_sphere_traces, _earth_atmosphere_trace, RE_KM
     from moon_render import moon_mesh_plotly
     from eclipse_brightness_plot import propagate_eci, sun_direction_eci, illumination_fraction, R_SUN_KM, AU_KM
     from eclipse_appearance_strip import render_lunar_panel, render_solar_panel
+    from scene_primitives import earth_rotation_deg_from_time
 
 D_MOON_A_KM = 384_748.0
 D_MOON_E = 0.0549
 D_MOON_INC_DEG = 5.145
 R_MOON_KM = 1_737.4
+
+
+REAL_LUNAR_ECLIPSE_2014 = {
+    "key": "2014-04-15-total-lunar-wisconsin",
+    "label": "April 15, 2014 total lunar eclipse",
+    "peak_utc": "2014-04-15T07:46:48",
+    "observer_name": "Madison, Wisconsin",
+    "observer_lat_deg": 43.0731,
+    "observer_lon_deg": -89.4012,
+    "observer_height_m": 267.0,
+    "source": "NASA eclipse catalog greatest-eclipse time; Astropy built-in ephemeris for demo geometry",
+}
+
+_LUNAR_EVENT_ALIASES = {
+    "2014",
+    "2014-lunar",
+    "2014-total-lunar",
+    "2014-april",
+    "2014-april-lunar",
+    "2014-04-15",
+    "2014-04-15-lunar",
+    "2014-04-15-total-lunar",
+    "2014-04-15-total-lunar-wisconsin",
+    "april-2014-lunar",
+    "wisconsin-2014-lunar",
+}
+
+
+_SOLAR_ECLIPSE_CATALOG_21ST_CENTURY = """2001-06-21 12:04:46 T
+2001-12-14 20:53:01 A
+2002-06-10 23:45:22 A
+2002-12-04 07:32:16 T
+2003-05-31 04:09:22 An
+2003-11-23 22:50:22 T
+2004-04-19 13:35:05 P
+2004-10-14 03:00:23 P
+2005-04-08 20:36:51 H
+2005-10-03 10:32:47 A
+2006-03-29 10:12:23 T
+2006-09-22 11:41:16 A
+2007-03-19 02:32:57 P
+2007-09-11 12:32:24 P
+2008-02-07 03:56:10 A
+2008-08-01 10:22:12 T
+2009-01-26 07:59:45 A
+2009-07-22 02:36:25 T
+2010-01-15 07:07:39 A
+2010-07-11 19:34:38 T
+2011-01-04 08:51:42 P
+2011-06-01 21:17:18 P
+2011-07-01 08:39:30 Pb
+2011-11-25 06:21:24 P
+2012-05-20 23:53:54 A
+2012-11-13 22:12:55 T
+2013-05-10 00:26:20 A
+2013-11-03 12:47:36 H3
+2014-04-29 06:04:33 A-
+2014-10-23 21:45:39 P
+2015-03-20 09:46:47 T
+2015-09-13 06:55:19 P
+2016-03-09 01:58:19 T
+2016-09-01 09:08:02 A
+2017-02-26 14:54:33 A
+2017-08-21 18:26:40 T
+2018-02-15 20:52:33 P
+2018-07-13 03:02:16 P
+2018-08-11 09:47:28 P
+2019-01-06 01:42:38 P
+2019-07-02 19:24:07 T
+2019-12-26 05:18:53 A
+2020-06-21 06:41:15 Am
+2020-12-14 16:14:39 T
+2021-06-10 10:43:07 A
+2021-12-04 07:34:38 T
+2022-04-30 20:42:36 P
+2022-10-25 11:01:20 P
+2023-04-20 04:17:56 H
+2023-10-14 18:00:41 A
+2024-04-08 18:18:29 T
+2024-10-02 18:46:13 A
+2025-03-29 10:48:36 P
+2025-09-21 19:43:04 P
+2026-02-17 12:13:06 A
+2026-08-12 17:47:06 T
+2027-02-06 16:00:48 A
+2027-08-02 10:07:50 T
+2028-01-26 15:08:59 A
+2028-07-22 02:56:40 T
+2029-01-14 17:13:48 P
+2029-06-12 04:06:13 P
+2029-07-11 15:37:19 P
+2029-12-05 15:03:58 P
+2030-06-01 06:29:13 A
+2030-11-25 06:51:37 T
+2031-05-21 07:16:04 A
+2031-11-14 21:07:31 H
+2032-05-09 13:26:42 A
+2032-11-03 05:34:13 P
+2033-03-30 18:02:36 T
+2033-09-23 13:54:31 P
+2034-03-20 10:18:45 T
+2034-09-12 16:19:28 A
+2035-03-09 23:05:54 A
+2035-09-02 01:56:46 T
+2036-02-27 04:46:49 P
+2036-07-23 10:32:06 P
+2036-08-21 17:25:45 P
+2037-01-16 09:48:55 P
+2037-07-13 02:40:36 T
+2038-01-05 13:47:11 A
+2038-07-02 13:32:55 A
+2038-12-26 01:00:10 T
+2039-06-21 17:12:54 A
+2039-12-15 16:23:46 T
+2040-05-11 03:43:02 P
+2040-11-04 19:09:02 P
+2041-04-30 11:52:21 T
+2041-10-25 01:36:22 A
+2042-04-20 02:17:30 T
+2042-10-14 02:00:42 A
+2043-04-09 18:57:49 T+
+2043-10-03 03:01:49 A-
+2044-02-28 20:24:39 As
+2044-08-23 01:17:02 T
+2045-02-16 23:56:07 A
+2045-08-12 17:42:39 T
+2046-02-05 23:06:26 A
+2046-08-02 10:21:13 T
+2047-01-26 01:33:18 P
+2047-06-23 10:52:31 P
+2047-07-22 22:36:17 P
+2047-12-16 23:50:12 P
+2048-06-11 12:58:53 A
+2048-12-05 15:35:27 T
+2049-05-31 13:59:59 A
+2049-11-25 05:33:48 H
+2050-05-20 20:42:50 H
+2050-11-14 13:30:53 P
+2051-04-11 02:10:39 P
+2051-10-04 21:02:14 P
+2052-03-30 18:31:53 T
+2052-09-22 23:39:10 A
+2053-03-20 07:08:19 A
+2053-09-12 09:34:09 T
+2054-03-09 12:33:40 P
+2054-08-03 18:04:02 Pe
+2054-09-02 01:09:34 P
+2055-01-27 17:54:05 P
+2055-07-24 09:57:50 T
+2056-01-16 22:16:45 A
+2056-07-12 20:21:59 A
+2057-01-05 09:47:52 T
+2057-07-01 23:40:15 A
+2057-12-26 01:14:35 T
+2058-05-22 10:39:25 P
+2058-06-21 00:19:35 Pb
+2058-11-16 03:23:07 P
+2059-05-11 19:22:16 T
+2059-11-05 09:18:15 A
+2060-04-30 10:10:00 T
+2060-10-24 09:24:10 A
+2061-04-20 02:56:49 T
+2061-10-13 10:32:10 A
+2062-03-11 04:26:16 P
+2062-09-03 08:54:27 P
+2063-02-28 07:43:30 A
+2063-08-24 01:22:11 T
+2064-02-17 07:00:23 A
+2064-08-12 17:46:06 T
+2065-02-05 09:52:26 P
+2065-07-03 17:33:52 P
+2065-08-02 05:34:17 P
+2065-12-27 08:39:56 P
+2066-06-22 19:25:48 A
+2066-12-17 00:23:40 T
+2067-06-11 20:42:26 A
+2067-12-06 14:03:43 H
+2068-05-31 03:56:39 T
+2068-11-24 21:32:30 P
+2069-04-21 10:11:09 P
+2069-05-20 17:53:18 Pb
+2069-10-15 04:19:56 P
+2070-04-11 02:36:09 T
+2070-10-04 07:08:57 A
+2071-03-31 15:01:06 A
+2071-09-23 17:20:28 T
+2072-03-19 20:10:31 P
+2072-09-12 08:59:20 T
+2073-02-07 01:55:59 P
+2073-08-03 17:15:23 T
+2074-01-27 06:44:15 A
+2074-07-24 03:10:32 A
+2075-01-16 18:36:04 T
+2075-07-13 06:05:44 A
+2076-01-06 10:07:27 T
+2076-06-01 17:31:22 P
+2076-07-01 06:50:43 P
+2076-11-26 11:43:01 P
+2077-05-22 02:46:05 T
+2077-11-15 17:07:56 A
+2078-05-11 17:56:55 T
+2078-11-04 16:55:44 A
+2079-05-01 10:50:13 T
+2079-10-24 18:11:21 A
+2080-03-21 12:20:15 P
+2080-09-13 16:38:09 P
+2081-03-10 15:23:31 A
+2081-09-03 09:07:31 T
+2082-02-27 14:47:00 A
+2082-08-24 01:16:21 T
+2083-02-16 18:06:36 P
+2083-07-15 00:14:23 Pe
+2083-08-13 12:34:41 P
+2084-01-07 17:30:24 P
+2084-07-03 01:50:26 A
+2084-12-27 09:13:48 T
+2085-06-22 03:21:16 A
+2085-12-16 22:37:48 A
+2086-06-11 11:07:14 T
+2086-12-06 05:38:55 P
+2087-05-02 18:04:42 P
+2087-06-01 01:27:14 P
+2087-10-26 11:46:57 P
+2088-04-21 10:31:49 T
+2088-10-14 14:48:05 A
+2089-04-10 22:44:42 A
+2089-10-04 01:15:23 T
+2090-03-31 03:38:08 P
+2090-09-23 16:56:36 T
+2091-02-18 09:54:40 P
+2091-08-15 00:34:43 T
+2092-02-07 15:10:20 A
+2092-08-03 09:59:33 A
+2093-01-27 03:22:16 T
+2093-07-23 12:32:04 A
+2094-01-16 18:59:03 T
+2094-06-13 00:22:11 P
+2094-07-12 13:24:35 P
+2094-12-07 20:05:56 P
+2095-06-02 10:07:40 T
+2095-11-27 01:02:57 A
+2096-05-22 01:37:14 T
+2096-11-15 00:36:15 A
+2097-05-11 18:34:31 T
+2097-11-04 02:01:25 A
+2098-04-01 20:02:31 P
+2098-09-25 00:31:16 P
+2098-10-24 10:36:11 Pb
+2099-03-21 22:54:32 A
+2099-09-14 16:57:53 T
+"""
+
+_LUNAR_ECLIPSE_CATALOG_21ST_CENTURY = """2001-01-09 20:21:40 T
+2001-07-05 14:56:23 P
+2001-12-30 10:30:22 N
+2002-05-26 12:04:26 N
+2002-06-24 21:28:13 N
+2002-11-20 01:47:40 N
+2003-05-16 03:41:13 T
+2003-11-09 01:19:38 T
+2004-05-04 20:31:17 T
+2004-10-28 03:05:11 T
+2005-04-24 09:55:55 N
+2005-10-17 12:04:27 P
+2006-03-14 23:48:34 Nx
+2006-09-07 18:52:25 P
+2007-03-03 23:21:59 T
+2007-08-28 10:38:27 T-
+2008-02-21 03:27:09 T
+2008-08-16 21:11:12 P
+2009-02-09 14:39:22 N
+2009-07-07 09:39:43 N
+2009-08-06 00:40:18 N
+2009-12-31 19:23:46 P
+2010-06-26 11:39:34 P
+2010-12-21 08:18:04 T
+2011-06-15 20:13:43 T+
+2011-12-10 14:32:56 T
+2012-06-04 11:04:20 P
+2012-11-28 14:34:07 N
+2013-04-25 20:08:38 P
+2013-05-25 04:11:06 Nb
+2013-10-18 23:51:25 N
+2014-04-15 07:46:48 T
+2014-10-08 10:55:44 T
+2015-04-04 12:01:24 T
+2015-09-28 02:48:17 T
+2016-03-23 11:48:21 N
+2016-09-16 18:55:27 N
+2017-02-11 00:45:03 N
+2017-08-07 18:21:38 P
+2018-01-31 13:31:00 T
+2018-07-27 20:22:54 T+
+2019-01-21 05:13:27 T
+2019-07-16 21:31:55 P
+2020-01-10 19:11:11 N
+2020-06-05 19:26:14 N
+2020-07-05 04:31:12 N
+2020-11-30 09:44:01 N
+2021-05-26 11:19:53 T
+2021-11-19 09:04:06 P
+2022-05-16 04:12:42 T-
+2022-11-08 11:00:22 T+
+2023-05-05 17:24:05 N
+2023-10-28 20:15:18 P
+2024-03-25 07:13:59 N
+2024-09-18 02:45:25 P
+2025-03-14 06:59:56 T
+2025-09-07 18:12:58 T
+2026-03-03 11:34:52 T
+2026-08-28 04:14:04 P
+2027-02-20 23:14:06 N
+2027-07-18 16:04:09 Ne
+2027-08-17 07:14:59 N
+2028-01-12 04:14:13 P
+2028-07-06 18:20:57 P
+2028-12-31 16:53:15 T
+2029-06-26 03:23:22 T+
+2029-12-20 22:43:12 T
+2030-06-15 18:34:34 P
+2030-12-09 22:28:51 N
+2031-05-07 03:52:02 N
+2031-06-05 11:45:17 N
+2031-10-30 07:46:45 N
+2032-04-25 15:14:51 T
+2032-10-18 19:03:40 T
+2033-04-14 19:13:51 T
+2033-10-08 10:56:23 T
+2034-04-03 19:06:59 N
+2034-09-28 02:47:37 P
+2035-02-22 09:06:12 N
+2035-08-19 01:12:15 P
+2036-02-11 22:13:06 T
+2036-08-07 02:52:32 T+
+2037-01-31 14:01:38 T
+2037-07-27 04:09:53 P
+2038-01-21 03:49:52 N
+2038-06-17 02:45:02 N
+2038-07-16 11:35:56 N
+2038-12-11 17:45:00 N
+2039-06-06 18:54:25 P
+2039-11-30 16:56:28 P
+2040-05-26 11:46:22 T-
+2040-11-18 19:04:40 T+
+2041-05-16 00:43:03 P
+2041-11-08 04:35:05 P
+2042-04-05 14:30:11 N
+2042-09-29 10:45:47 N
+2043-03-25 14:32:04 T
+2043-09-19 01:51:50 T
+2044-03-13 19:38:33 T
+2044-09-07 11:20:44 T
+2045-03-03 07:43:26 N
+2045-08-27 13:54:50 N
+2046-01-22 13:02:37 P
+2046-07-18 01:06:05 P
+2047-01-12 01:26:14 T
+2047-07-07 10:35:45 T-
+2048-01-01 06:53:55 T
+2048-06-26 02:02:28 P
+2048-12-20 06:27:48 N
+2049-05-17 11:26:39 N
+2049-06-15 19:14:12 N
+2049-11-09 15:52:11 N
+2050-05-06 22:32:02 T
+2050-10-30 03:21:47 T
+2051-04-26 02:16:28 T
+2051-10-19 19:11:50 T-
+2052-04-14 02:18:06 N
+2052-10-08 10:45:58 P
+2053-03-04 17:22:10 N
+2053-08-29 08:05:50 Nx
+2054-02-22 06:51:27 T
+2054-08-18 09:26:30 T
+2055-02-11 22:46:17 T
+2055-08-07 10:53:18 P
+2056-02-01 12:26:06 N
+2056-06-27 10:03:09 N
+2056-07-26 18:43:24 N
+2056-12-22 01:48:56 N
+2057-06-17 02:26:20 P
+2057-12-11 00:53:38 P
+2058-06-06 19:15:48 T-
+2058-11-30 03:16:18 T+
+2059-05-27 07:55:35 P
+2059-11-19 13:01:36 P
+2060-04-15 21:37:04 N
+2060-10-09 18:53:32 N
+2060-11-08 04:04:15 N
+2061-04-04 21:54:05 T
+2061-09-29 09:38:13 T
+2062-03-25 03:33:50 T
+2062-09-18 18:34:02 T
+2063-03-14 16:05:49 P
+2063-09-07 20:41:12 N
+2064-02-02 21:48:57 P
+2064-07-28 07:52:48 P
+2065-01-22 09:58:58 T
+2065-07-17 17:48:40 T-
+2066-01-11 15:04:47 T
+2066-07-07 09:30:29 P
+2066-12-31 14:30:10 N
+2067-05-28 18:56:08 N
+2067-06-27 02:41:06 N
+2067-11-21 00:04:42 N
+2068-05-17 05:42:17 P
+2068-11-09 11:47:00 T
+2069-05-06 09:09:57 T+
+2069-10-30 03:35:06 T-
+2070-04-25 09:21:24 Nx
+2070-10-19 18:51:12 P
+2071-03-16 01:31:09 N
+2071-09-09 15:05:41 N
+2072-03-04 15:23:07 T
+2072-08-28 16:05:42 T
+2073-02-22 07:24:53 T
+2073-08-17 17:42:41 T
+2074-02-11 20:55:58 N
+2074-07-08 17:21:38 N
+2074-08-07 01:56:03 N
+2075-01-02 09:55:03 N
+2075-06-28 09:55:35 P
+2075-12-22 08:55:55 P
+2076-06-17 02:39:47 T-
+2076-12-10 11:34:51 T+
+2077-06-06 14:59:52 P
+2077-11-29 21:35:53 P
+2078-04-27 04:35:44 N
+2078-10-21 03:08:03 N
+2078-11-19 12:40:04 N
+2079-04-16 05:10:45 P
+2079-10-10 17:30:30 T
+2080-04-04 11:23:38 T
+2080-09-29 01:52:42 T
+2081-03-25 00:22:01 P
+2081-09-18 03:35:26 N
+2082-02-13 06:29:19 P
+2082-08-08 14:46:42 Nx
+2083-02-02 18:26:46 T
+2083-07-29 01:05:34 T-
+2084-01-22 23:13:00 T
+2084-07-17 16:58:51 P
+2085-01-10 22:32:29 N
+2085-06-08 02:17:36 N
+2085-07-07 10:04:40 N
+2085-12-01 08:25:35 N
+2086-05-28 12:43:47 P
+2086-11-20 20:19:42 P
+2087-05-17 15:55:20 T+
+2087-11-10 12:05:33 T-
+2088-05-05 16:16:50 P
+2088-10-30 03:03:20 P
+2089-03-26 09:34:14 N
+2089-09-19 22:11:17 N
+2090-03-15 23:48:31 T
+2090-09-08 22:52:29 T
+2091-03-05 15:58:22 T
+2091-08-29 00:38:25 T
+2092-02-23 05:20:59 N
+2092-07-19 00:41:58 Ne
+2092-08-17 09:13:59 N
+2093-01-12 18:00:03 N
+2093-07-08 17:24:18 P
+2094-01-01 17:00:06 P
+2094-06-28 10:01:57 T+
+2094-12-21 19:56:32 T+
+2095-06-17 22:00:11 P
+2095-12-11 06:15:02 P
+2096-05-07 11:24:42 N
+2096-06-06 02:43:41 Nb
+2096-10-31 11:30:23 N
+2096-11-29 21:22:22 N
+2097-04-26 12:18:17 P
+2097-10-21 01:30:55 T
+2098-04-15 19:04:48 T-
+2098-10-10 09:19:58 T
+2099-04-05 08:30:56 P
+2099-09-29 10:36:38 Nx
+"""
+
+_SOLAR_ECLIPSE_TYPE_LABELS = {
+    "P": "Partial solar eclipse",
+    "A": "Annular solar eclipse",
+    "T": "Total solar eclipse",
+    "H": "Hybrid solar eclipse",
+}
+
+_LUNAR_ECLIPSE_TYPE_LABELS = {
+    "N": "Penumbral lunar eclipse",
+    "P": "Partial lunar eclipse",
+    "T": "Total lunar eclipse",
+}
+
+
+def _eclipse_type_label(mode, type_code):
+    lead = str(type_code).strip()[:1].upper()
+    if mode == "solar":
+        return _SOLAR_ECLIPSE_TYPE_LABELS.get(lead, f"Solar eclipse ({type_code})")
+    return _LUNAR_ECLIPSE_TYPE_LABELS.get(lead, f"Lunar eclipse ({type_code})")
+
+
+def _parse_eclipse_catalog(mode):
+    table = (_SOLAR_ECLIPSE_CATALOG_21ST_CENTURY if mode == "solar"
+             else _LUNAR_ECLIPSE_CATALOG_21ST_CENTURY)
+    entries = []
+    for line in table.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        date, time_utc, type_code = line.split()[:3]
+        type_label = _eclipse_type_label(mode, type_code)
+        entries.append({
+            "mode": mode,
+            "key": f"{mode}-{date}",
+            "event": date,
+            "date": date,
+            "time_utc": time_utc,
+            "type_code": type_code,
+            "type_label": type_label,
+            "label": f"{date} {time_utc} UTC — {type_label}",
+            "source": "NASA/GSFC Five Millennium Canon eclipse catalog, 2001-2100 page",
+        })
+    return entries
+
+
+def eclipse_catalog_21st_century(mode=None):
+    """Return compact NASA-derived 2001-2100 solar/lunar eclipse metadata."""
+    if mode is None:
+        return _parse_eclipse_catalog("lunar") + _parse_eclipse_catalog("solar")
+    mode = str(mode).strip().lower()
+    if mode not in {"lunar", "solar"}:
+        raise ValueError("mode must be 'lunar', 'solar', or None")
+    return _parse_eclipse_catalog(mode)
+
+
+def _catalog_event_by_date(mode, date):
+    for entry in eclipse_catalog_21st_century(mode):
+        if entry["date"] == date or entry["key"] == date:
+            return entry
+    return None
+
+
+def _render_call_for_catalog_entry(entry):
+    if entry["mode"] == "lunar":
+        return ("from ssapy_toolkit.plots.eclipse_space_view_plotly import plot_space_view_animated\n"
+                f"plot_space_view_animated(mode='lunar', event='{entry['date']}', "
+                "save_path='lunar_eclipse.html')")
+    if entry["date"] == "2024-04-08":
+        return ("from ssapy_toolkit.plots.eclipse_space_view_plotly import plot_2024_solar_eclipse_animated\n"
+                "plot_2024_solar_eclipse_animated(save_path='solar_eclipse.html')")
+    return ("from ssapy_toolkit.plots.eclipse_space_view_plotly import plot_2024_solar_eclipse_animated\n"
+            f"# Solar event '{entry['date']}' is in the selector catalog; use the date/time "
+            "as the center for a custom real-ephemeris solar render.")
+
+
+def _default_catalog_key(mode, default_event=None):
+    if default_event:
+        key = str(default_event).strip().lower()
+        if key in {"2014", "2014-04-15", "2014-04-15-total-lunar-wisconsin"}:
+            return "lunar-2014-04-15"
+        if key in {"2024", "2024-04-08", "2024-04-08-total-solar"}:
+            return "solar-2024-04-08"
+        if key.startswith("lunar-") or key.startswith("solar-"):
+            return key
+        if len(key) >= 10 and key[4] == "-" and key[7] == "-":
+            return f"{mode}-{key[:10]}"
+    return "lunar-2014-04-15" if mode == "lunar" else "solar-2024-04-08"
+
+
+def _eclipse_catalog_dropdown_payload(default_mode, default_event=None):
+    default_key = _default_catalog_key(default_mode, default_event)
+    entries = eclipse_catalog_21st_century()
+    for entry in entries:
+        entry["render_call"] = _render_call_for_catalog_entry(entry)
+        if entry["key"] == "lunar-2014-04-15":
+            entry["default_note"] = "Default lunar scene selected by Travis: Wisconsin-visible total lunar eclipse."
+        elif entry["key"] == "solar-2024-04-08":
+            entry["default_note"] = "Default solar scene selected by Travis: central Texas total solar eclipse."
+        else:
+            entry["default_note"] = "Catalog selection; regenerate the scene with the shown Python call."
+    return {
+        "default_mode": default_mode,
+        "default_key": default_key,
+        "rendered_note": (
+            "This static Plotly scene is rendered for the default event. The selector lists every "
+            "NASA/GSFC cataloged 21st-century eclipse and shows the event metadata plus a Python "
+            "call to generate a dedicated scene."
+        ),
+        "entries": entries,
+    }
+
+
+def _inject_eclipse_catalog_dropdown(html_path, *, default_mode, default_event=None):
+    """Add a self-contained 21st-century eclipse selector to a Plotly HTML file."""
+    path = str(html_path)
+    with open(path, "r", encoding="utf-8") as handle:
+        html = handle.read()
+    marker_start = "<!-- SSATK_ECLIPSE_CATALOG_SELECTOR_START -->"
+    marker_end = "<!-- SSATK_ECLIPSE_CATALOG_SELECTOR_END -->"
+    if marker_start in html and marker_end in html:
+        before = html.split(marker_start, 1)[0]
+        after = html.split(marker_end, 1)[1]
+        html = before + after
+
+    payload_json = json.dumps(_eclipse_catalog_dropdown_payload(default_mode, default_event))
+    selector = f"""
+{marker_start}
+<style>
+#ssatk-eclipse-selector {{
+  position: fixed; left: 16px; top: 16px; z-index: 10000; width: min(430px, calc(100vw - 32px));
+  color: #eef3ff; background: rgba(5, 8, 16, 0.82); border: 1px solid rgba(180, 205, 255, 0.32);
+  border-radius: 12px; padding: 12px 14px; font: 13px/1.35 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.42); backdrop-filter: blur(5px);
+}}
+#ssatk-eclipse-selector h2 {{ margin: 0 0 8px; font-size: 15px; color: #ffffff; }}
+#ssatk-eclipse-selector label {{ display: block; margin-top: 8px; margin-bottom: 3px; color: #b9c8e8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }}
+#ssatk-eclipse-selector select {{ width: 100%; background: #111827; color: #f8fbff; border: 1px solid #42506a; border-radius: 7px; padding: 6px 7px; }}
+#ssatk-eclipse-details {{ margin-top: 9px; color: #d9e4ff; }}
+#ssatk-eclipse-details code {{ display: block; white-space: pre-wrap; margin-top: 6px; padding: 7px; background: rgba(255,255,255,0.08); border-radius: 7px; color: #d9fff0; font-size: 11px; }}
+#ssatk-eclipse-selector .note {{ margin-top: 7px; color: #aab7d4; font-size: 11px; }}
+#ssatk-eclipse-selector .close {{ float: right; margin-left: 8px; background: transparent; color: #d8e3ff; border: 0; font-size: 18px; cursor: pointer; }}
+</style>
+<div id="ssatk-eclipse-selector" role="group" aria-label="21st-century eclipse selector">
+  <button class="close" type="button" title="Hide selector" onclick="document.getElementById('ssatk-eclipse-selector').style.display='none'">×</button>
+  <h2>21st-Century Eclipse Selector</h2>
+  <label for="ssatk-eclipse-mode">Eclipse Family</label>
+  <select id="ssatk-eclipse-mode">
+    <option value="lunar">Lunar eclipses</option>
+    <option value="solar">Solar eclipses</option>
+  </select>
+  <label for="ssatk-eclipse-event">Catalog Event</label>
+  <select id="ssatk-eclipse-event"></select>
+  <div id="ssatk-eclipse-details"></div>
+  <div class="note" id="ssatk-eclipse-rendered-note"></div>
+</div>
+<script>
+(function() {{
+  const payload = {payload_json};
+  const modeSelect = document.getElementById('ssatk-eclipse-mode');
+  const eventSelect = document.getElementById('ssatk-eclipse-event');
+  const details = document.getElementById('ssatk-eclipse-details');
+  const renderedNote = document.getElementById('ssatk-eclipse-rendered-note');
+  renderedNote.textContent = payload.rendered_note;
+  function entriesForMode(mode) {{ return payload.entries.filter(e => e.mode === mode); }}
+  function escapeHtml(text) {{ return String(text).replace(/[&<>]/g, ch => ({{'&':'&amp;','<':'&lt;','>':'&gt;'}}[ch])); }}
+  function populateEvents() {{
+    const mode = modeSelect.value;
+    const entries = entriesForMode(mode);
+    eventSelect.innerHTML = '';
+    for (const entry of entries) {{
+      const opt = document.createElement('option');
+      opt.value = entry.key;
+      opt.textContent = entry.label;
+      eventSelect.appendChild(opt);
+    }}
+    const preferred = entries.find(e => e.key === payload.default_key) || entries[0];
+    if (preferred) eventSelect.value = preferred.key;
+    updateDetails();
+  }}
+  function updateDetails() {{
+    const entry = payload.entries.find(e => e.key === eventSelect.value);
+    if (!entry) return;
+    details.innerHTML = '<strong>' + escapeHtml(entry.type_label) + '</strong><br>' +
+      escapeHtml(entry.date + ' ' + entry.time_utc + ' UTC') + '<br>' +
+      'NASA type code: ' + escapeHtml(entry.type_code) + '<br>' +
+      '<span style="color:#aab7d4">' + escapeHtml(entry.default_note) + '</span>' +
+      '<code>' + escapeHtml(entry.render_call) + '</code>';
+  }}
+  modeSelect.value = payload.default_mode;
+  modeSelect.addEventListener('change', populateEvents);
+  eventSelect.addEventListener('change', updateDetails);
+  populateEvents();
+}})();
+</script>
+{marker_end}
+"""
+    if "</body>" in html:
+        html = html.replace("</body>", selector + "\n</body>", 1)
+    else:
+        html += selector
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(html)
+
+
+def _event_date_from_key(mode, event):
+    key = str(event).strip().lower().replace("_", "-").replace(" ", "-")
+    prefix = f"{mode}-"
+    if key.startswith(prefix):
+        key = key[len(prefix):]
+    return key[:10] if len(key) >= 10 and key[4] == "-" and key[7] == "-" else key
+
+
+def _normalize_lunar_event_key(event):
+    if event in (None, False, ""):
+        return None
+    key = str(event).strip().lower().replace("_", "-").replace(" ", "-")
+    if key in _LUNAR_EVENT_ALIASES:
+        return REAL_LUNAR_ECLIPSE_2014["key"]
+    date = _event_date_from_key("lunar", event)
+    if _catalog_event_by_date("lunar", date) is not None:
+        return f"lunar-{date}"
+    raise ValueError(
+        "Unsupported lunar eclipse event {!r}; use a date from "
+        "eclipse_catalog_21st_century('lunar'), for example '2014-04-15'.".format(event)
+    )
+
+
+def _lunar_event_metadata(event):
+    key = _normalize_lunar_event_key(event)
+    if key is None:
+        return None
+    if key == REAL_LUNAR_ECLIPSE_2014["key"]:
+        meta = dict(REAL_LUNAR_ECLIPSE_2014)
+        meta["date"] = "2014-04-15"
+        meta["type_label"] = "Total lunar eclipse"
+        return meta
+    date = _event_date_from_key("lunar", key)
+    entry = _catalog_event_by_date("lunar", date)
+    if entry is None:
+        raise ValueError(f"No 21st-century lunar eclipse catalog entry for {event!r}")
+    return {
+        "key": entry["key"],
+        "label": entry["type_label"] + " — " + entry["date"],
+        "date": entry["date"],
+        "type_label": entry["type_label"],
+        "peak_utc": f"{entry['date']}T{entry['time_utc']}",
+        "source": entry["source"],
+    }
+
+
+def _real_solar_system_vectors(times):
+    """Return real geocentric Moon vector and Sun direction for Astropy times.
+
+    The vectors use Astropy's built-in solar-system ephemeris so the demo stays
+    offline-capable while still using the actual 2014 epoch instead of the older
+    synthetic fixed-node Moon orbit.
+    """
+    import astropy.units as u
+    from astropy.coordinates import get_body_barycentric_posvel, solar_system_ephemeris
+
+    with solar_system_ephemeris.set("builtin"):
+        earth_pos, _ = get_body_barycentric_posvel("earth", times)
+        moon_pos, _ = get_body_barycentric_posvel("moon", times)
+        sun_pos, _ = get_body_barycentric_posvel("sun", times)
+
+    r_moon_km = (moon_pos.xyz - earth_pos.xyz).to_value(u.km).T
+    r_sun_km = (sun_pos.xyz - earth_pos.xyz).to_value(u.km).T
+    sun_dist_km = np.linalg.norm(r_sun_km, axis=1)
+    sun_hat = r_sun_km / sun_dist_km[:, None]
+    return r_moon_km, sun_hat, sun_dist_km
+
+
+def _wisconsin_visibility_at_peak(peak_time):
+    """Moon/Sun altitude check for the 2014 event from Madison, Wisconsin."""
+    import astropy.units as u
+    from astropy.coordinates import AltAz, EarthLocation, get_body, solar_system_ephemeris
+
+    meta = REAL_LUNAR_ECLIPSE_2014
+    location = EarthLocation(
+        lat=meta["observer_lat_deg"] * u.deg,
+        lon=meta["observer_lon_deg"] * u.deg,
+        height=meta["observer_height_m"] * u.m,
+    )
+    frame = AltAz(obstime=peak_time, location=location)
+    with solar_system_ephemeris.set("builtin"):
+        moon_alt = get_body("moon", peak_time, location).transform_to(frame).alt.deg
+        sun_alt = get_body("sun", peak_time, location).transform_to(frame).alt.deg
+    return float(moon_alt), float(sun_alt)
+
+
+def _real_lunar_event_window(event, *, n_steps=4000, half_window_hr=6.0):
+    key = _normalize_lunar_event_key(event)
+    if key is None:
+        return None
+
+    import astropy.units as u
+    from astropy.time import Time
+
+    meta = _lunar_event_metadata(event)
+    peak_time = Time(meta["peak_utc"], scale="utc")
+    offsets_s = np.linspace(-half_window_hr * 3600.0, half_window_hr * 3600.0, int(n_steps))
+    times = peak_time + offsets_s * u.s
+    r_moon, sun_hat, sun_dist = _real_solar_system_vectors(times)
+    illum = illumination_fraction(
+        r_moon,
+        sun_hat,
+        R_body_km=RE_KM,
+        R_sun_km=R_SUN_KM,
+        D_km=sun_dist,
+    )
+    peak_idx = int(np.argmin(illum))
+
+    out = {
+        "mode": "lunar",
+        "event_key": key,
+        "event_label": meta["label"],
+        "event_source": meta["source"],
+        "peak_utc": meta["peak_utc"],
+        "peak_time": peak_time,
+        "t_s": offsets_s,
+        "times": times,
+        "r_moon": r_moon,
+        "sun_hat": sun_hat,
+        "sun_dist_km": sun_dist,
+        "illum": illum,
+        "peak_idx": peak_idx,
+        "epoch_jd": float(peak_time.jd),
+    }
+    if meta.get("observer_name"):
+        moon_alt_deg, sun_alt_deg = _wisconsin_visibility_at_peak(peak_time)
+        out.update({
+            "observer_name": meta["observer_name"],
+            "observer_lat_deg": meta["observer_lat_deg"],
+            "observer_lon_deg": meta["observer_lon_deg"],
+            "observer_moon_alt_deg": moon_alt_deg,
+            "observer_sun_alt_deg": sun_alt_deg,
+        })
+    return out
+
+
+def _synthetic_eclipse_window(mode, search_days=None, *, n_steps=4000, verbose=True):
+    if search_days is None:
+        search_days = 365.0 if mode == "lunar" else 365.25 * 6
+    lunar_period_days = 27.32
+    n_orbits_year = search_days / lunar_period_days
+    coarse_density = 60 if mode == "lunar" else 1500
+    t_s, r_moon, _ = propagate_eci(
+        a_km=D_MOON_A_KM, e=D_MOON_E, inc_deg=D_MOON_INC_DEG,
+        raan_deg=0.0, argp_deg=0.0, nu0_deg=0.0,
+        n_orbits=n_orbits_year, n_steps=int(n_orbits_year * coarse_density),
+    )
+    sun_hat = sun_direction_eci(t_s)
+    r_eval = r_moon if mode == "lunar" else -r_moon
+    R_occ = RE_KM if mode == "lunar" else R_MOON_KM
+    illum_coarse = illumination_fraction(r_eval, sun_hat, R_body_km=R_occ,
+                                          R_sun_km=R_SUN_KM, D_km=AU_KM)
+    best_idx = int(np.argmin(illum_coarse))
+    best_t = t_s[best_idx]
+    if verbose:
+        print(f"[{mode}] Coarse search over {search_days:.0f} days: "
+              f"deepest illumination minimum = {illum_coarse[best_idx]:.4f} "
+              f"at t={best_t/86400:.1f} days")
+
+    MU_EARTH_KM3S2 = 398_600.4418
+    window_days = 2.0
+    n_rad_s = np.sqrt(MU_EARTH_KM3S2 / D_MOON_A_KM**3)
+    t_window_start = best_t - window_days * 86400
+    M_start = (n_rad_s * t_window_start) % (2*np.pi)
+    E_start = float(M_start)
+    for _ in range(60):
+        dE = (M_start - E_start + D_MOON_E*np.sin(E_start)) / (1 - D_MOON_E*np.cos(E_start))
+        E_start += dE
+    nu_start = 2*np.arctan2(np.sqrt(1+D_MOON_E)*np.sin(E_start/2), np.sqrt(1-D_MOON_E)*np.cos(E_start/2))
+    n_orbits_window = (2 * window_days) / lunar_period_days
+
+    t_fine, r_fine, _ = propagate_eci(
+        a_km=D_MOON_A_KM, e=D_MOON_E, inc_deg=D_MOON_INC_DEG,
+        raan_deg=0.0, argp_deg=0.0, nu0_deg=np.degrees(nu_start),
+        n_orbits=n_orbits_window, n_steps=int(n_steps),
+    )
+    t_fine = t_fine + t_window_start
+    sun_fine = sun_direction_eci(t_fine)
+    r_eval_fine = r_fine if mode == "lunar" else -r_fine
+    illum_fine = illumination_fraction(r_eval_fine, sun_fine, R_body_km=R_occ,
+                                        R_sun_km=R_SUN_KM, D_km=AU_KM)
+    fine_mask = np.abs(t_fine - best_t) < window_days * 86400
+    t_win = t_fine[fine_mask]
+    r_win = r_fine[fine_mask]
+    sun_win = sun_fine[fine_mask]
+    illum_win = illum_fine[fine_mask]
+    peak_idx = int(np.argmin(illum_win))
+    return {
+        "mode": mode,
+        "event_key": None,
+        "event_label": None,
+        "t_s": t_win,
+        "times": None,
+        "r_moon": r_win,
+        "sun_hat": sun_win,
+        "sun_dist_km": np.full_like(illum_win, AU_KM, dtype=float),
+        "illum": illum_win,
+        "peak_idx": peak_idx,
+        "epoch_jd": 2_460_500.0,
+    }
+
+
+def _eclipse_window(mode, search_days=None, *, event=None, n_steps=4000, verbose=True):
+    assert mode in ("lunar", "solar")
+    if event is not None:
+        if mode != "lunar":
+            raise ValueError("Named real-event support is currently implemented for lunar eclipses only.")
+        return _real_lunar_event_window(event, n_steps=n_steps)
+    return _synthetic_eclipse_window(mode, search_days=search_days, n_steps=n_steps, verbose=verbose)
+
+
+def _earth_rotation_for_window_sample(window, idx):
+    times = window.get("times")
+    if times is not None:
+        return earth_rotation_deg_from_time(times[idx])
+    return earth_rotation_deg_from_time(
+        epoch_jd=window.get("epoch_jd", 2_460_500.0),
+        relative_seconds=float(window["t_s"][idx]),
+    )
+
+
+def _window_title_prefix(mode, window):
+    return window.get("event_label") or f"{mode.capitalize()} eclipse"
 
 
 
@@ -162,87 +1072,14 @@ def _moon_sphere_mpl(ax, center, radius, tint_rgb, seed=3):
     ax.plot_surface(mx, my, mz, facecolors=rgb, linewidth=0, shade=False, zorder=9)
 
 
-def find_and_plot_eclipse(mode="lunar", save_path=None, search_days=None, verbose=True):
+def find_and_plot_eclipse(mode="lunar", save_path=None, search_days=None, verbose=True, event=None):
     assert mode in ("lunar", "solar")
-    # Solar eclipses need a much tighter alignment (Moon's angular radius
-    # ~0.25-0.55 deg vs Earth's ~1-2 deg as seen from the Moon) — in this
-    # simplified fixed-node model (no real ~18.6yr nodal precession), a
-    # single year doesn't reliably produce a close-enough approach; the
-    # slight mismatch between the lunar month and the calendar year means
-    # different years land at different phases, so searching several years
-    # finds a real one (confirmed: 1 year found only a 0.70 deg near-miss,
-    # 6 years found a genuine 0.35 deg alignment).
-    if search_days is None:
-        search_days = 365.0 if mode == "lunar" else 365.25 * 6
-    lunar_period_days = 27.32
-    n_orbits_year = search_days / lunar_period_days
-
-    # Solar eclipse alignment windows are much narrower in time than lunar
-    # ones (Moon's angular radius ~0.25-0.55 deg vs Earth's ~1-2 deg as
-    # seen from the Moon), so the coarse search needs much denser sampling
-    # or it can skip the entire event — confirmed by testing: at 60
-    # samples/orbit the search found min_illum=1.0 all year (nothing),
-    # even though a genuine 0.71 deg alignment was present when checked
-    # directly at finer resolution.
-    _coarse_density = 60 if mode == "lunar" else 1500
-    t_s, r_moon, T_s = propagate_eci(
-        a_km=D_MOON_A_KM, e=D_MOON_E, inc_deg=D_MOON_INC_DEG,
-        raan_deg=0.0, argp_deg=0.0, nu0_deg=0.0,
-        n_orbits=n_orbits_year, n_steps=int(n_orbits_year*_coarse_density),
-    )
-    sun_hat = sun_direction_eci(t_s)
-
-    if mode == "lunar":
-        # Earth's shadow on the Moon: occluder=Earth, evaluated at the
-        # Moon's position relative to Earth (r_moon, as propagated above).
-        r_eval, R_occ = r_moon, RE_KM
-    else:
-        # The Moon's shadow on Earth: occluder=Moon, evaluated at Earth's
-        # position relative to the Moon = -r_moon.
-        r_eval, R_occ = -r_moon, R_MOON_KM
-
-    illum_coarse = illumination_fraction(r_eval, sun_hat, R_body_km=R_occ,
-                                          R_sun_km=R_SUN_KM, D_km=AU_KM)
-    best_idx = int(np.argmin(illum_coarse))
-    best_t = t_s[best_idx]
-    if verbose:
-        print(f"[{mode}] Coarse search over {search_days:.0f} days: "
-              f"deepest illumination minimum = {illum_coarse[best_idx]:.4f} "
-              f"at t={best_t/86400:.1f} days")
-
-    window_days = 2.0
-    # Propagate a short, dense window directly centred on best_t instead
-    # of re-doing the whole (possibly multi-year) span at ultra-fine
-    # resolution and slicing — for the 6-year solar search that would mean
-    # tens of millions of samples, far too slow. Compute the true anomaly
-    # at (best_t - window_days) analytically and use that as nu0 for a
-    # short fine propagation instead.
-    MU_EARTH_KM3S2 = 398_600.4418
-    n_rad_s = np.sqrt(MU_EARTH_KM3S2 / D_MOON_A_KM**3)
-    t_window_start = best_t - window_days*86400
-    M_start = (n_rad_s * t_window_start) % (2*np.pi)
-    E_start = M_start.copy() if hasattr(M_start, "copy") else M_start
-    for _ in range(60):
-        dE = (M_start - E_start + D_MOON_E*np.sin(E_start)) / (1 - D_MOON_E*np.cos(E_start))
-        E_start += dE
-    nu_start = 2*np.arctan2(np.sqrt(1+D_MOON_E)*np.sin(E_start/2), np.sqrt(1-D_MOON_E)*np.cos(E_start/2))
-    n_orbits_window = (2*window_days) / lunar_period_days
-
-    t_fine, r_fine, _ = propagate_eci(
-        a_km=D_MOON_A_KM, e=D_MOON_E, inc_deg=D_MOON_INC_DEG,
-        raan_deg=0.0, argp_deg=0.0, nu0_deg=np.degrees(nu_start),
-        n_orbits=n_orbits_window, n_steps=4000,
-    )
-    t_fine = t_fine + t_window_start   # shift back to the real timeline
-    sun_fine = sun_direction_eci(t_fine)
-    r_eval_fine = r_fine if mode == "lunar" else -r_fine
-    illum_fine = illumination_fraction(r_eval_fine, sun_fine, R_body_km=R_occ,
-                                        R_sun_km=R_SUN_KM, D_km=AU_KM)
-    fine_mask = np.abs(t_fine - best_t) < window_days*86400
-    t_win = t_fine[fine_mask]
-    r_win = r_fine[fine_mask]          # Moon position relative to Earth, always
-    sun_win = sun_fine[fine_mask]
-    illum_win = illum_fine[fine_mask]
+    window = _eclipse_window(mode, search_days=search_days, event=event, n_steps=4000, verbose=verbose)
+    t_win = window["t_s"]
+    r_win = window["r_moon"]
+    sun_win = window["sun_hat"]
+    illum_win = window["illum"]
+    best_t = t_win[window["peak_idx"]]
 
     t_hr = (t_win - best_t) / 3600.0
     mid = int(np.argmin(illum_win))
@@ -278,11 +1115,21 @@ def find_and_plot_eclipse(mode="lunar", save_path=None, search_days=None, verbos
         else:
             ecl_type = "Partial"
 
+    event_label = _window_title_prefix(mode, window)
+    event_note = ""
+    if window.get("event_key") and window.get("observer_name"):
+        event_note = (
+            f"; peak {window['peak_utc']} UTC, "
+            f"Moon altitude {window['observer_moon_alt_deg']:.1f}° from {window['observer_name']}"
+        )
+    elif window.get("event_key"):
+        event_note = f"; peak {window['peak_utc']} UTC"
+
     if verbose:
         print(f"[{mode}] Refined minimum illumination: {illum_win.min():.4f} ({ecl_type})")
         print(f"[{mode}] Angular separation at peak: {sep_deg_mid:.3f} deg")
         print(f"[{mode}] Peak phase duration: {dur_umbra_hr*60:.1f} min, "
-              f"total event duration: {dur_total_hr:.2f} hr")
+              f"total event duration: {dur_total_hr:.2f} hr{event_note}")
 
     fig = plt.figure(figsize=(13.5, 7.2), dpi=115)
     grid = fig.add_gridspec(2, 1, height_ratios=(3.3, 1.15), hspace=0.38)
@@ -297,9 +1144,18 @@ def find_and_plot_eclipse(mode="lunar", save_path=None, search_days=None, verbos
                      color="#3a0f08", alpha=0.75, label=label)
     ax1.set_xlabel("Time relative to deepest point [hours]")
     ax1.set_ylabel("Illumination fraction" if mode == "lunar" else "Sun visible fraction")
-    ax1.set_title(f"{ecl_type} {mode} eclipse — found via real search\n"
+    title_suffix = ""
+    if window.get("event_key") and window.get("observer_name"):
+        title_suffix = (
+            f"\n{window['peak_utc']} UTC; visible from {window['observer_name']} "
+            f"(Moon alt {window['observer_moon_alt_deg']:.1f}°)"
+        )
+    elif window.get("event_key"):
+        title_suffix = f"\n{window['peak_utc']} UTC"
+    ax1.set_title(f"{ecl_type} {event_label}\n"
                   f"min={illum_win.min():.3f}, angle at peak={sep_deg_mid:.3f}°, "
-                  f"peak phase {dur_umbra_hr*60:.0f} min, event {dur_total_hr:.1f} hr")
+                  f"peak phase {dur_umbra_hr*60:.0f} min, event {dur_total_hr:.1f} hr"
+                  f"{title_suffix}")
     ax1.set_ylim(-0.02, 1.05)
     ax1.legend(loc="lower right", fontsize=9)
     ax1.grid(alpha=0.25)
@@ -424,15 +1280,35 @@ def find_and_plot_eclipse(mode="lunar", save_path=None, search_days=None, verbos
     # 3D "view from space" now lives only in eclipse_space_view_plotly.py
     # as interactive HTML, not duplicated here as a static matplotlib panel.
 
-    fig.suptitle(f"{'Lunar' if mode=='lunar' else 'Solar'} eclipse simulation", fontsize=13, y=0.985)
+    fig.suptitle(event_label, fontsize=13, y=0.985)
 
     if mode == "lunar":
-        caption = ("What this is: a real total/partial lunar eclipse, found by searching actual Moon-Earth-Sun geometry over "
-                  "time rather than staging one. How it's made: two-body Keplerian propagation of the Moon's real orbit "
-                  "(true a/e), real Sun-direction vectors, and the same two-circle Sun-disk-overlap illumination physics "
-                  "used for shadow calculations throughout this toolkit. Each Moon panel is rasterized from that same real "
-                  "geometry at that instant (a real umbra/penumbra boundary crossing an actual cratered surface), not a "
-                  "flat colour swap.")
+        if window.get("event_key") and window.get("observer_name"):
+            caption = (
+                f"What this is: the real {window['event_label']}, using the greatest-eclipse time "
+                f"{window['peak_utc']} UTC. The Moon was above {window['observer_name']} "
+                f"at {window['observer_moon_alt_deg']:.1f}° altitude while the Sun was "
+                f"{window['observer_sun_alt_deg']:.1f}° below the horizon. How it's made: Astropy's "
+                "offline built-in solar-system ephemeris supplies geocentric Moon and Sun vectors at the "
+                "actual event epoch, then SSATK's two-circle Sun-disk-overlap illumination model renders "
+                "the umbra/penumbra transition at each sampled instant."
+            )
+        elif window.get("event_key"):
+            caption = (
+                f"What this is: the real {window['event_label']}, using the greatest-eclipse time "
+                f"{window['peak_utc']} UTC from the packaged 21st-century NASA/GSFC eclipse catalog. "
+                "How it's made: Astropy's offline built-in solar-system ephemeris supplies geocentric "
+                "Moon and Sun vectors at the actual event epoch, then SSATK's two-circle "
+                "Sun-disk-overlap illumination model renders the umbra/penumbra transition at each "
+                "sampled instant."
+            )
+        else:
+            caption = ("What this is: a real total/partial lunar eclipse, found by searching actual Moon-Earth-Sun geometry over "
+                      "time rather than staging one. How it's made: two-body Keplerian propagation of the Moon's real orbit "
+                      "(true a/e), real Sun-direction vectors, and the same two-circle Sun-disk-overlap illumination physics "
+                      "used for shadow calculations throughout this toolkit. Each Moon panel is rasterized from that same real "
+                      "geometry at that instant (a real umbra/penumbra boundary crossing an actual cratered surface), not a "
+                      "flat colour swap.")
     else:
         caption = ("What this is: a real total/partial/annular solar eclipse, found by searching actual Moon-Earth-Sun "
                   "geometry over time rather than staging one. How it's made: the same real orbit propagation and "
@@ -446,9 +1322,16 @@ def find_and_plot_eclipse(mode="lunar", save_path=None, search_days=None, verbos
     if save_path:
         fig.savefig(save_path, bbox_inches="tight")
         print(f"Saved -> {save_path}")
-    return fig, dict(mode=mode, eclipse_type=ecl_type, min_illum=illum_win.min(),
-                     angle_at_peak_deg=sep_deg_mid,
-                     dur_peak_hr=dur_umbra_hr, dur_total_hr=dur_total_hr)
+    stats = dict(mode=mode, eclipse_type=ecl_type, min_illum=float(illum_win.min()),
+                 angle_at_peak_deg=float(sep_deg_mid),
+                 dur_peak_hr=float(dur_umbra_hr), dur_total_hr=float(dur_total_hr))
+    for key in (
+        "event_key", "event_label", "event_source", "peak_utc", "observer_name",
+        "observer_lat_deg", "observer_lon_deg", "observer_moon_alt_deg", "observer_sun_alt_deg",
+    ):
+        if key in window and window[key] is not None:
+            stats[key] = window[key]
+    return fig, stats
 
 
 def _plot_space_view_unified(ax, moon_r_km, sun_hat, illum, mode, sep_deg=None):
@@ -671,7 +1554,10 @@ def _shadow_ground_point(moon_pos, sun_hat, earth_pos, earth_r_real=None):
     — most of a partial eclipse's duration, the umbra hasn't reached
     Earth's surface at all).
     """
-    from globe_orbit_daynight_plotly import RE_KM as _RE_KM
+    try:
+        from .globe_orbit_daynight_plotly import RE_KM as _RE_KM
+    except ImportError:
+        from globe_orbit_daynight_plotly import RE_KM as _RE_KM
     R = earth_r_real if earth_r_real is not None else _RE_KM
     d = -sun_hat / np.linalg.norm(sun_hat)
     oc = moon_pos - earth_pos
@@ -803,10 +1689,308 @@ def _sun_direction_arrow(origin, sun_hat, length, label="Sun direction"):
                         hoverinfo="skip", showlegend=False)
     return [shaft, head, text]
 
+def _time_grid_utc(start, stop, n_frames):
+    """Return an Astropy Time array spanning two UTC-like endpoints."""
+    from astropy.time import Time
+    start_t = Time(start, scale="utc") if not hasattr(start, "gps") else start
+    stop_t = Time(stop, scale="utc") if not hasattr(stop, "gps") else stop
+    gps = np.linspace(float(start_t.gps), float(stop_t.gps), int(n_frames))
+    return Time(gps, format="gps", scale="utc")
+
+
+def _body_xyz_km(name, times, ephemeris="builtin"):
+    """Return barycentric body coordinates as an ``(N, 3)`` km array."""
+    from astropy import units as u
+    from astropy.coordinates import get_body_barycentric, solar_system_ephemeris
+    with solar_system_ephemeris.set(ephemeris):
+        xyz = get_body_barycentric(name, times).xyz.to_value(u.km)
+    arr = np.asarray(xyz, dtype=float)
+    if arr.ndim == 1:
+        return arr.reshape(1, 3)
+    return np.moveaxis(arr, 0, -1).reshape(-1, 3)
+
+
+def _real_solar_eclipse_geometry(times, ephemeris="builtin"):
+    """Return real Earth-relative Moon positions and Earth-to-Sun directions."""
+    earth = _body_xyz_km("earth", times, ephemeris=ephemeris)
+    moon = _body_xyz_km("moon", times, ephemeris=ephemeris)
+    sun = _body_xyz_km("sun", times, ephemeris=ephemeris)
+    moon_pos = moon - earth
+    sun_vec = sun - earth
+    sun_hat = sun_vec / np.linalg.norm(sun_vec, axis=1, keepdims=True)
+    return moon_pos, sun_hat
+
+
+def _eci_surface_to_latlon(point_km, time):
+    """Convert an inertial Earth-surface point to approximate geodetic lat/lon."""
+    point = np.asarray(point_km, dtype=float)
+    radius = np.linalg.norm(point)
+    lat = np.degrees(np.arcsin(point[2] / radius))
+    lon_inertial = np.degrees(np.arctan2(point[1], point[0]))
+    lon = ((lon_inertial - earth_rotation_deg_from_time(time) + 180.0) % 360.0) - 180.0
+    return float(lat), float(lon)
+
+
+def _latlon_to_eci_surface(lat_deg, lon_deg, time, radius_scale=1.0, radius_km=RE_KM):
+    """Place a fixed Earth lat/lon marker in the inertial scene frame."""
+    lat = np.radians(float(lat_deg))
+    lon = np.radians(float(lon_deg) + earth_rotation_deg_from_time(time))
+    radius = float(radius_km) * float(radius_scale)
+    return radius * np.array([
+        np.cos(lat) * np.cos(lon),
+        np.cos(lat) * np.sin(lon),
+        np.sin(lat),
+    ])
+
+
+def _ground_latlon_path_to_eci(ground_latlon, time, radius_scale=1.0, radius_km=RE_KM):
+    """Project a ground-fixed lat/lon path onto Earth's currently rotated mesh."""
+    points = [
+        _latlon_to_eci_surface(lat, lon, time, radius_scale=radius_scale, radius_km=radius_km)
+        for lat, lon in ground_latlon
+        if lat is not None and lon is not None
+    ]
+    if not points:
+        return np.empty((0, 3), dtype=float)
+    return np.asarray(points, dtype=float)
+
+
+def _great_circle_distance_km(lat1, lon1, lat2, lon2, radius_km=6371.0):
+    lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = np.sin(dlat / 2.0) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2.0) ** 2
+    return float(radius_km * 2.0 * np.arcsin(np.sqrt(a)))
+
+
+def plot_2024_solar_eclipse_animated(
+    save_path=None,
+    *,
+    start="2024-04-08T17:30:00",
+    stop="2024-04-08T20:00:00",
+    n_frames=30,
+    n_lat=144,
+    n_lon=288,
+    ephemeris="builtin",
+    target_lat=30.3630,
+    target_lon=-97.9790,
+    target_label="NW Travis County, TX",
+    show_stars=True,
+    verbose=True,
+):
+    """Animate the April 8, 2024 total solar eclipse over central Texas.
+
+    This uses Astropy's real Sun/Earth/Moon ephemerides rather than the generic
+    fixed-node eclipse search used by the teaching lunar demo.  The default
+    target marker is placed near northwest Travis County/Lakeway, where the
+    totality path clipped the Austin/Travis County area.
+    """
+    times = _time_grid_utc(start, stop, n_frames)
+    moon_pos, sun_hat = _real_solar_eclipse_geometry(times, ephemeris=ephemeris)
+
+    size_boost = 16.0
+    base_r, umbra_len, pen_base_r, pen_len, pen_end_r, slope = _umbra_penumbra_geometry(
+        R_MOON_KM,
+        size_boost,
+        D_MOON_A_KM,
+    )
+
+    hits_real = []
+    ground_latlon = []
+    footprint_radii = []
+    target_distances = []
+    for time, moon_i, sun_i in zip(times, moon_pos, sun_hat):
+        hit = _shadow_ground_point(moon_i, sun_i, np.zeros(3), earth_r_real=RE_KM)
+        hits_real.append(hit)
+        if hit is None:
+            ground_latlon.append(None)
+            footprint_radii.append((0.0, 0.0))
+            target_distances.append(np.inf)
+            continue
+        lat, lon = _eci_surface_to_latlon(hit, time)
+        dist_from_moon = np.linalg.norm(hit - moon_i)
+        r_umbra = abs(base_r - slope * dist_from_moon)
+        r_pen = pen_base_r + slope * 1.35 * dist_from_moon
+        ground_latlon.append((lat, lon))
+        footprint_radii.append((r_umbra, r_pen))
+        target_distances.append(_great_circle_distance_km(lat, lon, target_lat, target_lon))
+
+    finite_dist = np.asarray(target_distances, dtype=float)
+    closest_idx = int(np.nanargmin(finite_dist)) if np.isfinite(finite_dist).any() else 0
+    mid_idx = closest_idx
+    moon_mid = moon_pos[mid_idx]
+    sun_mid = sun_hat[mid_idx]
+    ref_r = float(np.linalg.norm(moon_mid))
+    lim = (ref_r + max(RE_KM, R_MOON_KM) * size_boost) * 1.35
+    static_traces = [_starfield_trace(lim)] if show_stars else []
+
+    def _empty_shadow_footprint():
+        return [go.Mesh3d(x=[], y=[], z=[], i=[], j=[], k=[], hoverinfo="skip", showlegend=False),
+                go.Mesh3d(x=[], y=[], z=[], i=[], j=[], k=[], hoverinfo="skip", showlegend=False)]
+
+    def _path_traces(k):
+        all_latlon = [latlon for latlon in ground_latlon if latlon is not None]
+        elapsed_latlon = [latlon for latlon in ground_latlon[:k + 1] if latlon is not None]
+        all_pts = _ground_latlon_path_to_eci(all_latlon, times[k], radius_scale=size_boost * 1.006)
+        elapsed_pts = _ground_latlon_path_to_eci(elapsed_latlon, times[k], radius_scale=size_boost * 1.009)
+        if len(all_pts):
+            full_path_trace = go.Scatter3d(
+                x=all_pts[:, 0], y=all_pts[:, 1], z=all_pts[:, 2], mode="lines",
+                line=dict(color="#ff6b5a", width=4), opacity=0.45,
+                name="2024 full totality path", hoverinfo="skip", showlegend=False,
+            )
+        else:
+            full_path_trace = go.Scatter3d(x=[], y=[], z=[], mode="lines", hoverinfo="skip", showlegend=False)
+
+        if len(elapsed_pts):
+            elapsed_path_trace = go.Scatter3d(
+                x=elapsed_pts[:, 0], y=elapsed_pts[:, 1], z=elapsed_pts[:, 2], mode="lines",
+                line=dict(color="#ff3b1f", width=8),
+                name="2024 elapsed totality path", hoverinfo="skip", showlegend=False,
+            )
+        else:
+            elapsed_path_trace = go.Scatter3d(x=[], y=[], z=[], mode="lines", hoverinfo="skip", showlegend=False)
+
+        if ground_latlon[k] is not None:
+            point = _latlon_to_eci_surface(*ground_latlon[k], times[k], radius_scale=size_boost * 1.014)
+            marker_trace = go.Scatter3d(
+                x=[point[0]], y=[point[1]], z=[point[2]], mode="markers",
+                marker=dict(color="#ffcc00", size=6, line=dict(color="#ff3b1f", width=1)),
+                name="Current shadow center", hoverinfo="skip", showlegend=False,
+            )
+            r_umbra, r_pen = footprint_radii[k]
+            footprint = _shadow_footprint_traces(np.zeros(3), point, sun_hat[k], r_umbra, r_pen)
+        else:
+            marker_trace = go.Scatter3d(x=[], y=[], z=[], mode="markers", hoverinfo="skip", showlegend=False)
+            footprint = _empty_shadow_footprint()
+        return [full_path_trace, elapsed_path_trace, marker_trace] + footprint
+
+    def _target_trace(k):
+        point = _latlon_to_eci_surface(target_lat, target_lon, times[k], radius_scale=size_boost * 1.002)
+        return go.Scatter3d(
+            x=[point[0]], y=[point[1]], z=[point[2]], mode="markers",
+            marker=dict(color="#7CFC00", size=5, symbol="diamond", line=dict(color="white", width=1)),
+            name=target_label,
+            hovertemplate=(
+                f"{target_label}<br>lat={target_lat:.3f}° lon={target_lon:.3f}°"
+                "<br>shadow-center distance=%{customdata:.0f} km<extra></extra>"
+            ),
+            customdata=[target_distances[k]],
+            showlegend=True,
+        )
+
+    def _frame_traces(k):
+        moon_i = moon_pos[k]
+        sun_i = sun_hat[k]
+        earth_pos = np.zeros(3)
+        cone_origin = moon_i + (-sun_i) * (R_MOON_KM * size_boost * 0.03)
+        rotation_deg = earth_rotation_deg_from_time(times[k])
+        traces = [
+            _earth_mesh(sun_i, n_lat=n_lat, n_lon=n_lon, radius_scale=size_boost,
+                        center=tuple(earth_pos), rotation_deg=rotation_deg,
+                        shadow_body_center_km=moon_i, shadow_body_radius_km=R_MOON_KM),
+            _earth_atmosphere_trace(center=tuple(earth_pos), radius_scale=size_boost),
+            moon_mesh_plotly(moon_i, R_MOON_KM * size_boost, sun_hat=sun_i,
+                             real_center_km=np.zeros(3), mode="solar",
+                             n_lat=max(100, n_lat), n_lon=max(200, n_lon)),
+            _shadow_cone_trace(cone_origin, -sun_i, base_r, umbra_len,
+                               color="#1a0a0a", opacity=0.12, end_radius=0.0),
+            _shadow_cone_trace(cone_origin, -sun_i, pen_base_r, pen_len,
+                               color="#4a5a7a", opacity=0.045, end_radius=pen_end_r),
+            *_sun_direction_arrow(earth_pos + sun_i * RE_KM * size_boost * 1.15, sun_i, ref_r * 0.55),
+            *_path_traces(k),
+            _target_trace(k),
+        ]
+        return traces
+
+    initial_traces = _frame_traces(0)
+    dynamic_indices = list(range(len(static_traces), len(static_traces) + len(initial_traces)))
+    frames = []
+    for k, time in enumerate(times):
+        latlon = ground_latlon[k]
+        if latlon is None:
+            subtitle = "shadow axis off Earth"
+        else:
+            subtitle = (f"shadow center {latlon[0]:.2f}°, {latlon[1]:.2f}°; "
+                        f"{target_distances[k]:.0f} km from {target_label}")
+        frames.append(go.Frame(
+            data=_frame_traces(k),
+            traces=dynamic_indices,
+            name=str(k),
+            layout=go.Layout(title=dict(text=f"2024 total solar eclipse — {time.utc.iso}<br><sub>{subtitle}</sub>")),
+        ))
+
+    fig = go.Figure(data=static_traces + initial_traces, frames=frames)
+    camera_eye = _lunar_or_solar_camera_eye("solar", sun_mid)
+    fig.update_layout(
+        scene=dict(
+            xaxis=dict(range=[-lim, lim], title=dict(text="X [km]", font=dict(size=18, color="white")),
+                       tickfont=dict(size=14, color="white"), backgroundcolor="black", gridcolor="#333", color="white"),
+            yaxis=dict(range=[-lim, lim], title=dict(text="Y [km]", font=dict(size=18, color="white")),
+                       tickfont=dict(size=14, color="white"), backgroundcolor="black", gridcolor="#333", color="white"),
+            zaxis=dict(range=[-lim, lim], title=dict(text="Z [km]", font=dict(size=18, color="white")),
+                       tickfont=dict(size=14, color="white"), backgroundcolor="black", gridcolor="#333", color="white"),
+            bgcolor="black",
+            aspectmode="cube",
+            camera=dict(eye=camera_eye),
+        ),
+        paper_bgcolor="black",
+        font=dict(color="white", size=18),
+        title=dict(
+            text=(f"2024 total solar eclipse — {times[0].utc.iso}<br>"
+                  f"<sub>green marker: {target_label}; red/yellow: Moon shadow center</sub>"),
+            x=0.5,
+            font=dict(color="white", size=24),
+        ),
+        margin=dict(l=0, r=0, t=92, b=0),
+        showlegend=True,
+        legend=dict(bgcolor="rgba(0,0,0,0.45)", font=dict(color="white", size=12)),
+        updatemenus=[dict(
+            type="buttons", showactive=False, y=0.02, x=0.5, xanchor="center",
+            buttons=[
+                dict(label="▶ Play", method="animate",
+                     args=[None, dict(frame=dict(duration=120, redraw=True), fromcurrent=True)]),
+                dict(label="⏸ Pause", method="animate",
+                     args=[[None], dict(frame=dict(duration=0, redraw=False), mode="immediate")]),
+            ],
+        )],
+        sliders=[dict(
+            steps=[dict(method="animate", args=[[str(k)], dict(mode="immediate", frame=dict(duration=0, redraw=True))],
+                        label=times[k].utc.iso[11:16]) for k in range(len(times))],
+            transition=dict(duration=0), x=0.05, len=0.9, y=0.0,
+        )],
+    )
+
+    stats = dict(
+        event="2024-04-08 total solar eclipse",
+        start_utc=times[0].utc.iso,
+        stop_utc=times[-1].utc.iso,
+        closest_time_utc=times[closest_idx].utc.iso,
+        closest_shadow_latlon=ground_latlon[closest_idx],
+        closest_target_distance_km=float(target_distances[closest_idx]),
+        target_lat=float(target_lat),
+        target_lon=float(target_lon),
+        target_label=target_label,
+        ephemeris=ephemeris,
+    )
+    if verbose:
+        latlon = stats["closest_shadow_latlon"]
+        print(f"[2024 solar] closest shadow center to {target_label}: "
+              f"{stats['closest_target_distance_km']:.1f} km at {stats['closest_time_utc']} "
+              f"(lat/lon={latlon[0]:.3f}, {latlon[1]:.3f})")
+    if save_path:
+        if str(save_path).endswith(".html"):
+            fig.write_html(save_path)
+            _inject_eclipse_catalog_dropdown(save_path, default_mode="solar", default_event="2024-04-08")
+        else:
+            fig.write_image(save_path)
+        print(f"Saved -> {save_path}")
+    return fig, stats
+
 
 def plot_space_view_animated(mode="lunar", search_days=None, n_frames=26,
                              save_path=None, n_lat=60, n_lon=120, verbose=True,
-                             show_eclipse_path=True):
+                             show_eclipse_path=True, event=None):
     """
     Animated version of plot_space_view_plotly: steps through the real
     eclipse time window (the same fine-resolution window eclipse_demo.py
@@ -831,40 +2015,12 @@ def plot_space_view_animated(mode="lunar", search_days=None, n_frames=26,
     full 180x360 resolution would be quite slow to generate.
     """
     assert mode in ("lunar", "solar")
-    search_days = search_days or (365.0 if mode == "lunar" else 365.25*6)
-    lunar_period_days = 27.32
-    n_orbits_year = search_days / lunar_period_days
-    coarse_density = 60 if mode == "lunar" else 1500
-    t_s, r_moon, _ = propagate_eci(a_km=D_MOON_A_KM, e=D_MOON_E, inc_deg=D_MOON_INC_DEG,
-                                   raan_deg=0, argp_deg=0, nu0_deg=0,
-                                   n_orbits=n_orbits_year, n_steps=int(n_orbits_year*coarse_density))
-    sun_hat_all = sun_direction_eci(t_s)
-    r_eval = r_moon if mode == "lunar" else -r_moon
-    R_occ = RE_KM if mode == "lunar" else R_MOON_KM
-    illum_coarse = illumination_fraction(r_eval, sun_hat_all, R_body_km=R_occ, R_sun_km=R_SUN_KM, D_km=AU_KM)
-    best_idx = int(np.argmin(illum_coarse))
-    best_t = t_s[best_idx]
-
-    MU_EARTH_KM3S2 = 398_600.4418
-    window_days = 2.0
-    n_rad_s = np.sqrt(MU_EARTH_KM3S2 / D_MOON_A_KM**3)
-    t_window_start = best_t - window_days*86400
-    M_start = (n_rad_s * t_window_start) % (2*np.pi)
-    E_start = float(M_start)
-    for _ in range(60):
-        dE = (M_start - E_start + D_MOON_E*np.sin(E_start)) / (1 - D_MOON_E*np.cos(E_start))
-        E_start += dE
-    nu_start = 2*np.arctan2(np.sqrt(1+D_MOON_E)*np.sin(E_start/2), np.sqrt(1-D_MOON_E)*np.cos(E_start/2))
-    n_orbits_window = (2*window_days) / lunar_period_days
-
-    t_fine, r_fine, _ = propagate_eci(a_km=D_MOON_A_KM, e=D_MOON_E, inc_deg=D_MOON_INC_DEG,
-                                      raan_deg=0, argp_deg=0, nu0_deg=np.degrees(nu_start),
-                                      n_orbits=n_orbits_window, n_steps=4000)
-    t_fine = t_fine + t_window_start
-    sun_fine = sun_direction_eci(t_fine)
-    r_eval_fine = r_fine if mode == "lunar" else -r_fine
-    illum_fine = illumination_fraction(r_eval_fine, sun_fine, R_body_km=R_occ, R_sun_km=R_SUN_KM, D_km=AU_KM)
-    mid = int(np.argmin(illum_fine))
+    window = _eclipse_window(mode, search_days=search_days, event=event, n_steps=4000, verbose=verbose)
+    t_fine = window["t_s"]
+    r_fine = window["r_moon"]
+    sun_fine = window["sun_hat"]
+    illum_fine = window["illum"]
+    mid = window["peak_idx"]
 
     # Window of interest around the peak — a bit wider than the peak
     # phase itself so the animation shows the approach and departure, not
@@ -879,15 +2035,12 @@ def plot_space_view_animated(mode="lunar", search_days=None, n_frames=26,
               f"+/-{half_window_hr:.1f} hr around the peak "
               f"(illum min={illum_fine[mid]:.4f})")
 
-    EARTH_SIDEREAL_DEG_PER_SEC = 360.0 / 86164.0905
     # 16x, not 40x -- at 40x the boosted Earth+Moon radii summed to ~89%
     # of their real center-to-center distance at eclipse alignment,
     # leaving only ~11% of real space between them (they looked almost
     # touching even though the Moon is genuinely ~60 Earth-radii away).
     # 16x still shows real surface detail while leaving an honest ~64% gap.
     size_boost = 16.0
-    t0 = t_fine[frame_idxs[0]]
-
     ref_dist_km = D_MOON_A_KM  # shared calibration distance for both
     # directions of shadow (Earth's shadow reaching the Moon, or the
     # Moon's shadow reaching Earth) — this is the real Earth-Moon
@@ -898,7 +2051,7 @@ def plot_space_view_animated(mode="lunar", search_days=None, n_frames=26,
         moon_r_km = r_fine[idx]
         sun_hat = sun_fine[idx]
         illum = illum_fine[idx]
-        rotation_deg = (t_fine[idx] - t0) * EARTH_SIDEREAL_DEG_PER_SEC
+        rotation_deg = _earth_rotation_for_window_sample(window, idx)
 
         # Earth-fixed frame for BOTH modes — Earth stays at the origin,
         # the Moon orbits around it. The previous solar-mode version used
@@ -1087,25 +2240,25 @@ def plot_space_view_animated(mode="lunar", search_days=None, n_frames=26,
 
     ref_r_lim = np.linalg.norm(r_fine[mid])
     lim = (ref_r_lim + max(RE_KM, R_MOON_KM)*size_boost) * 1.35
-    star_trace = _starfield_trace(lim)
+    static_traces = [_starfield_trace(lim)]
 
     first_traces, first_illum, sun_len, *_ = _frame_traces(frame_idxs[0])
     if mode == "solar" and show_eclipse_path:
         first_traces = first_traces + _path_traces(0)
-    first_traces = first_traces + [star_trace]
-    fig = go.Figure(data=first_traces)
+    dynamic_indices = list(range(len(static_traces), len(static_traces) + len(first_traces)))
+    fig = go.Figure(data=static_traces + first_traces)
 
     frames = []
     for k, idx in enumerate(frame_idxs):
         traces, illum, *_ = _frame_traces(idx)
         if mode == "solar" and show_eclipse_path:
             traces = traces + _path_traces(k)
-        traces = traces + [star_trace]
         t_rel_hr = (t_fine[idx] - t_fine[mid]) / 3600.0
         frames.append(go.Frame(
             data=traces, name=str(k),
+            traces=dynamic_indices,
             layout=go.Layout(title=dict(
-                text=f"{mode.capitalize()} eclipse — animated<br>"
+                text=f"{_window_title_prefix(mode, window)} — animated<br>"
                     f"<sub>t={t_rel_hr:+.2f} hr, illum={illum:.3f}</sub>",
                 x=0.5, font=dict(color="white", size=15))),
         ))
@@ -1147,7 +2300,7 @@ def plot_space_view_animated(mode="lunar", search_days=None, n_frames=26,
         ),
         paper_bgcolor="black",
         font=dict(color="white", size=18),
-        title=dict(text=f"{mode.capitalize()} eclipse — animated<br>"
+        title=dict(text=f"{_window_title_prefix(mode, window)} — animated<br>"
                         f"<sub>t={(t_fine[frame_idxs[0]]-t_fine[mid])/3600:+.2f} hr, illum={first_illum:.3f}</sub>",
                   x=0.5, font=dict(color="white", size=24)),
         margin=dict(l=0, r=0, t=90, b=0),
@@ -1184,54 +2337,23 @@ def plot_space_view_animated(mode="lunar", search_days=None, n_frames=26,
 
     if save_path:
         fig.write_html(save_path)
+        if str(save_path).endswith(".html"):
+            _inject_eclipse_catalog_dropdown(save_path, default_mode=mode, default_event=event)
         print(f"Saved -> {save_path}")
     return fig
 
 
-def plot_space_view_plotly(mode="lunar", search_days=None, save_path=None, verbose=True):
+def plot_space_view_plotly(mode="lunar", search_days=None, save_path=None, verbose=True, event=None):
     """Recomputes the same real search as find_and_plot_eclipse() (so this
     can be called standalone) and renders the space-view panel in Plotly."""
     _, stats = find_and_plot_eclipse(mode=mode, search_days=search_days,
-                                     save_path=None, verbose=verbose)
-    # Re-derive the peak-instant vectors at the SAME refined resolution
-    # eclipse_demo.py uses internally (not just the coarse search sample,
-    # which can be off by a lot — confirmed: coarse gave illum=0.32 at a
-    # point where the true refined minimum is illum=0.00).
-    lunar_period_days = 27.32
-    search_days = search_days or (365.0 if mode == "lunar" else 365.25*6)
-    n_orbits_year = search_days / lunar_period_days
-    coarse_density = 60 if mode == "lunar" else 1500
-    t_s, r_moon, _ = propagate_eci(a_km=D_MOON_A_KM, e=D_MOON_E, inc_deg=D_MOON_INC_DEG,
-                                   raan_deg=0, argp_deg=0, nu0_deg=0,
-                                   n_orbits=n_orbits_year, n_steps=int(n_orbits_year*coarse_density))
-    sun_hat_all = sun_direction_eci(t_s)
-    r_eval = r_moon if mode == "lunar" else -r_moon
-    R_occ = RE_KM if mode == "lunar" else R_MOON_KM
-    illum_coarse = illumination_fraction(r_eval, sun_hat_all, R_body_km=R_occ, R_sun_km=R_SUN_KM, D_km=AU_KM)
-    best_idx = int(np.argmin(illum_coarse))
-    best_t = t_s[best_idx]
-
-    # Same targeted fine-window propagation as eclipse_demo.py's refine step
-    MU_EARTH_KM3S2 = 398_600.4418
-    window_days = 2.0
-    n_rad_s = np.sqrt(MU_EARTH_KM3S2 / D_MOON_A_KM**3)
-    t_window_start = best_t - window_days*86400
-    M_start = (n_rad_s * t_window_start) % (2*np.pi)
-    E_start = float(M_start)
-    for _ in range(60):
-        dE = (M_start - E_start + D_MOON_E*np.sin(E_start)) / (1 - D_MOON_E*np.cos(E_start))
-        E_start += dE
-    nu_start = 2*np.arctan2(np.sqrt(1+D_MOON_E)*np.sin(E_start/2), np.sqrt(1-D_MOON_E)*np.cos(E_start/2))
-    n_orbits_window = (2*window_days) / lunar_period_days
-
-    t_fine, r_fine, _ = propagate_eci(a_km=D_MOON_A_KM, e=D_MOON_E, inc_deg=D_MOON_INC_DEG,
-                                      raan_deg=0, argp_deg=0, nu0_deg=np.degrees(nu_start),
-                                      n_orbits=n_orbits_window, n_steps=4000)
-    t_fine = t_fine + t_window_start
-    sun_fine = sun_direction_eci(t_fine)
-    r_eval_fine = r_fine if mode == "lunar" else -r_fine
-    illum_fine = illumination_fraction(r_eval_fine, sun_fine, R_body_km=R_occ, R_sun_km=R_SUN_KM, D_km=AU_KM)
-    mid = int(np.argmin(illum_fine))
+                                     save_path=None, verbose=verbose, event=event)
+    window = _eclipse_window(mode, search_days=search_days, event=event, n_steps=4000, verbose=False)
+    t_fine = window["t_s"]
+    r_fine = window["r_moon"]
+    sun_fine = window["sun_hat"]
+    illum_fine = window["illum"]
+    mid = window["peak_idx"]
 
     moon_r_km = r_fine[mid]
     sun_hat = sun_fine[mid]
@@ -1253,7 +2375,9 @@ def plot_space_view_plotly(mode="lunar", search_days=None, save_path=None, verbo
     _shadow_kwargs = {}
     if mode == "solar":
         _shadow_kwargs = dict(shadow_body_center_km=moon_pos, shadow_body_radius_km=R_MOON_KM)
-    fig.add_trace(_earth_mesh(sun_hat, radius_scale=size_boost, center=tuple(earth_pos), **_shadow_kwargs))
+    rotation_deg = _earth_rotation_for_window_sample(window, mid)
+    fig.add_trace(_earth_mesh(sun_hat, radius_scale=size_boost, center=tuple(earth_pos),
+                              rotation_deg=rotation_deg, **_shadow_kwargs))
     fig.add_trace(_earth_atmosphere_trace(center=tuple(earth_pos), radius_scale=size_boost))
     _real_moon_center = moon_r_km if mode == "lunar" else np.array([0.0, 0.0, 0.0])
     fig.add_trace(moon_mesh_plotly(moon_pos, R_MOON_KM*size_boost, sun_hat=sun_hat,
@@ -1309,7 +2433,7 @@ def plot_space_view_plotly(mode="lunar", search_days=None, save_path=None, verbo
         ),
         paper_bgcolor="black",
         font=dict(color="white", size=18),
-        title=dict(text=f"{mode.capitalize()} eclipse — view from space<br>"
+        title=dict(text=f"{_window_title_prefix(mode, window)} — view from space<br>"
                         f"<sub>illum={illum:.3f}, angle at peak={sep_deg:.3f}°</sub>",
                   x=0.5, font=dict(color="white", size=24)),
         margin=dict(l=0, r=0, t=90, b=0),
@@ -1319,6 +2443,7 @@ def plot_space_view_plotly(mode="lunar", search_days=None, save_path=None, verbo
     if save_path:
         if save_path.endswith(".html"):
             fig.write_html(save_path)
+            _inject_eclipse_catalog_dropdown(save_path, default_mode=mode, default_event=event)
         else:
             fig.write_image(save_path, width=1000, height=900, scale=1)
         print(f"Saved -> {save_path}")

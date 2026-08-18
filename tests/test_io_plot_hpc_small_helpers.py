@@ -70,6 +70,8 @@ def test_html_to_gif_crop_and_fake_browser(monkeypatch, tmp_path):
 
 
 def test_divergence_gif_generates_frames_and_invokes_writer(monkeypatch, tmp_path):
+    import inspect
+
     module = pytest.importorskip("ssapy_toolkit.plots.divergence_gif")
     write_module = pytest.importorskip("ssapy_toolkit.plots.write_gifs")
     calls = []
@@ -99,6 +101,7 @@ def test_divergence_gif_generates_frames_and_invokes_writer(monkeypatch, tmp_pat
     assert calls[0]["gif_name"] == str(out)
     assert len(calls[0]["frames"]) == len(times)
     assert calls[0]["duration"] == 0.2
+    assert inspect.signature(module.divergence_gif).parameters["fps"].default == 1
 
 
 def test_hpc_partition_helpers_cover_remainder_and_empty_slices():

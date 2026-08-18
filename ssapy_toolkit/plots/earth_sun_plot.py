@@ -134,7 +134,7 @@ def _static_backdrop(cfg: dict, t_jd0: float) -> list:
     # Earth's full-year orbit — computed once; over one year the ellipse
     # itself doesn't visibly change, so it's a static reference rather than
     # something recomputed per frame.
-    ex, ey, ez = _orbit_trail_au(_EARTH, t_jd0, n_pts=300)
+    ex, ey, ez = _orbit_trail_au("Earth", t_jd0, n_pts=300)
     traces.append(go.Scatter3d(
         x=ex, y=ey, z=ez, mode="lines",
         line=dict(color="rgba(90,160,230,0.45)", width=2),
@@ -219,7 +219,7 @@ def _dynamic_traces(cfg: dict, t_jd: float, n: int):
 
     earth_pos = np.array(_planet_pos_au(_EARTH, t_jd))
     traces = list(make_planet_traces("Earth", tuple(earth_pos), scale_au=scale_au,
-                                      show_label=show_labels, n=n))
+                                      show_label=show_labels, n=n, time=t_jd))
 
     moon_offset_km = np.array(moon_geocentric_ecliptic(t_jd))
     traces.extend(make_moon_traces(tuple(earth_pos), t_jd, orbit_scale=moon_scale,

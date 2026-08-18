@@ -25,7 +25,9 @@ from ssapy_toolkit.plots.divergence_gif import divergence_gif
 from ssapy_toolkit.plots.figpath import ssatk_path
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
+GALLERY_CATEGORY = "analysis_dashboards"
 FIGDIR = "demo_gallery/figures"
+GIF_FRAME_DURATION_S = 1.0
 
 
 def main(make_figures=None, fast=None):
@@ -124,7 +126,7 @@ def main(make_figures=None, fast=None):
             output_path=ssatk_path(f"{FIGDIR}/divergence_test_explicit.gif"),
             r_nominal_hist=r_nominal_hist,
             v_nominal_hist=v_nominal_hist,
-            duration=0.2,
+            duration=GIF_FRAME_DURATION_S,
             vmin=-50,
             vmax=50,
         )
@@ -132,7 +134,7 @@ def main(make_figures=None, fast=None):
             r_histories=r_histories,
             times_gps=times_gps,
             output_path=ssatk_path(f"{FIGDIR}/divergence_test_median.gif"),
-            fps=5,
+            duration=GIF_FRAME_DURATION_S,
         )
     else:
         # Pytest-safe: just exercise function with minimal work, no file output

@@ -48,7 +48,8 @@ from astropy.time import Time
 from astropy import units as u
 from astropy.coordinates import get_body, GCRS, solar_system_ephemeris
 
-from ssapy_toolkit.constants import EARTH_RADIUS, MOON_RADIUS, SUN_RADIUS
+from ssapy_toolkit.constants import AU_KM, EARTH_RADIUS, MOON_RADIUS, SUN_RADIUS
+from ssapy_toolkit.plots.scene_primitives import earth_rotation_deg_from_time, stabilize_sphere_poles
 
 # ---------------------------------------------------------------------------
 # Physical / display constants
@@ -62,16 +63,15 @@ R_EARTH_KM = EARTH_RADIUS / 1000.0
 R_MOON_KM  = MOON_RADIUS / 1000.0
 R_SUN_KM   = SUN_RADIUS / 1000.0
 
-# No AU constant exists in ssapy_toolkit.constants, so this comes from
-# astropy.units instead of being hardcoded.
-AU_KM = (1 * u.au).to(u.km).value
+# AU_KM comes from ssapy_toolkit.constants so every plot uses the same
+# physical distance scale.
 
-# Visual sun placement: distance in the scene (not to scale; chosen so the
-# sun sphere is clearly visible without overwhelming LEO / GEO scenes).
-# Increase for cislunar scenes where axes span hundreds of thousands of km.
+# Visual sun placement: distance in the scene is compressed for readable
+# Earth-orbit plots, but the display radius preserves the Sun's physical
+# angular radius at that compressed distance.
 VISUAL_DIST_KM_LEO      = 80_000.0    # good for LEO / GEO
 VISUAL_DIST_KM_CISLUNAR = 600_000.0   # good for cislunar / Moon plots
-VISUAL_SUN_RADIUS_KM    = 5_500.0     # display radius (obviously not 1:1 scale)
+VISUAL_SUN_RADIUS_KM    = VISUAL_DIST_KM_LEO * (R_SUN_KM / AU_KM)
 
 # Corona glow rings: (scale_factor_vs_core, opacity, colour)
 _CORONA_RINGS = [
@@ -500,6 +500,8 @@ class EarthShadingLayer:
         radius_km: float = R_EARTH_KM,
         nu: int = 140,
         nv: int = 70,
+        time=None,
+        rotation_deg=None,
     ):
         self.sun_hat = np.asarray(sun_pos_eci, dtype=float)
         if np.linalg.norm(self.sun_hat) > 0:
@@ -508,6 +510,8 @@ class EarthShadingLayer:
         self.radius = radius_km
         self.nu = nu
         self.nv = nv
+        self.rotation_deg = (earth_rotation_deg_from_time(time)
+                             if rotation_deg is None else float(rotation_deg))
 
     def build_traces(self) -> list:
         """Return a single, fully-opaque trace for the Earth: a real
@@ -517,10 +521,11 @@ class EarthShadingLayer:
 
         if texture_path is not None:
             x, y, z, phi, theta, i, j, k = _uv_sphere_with_faces(self.nu, self.nv)
-            rgb = _sample_texture_rgb(texture_path, phi, theta)
+            rgb = _sample_texture_rgb(texture_path, phi, theta - np.radians(self.rotation_deg))
             if rgb is not None:
                 lit = _lit_multiplier(x, y, z, self.sun_hat)
-                shaded_rgb = rgb * lit[:, None]
+                shaded_rgb = (rgb * lit[:, None]).reshape(self.nv, self.nu, 3)
+                shaded_rgb = stabilize_sphere_poles(shaded_rgb).reshape(-1, 3)
                 return [go.Mesh3d(
                     x=self.center[0] + self.radius * x,
                     y=self.center[1] + self.radius * y,
@@ -609,7 +614,8 @@ class MoonShadingLayer:
             rgb = _sample_texture_rgb(texture_path, phi, theta)
             if rgb is not None:
                 lit = _lit_multiplier(x, y, z, self.sun_hat)
-                shaded_rgb = rgb * lit[:, None]
+                shaded_rgb = (rgb * lit[:, None]).reshape(self.nv, self.nu, 3)
+                shaded_rgb = stabilize_sphere_poles(shaded_rgb).reshape(-1, 3)
                 return [go.Mesh3d(
                     x=self.moon_center[0] + self.radius * x,
                     y=self.moon_center[1] + self.radius * y,
@@ -791,5 +797,6 @@ def auto_sun_position(sun_hat: np.ndarray, scene_radius_km: float) -> np.ndarray
 
 
 def auto_sun_radius(scene_radius_km: float) -> float:
-    """Return a display sun radius proportional to the scene scale."""
-    return max(scene_radius_km * 0.07, VISUAL_SUN_RADIUS_KM * 0.5)
+    """Return an angular-correct display Sun radius for auto_sun_position."""
+    dist = max(scene_radius_km * 12.0, VISUAL_DIST_KM_LEO)
+    return max(dist * (R_SUN_KM / AU_KM), 1.0)

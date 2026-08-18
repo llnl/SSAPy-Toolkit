@@ -7,6 +7,8 @@ JavaScript sources and texture helper. No source data files are written into the
 repository; the output goes under the standard SSATK figure directory.
 """
 
+GALLERY_CATEGORY = "sensor_coverage"
+
 import os
 import sys
 from pathlib import Path

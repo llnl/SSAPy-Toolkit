@@ -56,12 +56,18 @@ SSAPy Toolkit is a standard Python package.
 ```
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install --upgrade pip
-pip install -e .[dev]
+python -m pip install --upgrade pip
+python -m pip install -e .[dev]
 ```
 
 This installs the package in editable mode along with development dependencies
-(testing, linting, docs tools, etc.). SSAPy Toolkit builds on SSAPy; see the
+(testing, linting, docs tools, JavaScript validation helpers, etc.). Runtime
+plotting dependencies include Plotly, Matplotlib, Pillow, Kaleido, imageio, and
+SSAPy-Data assets. Node.js 20+ is used only to validate the self-contained
+JavaScript viewer sources; GitHub Actions installs it with `actions/setup-node`,
+and local developers can use system Node.js or `nodeenv`.
+
+SSAPy Toolkit builds on SSAPy; see the
 [SSAPy](https://github.com/llnl/SSAPy) repository for its installation details.
 
 ---

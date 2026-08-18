@@ -33,6 +33,7 @@ from ssapy_toolkit.plots.solar_bodies import (
     make_moon_traces,
     _R_AU,
 )
+from ssapy_toolkit.plots.starfield import starfield_traces
 
 # Always define these locally — importing toolkit_gui.py here is unsafe:
 # it's a Streamlit *app* script, not a library, and merely importing it
@@ -81,55 +82,124 @@ def _planet_pos_au(p: dict, t_jd: float):
     z = (sw*xo + cw*yo)*si
     return x, y, z
 
-def _orbit_trail_au(p: dict, t_jd: float, n_pts: int = 360):
-    T_orbit_days = 365.25 * math.sqrt(p["a"] ** 3)
-    xs, ys, zs = [], [], []
-    for k in range(n_pts + 1):
-        tj = t_jd - T_orbit_days + k * T_orbit_days / n_pts
-        x, y, z = _planet_pos_au(p, tj)
-        xs.append(x); ys.append(y); zs.append(z)
-    return xs, ys, zs
+def _fallback_planet_positions_au(name: str, t_jd):
+    p = _PLANETS[name]
+    jd = np.atleast_1d(np.asarray(t_jd, dtype=float))
+    out = np.array([_planet_pos_au(p, float(t)) for t in jd], dtype=float)
+    return out[0] if np.ndim(t_jd) == 0 else out
 
 
-# ── Catalog helper ────────────────────────────────────────────────────────────
-def _load_stars(catalog_path: str, mag_limit: float = 5.5):
-    """Load HYG catalog and return GCRF unit-sphere arrays for starfield."""
+def _body_positions_au(name: str, time, ephemeris: str = "builtin"):
+    """Return heliocentric body positions in AU using Astropy ephemerides."""
     try:
-        import pandas as pd
-        df = pd.read_csv(catalog_path, encoding="utf-8")
-    except UnicodeDecodeError:
-        import pandas as pd
-        df = pd.read_csv(catalog_path, encoding="latin-1")
+        from astropy import units as u
+        from astropy.coordinates import get_body_barycentric, solar_system_ephemeris
+
+        with solar_system_ephemeris.set(ephemeris):
+            body = get_body_barycentric(name.lower(), time)
+            sun = get_body_barycentric("sun", time)
+        xyz = (body.xyz - sun.xyz).to_value(u.au)
+        return np.moveaxis(np.asarray(xyz, dtype=float), 0, -1)
+    except Exception as exc:
+        jd = getattr(time, "jd", time)
+        print(
+            f"[solar_view_plot] Astropy ephemeris '{ephemeris}' failed for {name} "
+            f"({exc}); using low-precision Kepler fallback."
+        )
+        return _fallback_planet_positions_au(name, jd)
+
+
+def _orbit_trail_au(
+    name: str,
+    t_jd: float,
+    time=None,
+    ephemeris: str = "builtin",
+    n_pts: int = 360,
+):
+    p = _PLANETS[name]
+    T_orbit_days = 365.25 * math.sqrt(p["a"] ** 3)
+    offsets = np.linspace(-T_orbit_days, 0.0, n_pts + 1)
+    if time is not None:
+        sample_years = float(time.jyear) + offsets / 365.25
+        if (
+            np.nanmin(sample_years) >= 1972.0
+            and np.nanmax(sample_years) <= 2100.0
+        ):
+            try:
+                from astropy import units as u
+                samples = time + offsets * u.day
+                pos = np.asarray(
+                    _body_positions_au(name, samples, ephemeris=ephemeris),
+                    dtype=float,
+                )
+                return pos[:, 0], pos[:, 1], pos[:, 2]
+            except Exception:
+                pass
+
+    pos = _fallback_planet_positions_au(name, t_jd + offsets)
+    return pos[:, 0], pos[:, 1], pos[:, 2]
+
+
+def _mars_view_radius_au(margin: float = 1.10) -> float:
+    mars = _PLANETS["Mars"]
+    return float(mars["a"] * (1.0 + mars["e"]) * margin)
+
+
+def _view_radius_au(cfg: dict, full_content_radius_au: float) -> float:
+    value = cfg.get("view_radius_au", cfg.get("sol_view_radius_au", "mars"))
+    if isinstance(value, str):
+        cleaned = value.strip().lower().replace("-", "_").replace(" ", "_")
+        if cleaned in {"mars", "inner", "inner_solar_system"}:
+            return _mars_view_radius_au(float(cfg.get("mars_view_margin", 1.10)))
+        if cleaned in {"full", "auto", "all", "all_planets"}:
+            return float(full_content_radius_au)
+    try:
+        return max(float(value), 0.1)
     except Exception:
-        return None
-    df = df[(df["mag"] < mag_limit) & (df["mag"] > -10)].dropna(subset=["ra","dec","mag"])
-    ra_r  = np.radians(df["ra"].values * 15.0)
-    dec_r = np.radians(df["dec"].values)
-    cx = np.cos(dec_r)*np.cos(ra_r)
-    cy = np.cos(dec_r)*np.sin(ra_r)
-    cz = np.sin(dec_r)
-    return cx, cy, cz, df["mag"].values, df["spect"].fillna("G").str[:1].values
+        return _mars_view_radius_au(float(cfg.get("mars_view_margin", 1.10)))
 
 
-_SPECT_COLORS = {
-    "O":"rgb(155,175,255)","B":"rgb(171,191,255)","A":"rgb(201,217,255)",
-    "F":"rgb(247,247,255)","G":"rgb(255,245,235)","K":"rgb(255,209,160)","M":"rgb(255,204,112)",
-}
+def _camera_eye_from_cfg(cfg: dict):
+    value = cfg.get("camera_eye", cfg.get("sol_camera_eye"))
+    default = dict(x=0.75, y=-0.95, z=0.09)
+    if value is None:
+        return default
+    if isinstance(value, dict):
+        return {axis: float(value.get(axis, default[axis])) for axis in ("x", "y", "z")}
+    try:
+        vals = list(value)
+        return {axis: float(vals[i]) for i, axis in enumerate(("x", "y", "z"))}
+    except Exception:
+        return default
+
+
+def _scene_time(cfg: dict):
+    import datetime as _dt
+
+    yr = int(cfg.get("sol_year", 2025))
+    mo = int(cfg.get("sol_month", 1))
+    try:
+        d = _dt.date(yr, mo, 1)
+    except ValueError:
+        d = _dt.date(2025, 1, 1)
+
+    try:
+        from astropy.time import Time
+        time = Time(f"{d.isoformat()}T00:00:00", scale="utc")
+        return d, float(time.jd), time
+    except Exception:
+        t_jd = 2_451_545.0 + (d - _dt.date(2000, 1, 1)).days - 0.5
+        return d, t_jd, None
+
 
 
 # ── Figure builder ────────────────────────────────────────────────────────────
 
 def build_figure(cfg: dict) -> go.Figure:
-    import datetime as _dt
-
-    # Resolve JD
-    yr    = int(cfg.get("sol_year",  2025))
-    mo    = int(cfg.get("sol_month", 1))
-    try:
-        d = _dt.date(yr, mo, 1)
-    except ValueError:
-        d = _dt.date(2025, 1, 1)
-    t_jd = 2_451_545.0 + (d - _dt.date(2000, 1, 1)).days
+    # Resolve epoch. Planet positions are heliocentric: Astropy barycentric
+    # body positions minus the Astropy Sun position, with a Kepler fallback.
+    d, t_jd, time = _scene_time(cfg)
+    ephemeris = str(cfg.get("sol_ephemeris", "builtin"))
 
     show_planets = {
         name: bool(cfg.get(f"sol_show_{name.lower()}", True))
@@ -141,73 +211,35 @@ def build_figure(cfg: dict) -> go.Figure:
     show_labels   = bool(cfg.get("sol_show_labels",   True))
     show_moon     = bool(cfg.get("sol_show_moon",     True))
     scale_au      = float(cfg.get("planet_scale",     1.0))
-    catalog_path  = cfg.get("star_catalog",
-                            str(Path.home() / "bright_stars.csv"))
+    sun_scale     = float(cfg.get("sun_scale",        1.0))
     star_mag_limit = float(cfg.get("star_mag_limit", 6.5))
+    catalog_path = cfg.get("star_catalog")
     sphere_res    = int(cfg.get("sphere_resolution",  50))
     bg            = cfg.get("bg_color", "#060810")
     outer_a = max((p["a"] for n, p in _PLANETS.items() if show_planets.get(n)), default=1.5)
-    star_radius_au = max(outer_a * 1.35, 3.0)
+    full_content_radius_au = max(outer_a * 1.25, 3.0)
+    view_radius_au = _view_radius_au(cfg, full_content_radius_au)
+    star_radius_au = view_radius_au * float(cfg.get("star_backdrop_radius_factor", 0.98))
+    camera_eye = _camera_eye_from_cfg(cfg)
 
     fig = go.Figure()
 
     # ── Starfield ─────────────────────────────────────────────────────────────
-    # Was silently skipped whenever `catalog_path` didn't exist (default:
-    # ~/bright_stars.csv) — no error, just no stars. Now tries a few common
-    # locations first, matching van_allen_plot_3d.py's approach, and falls
-    # back to a synthetic random starfield so stars always render.
+    # Stars use real catalogue directions, projected onto the back half of the
+    # current view shell so the default Mars view reads as a distant backdrop.
     if show_stars:
-        _star_paths = [
-            catalog_path,
-            str(Path.home() / "SSAPy" / "ssapy" / "data" / "bright_stars.csv"),
-            os.path.join(os.path.dirname(__file__), "bright_stars.csv"),
-        ]
-        try:
-            from ssapy_toolkit.plots.starfield import find_data_file as _find_data_file
-            for _name in ("bright_stars_mag9.csv", "bright_stars.csv"):
-                _found = _find_data_file(_name)
-                if _found is not None:
-                    _star_paths.insert(0, str(_found))
-        except Exception:
-            pass
-        try:
-            from ssapy.utils import find_file as _ssapy_find_file
-            _star_paths.insert(0, _ssapy_find_file("bright_stars", ext=".csv"))
-        except Exception:
-            pass
-
-        res = None
-        _found_path = None
-        for _sp in _star_paths:
-            if _sp and Path(_sp).exists():
-                res = _load_stars(_sp, mag_limit=star_mag_limit)
-                if res is not None:
-                    _found_path = _sp
-                    break
-
-        R_star = star_radius_au
-        if res is not None:
-            cx, cy, cz, mags, spects = res
-            sizes  = np.clip(0.45 * (star_mag_limit - mags)**1.1, 0.25, 3.2)
-            colors = [_SPECT_COLORS.get(s, _SPECT_COLORS["G"]) for s in spects]
-            print(f"[solar_view_plot] Loaded {len(mags)} stars from {_found_path}")
-        else:
-            print(f"[solar_view_plot] No star catalog found (tried "
-                  f"{[p for p in _star_paths if p]}) — using a synthetic "
-                  f"starfield instead of a real catalog.")
-            _rng = np.random.default_rng(7)
-            _n_syn = 1500
-            _th = _rng.uniform(0, 2*np.pi, _n_syn)
-            _ph = np.arccos(_rng.uniform(-1, 1, _n_syn))
-            cx, cy, cz = np.sin(_ph)*np.cos(_th), np.sin(_ph)*np.sin(_th), np.cos(_ph)
-            sizes = _rng.uniform(0.4, 1.8, _n_syn)
-            colors = "white"
-        fig.add_trace(go.Scatter3d(
-            x=cx*R_star, y=cy*R_star, z=cz*R_star,
-            mode="markers",
-            marker=dict(size=sizes, color=colors, opacity=0.75),
-            hoverinfo="skip", name="Stars", showlegend=True,
-        ))
+        for trace in starfield_traces(
+            star_radius_au,
+            when=time if time is not None else t_jd,
+            frame="gcrf",
+            mag_limit=star_mag_limit,
+            opacity=0.72,
+            fallback_random=True,
+            catalog_path=catalog_path,
+            hemisphere_away_from=(camera_eye["x"], camera_eye["y"], camera_eye["z"]),
+        ):
+            trace.showlegend = True
+            fig.add_trace(trace)
 
     # ── Ecliptic grid — faint teal reference circles (radii 1/5/10/20/30 AU)
     # + 12 radial spokes every 30°, all centred on the Sun. Purely a visual
@@ -239,7 +271,7 @@ def build_figure(cfg: dict) -> go.Figure:
             ))
 
     # ── Sun ───────────────────────────────────────────────────────────────────
-    for t in make_sun_traces(r_display_au=_R_AU["Sun"] * scale_au):
+    for t in make_sun_traces(r_display_au=_R_AU["Sun"] * sun_scale):
         fig.add_trace(t)
 
     # ── Planets ───────────────────────────────────────────────────────────────
@@ -251,26 +283,41 @@ def build_figure(cfg: dict) -> go.Figure:
         "Uranus":  "rgba(125,232,232,0.28)", "Neptune": "rgba(63,84,186,0.28)",
     }
 
-    for name, p in _PLANETS.items():
+    for name in _PLANETS:
         if not show_planets.get(name, False):
             continue
-        x, y, z = _planet_pos_au(p, t_jd)
-        pos = (x, y, z)
+        pos = tuple(np.asarray(
+            _body_positions_au(
+                name,
+                time if time is not None else t_jd,
+                ephemeris=ephemeris,
+            ),
+            dtype=float,
+        ))
         if name == "Earth":
             earth_pos = pos
 
         # Orbit trail
         if show_trails:
-            tx, ty, tz = _orbit_trail_au(p, t_jd)
+            tx, ty, tz = _orbit_trail_au(name, t_jd, time=time, ephemeris=ephemeris)
             fig.add_trace(go.Scatter3d(
                 x=tx, y=ty, z=tz, mode="lines",
-                line=dict(color=trail_colors.get(name, "rgba(200,200,200,0.3)"), width=1),
+                line=dict(
+                    color=trail_colors.get(name, "rgba(200,200,200,0.3)"),
+                    width=1,
+                ),
                 hoverinfo="skip", showlegend=False,
             ))
 
         # Planet sphere(s)
-        for t in make_planet_traces(name, pos, scale_au=scale_au,
-                                    show_label=show_labels, n=sphere_res):
+        for t in make_planet_traces(
+            name,
+            pos,
+            scale_au=scale_au,
+            show_label=show_labels,
+            n=sphere_res,
+            time=time if time is not None else t_jd,
+        ):
             fig.add_trace(t)
 
         # Saturn rings
@@ -288,7 +335,7 @@ def build_figure(cfg: dict) -> go.Figure:
 
     # ── Layout ────────────────────────────────────────────────────────────────
     T_yr = (t_jd - 2_451_545.0) / 365.25
-    rng = max(outer_a * 1.25, star_radius_au * 1.03 if show_stars else 0.0)
+    rng = view_radius_au
 
     fig.update_layout(
         scene=dict(
@@ -296,18 +343,23 @@ def build_figure(cfg: dict) -> go.Figure:
                        showgrid=False, zeroline=False, title="X (AU)"),
             yaxis=dict(range=[-rng, rng], showbackground=False,
                        showgrid=False, zeroline=False, title="Y (AU)"),
-            zaxis=dict(range=[-rng*0.25, rng*0.25], showbackground=False,
+            zaxis=dict(range=[-rng, rng], showbackground=False,
                        showgrid=False, zeroline=False, title="Z (AU)"),
             bgcolor=bg,
-            aspectmode="manual",
-            aspectratio=dict(x=1, y=1, z=0.25),
-            camera=dict(eye=dict(x=0, y=0, z=2.4),
-                        up=dict(x=0, y=1, z=0)),
+            aspectmode="cube",
+            camera=dict(
+                eye=camera_eye,
+                up=dict(x=0, y=0, z=1),
+                projection=dict(type=str(cfg.get("camera_projection", "perspective"))),
+            ),
         ),
         paper_bgcolor=bg,
         font=dict(color="#C8D8E8"),
         title=dict(
-            text=f"Complete heliocentric Solar System — {2000+T_yr:.3f}",
+            text=(
+                f"Heliocentric Solar System — Mars view — "
+                f"{2000+T_yr:.3f} ({ephemeris} ephemeris)"
+            ),
             x=0.5, font=dict(color="#00FF9C", size=14),
         ),
         legend=dict(bgcolor="rgba(0,0,0,0.5)", bordercolor="#333",
@@ -326,10 +378,16 @@ DEFAULT_CFG = dict(
     sol_show_moon=True,    sol_show_trails=True,
     sol_show_stars=True,   sol_show_ecliptic=True, sol_show_labels=True,
     star_mag_limit=6.5,
+    view_radius_au="mars",
+    mars_view_margin=1.10,
+    star_backdrop_radius_factor=0.98,
+    camera_projection="perspective",
+    star_catalog=None,
+    sol_ephemeris="builtin",
     planet_scale=1.0,
+    sun_scale=1.0,
     sphere_resolution=50,
     bg_color="#060810",
-    star_catalog=str(Path.home() / "bright_stars.csv"),
     output_dir=str(Path.home() / "ssatk_figures" / "demo_gallery" / "figures"),
 )
 

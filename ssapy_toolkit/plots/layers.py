@@ -36,6 +36,7 @@ from typing import Optional
 import numpy as np
 
 from ssapy_toolkit.constants import EARTH_RADIUS, MOON_RADIUS, LD
+from ssapy_toolkit.plots.scene_primitives import earth_rotation_deg_from_time
 
 # ── optional heavy imports ────────────────────────────────────────────────────
 try:
@@ -427,12 +428,14 @@ class EarthLayer(BaseLayer):
     """Textured Earth sphere.  Falls back to solid blue if texture missing."""
 
     def __init__(self, texture_path: str | Path | None = None,
-                 n_lat: int = 72, n_lon: int = 144, radius_scale: float = 1.0, **kw):
+                 n_lat: int = 72, n_lon: int = 144, radius_scale: float = 1.0,
+                 time=None, rotation_deg=None, **kw):
         super().__init__("earth", "Earth", **kw)
         self.texture_path = Path(texture_path) if texture_path else None
         self.n_lat = n_lat
         self.n_lon = n_lon
         self.radius_scale = radius_scale   # visual size multiplier; doesn't move position
+        self.rotation_deg = earth_rotation_deg_from_time(time) if rotation_deg is None else float(rotation_deg)
         self._tex: Optional[np.ndarray] = None  # (H, W, 3) uint8
 
     def _load_texture(self):
@@ -447,8 +450,11 @@ class EarthLayer(BaseLayer):
                 warnings.warn(f"Earth texture load error: {ex}")
 
     def _sphere_xyz(self, R=RE_KM):
-        lat = np.linspace(-np.pi/2, np.pi/2, self.n_lat)
-        lon = np.linspace(-np.pi,   np.pi,   self.n_lon)
+        # Texture row 0 is the north pole for standard equirectangular Earth
+        # maps, so build the geometry north-to-south to keep Matplotlib
+        # facecolors geodetically aligned.
+        lat = np.linspace(np.pi/2, -np.pi/2, self.n_lat)
+        lon = np.linspace(-np.pi,   np.pi,   self.n_lon) + np.radians(self.rotation_deg)
         Lon, Lat = np.meshgrid(lon, lat)
         X = R * np.cos(Lat) * np.cos(Lon)
         Y = R * np.cos(Lat) * np.sin(Lon)
@@ -479,7 +485,7 @@ class EarthLayer(BaseLayer):
         # Latitude 90→−90 (north first) so texture row 0 (North Pole in any
         # standard equirectangular map) maps to +Z, not -Z.
         lat = np.linspace( 90, -90,  self.n_lat)
-        lon = np.linspace(-180, 180, self.n_lon)
+        lon = np.linspace(-180, 180, self.n_lon) + float(self.rotation_deg)
         Lon, Lat = np.meshgrid(lon, lat)
         _R = RE_KM * self.radius_scale
         X = _R * np.cos(np.radians(Lat)) * np.cos(np.radians(Lon))
@@ -495,9 +501,10 @@ class EarthLayer(BaseLayer):
             for r in range(H - 1):
                 for c in range(W - 1):
                     v0 = r*W + c; v1 = v0+1; v2 = (r+1)*W + c; v3 = v2+1
-                    # texture col with longitude alignment fix
-                    tc = (c + W//2) % W
-                    pixel = self._tex[r, tc]
+                    # SSAPy's bundled earth.png and standard Blue Marble
+                    # equirectangular maps already run left-to-right over
+                    # [-180°, +180°], matching the mesh longitude grid.
+                    pixel = self._tex[r, c]
                     col = f"rgb({pixel[0]},{pixel[1]},{pixel[2]})"
                     for tri in [(v0,v1,v2),(v1,v3,v2)]:
                         i_idx.append(tri[0]); j_idx.append(tri[1]); k_idx.append(tri[2])

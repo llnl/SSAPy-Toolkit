@@ -22,6 +22,11 @@ from pathlib import Path
 
 import numpy as np
 
+try:
+    from .scene_primitives import stabilize_sphere_poles
+except ImportError:
+    from scene_primitives import stabilize_sphere_poles
+
 # Sky and astrometry live in starfield.py, which the rest of the toolkit
 # already uses for matplotlib plots.  Re-exported here so existing callers keep
 # working; there is only one definition.
@@ -299,7 +304,8 @@ def _build_earth_mesh(texture_path, n_lon=480, n_lat=240, sun_shading=False,
         colors = np.tile(base, (n_lat, n_lon, 1)).astype(np.uint8)
         print("  no Earth texture available — using flat colour", flush=True)
 
-    if sun_shading and date is not None:
+    baked_sun_shading = bool(sun_shading and date is not None)
+    if baked_sun_shading:
         sd, sl = _subsolar_point(date)
         sun = np.array([np.cos(np.radians(sd)) * np.cos(np.radians(sl)),
                         np.cos(np.radians(sd)) * np.sin(np.radians(sl)),
@@ -310,11 +316,19 @@ def _build_earth_mesh(texture_path, n_lon=480, n_lat=240, sun_shading=False,
         shade = night_floor + (1.0 - night_floor) * cosang
         colors = np.clip(colors.astype(np.float32) * shade[..., None], 0, 255).astype(np.uint8)
 
+    colors = stabilize_sphere_poles(colors)
+
+    lighting = (
+        dict(ambient=1.0, diffuse=0.0, specular=0.0, roughness=1.0, fresnel=0.0)
+        if baked_sun_shading
+        else dict(ambient=0.95, diffuse=0.16, specular=0.02, roughness=0.95)
+    )
+
     return go.Mesh3d(
         x=X.ravel(), y=Y.ravel(), z=Z.ravel(), i=ti, j=tj, k=tk,
         vertexcolor=colors.reshape(-1, 3),
         showscale=False, hoverinfo='none',
-        lighting=dict(ambient=0.95, diffuse=0.16, specular=0.02, roughness=0.95),
+        lighting=lighting,
         name='Earth', showlegend=False,
     )
 

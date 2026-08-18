@@ -8,7 +8,12 @@ Install in editable mode with development extras:
 
 .. code-block:: bash
 
-   pip install -e .[dev]
+   python -m pip install -e .[dev]
+
+Plotting installs the Python packages needed for HTML, image, GIF, and MP4
+outputs, including Plotly, Matplotlib, Pillow, Kaleido, imageio, and SSAPy-Data.
+Node.js 20+ is only needed for validating the JavaScript satellite-viewer source;
+GitHub Actions installs it with ``actions/setup-node``.
 
 Basic Example
 -------------
