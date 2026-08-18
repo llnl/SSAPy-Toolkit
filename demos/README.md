@@ -32,7 +32,7 @@ The `demos/` package is organized by workflow area:
 
 | Folder | Contents |
 |--------|----------|
-| `getting_started/` | first workflow, packaged data access, time helpers, optional 3LE parsing |
+| `getting_started/` | first workflow, plotting quickstart, packaged data access, time helpers, optional 3LE parsing |
 | `coordinates/` | frame transforms, surface state vectors, NTW/GCRF checks, rotation utilities |
 | `data_io/` | sampling, sphere generation, and dictionary/HDF5 round-trip examples |
 | `orbital_mechanics/` | orbit quantities, propagation/model comparisons, ellipse fitting, maneuvers, transfers, station keeping |

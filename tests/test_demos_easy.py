@@ -32,6 +32,7 @@ DEMO_MODULES = {
     "demo_orbital_stats_dashboard": "demos.analysis_dashboards.demo_orbital_stats_dashboard",
     "demo_parsing_3le": "demos.getting_started.demo_parsing_3le",
     "demo_photometry_application": "demos.photometry.demo_photometry_application",
+    "demo_plotting_quickstart": "demos.getting_started.demo_plotting_quickstart",
     "demo_sampling": "demos.data_io.demo_sampling",
     "demo_sphere_generation": "demos.data_io.demo_sphere_generation",
     "demo_ssapy_ground_lambertian_reflectance": "demos.photometry.demo_ssapy_ground_lambertian_reflectance",
@@ -237,6 +238,14 @@ def test_demo_photometry_application():
     assert out["ranges_km"].shape[0] > 0
     assert set(out["topocentric"]) == {"V", "SWIR", "LWIR"}
     assert out["topocentric"]["V"].shape == out["ranges_km"].shape
+
+
+def test_demo_plotting_quickstart():
+    demo_plotting_quickstart = demo_main("demo_plotting_quickstart")
+    out = demo_plotting_quickstart(make_figures=False, fast=True)
+    assert out["r_m"].shape[1] == 3
+    assert out["v_mps"].shape == out["r_m"].shape
+    assert out["files"] == []
 
 
 def test_demo_sampling():
