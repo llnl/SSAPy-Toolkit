@@ -78,9 +78,10 @@ def main(make_figures=None, fast=None):
     # ------------------------------------------------------------
     # Moon state (simple finite-difference velocity)
     # ------------------------------------------------------------
-    r_moon = get_body("moon").position(t0).T
-    r_moon_minus = get_body("moon").position(t0 - 1 * u.s).T
-    r_moon_plus = get_body("moon").position(t0 + 1 * u.s).T
+    moon_body = get_body("moon")
+    r_moon = moon_body.position(t0).T
+    r_moon_minus = moon_body.position(t0 - 1 * u.s).T
+    r_moon_plus = moon_body.position(t0 + 1 * u.s).T
     v_moon = (r_moon_plus - r_moon_minus) / 2.0
     print("r_moon[0]:", r_moon[0], "v_moon[0]:", v_moon[0])
 

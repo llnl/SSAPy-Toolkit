@@ -38,8 +38,9 @@ def moon_normal_vector(t):
         t = [item.gps if isinstance(item, Time) else item for item in t]
     elif isinstance(t, Time):
         t = t.gps
-    r = get_body("moon").position(t).T
-    r_random = get_body("moon").position(np.asarray(t) + 604800).T
+    moon_body = get_body("moon")
+    r = moon_body.position(t).T
+    r_random = moon_body.position(np.asarray(t) + 604800).T
     normal = np.cross(r, r_random)
     normal_norm = np.linalg.norm(normal, axis=-1)
     if np.ndim(normal_norm) == 0:
@@ -86,7 +87,8 @@ def lunar_lagrange_points(t):
         t = [item.gps if isinstance(item, Time) else item for item in t]
     elif isinstance(t, Time):
         t = t.gps
-    r = get_body("moon").position(t).T
+    moon_body = get_body("moon")
+    r = moon_body.position(t).T
     d = np.linalg.norm(r)  # Distance between Earth and Moon
     unit_vector_moon = r / np.linalg.norm(r, axis=-1)
     # plane_vector = np.cross(r, r_random)
@@ -112,8 +114,8 @@ def lunar_lagrange_points(t):
         "L1": L1_from_moon + r,
         "L2": L2_from_moon + r,
         "L3": -r,
-        "L4": get_body("moon").position(t + lunar_period_seconds / 6).T,
-        "L5": get_body("moon").position(t - lunar_period_seconds / 6).T
+        "L4": moon_body.position(t + lunar_period_seconds / 6).T,
+        "L5": moon_body.position(t - lunar_period_seconds / 6).T
     }
 
 
@@ -155,7 +157,8 @@ def lunar_lagrange_points_circular(t):
         t = [item.gps if isinstance(item, Time) else item for item in t]
     elif isinstance(t, Time):
         t = t.gps
-    r = get_body("moon").position(t).T
+    moon_body = get_body("moon")
+    r = moon_body.position(t).T
     d = np.linalg.norm(r)  # Distance between Earth and Moon
     unit_vector_moon = r / np.linalg.norm(r, axis=-1)
 

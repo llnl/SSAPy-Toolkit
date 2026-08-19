@@ -93,7 +93,8 @@ def _orbit_plot_core(
         for orbit_index, xyz_raw in enumerate(r):
             xyz = xyz_raw
             t_current = t[orbit_index]
-            r_moon = _get_body("moon").position(t_current).T
+            moon_body = _get_body("moon")
+            r_moon = moon_body.position(t_current).T
             r_earth = _np.zeros(_np.shape(r_moon))
 
             title2, transform_func = frame_transformations[frame_key]

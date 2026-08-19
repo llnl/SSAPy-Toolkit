@@ -30,19 +30,24 @@ def gcrf_to_itrf(r_gcrf, t, v=None):
 
 def gcrf_to_itrf_astropy(state_vectors, t):
     """
-    Convert GCRF state vectors to ITRF using Astropy.
+    Convert GCRF positions to geocentric ITRF using Astropy.
 
     Parameters:
-    - state_vectors (np.ndarray): Position and velocity vectors in GCRF coordinates (meters).
+    - state_vectors (np.ndarray): Position vectors in GCRF coordinates (meters),
+      shape (N, 3).
     - t (Time): Time of conversion.
 
     Returns:
-    - np.ndarray: Position and velocity vectors in ITRF coordinates (meters).
+    - np.ndarray: Position vectors in ITRF coordinates (meters), shape (N, 3).
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     import astropy.units as u
-    from astropy.coordinates import GCRS, ITRS, SkyCoord, get_body_barycentric, solar_system_ephemeris, ICRS
+    from astropy.coordinates import GCRS, ITRS, SkyCoord
+
+    state_vectors = np.asarray(state_vectors, dtype=float)
+    if state_vectors.ndim != 2 or state_vectors.shape[1] != 3:
+        raise ValueError("state_vectors must have shape (N, 3)")
 
     sc = SkyCoord(
         x=state_vectors[:, 0] * u.m,
@@ -53,23 +58,8 @@ def gcrf_to_itrf_astropy(state_vectors, t):
     )
     sc_itrs = sc.transform_to(ITRS(obstime=t))
 
-    with solar_system_ephemeris.set("de430"):
-        earth = get_body_barycentric("earth", t)
-
-    earth_center_itrs = SkyCoord(
-        earth.x,
-        earth.y,
-        earth.z,
-        representation_type="cartesian",
-        frame=ICRS(),
-    ).transform_to(ITRS(obstime=t))
-
-    itrs_coords = SkyCoord(
-        sc_itrs.x.value - earth_center_itrs.x.to_value(u.m),
-        sc_itrs.y.value - earth_center_itrs.y.to_value(u.m),
-        sc_itrs.z.value - earth_center_itrs.z.to_value(u.m),
-        representation_type="cartesian",
-        frame=ITRS(obstime=t),
-    )
-
-    return np.array([itrs_coords.x, itrs_coords.y, itrs_coords.z]).T
+    return np.array([
+        sc_itrs.cartesian.x.to_value(u.m),
+        sc_itrs.cartesian.y.to_value(u.m),
+        sc_itrs.cartesian.z.to_value(u.m),
+    ]).T

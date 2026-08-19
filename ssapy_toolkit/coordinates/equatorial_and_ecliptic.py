@@ -135,9 +135,16 @@ def equatorial_to_ecliptic(right_ascension: float, declination: float, degrees: 
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
-    ra, dec = np.radians(right_ascension), np.radians(declination)
+    if degrees:
+        ra, dec = np.radians(right_ascension), np.radians(declination)
+    else:
+        ra, dec = right_ascension, declination
+
     ec_latitude = np.arcsin(cos_ec * np.sin(dec) - sin_ec * np.cos(dec) * np.sin(ra))
-    ec_longitude = np.arctan((cos_ec * np.cos(dec) * np.sin(ra) + sin_ec * np.sin(dec)) / (np.cos(dec) * np.cos(ra)))
+    ec_longitude = np.arctan2(
+        cos_ec * np.cos(dec) * np.sin(ra) + sin_ec * np.sin(dec),
+        np.cos(dec) * np.cos(ra),
+    )
     if degrees:
         return deg0to360(np.degrees(ec_longitude)), np.degrees(ec_latitude)
     else:
@@ -158,10 +165,15 @@ def ecliptic_to_equatorial(lon: float, lat: float, degrees: bool = False) -> flo
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
-    lon, lat = np.radians(lon), np.radians(lat)
-    ra = np.arctan((cos_ec * np.cos(lat) * np.sin(lon) - sin_ec * np.sin(lat)) / (np.cos(lat) * np.cos(lon)))
+    if degrees:
+        lon, lat = np.radians(lon), np.radians(lat)
+
+    ra = np.arctan2(
+        cos_ec * np.cos(lat) * np.sin(lon) - sin_ec * np.sin(lat),
+        np.cos(lat) * np.cos(lon),
+    )
     dec = np.arcsin(cos_ec * np.sin(lat) + sin_ec * np.cos(lat) * np.sin(lon))
     if degrees:
-        return np.degrees(ra), np.degrees(dec)
+        return deg0to360(np.degrees(ra)), np.degrees(dec)
     else:
-        return ra, dec
+        return rad0to2pi(ra), dec

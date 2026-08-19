@@ -213,7 +213,8 @@ def _prepare_animation_tracks(r_list, t_list, *, frame, lunar_transform, pad):
     for xyz_raw, t_current in zip(r_list, t_list):
         xyz = _np.asarray(xyz_raw, dtype=float)
         groundtrack = _groundtrack_degrees(xyz, t_current)
-        r_moon = _get_body("moon").position(t_current).T
+        moon_body = _get_body("moon")
+        r_moon = moon_body.position(t_current).T
         r_earth = _np.zeros(_np.shape(r_moon))
         if transform_func:
             xyz = transform_func(xyz, t_current)

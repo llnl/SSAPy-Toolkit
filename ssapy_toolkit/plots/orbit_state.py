@@ -523,6 +523,23 @@ class OrbitalState:
         -------
         Trajectory  (or partial trajectory if stopped early)
         """
+        invalid_messages = [
+            message
+            for message in self.warnings
+            if (
+                "e ≥ 1.0" in message
+                or "Negative eccentricity" in message
+                or "Inclination out of [0, 180]" in message
+            )
+        ]
+        if invalid_messages:
+            t = Trajectory(r=np.zeros((1, 3)), v=np.zeros((1, 3)),
+                           t=np.array([self._epoch_gps()]),
+                           ok=False, msg="; ".join(invalid_messages))
+            if callback:
+                callback(t)
+            return t
+
         # Guard: periapsis below surface → analytic only with warning
         if self.h_p_km < 0:
             t = Trajectory(r=np.zeros((1, 3)), v=np.zeros((1, 3)),
@@ -638,7 +655,7 @@ class OrbitalState:
         M_deg  = float(l2[43:51])
         # M → nu (low-e approximation)
         M = np.radians(M_deg)
-        E = cls._solve_kepler.__func__(M, e_raw)
+        E = cls._solve_kepler(M, e_raw)
         nu = np.degrees(2*np.arctan2(np.sqrt(1+e_raw)*np.sin(E/2),
                                       np.sqrt(1-e_raw)*np.cos(E/2)))
         return cls(a_km=a_km, e=e_raw, inc_deg=inc, raan_deg=raan,

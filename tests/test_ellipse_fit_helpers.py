@@ -38,6 +38,26 @@ def test_ellipse_fit_input_modes_and_outputs(tmp_path):
     assert arrival_fit["t_abs"][-1] == pytest.approx(200.0)
 
 
+def test_ellipse_fit_polygon_fallback_for_degenerate_kepler_basis():
+    fit = ellipse_fit(
+        P1,
+        P2,
+        F2_m=np.array([0.0, 0.0, 1_000_000.0]),
+        n_pts=24,
+        v_pref_m_s=np.array([0.0, 7_500.0, 0.0]),
+        plot=False,
+    )
+
+    assert fit["r"].shape[1] == 3
+    assert fit["v"].shape == fit["r"].shape
+    assert fit["r"].shape[0] >= 2
+    assert np.all(np.isfinite(fit["r"]))
+    assert np.all(np.isfinite(fit["v"]))
+    assert np.all(np.diff(fit["t_rel"]) >= 0.0)
+    assert 0.0 < fit["e"] < 1.0
+    assert fit["rot_dir"] in {-1, 1}
+
+
 def test_ellipse_fit_plot_save_path_with_fake_ssapy_overlay(monkeypatch, tmp_path):
     ssapy_orbits = __import__("ssapy_toolkit.ssapy_wrappers.ssapy_orbits", fromlist=["ssapy_orbit"])
 

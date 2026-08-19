@@ -458,7 +458,8 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
                 t_single = t_single[0:1]
             else:
                 t_single = np.atleast_1d(np.asarray(t_for_earth, dtype=float))[0:1]
-            moon_pos_gcrf_m = get_body("moon").position(t_single).T
+            moon_body = get_body("moon")
+            moon_pos_gcrf_m = moon_body.position(t_single).T
             moon_pos_gcrf_m = np.atleast_2d(moon_pos_gcrf_m)[0]
             # Earth relative to Moon = -(Moon relative to Earth).
             # get_body().position() returns meters (same convention used

@@ -9,7 +9,7 @@ ECI   Earth-Centred Inertial  (J2000 / GCRF) — the native SSAPy frame
 ECF   Earth-Centred Fixed     (rotates with Earth at OMEGA_E)
 LVLH  Local Vertical / Local Horizontal  (RSW: R along r, W = h-hat, S = W×R)
 RTN   Radial–Transverse–Normal  (same as LVLH / RSW — alias)
-NTW   Normal–Transverse–W       (T along v, N in-plane ⊥ v, W = orbit normal)
+NTW   Normal–Transverse–W       (N = T×W, T along v, W = orbit normal)
 
 Usage
 -----
@@ -101,23 +101,30 @@ def lvlh_matrix(r: np.ndarray, v: np.ndarray) -> np.ndarray:
 
 def ntw_matrix(r: np.ndarray, v: np.ndarray) -> np.ndarray:
     """
-    3×3 matrix whose rows are [T_hat, N_hat, W_hat] in ECI.
+    3×3 matrix whose rows are [N_hat, T_hat, W_hat] in ECI.
     T = v/|v|  (tangential / along-track),
     W = h/|h|  (orbit normal),
-    N = W × T  (in-plane, cross-track)
+    N = T × W  (in-plane, radial for circular prograde equatorial orbits).
     Transforms ECI → NTW.
+
+    The component ordering intentionally matches SSAPy's AccelConstNTW and
+    ssapy_toolkit.coordinates.ntw_to_gcrf convention: [N, T, W].
     """
     T_hat = _unit(v)
     W_hat = _unit(np.cross(r, v))
-    N_hat = np.cross(W_hat, T_hat)
-    return np.array([T_hat, N_hat, W_hat])
+    N_hat = np.cross(T_hat, W_hat)
+    return np.array([N_hat, T_hat, W_hat])
 
 
 def ntw_axes(r: np.ndarray, v: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Return (T_hat, N_hat, W_hat) as separate ECI unit vectors."""
+    """Return (T_hat, N_hat, W_hat) as separate ECI unit vectors.
+
+    This helper returns named plotting axes rather than NTW component order.
+    Use :func:`ntw_matrix` for canonical SSAPy [N, T, W] components.
+    """
     T = _unit(v)
     W = _unit(np.cross(r, v))
-    N = np.cross(W, T)
+    N = np.cross(T, W)
     return T, N, W
 
 

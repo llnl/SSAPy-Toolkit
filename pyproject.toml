@@ -86,6 +86,7 @@ validation = [
 ]
 
 dev = [
+  "coverage",
   "pytest",
   "pytest-mpi",
   "sphinx",

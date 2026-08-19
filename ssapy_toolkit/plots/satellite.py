@@ -15,7 +15,7 @@ sat.show_burns = True
 # Add an impulsive burn (delta-v in NTW frame)
 sat.add_burn(BurnEvent(
     epoch_offset_s = 1800,          # seconds from propagation start
-    dv_ntw_km_s    = np.array([0.02, 0, 0]),  # along T (prograde)
+    dv_ntw_km_s    = np.array([0, 0.02, 0]),  # along T (prograde), [N,T,W]
     mode           = "impulsive",
 ))
 
@@ -47,8 +47,8 @@ class BurnEvent:
     epoch_offset_s : float
         Seconds from propagation start when burn occurs.
     dv_ntw_km_s : array (3,)
-        Delta-V in NTW frame (T=along-track, N=cross-track, W=orbit-normal).
-        km/s.
+        Delta-V in the canonical SSAPy NTW component order [N, T, W],
+        where T is along-track and W is orbit-normal. Units are km/s.
     mode : "impulsive" | "finite"
         Impulsive: instantaneous Δv applied.
         Finite: constant-thrust burn arc computed with fixed-step RK4.
@@ -86,7 +86,7 @@ class BurnEvent:
         return float(np.linalg.norm(self.dv_ntw_km_s))
 
     def dv_eci(self, r_km: np.ndarray, v_km_s: np.ndarray) -> np.ndarray:
-        """Rotate the NTW Δv into ECI using the spacecraft's current state."""
+        """Rotate canonical [N, T, W] Δv into ECI using the current state."""
         T, N, W = ntw_axes(r_km, v_km_s)
         dv_n, dv_t, dv_w = self.dv_ntw_km_s
         return dv_t*T + dv_n*N + dv_w*W

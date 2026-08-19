@@ -68,7 +68,8 @@ def gcrf_to_lunar_fixed(r: np.ndarray, t: np.ndarray, v: np.ndarray = None) -> n
     # print(3, np.shape(gcrf_to_lunar(r, t)))
     # print(4, np.shape(get_body('moon').position(t).T))
     # print(5, np.shape(gcrf_to_lunar(get_body('moon').position(t).T, t)))
-    r_lunar = gcrf_to_lunar(r, t) - gcrf_to_lunar(get_body('moon').position(t).T, t)
+    moon_body = get_body("moon")
+    r_lunar = gcrf_to_lunar(r, t) - gcrf_to_lunar(moon_body.position(t).T, t)
     if v is None:
         return r_lunar
     else:

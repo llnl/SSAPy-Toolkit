@@ -218,6 +218,71 @@ def test_transfer_ssapy_propagation_path_with_fakes(monkeypatch):
     assert intercept["trajectory"]["t"].size >= 2
 
 
+def test_transfer_ssapy_refinement_shooting_path_with_fakes(monkeypatch):
+    import ssapy.compute as compute
+
+    class VectorAccel:
+        def __init__(self, vec=None, mu=EARTH_MU):
+            self.vec = np.zeros(3) if vec is None else np.asarray(vec, dtype=float)
+            self.mu = mu
+
+        def __add__(self, other):
+            return VectorAccel(self.vec + getattr(other, "vec", np.zeros(3)), mu=self.mu)
+
+    class VectorPropagator:
+        def __init__(self, accel, h=None):
+            self.accel = accel
+            self.h = h
+
+    def fake_rv(orbit, times, propagator=None):
+        times = np.asarray(times, dtype=float)
+        dt = times - float(orbit.t)
+        accel_vec = getattr(getattr(propagator, "accel", None), "vec", np.zeros(3))
+        r = np.repeat(np.asarray(orbit.r, dtype=float)[None, :], len(times), axis=0)
+        v = np.repeat(np.asarray(orbit.v, dtype=float)[None, :], len(times), axis=0)
+        v = v + dt[:, None] * accel_vec[None, :]
+        if float(orbit.t) < 50.0:
+            r = r + dt[:, None] * accel_vec[None, :]
+        return r, v
+
+    monkeypatch.setattr(tsf, "Orbit", FakeOrbit)
+    monkeypatch.setattr(tsf, "AccelKepler", lambda: VectorAccel())
+    monkeypatch.setattr(tsf, "AccelConstNTW", lambda vec, time_breakpoints=None: VectorAccel(vec))
+    monkeypatch.setattr(tsf, "RK78Propagator", VectorPropagator)
+    monkeypatch.setattr(tsf, "rv_to_ntw", lambda r, v, x: np.asarray(x, dtype=float))
+    monkeypatch.setattr(tsf, "normed", lambda x: np.asarray(x, dtype=float) / np.linalg.norm(x))
+    monkeypatch.setattr(compute, "rv", fake_rv)
+
+    r1 = np.array([7000e3, 0.0, 0.0])
+    v1 = np.array([0.0, 7500.0, 0.0])
+    r2 = r1 + np.array([30.0, -20.0, 10.0])
+    v2 = v1 + np.array([5.0, 7.0, -3.0])
+
+    monkeypatch.setattr(
+        tsf,
+        "solve_lambert",
+        lambda r1_in, r2_in, tof, mu=EARTH_MU, prograde=True: (
+            v1 + np.array([10.0, 0.0, 0.0]),
+            v2 - np.array([0.0, 10.0, 0.0]),
+        ),
+    )
+
+    result = tsf.transfer_ssapy(
+        (r1, v1, 0.0),
+        (r2, v2, 100.0),
+        propagate=True,
+        refine=True,
+        refine_tol=(1e-7, 1e-7),
+        max_refine_iter=3,
+        burn_duration=1.0,
+        n_samples=5,
+    )
+
+    assert result["diagnostics"]["arrival_error"] < 1e-4
+    np.testing.assert_allclose(result["trajectory"]["r"][-1], r2, atol=1e-4)
+    np.testing.assert_allclose(result["trajectory"]["v"][-1], v2, atol=1e-4)
+
+
 def test_transfer_ssapy_propagation_error_branches(monkeypatch):
     import ssapy.compute as compute
 
