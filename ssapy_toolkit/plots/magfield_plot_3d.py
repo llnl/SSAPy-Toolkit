@@ -37,6 +37,13 @@ import calendar
 
 import numpy as np
 
+if __name__ == "__main__" and not __package__:
+    import os as _os, sys as _sys
+    _sys.path.insert(
+        0, _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+    )
+    __package__ = "ssapy_toolkit.plots"
+
 try:
     from .plotutils import normalize_orbit_trajectory, plotly_orbit_trace
 except ImportError:
@@ -81,57 +88,43 @@ except ImportError:
 # rebind only this module's name while the physics kept using the old value,
 # silently producing wrong numbers. Use geomagnetics.set_external_model()
 # instead; `_EXTERNAL_MODEL` below is a read-only convenience via __getattr__.
+# geomagnetics is a sibling module in this package. It previously lived at the
+# ssapy_toolkit package root, which required a sys.path bootstrap here for
+# script mode and -- worse -- created a circular import: reaching it pulled in
+# ssapy_toolkit.plots, whose __init__ auto-imports this module, which imports
+# back into a half-initialised geomagnetics. A plain sibling import has neither
+# problem.
 try:
     from .. import geomagnetics as _geo
-except ImportError:
-    # Running as a script (`python .../magfield_plot_3d.py`) gives no package
-    # context, so the relative import fails -- and a bare `import geomagnetics`
-    # cannot work either, because geomagnetics.py sits at the ssapy_toolkit
-    # package root, not beside this file. The GUI launches this module exactly
-    # that way, so put the repo root on sys.path and import by its real name.
-    import sys as _sys_boot
-    from pathlib import Path as _Path_boot
-    _repo_root = str(_Path_boot(__file__).resolve().parents[2])
-    if _repo_root not in _sys_boot.path:
-        _sys_boot.path.insert(0, _repo_root)
-    from ssapy_toolkit import geomagnetics as _geo
-
-# Explicit imports rather than a runtime globals() loop: ruff (and IDEs, and
-# readers) cannot see names injected dynamically, so the loop produced 16
-# spurious F821 "undefined name" errors and hid one real one -- `_pp` was used
-# below but never re-exported, which would have raised NameError the first
-# time that branch ran.
-# Both spellings, so this resolves whether imported as a package submodule
-# or executed directly as a script. sys.path was extended above, so the
-# absolute form works in script mode.
-try:
     from ..geomagnetics import (  # noqa: F401  (re-exported for back-compat)
-  # noqa: F401  (re-exported for backwards compat)
-    _geo_to_gsm_matrix, _get_external, _get_t89, _enu_to_cartesian_batch,
-    _bfield_batch, _bunit_batch, _field_magnitude_along, _surface_radius_km,
-    _adaptive_step_km, _trace_batch_rk4, _trace_all_closed, _resample_curve,
-    _make_seeds_lshell, _make_seeds_magnetic, _physics_fingerprint,
-    _aep8_table_path, _build_aep8_table, _load_aep8_table, _aep8_lookup,
-    _true_magnetic_equator, _belt_flux_samples, _load_omni_year,
-    get_solar_wind, _apply_solar_wind, _gsm_frame, _sun_direction_geo,
-    _shue_magnetopause, _classify_line, _T89Grid,
-    _M_DIPOLE_NT_RE3, _HAS_PPIGRF, _HAS_GEOPACK, _pp,
-    set_external_model, get_external_model,
-)
+        _geo_to_gsm_matrix, _get_external, _get_t89, _enu_to_cartesian_batch,
+        _bfield_batch, _bunit_batch, _field_magnitude_along, _surface_radius_km,
+        _adaptive_step_km, _trace_batch_rk4, _trace_all_closed, _resample_curve,
+        _make_seeds_lshell, _make_seeds_magnetic, _physics_fingerprint,
+        _aep8_table_path, _build_aep8_table, _load_aep8_table, _aep8_lookup,
+        _true_magnetic_equator, _belt_flux_samples, _load_omni_year,
+        get_solar_wind, _apply_solar_wind, _gsm_frame, _sun_direction_geo,
+        _shue_magnetopause, _classify_line, _T89Grid,
+        _M_DIPOLE_NT_RE3, _HAS_PPIGRF, _HAS_GEOPACK, _pp,
+        set_external_model, get_external_model,
+    )
 except ImportError:
-    from ssapy_toolkit.geomagnetics import (  # noqa: F401
-  # noqa: F401  (re-exported for backwards compat)
-    _geo_to_gsm_matrix, _get_external, _get_t89, _enu_to_cartesian_batch,
-    _bfield_batch, _bunit_batch, _field_magnitude_along, _surface_radius_km,
-    _adaptive_step_km, _trace_batch_rk4, _trace_all_closed, _resample_curve,
-    _make_seeds_lshell, _make_seeds_magnetic, _physics_fingerprint,
-    _aep8_table_path, _build_aep8_table, _load_aep8_table, _aep8_lookup,
-    _true_magnetic_equator, _belt_flux_samples, _load_omni_year,
-    get_solar_wind, _apply_solar_wind, _gsm_frame, _sun_direction_geo,
-    _shue_magnetopause, _classify_line, _T89Grid,
-    _M_DIPOLE_NT_RE3, _HAS_PPIGRF, _HAS_GEOPACK, _pp,
-    set_external_model, get_external_model,
-)
+    # Script mode (`python .../magfield_plot_3d.py`): no package context, but
+    # the script's own directory is on sys.path, so the sibling resolves by
+    # bare name. The GUI launches this module exactly that way.
+    import geomagnetics as _geo
+    from geomagnetics import (  # noqa: F401
+        _geo_to_gsm_matrix, _get_external, _get_t89, _enu_to_cartesian_batch,
+        _bfield_batch, _bunit_batch, _field_magnitude_along, _surface_radius_km,
+        _adaptive_step_km, _trace_batch_rk4, _trace_all_closed, _resample_curve,
+        _make_seeds_lshell, _make_seeds_magnetic, _physics_fingerprint,
+        _aep8_table_path, _build_aep8_table, _load_aep8_table, _aep8_lookup,
+        _true_magnetic_equator, _belt_flux_samples, _load_omni_year,
+        get_solar_wind, _apply_solar_wind, _gsm_frame, _sun_direction_geo,
+        _shue_magnetopause, _classify_line, _T89Grid,
+        _M_DIPOLE_NT_RE3, _HAS_PPIGRF, _HAS_GEOPACK, _pp,
+        set_external_model, get_external_model,
+    )
 
 
 def __getattr__(name):
@@ -160,7 +153,7 @@ class _GuardedModule(_types.ModuleType):
         if name == "_EXTERNAL_MODEL":
             raise AttributeError(
                 "Assigning magfield_plot_3d._EXTERNAL_MODEL has no effect on the "
-                "physics -- the state lives in ssapy_toolkit.geomagnetics. Use "
+                "physics -- the state lives in ssapy_toolkit.plots.geomagnetics. Use "
                 "geomagnetics.set_external_model(value), which returns the "
                 "previous model so you can restore it in a finally block."
             )

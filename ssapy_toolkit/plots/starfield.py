@@ -82,22 +82,24 @@ GPS_JD_EPOCH = 2_444_244.5
 # Time
 # ===========================================================================
 
-def _julian_date(d: datetime) -> float:
-    y, m = d.year, d.month
-    day = d.day + (d.hour + d.minute/60 + (d.second + d.microsecond/1e6)/3600) / 24.0
-    if m <= 2:
-        y -= 1; m += 12
-    A = y // 100
-    B = 2 - A + A // 4
-    return int(365.25*(y+4716)) + int(30.6001*(m+1)) + day + B - 1524.5
-
-
-def _gmst_rad(d: datetime) -> float:
-    """Greenwich Mean Sidereal Time (IAU 1982 series), radians."""
-    T = (_julian_date(d) - 2451545.0) / 36525.0
-    g = (67310.54841 + (876600.0*3600.0 + 8640184.812866)*T
-         + 0.093104*T*T - 6.2e-6*T*T*T)
-    return np.radians((g % 86400.0) / 240.0)
+# Julian date and GMST moved to ssapy_toolkit.time_functions.
+#
+# They are pure time-scale arithmetic with no rendering content, and keeping
+# them here forced the physics layer to import the plotting package to reach
+# them: geomagnetics needs the subsolar point, which needs GMST. Importing
+# ssapy_toolkit.plots pulls in plots/__init__, which auto-imports every module
+# in the package including one that imports back into geomagnetics -- a cycle
+# that made `import ssapy_toolkit.geomagnetics` fail outright.
+#
+# Re-exported under their original private names so existing imports here,
+# in magnetosphere_core and in the tests keep working unchanged. Verified
+# bit-identical to the previous definitions across epochs from 1582 to 2026.
+try:
+    from ..time_functions.gmst import _gmst_rad  # noqa: F401
+    from ..time_functions.julian_date import _julian_date  # noqa: F401
+except ImportError:  # script mode, no package context
+    from ssapy_toolkit.time_functions.gmst import _gmst_rad  # noqa: F401
+    from ssapy_toolkit.time_functions.julian_date import _julian_date  # noqa: F401
 
 
 def _to_datetime(epoch):

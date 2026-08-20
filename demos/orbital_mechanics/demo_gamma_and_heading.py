@@ -211,9 +211,9 @@ def test_equatorial_local_only():
 
     g_rms = _rms(g_loc)
     if g_rms <= 2.5:
-        _ok(f"local equatorial: gamma RMS {g_rms:.3f}° ≤ 2.5°")
+        _ok(f"local equatorial: gamma RMS {g_rms:.3f} deg <= 2.5 deg")
     else:
-        _fail(f"local equatorial: gamma RMS {g_rms:.3f}° > 2.5°")
+        _fail(f"local equatorial: gamma RMS {g_rms:.3f} deg > 2.5 deg")
         return False
     return True
 

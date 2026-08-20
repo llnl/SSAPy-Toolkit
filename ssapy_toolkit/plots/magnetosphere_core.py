@@ -44,6 +44,26 @@ except ImportError:
                            starfield_traces)
 
 
+# Constants and geometry moved to ssapy_toolkit.geomagnetics, one layer below
+# this module, so the physics layer no longer imports the plotting package.
+# Re-exported here under the same names -- references, not copies -- so the
+# plot modules and the tests that patch them keep working.
+#
+# EARTH_RADIUS_KM here is 6371.0, the spherical mean radius used for magnetic
+# work -- NOT constants.EARTH_RADIUS_KM, which is 6378.137 WGS84 equatorial.
+try:
+    from ..geomagnetics import (  # noqa: F401
+        EARTH_RADIUS_KM, WGS84_A_KM, WGS84_B_KM,
+        _DIPOLE_LON_DEG, _DIPOLE_TILT_DEG,
+        _dipole_axis, _mag_basis, _subsolar_point, _texture_cache_dir,
+    )
+except ImportError:
+    from ssapy_toolkit.geomagnetics import (  # noqa: F401
+        EARTH_RADIUS_KM, WGS84_A_KM, WGS84_B_KM,
+        _DIPOLE_LON_DEG, _DIPOLE_TILT_DEG,
+        _dipole_axis, _mag_basis, _subsolar_point, _texture_cache_dir,
+    )
+
 # Re-exported for the plot modules and tests; declared so static analysis
 # knows they are intentional pass-throughs rather than dead imports.
 __all__ = [
@@ -74,13 +94,10 @@ except ImportError:
     _HAS_PLOTLY = False
 
 
-EARTH_RADIUS_KM = 6_371.0
 
 
-WGS84_A_KM      = 6_378.137
 
 
-WGS84_B_KM      = 6_356.752314245
 
 
 STAR_SPHERE_FACTOR = 50.0
@@ -107,11 +124,6 @@ EARTH_TEXTURE_URLS = [
 ]
 
 
-def _texture_cache_dir():
-    d = Path(os.environ.get("SSAPY_TOOLKIT_CACHE",
-                            str(Path.home() / ".cache" / "ssapy_toolkit")))
-    d.mkdir(parents=True, exist_ok=True)
-    return d
 
 
 def _download_earth_texture(timeout=90):
@@ -237,25 +249,6 @@ def _sample_equirect_bilinear(tex, lat_deg, lon_deg, prefilter_to=None):
     return np.clip(top * (1 - wr) + bot * wr, 0, 255).astype(np.uint8)
 
 
-def _subsolar_point(date):
-    """
-    Subsolar latitude/longitude (deg), Meeus low-precision solar position.
-
-    Includes the equation of centre and the equation of time; a mean-Sun
-    approximation that drops them is ~2.7 deg off, which is ~300 km of
-    terminator position.
-    """
-    jd = _julian_date(date)
-    n = jd - 2451545.0
-    Lm = (280.460 + 0.9856474*n) % 360.0                 # mean longitude
-    g = np.radians((357.528 + 0.9856003*n) % 360.0)      # mean anomaly
-    lam = np.radians(Lm + 1.915*np.sin(g) + 0.020*np.sin(2*g))   # ecliptic longitude
-    eps = np.radians(23.439 - 3.6e-7*n)                  # obliquity
-    dec = np.degrees(np.arcsin(np.sin(eps)*np.sin(lam)))
-    ra = np.degrees(np.arctan2(np.cos(eps)*np.sin(lam), np.cos(lam)))
-    gmst_deg = np.degrees(_gmst_rad(date))
-    lon = ((ra - gmst_deg + 180.0) % 360.0) - 180.0
-    return dec, lon
 
 
 def _build_earth_mesh(texture_path, n_lon=480, n_lat=240, sun_shading=False,
@@ -402,16 +395,10 @@ def _geo_to_xyz(lon_deg, lat_deg, r=EARTH_RADIUS_KM):
             r * np.sin(la))
 
 
-_DIPOLE_TILT_DEG = 9.6
 
 
-_DIPOLE_LON_DEG  = -72.0
 
 
-def _dipole_axis():
-    tilt = np.radians(_DIPOLE_TILT_DEG)
-    lon  = np.radians(_DIPOLE_LON_DEG)
-    return np.array([np.sin(tilt)*np.cos(lon), np.sin(tilt)*np.sin(lon), np.cos(tilt)])
 
 
 def _rotation_z_to_axis(axis):
@@ -425,15 +412,6 @@ def _rotation_z_to_axis(axis):
     return np.eye(3) + vx + vx @ vx * (1 - c) / (s ** 2)
 
 
-def _mag_basis(axis):
-    z  = np.array([0., 0., 1.])
-    e1 = np.cross(axis, z)
-    if np.linalg.norm(e1) < 1e-6:
-        e1 = np.cross(axis, np.array([1., 0., 0.]))
-    e1 /= np.linalg.norm(e1)
-    e2 = np.cross(axis, e1)
-    e2 /= np.linalg.norm(e2)
-    return axis, e1, e2
 
 
 def _belt_vertex_color(base_rgb, weight, floor=0.10):
