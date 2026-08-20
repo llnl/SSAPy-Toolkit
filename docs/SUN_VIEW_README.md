@@ -45,7 +45,7 @@ sourced from those authorities, never re-hardcoded as literals:
 
 `sun_position_eci()` likewise uses the **real** JPL (DE-series) solar
 ephemeris via `astropy.get_body("sun", t)` — the same real-API approach as
-`ssapy_toolkit/accelerations/accel_sun.py` — not a hand-rolled analytic
+`ssapy_toolkit/accelerations_6dof/accel_sun.py` — not a hand-rolled analytic
 series.
 
 ### Deliberately artistic constants (NOT physical scale)

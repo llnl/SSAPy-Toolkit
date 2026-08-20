@@ -258,17 +258,17 @@ def build_benchmark_cases(
             tags=("photometry", "array"),
         ),
         BenchmarkCase(
-            name="accelerations.accel_point_earth",
-            group="accelerations",
+            name="accelerations_6dof.accel_point_earth",
+            group="accelerations_6dof",
             description="Point-Earth gravity acceleration for one position vector.",
             factory=lambda _ctx: _call(lambda: _accel_point_earth(r0)),
             tags=("dynamics", "scalar"),
         ),
         BenchmarkCase(
-            name="integrators.leapfrog_32_steps",
-            group="integrators",
+            name="propagators_6dof.leapfrog_32_steps",
+            group="propagators_6dof",
             description="Leapfrog propagation over 32 short time steps.",
-            factory=lambda _ctx: _call(lambda: _integrator_leapfrog(r0, v0, times)),
+            factory=lambda _ctx: _call(lambda: _propagator_leapfrog(r0, v0, times)),
             tags=("dynamics", "propagation"),
             default_min_sample_time=0.01,
         ),
@@ -381,10 +381,10 @@ def build_benchmark_cases(
         cases.extend(
             [
                 BenchmarkCase(
-                    name="integrators.rk4_32_steps",
-                    group="integrators",
+                    name="propagators_6dof.rk4_32_steps",
+                    group="propagators_6dof",
                     description="RK4 propagation over 32 short time steps including third-body terms.",
-                    factory=lambda _ctx: _call(lambda: _integrator_rk4(r0, v0, times)),
+                    factory=lambda _ctx: _call(lambda: _propagator_rk4(r0, v0, times)),
                     tags=("dynamics", "propagation", "slow"),
                     default_repeats=3,
                     default_min_sample_time=0.0,
@@ -451,25 +451,25 @@ def _vectors_rotate_points_3d(array):
 
 
 def _coordinates_rad0to2pi(angles):
-    from ssapy_toolkit.coordinates.unit_conversions import rad0to2pi
+    from ssapy_toolkit.coordinates.angle_units import rad0to2pi
 
     return rad0to2pi(angles)
 
 
 def _coordinates_deg90to90array(angles):
-    from ssapy_toolkit.coordinates.unit_conversions import deg90to90array
+    from ssapy_toolkit.coordinates.angle_units import deg90to90array
 
     return deg90to90array(angles)
 
 
 def _coordinates_cart2sph_deg(x, y, z):
-    from ssapy_toolkit.coordinates.cartesian_to_spherical import cart2sph_deg
+    from ssapy_toolkit.coordinates.cartesian import cart2sph_deg
 
     return cart2sph_deg(x, y, z)
 
 
 def _coordinates_cart_to_cyl(x, y, z):
-    from ssapy_toolkit.coordinates.cartesian_to_cylindrical import cart_to_cyl
+    from ssapy_toolkit.coordinates.cartesian import cart_to_cyl
 
     return cart_to_cyl(x, y, z)
 
@@ -505,19 +505,19 @@ def _compute_airmass_kasten_young(zenith_deg):
 
 
 def _accel_point_earth(r):
-    from ssapy_toolkit.accelerations.accel_point_earth import accel_point_earth
+    from ssapy_toolkit.accelerations_6dof.accel_point_earth import accel_point_earth
 
     return accel_point_earth(r)
 
 
-def _integrator_leapfrog(r0, v0, t):
-    from ssapy_toolkit.integrators.leap_frog import leapfrog
+def _propagator_leapfrog(r0, v0, t):
+    from ssapy_toolkit.propagators_6dof.leap_frog import leapfrog
 
     return leapfrog(r0, v0, t)
 
 
-def _integrator_rk4(r0, v0, t):
-    from ssapy_toolkit.integrators.rk4 import rk4
+def _propagator_rk4(r0, v0, t):
+    from ssapy_toolkit.propagators_6dof.rk4 import rk4
 
     return rk4(r0, v0, t)
 

@@ -1,7 +1,7 @@
 """SSAPy Toolkit.
 
 Utilities for orbital mechanics, plotting, coordinate transforms,
-integrators, io helpers, and SSAPy-related workflows.
+6-DoF propagators, io helpers, and SSAPy-related workflows.
 """
 
 from importlib import import_module
@@ -71,19 +71,20 @@ _SSAPY_ALIAS_NAMES = frozenset(
 )
 _TOOLKIT_SUBMODULE_NAMES = frozenset(
     {
-        "accelerations",
+        "accelerations_6dof",
         "asteroids",
         "compute",
         "constants",
         "coordinates",
         "data",
         "demo_gallery",
+        "dynamics",
         "engines",
         "hpc",
-        "integrators",
         "io",
         "orbital_mechanics",
         "plots",
+        "propagators_6dof",
         "rockets",
         "run_all_demos",
         "ssapy_wrappers",
@@ -95,48 +96,50 @@ _TOOLKIT_SUBMODULE_NAMES = frozenset(
 )
 _TOOLKIT_DUPLICATE_ALIASES = {
     "apoapsis": ".orbital_mechanics.keplerian",
-    "cart2sph_deg": ".coordinates.cartesian_to_spherical",
-    "cart_to_cyl": ".coordinates.cartesian_to_cylindrical",
+    "cart2sph_deg": ".coordinates.cartesian",
+    "cart_to_cyl": ".coordinates.cartesian",
     "dd_to_dms": ".time_functions.convert_dd_and_dms",
     "dd_to_hms": ".time_functions.convert_dd_and_hms",
-    "deg0to360": ".coordinates.unit_conversions",
-    "deg0to360array": ".coordinates.unit_conversions",
-    "deg90to90": ".coordinates.unit_conversions",
-    "deg90to90array": ".coordinates.unit_conversions",
+    "deg0to360": ".coordinates.angle_units",
+    "deg0to360array": ".coordinates.angle_units",
+    "deg90to90": ".coordinates.angle_units",
+    "deg90to90array": ".coordinates.angle_units",
     "dms_to_dd": ".time_functions.convert_dd_and_dms",
-    "dms_to_deg": ".coordinates.unit_conversions",
-    "dms_to_rad": ".coordinates.unit_conversions",
-    "ecliptic_to_equatorial": ".coordinates.equatorial_and_ecliptic",
-    "ecliptic_xyz_to_equatorial": ".coordinates.equatorial_and_ecliptic",
-    "ecliptic_xyz_to_equatorial_xyz": ".coordinates.equatorial_and_ecliptic",
+    "dms_to_deg": ".coordinates.angle_units",
+    "dms_to_rad": ".coordinates.angle_units",
+    "ecliptic_to_equatorial": ".coordinates.equatorial_ecliptic",
+    "ecliptic_xyz_to_equatorial": ".coordinates.equatorial_ecliptic",
+    "ecliptic_xyz_to_equatorial_xyz": ".coordinates.equatorial_ecliptic",
     "einsum_norm": ".vectors",
-    "equatorial_to_ecliptic": ".coordinates.equatorial_and_ecliptic",
-    "equatorial_to_horizontal": ".coordinates.local_and_equatorial",
-    "equatorial_xyz_to_ecliptic_xyz": ".coordinates.equatorial_and_ecliptic",
+    "equatorial_to_ecliptic": ".coordinates.equatorial_ecliptic",
+    "equatorial_to_horizontal": ".coordinates.local_equatorial",
+    "equatorial_xyz_to_ecliptic_xyz": ".coordinates.equatorial_ecliptic",
     "hms_to_dd": ".time_functions.convert_dd_and_hms",
-    "horizontal_to_equatorial": ".coordinates.local_and_equatorial",
-    "inert2rot": ".coordinates.earth_trojan_sim",
+    "horizontal_to_equatorial": ".coordinates.local_equatorial",
+    "inert2rot": ".coordinates.rotating_frames",
     "load_earth_file": ".plots.plotutils",
     "load_moon_file": ".plots.plotutils",
-    "lonlat_distance": ".coordinates.on_sky_distance",
+    "lonlat_distance": ".coordinates.geodetic",
     "norm": ".vectors",
     "normSq": ".vectors",
     "normed": ".vectors",
     "periapsis": ".orbital_mechanics.keplerian",
+    "propagate_6dof": ".dynamics",
+    "Spacecraft": ".dynamics",
     "period": ".orbital_mechanics.keplerian",
-    "ra_dec": ".coordinates.sky_angles",
-    "rad0to2pi": ".coordinates.unit_conversions",
-    "rightascension2hourangle": ".coordinates.local_and_equatorial",
-    "sim_lonlatrad": ".coordinates.earth_trojan_sim",
+    "ra_dec": ".coordinates.sky",
+    "rad0to2pi": ".coordinates.angle_units",
+    "rightascension2hourangle": ".coordinates.local_equatorial",
+    "sim_lonlatrad": ".coordinates.rotating_frames",
     "ssatk_load_cache": ".io.ssatk_cache",
     "ssatk_save_cache": ".io.ssatk_cache",
     "ssatk_load": ".io.ssatk_save",
     "ssatk_save": ".io.ssatk_save",
     "supported_save_formats": ".io.ssatk_save",
-    "sun_ra_dec": ".coordinates.sky_angles",
+    "sun_ra_dec": ".coordinates.sky",
     "unit_vector": ".vectors",
-    "xyz_to_ecliptic": ".coordinates.equatorial_and_ecliptic",
-    "xyz_to_equatorial": ".coordinates.equatorial_and_ecliptic",
+    "xyz_to_ecliptic": ".coordinates.equatorial_ecliptic",
+    "xyz_to_equatorial": ".coordinates.equatorial_ecliptic",
 }
 
 
@@ -196,10 +199,10 @@ except ImportError:
 
 # # Folders
 # from .yastropy import *
-# from .accelerations import *
+# from .accelerations_6dof import *
 # from .compute import *
 # from .coordinates import *
-# from .integrators import *
+# from .propagators_6dof import *
 # from .io import *
 # from .orbital_mechanics import *
 # from .plots import *

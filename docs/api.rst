@@ -15,11 +15,12 @@ Subpackages
    :toctree: generated/
    :recursive:
 
-   ssapy_toolkit.accelerations
+   ssapy_toolkit.accelerations_6dof
    ssapy_toolkit.compute
    ssapy_toolkit.coordinates
+   ssapy_toolkit.dynamics
    ssapy_toolkit.io
-   ssapy_toolkit.integrators
+   ssapy_toolkit.propagators_6dof
    ssapy_toolkit.orbital_mechanics
    ssapy_toolkit.plots
    ssapy_toolkit.rockets

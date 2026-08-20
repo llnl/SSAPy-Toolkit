@@ -13,7 +13,7 @@ from ssapy import rv, Orbit
 from ssapy.propagator import default_numerical
 from astropy.time import Time
 
-from ssapy_toolkit.coordinates.lunar_position import get_lunar_rv
+from ssapy_toolkit.coordinates.lunar import get_lunar_rv
 from ssapy_toolkit.plots.figpath import figpath
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None

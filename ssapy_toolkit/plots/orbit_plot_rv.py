@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from ..constants import EARTH_MU, EARTH_RADIUS
 from .plotutils import save_plot, _pop_save_path_aliases, _raise_unrecognized_kwargs
-from ..integrators import leapfrog
+from ..propagators_6dof import leapfrog
 from ssapy import Orbit
 
 

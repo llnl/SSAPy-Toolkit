@@ -177,7 +177,7 @@ def test_ssapy_orbit_incremented_and_similar_orbits(monkeypatch):
 
 
 def test_quickint_modes_and_period_validation(monkeypatch):
-    module = importlib.import_module("ssapy_toolkit.integrators.quick_int")
+    module = importlib.import_module("ssapy_toolkit.propagators_6dof.quick_int")
     monkeypatch.setattr(module, "Time", FakeTime)
     monkeypatch.setattr(module, "Orbit", FakeOrbit)
     monkeypatch.setattr(module, "get_times", lambda *args, **kwargs: np.array([FakeTime(0), FakeTime(1)], dtype=object))

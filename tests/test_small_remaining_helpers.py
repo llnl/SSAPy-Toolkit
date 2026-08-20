@@ -20,9 +20,9 @@ def test_set_axes_equal_balances_3d_ranges():
     plt.close(fig)
 
 
-def test_integrator_fuel_gravity_turn_and_finite_burn(monkeypatch):
-    fuel = importlib.import_module("ssapy_toolkit.integrators.fuel")
-    gravity = importlib.import_module("ssapy_toolkit.integrators.gravity_turn")
+def test_propagator_fuel_gravity_turn_and_finite_burn(monkeypatch):
+    fuel = importlib.import_module("ssapy_toolkit.propagators_6dof.fuel")
+    gravity = importlib.import_module("ssapy_toolkit.propagators_6dof.gravity_turn")
     finite = importlib.import_module("ssapy_toolkit.orbital_mechanics.calculate_finite_burn_acceleration")
 
     monkeypatch.setitem(fuel.thrusters, "Test", {"ISP": 300.0})
@@ -169,7 +169,7 @@ def test_break_plot_line_preserves_containers_and_inserts_nans():
 
 
 def test_leapfrog_extra_accel_signatures_and_impact(monkeypatch, capsys):
-    module = importlib.import_module("ssapy_toolkit.integrators.leap_frog")
+    module = importlib.import_module("ssapy_toolkit.propagators_6dof.leap_frog")
     monkeypatch.setattr(module, "to_gps", lambda t: np.asarray(t, dtype=float))
     monkeypatch.setattr(module, "build_profile", lambda spec, t: np.zeros_like(np.asarray(t, dtype=float)))
     monkeypatch.setattr(module, "accel_point_earth", lambda r: np.zeros(3))

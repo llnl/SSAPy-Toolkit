@@ -1,11 +1,9 @@
 import numpy as np
 import pytest
 
-from ssapy_toolkit.accelerations.accel_add import accel_add
-from ssapy_toolkit.accelerations.accel_circularize import accel_to_circular, reset_orbit_status
-from ssapy_toolkit.accelerations.accel_deltav import accel_deltav
-from ssapy_toolkit.accelerations.accel_deltav_vector import accel_deltav_vector
-from ssapy_toolkit.accelerations.accel_earth_harmonics import (
+from ssapy_toolkit.accelerations_6dof.accel_add import accel_add
+from ssapy_toolkit.accelerations_6dof.accel_circularize import accel_to_circular, reset_orbit_status
+from ssapy_toolkit.accelerations_6dof.accel_earth_harmonics import (
     accel_J2,
     accel_J3,
     accel_J4,
@@ -15,13 +13,15 @@ from ssapy_toolkit.accelerations.accel_earth_harmonics import (
     accel_J8,
     accel_earth_harmonics,
 )
-from ssapy_toolkit.accelerations.accel_equatorial import accel_equatorial
-from ssapy_toolkit.accelerations.accel_inclination import accel_inclination
-from ssapy_toolkit.accelerations.accel_plane import accel_plane
-from ssapy_toolkit.accelerations.accel_radial import accel_radial
-from ssapy_toolkit.accelerations.accel_uniform_earth import accel_uniform_earth
-from ssapy_toolkit.accelerations.accel_velocity import accel_velocity
+from ssapy_toolkit.accelerations_6dof.accel_equatorial import accel_equatorial
+from ssapy_toolkit.accelerations_6dof.accel_inclination import accel_inclination
+from ssapy_toolkit.accelerations_6dof.accel_plane import accel_plane
+from ssapy_toolkit.accelerations_6dof.accel_point_earth import accel_point_earth
+from ssapy_toolkit.accelerations_6dof.accel_radial import accel_radial
+from ssapy_toolkit.accelerations_6dof.accel_uniform_earth import accel_uniform_earth
+from ssapy_toolkit.accelerations_6dof.accel_velocity import accel_velocity
 from ssapy_toolkit.constants import EARTH_MU, EARTH_RADIUS, RGEO
+from ssapy_toolkit.dynamics import Spacecraft
 
 
 def test_accel_add_supports_time_and_position_only_functions():
@@ -56,38 +56,34 @@ def test_directional_acceleration_helpers_and_zero_cases():
     np.testing.assert_allclose(accel_inclination([0.0, 0.0, 1.0], v, 0.75), np.zeros(3))
 
 
+def test_legacy_acceleration_helpers_accept_spacecraft_state():
+    sat = Spacecraft(
+        r=[3.0, 4.0, 0.0],
+        v=[-4.0, 3.0, 0.0],
+        inertia=np.eye(3),
+        mass=100.0,
+    )
+
+    np.testing.assert_allclose(accel_radial(sat, 2.0), [1.2, 1.6, 0.0])
+    np.testing.assert_allclose(accel_velocity(sat, 10.0), [-8.0, 6.0, 0.0])
+    np.testing.assert_allclose(accel_plane(sat, 0.5), sat.v / np.linalg.norm(sat.v) * 0.5)
+    np.testing.assert_allclose(accel_equatorial(sat, 0.25), [-0.2, 0.15, 0.0])
+    np.testing.assert_allclose(accel_inclination(sat, 0.75), [0.0, 0.0, 0.75])
+
+    expected_gravity = -EARTH_MU * sat.r / np.linalg.norm(sat.r) ** 3
+    np.testing.assert_allclose(accel_point_earth(sat), expected_gravity)
+    np.testing.assert_allclose(
+        accel_add(accel_point_earth, lambda r, v, t: accel_radial(r, 0.0))(sat, t=0.0),
+        expected_gravity,
+    )
+
+
 def test_uniform_earth_gravity_inside_and_outside():
     outside = np.array([2.0 * EARTH_RADIUS, 0.0, 0.0])
     inside = np.array([0.5 * EARTH_RADIUS, 0.0, 0.0])
 
     np.testing.assert_allclose(accel_uniform_earth(outside), [-EARTH_MU / outside[0] ** 2, 0.0, 0.0])
     np.testing.assert_allclose(accel_uniform_earth(inside), [-EARTH_MU * inside[0] / EARTH_RADIUS**3, 0.0, 0.0])
-
-
-def test_deltav_profile_helpers_validate_and_compute_profiles():
-    assert accel_deltav(12.0, thrust_accel=2.0, center_idx=10, dt=1.0) == {
-        "thrust": 2.0,
-        "start": 7,
-        "end": 13,
-    }
-    assert accel_deltav(-3.0, thrust_accel=2.0, center_idx=4, dt=2.0)["thrust"] == -2.0
-    assert accel_deltav(0.0, thrust_accel=2.0, center_idx=4, dt=2.0)["end"] - accel_deltav(0.0, thrust_accel=2.0, center_idx=4, dt=2.0)["start"] == 1
-
-    with pytest.raises(ValueError, match="thrust_accel"):
-        accel_deltav(1.0, thrust_accel=0.0, center_idx=0)
-    with pytest.raises(ValueError, match="dt"):
-        accel_deltav(1.0, thrust_accel=1.0, center_idx=0, dt=0.0)
-
-    thrust, direction, accel = accel_deltav_vector([3.0, 4.0, 0.0], duration=10.0)
-    assert np.isclose(thrust, 0.5)
-    np.testing.assert_allclose(direction, [0.6, 0.8, 0.0])
-    np.testing.assert_allclose(accel, [0.3, 0.4, 0.0])
-    zero_thrust, zero_direction, zero_accel = accel_deltav_vector([0.0, 0.0, 0.0], duration=10.0)
-    assert zero_thrust == 0.0
-    np.testing.assert_allclose(zero_direction, np.zeros(3))
-    np.testing.assert_allclose(zero_accel, np.zeros(3))
-    with pytest.raises(ValueError, match="Duration"):
-        accel_deltav_vector([1.0, 0.0, 0.0], duration=0.0)
 
 
 def test_accel_to_circular_latches_after_tolerance_and_can_reset():
@@ -105,6 +101,10 @@ def test_accel_to_circular_latches_after_tolerance_and_can_reset():
     np.testing.assert_allclose(accel_to_circular(np.zeros(3), circular_v, thrust=0.01), np.zeros(3))
     np.testing.assert_allclose(accel_to_circular([EARTH_RADIUS, 0.0, 0.0], circular_v, thrust=0.01), np.zeros(3))
 
+    sat = Spacecraft(r=RGEO * np.array([1.0, 0.0, 0.0]), v=circular_v + [0.0, 100.0, 0.0], inertia=np.eye(3))
+    command = accel_to_circular(sat, thrust=0.01, tol=1.0)
+    assert np.isclose(np.linalg.norm(command), 0.01)
+
 
 def test_earth_harmonics_are_finite_and_reject_subsurface_positions():
     r = np.array([RGEO, 0.1 * RGEO, 0.25 * RGEO])
@@ -117,6 +117,7 @@ def test_earth_harmonics_are_finite_and_reject_subsurface_positions():
 
     expected = -EARTH_MU * r / np.linalg.norm(r) ** 3 + np.sum(components, axis=0)
     np.testing.assert_allclose(accel_earth_harmonics(r), expected)
+    np.testing.assert_allclose(accel_earth_harmonics(Spacecraft(r=r, v=[0, 0, 0], inertia=np.eye(3))), expected)
 
     with pytest.raises(ValueError, match="below Earth's surface"):
         accel_J2([EARTH_RADIUS / 2.0, 0.0, 0.0])

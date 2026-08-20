@@ -10,24 +10,21 @@ Pytest-safe behavior:
 import os
 import sys
 
-import numpy as np
-import matplotlib.pyplot as plt
 import astropy.units as u
+import matplotlib.pyplot as plt
+import numpy as np
 from astropy.time import Time
-
-from ssapy_toolkit.plots.figpath import figpath
-from ssapy_toolkit.plots.orbit_plot import orbit_plot
-from ssapy_toolkit.plots.groundtrack_plot import groundtrack_plot
-from ssapy_toolkit.plots.plotutils import save_plot
-from ssapy_toolkit.compute.lambertian_magnitude import lambertian_reflection
-from ssapy_toolkit.time_functions.get_times import get_times
-
-# Pull in ssapy pieces explicitly so the call signatures are unambiguous.
-from ssapy import constants
-from ssapy import Orbit, rv, get_body
-from ssapy.accel import AccelKepler, AccelEarthRad, AccelSolRad
+from ssapy import Orbit, constants, get_body, rv
+from ssapy.accel import AccelEarthRad, AccelKepler, AccelSolRad
 from ssapy.gravity import AccelHarmonic, AccelThirdBody
 from ssapy.propagator import SciPyPropagator
+
+from ssapy_toolkit.compute.lambertian_magnitude import lambertian_reflection
+from ssapy_toolkit.plots.figpath import figpath
+from ssapy_toolkit.plots.groundtrack_plot import groundtrack_plot
+from ssapy_toolkit.plots.orbit_plot import orbit_plot
+from ssapy_toolkit.plots.plotutils import save_plot
+from ssapy_toolkit.time_functions.get_times import get_times
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -140,11 +137,11 @@ def main(make_figures=None, fast=None):
     # Plot: GCRF and lunar frames — save with figpath
     # ------------------------------------------------------------
     if make_figures:
-        fig, ax = orbit_plot(r, times, frame="gcrf")
+        fig, _ax = orbit_plot(r, times, frame="gcrf")
         out_gcrf = figpath("demo_gallery/figures/ssapy_orbit_gcrf")
         save_plot(fig, save_path=out_gcrf)
 
-        fig, ax = orbit_plot(r, times, frame="lunar")
+        fig, _ax = orbit_plot(r, times, frame="lunar")
         out_lunar = figpath("demo_gallery/figures/ssapy_orbit_lunar")
         save_plot(fig, save_path=out_lunar)
 

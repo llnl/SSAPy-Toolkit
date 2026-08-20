@@ -7,7 +7,7 @@ from astropy.time import Time
 from ssapy_toolkit.ssapy_wrappers.ssapy_orbits import ssapy_orbit
 from ssapy_toolkit.plots.orbit_plot import orbit_plot
 from ssapy_toolkit.constants import RGEO
-from ssapy_toolkit.coordinates.lunar_position import get_lunar_rv
+from ssapy_toolkit.coordinates.lunar import get_lunar_rv
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 GALLERY_CATEGORY = "orbit_visualization"

@@ -128,7 +128,7 @@ def sun_position_eci(t) -> tuple[np.ndarray, float]:
 
     This uses SSAPy's real solar ephemeris (JPL, via astropy's get_body),
     the same real API already used elsewhere in the toolkit -- see
-    ssapy_toolkit/accelerations/accel_sun.py's accel_point_sun, which this
+    ssapy_toolkit/accelerations_6dof/accel_sun.py's accel_point_sun, which this
     follows directly -- rather than a hand-rolled low-precision analytic
     series.
 

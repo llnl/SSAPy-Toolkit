@@ -105,8 +105,8 @@ def test_benchmark_private_wrappers_have_expected_outputs(monkeypatch, tmp_path)
     assert gravity[0] < 0.0
 
     times = np.array([0.0, 5.0, 10.0])
-    lf_r, lf_v = benchmark._integrator_leapfrog(r0, v0, times)
-    rk_r, rk_v = benchmark._integrator_rk4(r0, v0, times)
+    lf_r, lf_v = benchmark._propagator_leapfrog(r0, v0, times)
+    rk_r, rk_v = benchmark._propagator_rk4(r0, v0, times)
     assert lf_r.shape == lf_v.shape == rk_r.shape == rk_v.shape == (3, 3)
     assert np.all(np.isfinite(lf_r)) and np.all(np.isfinite(rk_r))
 

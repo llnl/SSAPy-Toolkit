@@ -15,8 +15,7 @@ from astropy.time import Time
 from astropy.coordinates import GCRS, ITRS, CartesianRepresentation, EarthLocation, get_sun
 import astropy.units as u
 
-from ssapy_toolkit.coordinates.llh_to_gcrf import llh_to_gcrf
-from ssapy_toolkit.coordinates.gcrf_to_llh import gcrf_to_llh
+from ssapy_toolkit.coordinates.geodetic import gcrf_to_llh, llh_to_gcrf
 from ssapy_toolkit.yastropy.astropy_surface_rv import astropy_surface_rv
 from ssapy_toolkit.plots.groundtrack_dashboard import groundtrack_dashboard
 from ssapy_toolkit.constants import EARTH_RADIUS

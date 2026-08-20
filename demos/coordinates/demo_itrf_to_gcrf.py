@@ -9,8 +9,7 @@ if str(ROOT) not in sys.path:
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ssapy_toolkit.coordinates.gcrf_to_itrf import gcrf_to_itrf
-from ssapy_toolkit.coordinates.itrf_to_gcrf import itrf_to_gcrf
+from ssapy_toolkit.coordinates.earth_fixed import gcrf_to_itrf, itrf_to_gcrf
 from ssapy_toolkit.time_functions.get_times import get_times
 from ssapy_toolkit.ssapy_wrappers.ssapy_orbits import ssapy_orbit
 from ssapy_toolkit.constants import RGEO  # [19]

@@ -6,13 +6,13 @@
 provides the core high-fidelity propagation and modeling engine, the Toolkit
 adds astrodynamics utilities, orbital-transfer design, coordinate/time
 conversions, brightness and observables modeling, launch and rocket helpers,
-integrators, rich plotting, and data I/O to support day-to-day research and
+6-DoF propagators, rich plotting, and data I/O to support day-to-day research and
 engineering workflows.
 
 SSAPy itself is a fast, flexible, high-fidelity orbital modeling and analysis
 tool for orbits spanning from low-Earth orbit into the cislunar regime, with
 configurable force models (Earth and lunar gravity, radiation pressure, drag,
-planetary perturbations, maneuvers), multiple integrators, orbit determination,
+planetary perturbations, maneuvers), multiple propagators, orbit determination,
 Monte Carlo / uncertainty-quantification workflows, and ground/space observer
 models. See the SSAPy repository for full details:
 <https://github.com/llnl/SSAPy>.
@@ -29,14 +29,18 @@ models. See the SSAPy repository for full details:
   conversions with finite-burn modeling.
 - **Coordinate transforms & time conversions** — GCRF-to-ITRF, GCRF-to-NTW,
   GCRF-to-LLH/lon-lat, GCRF-to-lunar, J2000-to-GCRF, Cartesian/spherical/
-  cylindrical, equatorial/ecliptic, and sky-angle helpers, using a right-handed
-  NTW (N = T x W) convention consistent with SSAPy.
+  cylindrical, equatorial/ecliptic, sky-angle helpers, and satellite operation
+  frames (NTW, RTN, LVLH, VNB, body, topocentric, and line-of-sight), using a
+  right-handed NTW (N = T x W) convention consistent with SSAPy.
 - **Observables & brightness modeling** — Lambertian magnitude / brightness,
   including object thermal emission, Earth-shadow effects, and ground
   reflectance.
 - **Plotting & visualization** — orbit, ground-track, cislunar (2-D and 3-D),
   and transfer plots; interactive dashboards; and animated GIF/video output.
-- **Integrators** — Runge-Kutta (RK4), leapfrog, and gravity-turn integrators.
+- **6-DoF Propagators** — adaptive DOP853 propagation plus fixed-step RK4/leapfrog helpers.
+- **6-DoF dynamics** — coupled translational and rigid-body attitude
+  propagation with quaternion attitude states, optional user acceleration and
+  torque models, and gravity-gradient torque.
 - **Launch & rockets** — launch-pad definitions, gravity-turn ascent, and
   fuel/burn utilities.
 - **Data I/O** — HDF5 helpers (including dictionary/HDF5 conversion with array
@@ -113,6 +117,57 @@ from ssapy_toolkit.orbital_mechanics import transfer_bielliptic
 from ssapy_toolkit.coordinates import gcrf_to_itrf
 from ssapy_toolkit.plots import orbit_plot
 ```
+
+For high-accuracy translational propagation, use the adaptive DOP853 wrapper in
+`propagators_6dof` instead of the older fixed-step helpers:
+
+```
+import numpy as np
+from ssapy_toolkit.constants import EARTH_MU
+from ssapy_toolkit.propagators_6dof import propagate_orbit_state
+
+radius = 7_000_000.0
+speed = np.sqrt(EARTH_MU / radius)
+traj = propagate_orbit_state(
+    r0=[radius, 0.0, 0.0],
+    v0=[0.0, speed, 0.0],
+    times=np.linspace(0.0, 3600.0, 121),
+)
+```
+
+For rigid-body spacecraft dynamics, use `Spacecraft` when you want an
+`Orbit`-like object with attitude, angular rate, inertia, and mass attached.
+Use `propagate_6dof` directly for lower-level numerical propagation.
+
+```
+import numpy as np
+import ssapy_toolkit as ssatk
+from ssapy_toolkit.accelerations_6dof import SpacecraftAccelJ2, constant_body_thrust
+from ssapy_toolkit.plots import orbit_plot
+
+sat = ssatk.Spacecraft(
+    r=[7_000_000.0, 0.0, 0.0],
+    v=[0.0, 7_500.0, 0.0],
+    q=[1.0, 0.0, 0.0, 0.0],       # [w, x, y, z], body to inertial
+    omega=[0.0, 0.0, 0.001],      # body-frame rad/s
+    inertia=np.diag([10.0, 12.0, 8.0]),
+    mass=100.0,
+)
+
+traj = sat.propagate(
+    times=np.linspace(0.0, 600.0, 61),
+    acceleration=SpacecraftAccelJ2(),
+    body_acceleration=constant_body_thrust([0.0, 0.01, 0.0], sat.mass),
+    gravity_gradient=True,
+)
+
+orbit_plot(traj.r, traj.t, view="3d")
+```
+
+Reusable 6-DoF acceleration models live in ``ssapy_toolkit.accelerations_6dof`` and
+include SSAPy-like classes for Kepler gravity, J2, third-body gravity,
+cannonball drag, cannonball solar radiation pressure, constant inertial/NTW/body
+accelerations, and summed acceleration models.
 
 `transfer_bielliptic` computes the analytic three-impulse, two-half-ellipse
 transfer between coplanar circular orbits through an intermediate apoapsis

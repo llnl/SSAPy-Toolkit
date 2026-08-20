@@ -9,11 +9,9 @@ from astropy.time import Time
 from ssapy import Orbit, rv
 
 from ssapy_toolkit.constants import RGEO
-from ssapy_toolkit.coordinates.gcrf_to_itrf import gcrf_to_itrf
-from ssapy_toolkit.coordinates.gcrf_to_lonlat import gcrf_to_lonlat
-from ssapy_toolkit.coordinates.gcrf_to_ntw import gcrf_to_ntw
-from ssapy_toolkit.coordinates.itrf_to_gcrf import itrf_to_gcrf
-from ssapy_toolkit.coordinates.ntw_to_gcrf import ntw_to_gcrf
+from ssapy_toolkit.coordinates.earth_fixed import gcrf_to_itrf, itrf_to_gcrf
+from ssapy_toolkit.coordinates.geodetic import gcrf_to_lonlat
+from ssapy_toolkit.coordinates.satellite_frames import gcrf_to_ntw, ntw_to_gcrf
 from ssapy_toolkit.plots.plotutils import figsave
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None

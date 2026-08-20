@@ -21,11 +21,11 @@ from ssapy_toolkit.coordinates.unit_conversions import (
     dms_to_rad,
     rad0to2pi,
 )
-from ssapy_toolkit.integrators import int_utils
+from ssapy_toolkit.propagators_6dof import int_utils
 from ssapy_toolkit.orbital_mechanics import misc
 
-rk4_module = importlib.import_module("ssapy_toolkit.integrators.rk4")
-leapfrog_module = importlib.import_module("ssapy_toolkit.integrators.leap_frog")
+rk4_module = importlib.import_module("ssapy_toolkit.propagators_6dof.rk4")
+leapfrog_module = importlib.import_module("ssapy_toolkit.propagators_6dof.leap_frog")
 eqecl = equatorial_and_ecliptic
 
 
@@ -102,7 +102,7 @@ def test_coordinate_conversion_helpers():
     assert np.isfinite(dec2)
 
 
-def test_integrator_profile_and_simple_motion(monkeypatch):
+def test_propagator_profile_and_simple_motion(monkeypatch):
     t = np.arange(5.0)
     np.testing.assert_array_equal(int_utils.build_profile(None, t), np.zeros(5))
     np.testing.assert_array_equal(int_utils.build_profile(2.0, t), np.full(5, 2.0))
