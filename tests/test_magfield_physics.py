@@ -934,7 +934,7 @@ def test_physics_fingerprint_tracks_the_code():
 
     Patches the module where the physics actually lives. _physics_fingerprint
     resolves the routine names from its own module globals, and the physics
-    moved to ssapy_toolkit.geomagnetics -- magfield_plot_3d only re-exports
+    moved to ssapy_toolkit.plots.geomagnetics -- magfield_plot_3d only re-exports
     them. Re-exported names are separate bindings, so patching the plot
     module's copy leaves the fingerprint's view untouched (the same trap that
     made attribute assignment to _EXTERNAL_MODEL a silent no-op).

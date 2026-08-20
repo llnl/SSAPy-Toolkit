@@ -98,9 +98,9 @@ def main(make_figures=None, fast=None, output_dir=None):
     print("=" * 70)
     print("ORBIT COMPARISON: Keplerian vs. High-Fidelity")
     print("=" * 70)
-    print(f"Orbit: a={a_m/1e3:.0f} km, e={ecc}, i={inc_deg}°")
+    print(f"Orbit: a={a_m/1e3:.0f} km, e={ecc}, i={inc_deg} deg")
     print(f"Duration: {duration_hours} hours, dt={dt_seconds} s")
-    print(f"S/C: m={sc_mass_kg} kg, A={sc_area_m2} m², Cd={sc_Cd}, Cr={sc_Cr}")
+    print(f"S/C: m={sc_mass_kg} kg, A={sc_area_m2} m^2, Cd={sc_Cd}, Cr={sc_Cr}")
     print()
 
     t0_gps = Time(t0_str, scale="utc").gps
@@ -147,12 +147,12 @@ def main(make_figures=None, fast=None, output_dir=None):
     )
 
     print("      Force model:")
-    print("        ✓ Earth point-mass + 20×20 harmonics")
-    print("        ✓ Sun point-mass")
-    print("        ✓ Moon point-mass + 10×10 harmonics")
-    print("        ✓ Solar radiation pressure")
-    print("        ✓ Atmospheric drag")
-    print("        ✓ Earth radiation pressure")
+    print("        [x] Earth point-mass + 20x20 harmonics")
+    print("        [x] Sun point-mass")
+    print("        [x] Moon point-mass + 10x10 harmonics")
+    print("        [x] Solar radiation pressure")
+    print("        [x] Atmospheric drag")
+    print("        [x] Earth radiation pressure")
 
     scipy_prop = SciPyPropagator(accel_perturbed)
     orbit_perturbed = Orbit(

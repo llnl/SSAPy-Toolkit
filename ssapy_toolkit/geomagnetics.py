@@ -12,11 +12,35 @@ whole rendering stack.
 
 Layering
 --------
-    plots/magnetosphere_core.py   no ppigrf/geopack/spacepy -- always imports
+    time_functions/               julian_date, gmst -- no dependencies
             |
     geomagnetics.py               (this file) ppigrf + geopack -- the physics
             |
+    plots/magnetosphere_core.py   geometry, meshes, textures -- no heavy deps
+            |
     plots/magfield_plot_3d.py     plotly -- rendering only
+    plots/van_allen_plot_3d.py
+
+Every arrow points one way, downward, and that is load-bearing rather than
+tidy. This module previously sat *below* magnetosphere_core and imported the
+shared constants and geometry upward from it. Reaching into ssapy_toolkit.plots
+runs plots/__init__, which auto-imports every module in the package, including
+magfield_plot_3d, which imports back into this module while it is still
+half-initialised. `import ssapy_toolkit.geomagnetics` failed outright as a
+result -- while `import ssapy_toolkit.plots` happened to work, because it
+entered the cycle from the other side. Nothing caught it: every test imported
+the plots package first.
+
+The constants and geometry (EARTH_RADIUS_KM, the WGS84 axes, _dipole_axis,
+_mag_basis, _subsolar_point, _texture_cache_dir) are therefore defined here,
+and magnetosphere_core re-exports them under the same names so existing
+callers and tests are unaffected.
+
+Note EARTH_RADIUS_KM below is 6371.0, the spherical mean radius -- NOT
+ssapy_toolkit.constants.EARTH_RADIUS_KM, which is the 6378.137 WGS84
+equatorial radius. L shells are expressed in the spherical mean, so
+interchanging them shifts every field line by 0.1%. The names collide; the
+quantities differ.
 
 magnetosphere_core stays dependency-light on purpose: it documents "nothing
 here depends on ppigrf, geopack or spacepy, so it imports cleanly", and
@@ -33,9 +57,18 @@ from __future__ import annotations
 import functools as _functools
 from datetime import datetime
 
+import os
+from pathlib import Path
+
 import numpy as np
 
-from .constants import EARTH_GEOMAGNETIC_REFERENCE_RADIUS_KM
+from .constants import (
+    EARTH_GEOMAGNETIC_REFERENCE_RADIUS_KM,
+    EARTH_MEAN_RADIUS_KM,
+    EARTH_OBLIQUITY_J2000_DEG,
+    WGS84_A_KM,
+    WGS84_B_KM,
+)
 
 try:
     import ppigrf.ppigrf as _pp
@@ -54,15 +87,88 @@ except Exception:
     _HAS_GEOPACK = False
 
 try:
-    from .plots.magnetosphere_core import (
-        EARTH_RADIUS_KM, WGS84_A_KM, WGS84_B_KM,
-        _dipole_axis, _mag_basis, _subsolar_point, _texture_cache_dir,
-    )
-except ImportError:
-    from magnetosphere_core import (
-        EARTH_RADIUS_KM, WGS84_A_KM, WGS84_B_KM,
-        _dipole_axis, _mag_basis, _subsolar_point, _texture_cache_dir,
-    )
+    from .time_functions.gmst import _gmst_rad
+    from .time_functions.julian_date import _julian_date
+except ImportError:  # script mode
+    from ssapy_toolkit.time_functions.gmst import _gmst_rad
+    from ssapy_toolkit.time_functions.julian_date import _julian_date
+
+# ── Shared constants and geometry ────────────────────────────────────────────
+#
+# These used to live in plots/magnetosphere_core.py and were imported from
+# here, which pointed the dependency the wrong way: the physics layer reached
+# up into the plotting package, whose __init__ auto-imports every module in it,
+# including one that imports back into this module. `import
+# ssapy_toolkit.geomagnetics` failed outright as a result.
+#
+# They are defined here now and magnetosphere_core imports them back, so the
+# arrow runs physics -> plotting and the cycle cannot form. Nothing in this
+# block needs numpy beyond what is already imported, and none of it renders
+# anything.
+
+EARTH_RADIUS_KM = EARTH_MEAN_RADIUS_KM
+"""Spherical mean Earth radius, km.
+
+Deliberately NOT ssapy_toolkit.constants.EARTH_RADIUS_KM, which is 6378.137 --
+the WGS84 equatorial radius. Magnetospheric work uses the spherical mean: L
+shells are expressed in it, and swapping the two shifts every field line and
+L value by 0.1%. The two names collide, so they are kept in separate modules
+on purpose; use this one for anything magnetic.
+"""
+
+_DIPOLE_TILT_DEG = 9.6
+_DIPOLE_LON_DEG = -72.0
+
+
+def _texture_cache_dir():
+    """Directory for cached grids and downloaded textures, created on demand."""
+    d = Path(os.environ.get("SSAPY_TOOLKIT_CACHE",
+                            str(Path.home() / ".cache" / "ssapy_toolkit")))
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _dipole_axis():
+    """Unit vector along the geomagnetic dipole axis, in geographic frame."""
+    tilt = np.radians(_DIPOLE_TILT_DEG)
+    lon = np.radians(_DIPOLE_LON_DEG)
+    return np.array([np.sin(tilt) * np.cos(lon), np.sin(tilt) * np.sin(lon), np.cos(tilt)])
+
+
+def _mag_basis(axis):
+    """Right-handed basis with `axis` as the third vector.
+
+    The degenerate case matters: when the dipole axis is parallel to z the
+    first cross product vanishes, so fall back to crossing with x instead.
+    """
+    z = np.array([0., 0., 1.])
+    e1 = np.cross(axis, z)
+    if np.linalg.norm(e1) < 1e-6:
+        e1 = np.cross(axis, np.array([1., 0., 0.]))
+    e1 /= np.linalg.norm(e1)
+    e2 = np.cross(axis, e1)
+    e2 /= np.linalg.norm(e2)
+    return axis, e1, e2
+
+
+def _subsolar_point(date):
+    """Subsolar latitude/longitude in degrees (Meeus low-precision Sun).
+
+    Includes the equation of centre and the equation of time. A mean-Sun
+    approximation that drops them is ~2.7 deg off, which is ~300 km of
+    terminator position -- visible against a coastline.
+    """
+    jd = _julian_date(date)
+    n = jd - 2451545.0
+    Lm = (280.460 + 0.9856474 * n) % 360.0                        # mean longitude
+    g = np.radians((357.528 + 0.9856003 * n) % 360.0)             # mean anomaly
+    lam = np.radians(Lm + 1.915 * np.sin(g) + 0.020 * np.sin(2 * g))   # ecliptic longitude
+    eps = np.radians(EARTH_OBLIQUITY_J2000_DEG - 3.6e-7 * n)     # obliquity
+    dec = np.degrees(np.arcsin(np.sin(eps) * np.sin(lam)))
+    ra = np.degrees(np.arctan2(np.cos(eps) * np.sin(lam), np.cos(lam)))
+    gmst_deg = np.degrees(_gmst_rad(date))
+    lon = ((ra - gmst_deg + 180.0) % 360.0) - 180.0
+    return dec, lon
 
 # ---------------------------------------------------------------------------
 # Module state
@@ -312,6 +418,11 @@ def _get_external(date, kp=2, step=None, model="t89", solar_wind=None):
                             z=g.z, B=g.B, step=g.step)
     _T89_CACHE[key] = g
     return g
+
+
+def _get_t89(date, kp=2, step=None):
+    """Backward-compatible T89-only wrapper."""
+    return _get_external(date, kp=kp, step=step, model="t89")
 
 
 def _enu_to_cartesian_batch(Be, Bn, Bu, lons_deg, lats_deg):
