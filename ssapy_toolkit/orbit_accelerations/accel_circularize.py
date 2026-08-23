@@ -1,4 +1,4 @@
-# ssapy_toolkit/accelerations_6dof/accel_circularize.py
+# ssapy_toolkit/orbit_accelerations/accel_circularize.py
 
 import numpy as np
 from ..constants import EARTH_MU, EARTH_RADIUS  # [56]

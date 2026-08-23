@@ -36,6 +36,7 @@ The `demos/` package is organized by workflow area:
 | `coordinates/` | frame transforms, surface state vectors, NTW/GCRF checks, rotation utilities |
 | `data_io/` | sampling, sphere generation, and dictionary/HDF5 round-trip examples |
 | `orbital_mechanics/` | orbit quantities, propagation/model comparisons, ellipse fitting, maneuvers, transfers, station keeping |
+| `six_dof/` | rigid-body attitude, gravity-gradient torque, facet solar-radiation pressure, and finite-burn coupling |
 | `orbit_visualization/` | orbit, cislunar, globe, Moon, and ground-track visualization workflows |
 | `sensor_coverage/` | satellite viewer and sensor field-of-view coverage demos |
 | `space_environment/` | Sun/Earth/Moon scenes, solar-system views, magnetic fields, and Van Allen belts |

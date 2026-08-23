@@ -22,6 +22,10 @@ def test_constants_available_from_toolkit_entrypoint():
 def test_toolkit_specific_constants_are_preserved():
     assert ssatk_constants.au_to_m == 149597870700
     assert ssatk_constants.SUN_RADIUS == 696340000.0
+    assert ssatk_constants.STANDARD_GRAVITY == 9.80665
+    assert ssatk_constants.G0 == ssatk_constants.STANDARD_GRAVITY
+    assert ssatk_constants.SOLAR_CONSTANT == ssatk_constants.SOLAR_FLUX_1_AU
+    assert ssatk_constants.EARTH_GEOMAGNETIC_REFERENCE_RADIUS_KM == 6371.2
     assert "EARTH_MU" in ssatk_constants.__all__
     assert "au_to_m" in ssatk_constants.__all__
 
@@ -40,3 +44,4 @@ def test_solar_system_constants_are_available():
         assert planet in ssatk_constants.PLANET_RADIUS_KM
     assert ssatk.SUN_RADIUS_KM == ssatk_constants.SUN_RADIUS_KM
     assert ssatk.MARS_SEMI_MAJOR_AXIS_AU == ssatk_constants.MARS_SEMI_MAJOR_AXIS_AU
+    assert ssatk.SUN_NOMINAL_RADIUS_KM == ssatk_constants.SUN_NOMINAL_RADIUS_KM

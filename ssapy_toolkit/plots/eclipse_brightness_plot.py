@@ -21,10 +21,17 @@ satellite day/night crossings by swapping which body is the occluder.
 from __future__ import annotations
 import numpy as np
 
-MU_EARTH_KM3S2 = 398_600.4418
-RE_KM = 6_378.137
-R_SUN_KM = 695_700.0
-AU_KM = 149_597_870.7
+from ssapy_toolkit.constants import (
+    AU_KM,
+    EARTH_MU_KM3_S2,
+    EARTH_OBLIQUITY_J2000_RAD,
+    EARTH_RADIUS_KM,
+    SUN_NOMINAL_RADIUS_KM,
+)
+
+MU_EARTH_KM3S2 = EARTH_MU_KM3_S2
+RE_KM = EARTH_RADIUS_KM
+R_SUN_KM = SUN_NOMINAL_RADIUS_KM
 
 
 def propagate_eci(a_km, e, inc_deg, raan_deg, argp_deg, nu0_deg,
@@ -72,7 +79,7 @@ def sun_direction_eci(t_s, epoch_jd=2_460_500.0):
     L = np.radians((280.460 + 0.9856474*n_days) % 360)
     g = np.radians((357.528 + 0.9856003*n_days) % 360)
     lam = L + np.radians(1.915*np.sin(g) + 0.020*np.sin(2*g))
-    eps = np.radians(23.439291)
+    eps = EARTH_OBLIQUITY_J2000_RAD
     return np.stack([
         np.cos(lam),
         np.cos(eps) * np.sin(lam),

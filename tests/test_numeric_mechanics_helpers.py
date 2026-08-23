@@ -21,11 +21,11 @@ from ssapy_toolkit.coordinates.unit_conversions import (
     dms_to_rad,
     rad0to2pi,
 )
-from ssapy_toolkit.propagators_6dof import int_utils
+from ssapy_toolkit.propagators import int_utils
 from ssapy_toolkit.orbital_mechanics import misc
 
-rk4_module = importlib.import_module("ssapy_toolkit.propagators_6dof.rk4")
-leapfrog_module = importlib.import_module("ssapy_toolkit.propagators_6dof.leap_frog")
+rk4_module = importlib.import_module("ssapy_toolkit.propagators.rk4")
+leapfrog_module = importlib.import_module("ssapy_toolkit.propagators.leap_frog")
 eqecl = equatorial_and_ecliptic
 
 

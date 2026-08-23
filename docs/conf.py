@@ -25,7 +25,7 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 html_theme = "sphinx_rtd_theme"
 html_static_path = []
 
-autosummary_generate = True
+autosummary_generate = ["api.rst"]
 autosummary_imported_members = False
 
 autodoc_default_options = {

@@ -261,8 +261,8 @@ def test_local_equatorial_and_earth_trojan_helpers():
 
 
 def test_point_mass_accelerations_with_fake_ephemerides(monkeypatch):
-    moon = importlib.import_module("ssapy_toolkit.accelerations_6dof.accel_moon")
-    sun = importlib.import_module("ssapy_toolkit.accelerations_6dof.accel_sun")
+    moon = importlib.import_module("ssapy_toolkit.orbit_accelerations.accel_moon")
+    sun = importlib.import_module("ssapy_toolkit.orbit_accelerations.accel_sun")
 
     class FakeContext:
         def __enter__(self):

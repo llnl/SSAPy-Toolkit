@@ -1,4 +1,4 @@
-# ssapy_toolkit/accelerations_6dof/accel_moon.py
+# ssapy_toolkit/orbit_accelerations/accel_moon.py
 
 import numpy as np
 from astropy.time import Time

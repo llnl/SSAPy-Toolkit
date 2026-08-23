@@ -46,6 +46,8 @@ from __future__ import annotations
 import numpy as np
 import plotly.graph_objects as go
 
+from ssapy_toolkit.constants import AU_KM, EARTH_RADIUS_KM, MOON_MEAN_RADIUS_KM, SUN_NOMINAL_RADIUS_KM
+
 try:
     from .scene_primitives import stabilize_sphere_poles
 except ImportError:
@@ -58,9 +60,9 @@ except ImportError:
         from eclipse_brightness_plot import illumination_fraction, R_SUN_KM, AU_KM
     except ImportError:
         illumination_fraction = None
-        R_SUN_KM, AU_KM = 695_700.0, 149_597_870.7
+        R_SUN_KM = SUN_NOMINAL_RADIUS_KM
 
-R_MOON_KM = 1_737.4
+R_MOON_KM = MOON_MEAN_RADIUS_KM
 
 _moon_texture_cache = None
 
@@ -303,12 +305,11 @@ def moon_mesh_plotly(center, radius, sun_hat=None, seed=3,
 
     if mode == "lunar" and real_center_km is not None and sun_hat is not None \
             and illumination_fraction is not None:
-        RE_KM = 6_378.137
         real_surface = np.stack([nx0, ny0, nz0], axis=-1) * R_MOON_KM
         real_positions = real_center_km[None, None, :] + real_surface
         flat_pos = real_positions.reshape(-1, 3)
         flat_sun = np.tile(sun_hat, (flat_pos.shape[0], 1))
-        illum = illumination_fraction(flat_pos, flat_sun, R_body_km=RE_KM,
+        illum = illumination_fraction(flat_pos, flat_sun, R_body_km=EARTH_RADIUS_KM,
                                       R_sun_km=R_SUN_KM, D_km=AU_KM).reshape(Lat.shape)
         floor = 0.12
         eclipse_brightness = np.clip(floor + (1 - floor) * illum, floor, 1.0)

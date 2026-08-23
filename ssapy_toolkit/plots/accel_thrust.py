@@ -24,7 +24,7 @@ Usage:
 import numpy as np
 from ssapy.accel import Accel
 
-G0 = 9.80665   # m/s² — standard gravity, per Tsiolkovsky convention
+from ssapy_toolkit.constants import G0
 
 
 class AccelConstantThrust(Accel):

@@ -33,6 +33,7 @@ from ssapy.orbit import Orbit
 from ssapy.propagator import RK78Propagator
 from ssapy.utils import normed, rv_to_ntw
 from ssapy.constants import EARTH_MU
+from ssapy_toolkit.constants import G0
 from ssapy_toolkit.time_functions._gps import _to_gps_seconds
 from ssapy_toolkit.orbital_mechanics._transfer_result import maneuver_burn, trajectory_dict, transfer_boundary_states, transfer_result
 
@@ -937,14 +938,13 @@ def _attach_engine_info(burns, thrust, mass, isp):
     Reporting only -- the propagated dynamics ignore mass depletion.
     The running mass is debited between burns purely for the estimate.
     """
-    g0 = 9.80665
     m = mass
     for b in burns:
         b.thrust = thrust
         b.duration = b.t_end - b.t_start
         b.propellant_mass = None
         if isp is not None and m is not None:
-            b.propellant_mass = m * (1.0 - np.exp(-b.dv_mag / (isp * g0)))
+            b.propellant_mass = m * (1.0 - np.exp(-b.dv_mag / (isp * G0)))
             m = m - b.propellant_mass
 
 

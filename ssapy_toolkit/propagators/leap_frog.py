@@ -1,4 +1,4 @@
-# ssapy_toolkit/propagators_6dof/leap_frog.py
+# ssapy_toolkit/propagators/leap_frog.py
 
 import numpy as np
 
@@ -7,10 +7,10 @@ from ..time_functions import to_gps
 
 from .int_utils import build_profile  # thrust-profile helper [104]
 
-from ..accelerations_6dof.accel_point_earth import accel_point_earth  # [64]
-from ..accelerations_6dof.accel_radial import accel_radial            # [65]
-from ..accelerations_6dof.accel_velocity import accel_velocity        # [68]
-from ..accelerations_6dof.accel_inclination import accel_inclination  # [61]
+from ..orbit_accelerations.accel_point_earth import accel_point_earth  # [64]
+from ..orbit_accelerations.accel_radial import accel_radial            # [65]
+from ..orbit_accelerations.accel_velocity import accel_velocity        # [68]
+from ..orbit_accelerations.accel_inclination import accel_inclination  # [61]
 
 
 def leapfrog(

@@ -1,11 +1,13 @@
 import numpy as np
+
+from ..constants import EARTH_OBLIQUITY_J2000_RAD
 from .angle_units import rad0to2pi, deg0to360
 
 
 # Constants for ecliptic inclination and sine/cosine of it
-_ecliptic = 0.409092601  # np.radians(23.43927944)
-cos_ec = 0.9174821430960974
-sin_ec = 0.3977769690414367
+_ecliptic = EARTH_OBLIQUITY_J2000_RAD
+cos_ec = np.cos(_ecliptic)
+sin_ec = np.sin(_ecliptic)
 
 
 def equatorial_xyz_to_ecliptic_xyz(xq: float, yq: float, zq: float) -> float:

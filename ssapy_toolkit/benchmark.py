@@ -258,15 +258,15 @@ def build_benchmark_cases(
             tags=("photometry", "array"),
         ),
         BenchmarkCase(
-            name="accelerations_6dof.accel_point_earth",
-            group="accelerations_6dof",
+            name="orbit_accelerations.accel_point_earth",
+            group="orbit_accelerations",
             description="Point-Earth gravity acceleration for one position vector.",
             factory=lambda _ctx: _call(lambda: _accel_point_earth(r0)),
             tags=("dynamics", "scalar"),
         ),
         BenchmarkCase(
-            name="propagators_6dof.leapfrog_32_steps",
-            group="propagators_6dof",
+            name="propagators.leapfrog_32_steps",
+            group="propagators",
             description="Leapfrog propagation over 32 short time steps.",
             factory=lambda _ctx: _call(lambda: _propagator_leapfrog(r0, v0, times)),
             tags=("dynamics", "propagation"),
@@ -381,8 +381,8 @@ def build_benchmark_cases(
         cases.extend(
             [
                 BenchmarkCase(
-                    name="propagators_6dof.rk4_32_steps",
-                    group="propagators_6dof",
+                    name="propagators.rk4_32_steps",
+                    group="propagators",
                     description="RK4 propagation over 32 short time steps including third-body terms.",
                     factory=lambda _ctx: _call(lambda: _propagator_rk4(r0, v0, times)),
                     tags=("dynamics", "propagation", "slow"),
@@ -505,19 +505,19 @@ def _compute_airmass_kasten_young(zenith_deg):
 
 
 def _accel_point_earth(r):
-    from ssapy_toolkit.accelerations_6dof.accel_point_earth import accel_point_earth
+    from ssapy_toolkit.orbit_accelerations.accel_point_earth import accel_point_earth
 
     return accel_point_earth(r)
 
 
 def _propagator_leapfrog(r0, v0, t):
-    from ssapy_toolkit.propagators_6dof.leap_frog import leapfrog
+    from ssapy_toolkit.propagators.leap_frog import leapfrog
 
     return leapfrog(r0, v0, t)
 
 
 def _propagator_rk4(r0, v0, t):
-    from ssapy_toolkit.propagators_6dof.rk4 import rk4
+    from ssapy_toolkit.propagators.rk4 import rk4
 
     return rk4(r0, v0, t)
 

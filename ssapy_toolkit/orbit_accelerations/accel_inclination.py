@@ -1,4 +1,4 @@
-# ssapy_toolkit/accelerations_6dof/accel_inclination.py
+# ssapy_toolkit/orbit_accelerations/accel_inclination.py
 
 import numpy as np
 from ._state import position

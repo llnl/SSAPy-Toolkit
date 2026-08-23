@@ -1,4 +1,4 @@
-from .leap_frog import leapfrog
+from ..propagators import leapfrog
 from ..constants import EARTH_MU
 from ..time_functions import get_times, Time
 from ssapy import Orbit

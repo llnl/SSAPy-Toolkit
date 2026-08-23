@@ -8,4 +8,6 @@ Welcome to the SSAPy Toolkit documentation.
    :caption: Contents:
 
    usage
+   benchmarking_ssatk
+   design/6dof_architecture
    api

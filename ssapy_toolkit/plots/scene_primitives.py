@@ -12,16 +12,15 @@ from datetime import datetime
 import numpy as np
 
 from ssapy_toolkit.constants import (
-    EARTH_RADIUS,
-    LD,
-    MOON_RADIUS,
+    EARTH_RADIUS_KM,
+    LD_KM,
+    MOON_RADIUS_KM,
+    SIDEREAL_DAY_SECONDS,
     SUN_EARTH_AVERAGE_DISTANCE_KM,
     SUN_RADIUS_KM,
 )
 
-EARTH_RADIUS_KM = EARTH_RADIUS / 1000.0
-MOON_RADIUS_KM = MOON_RADIUS / 1000.0
-MOON_ORBIT_RADIUS_KM = LD / 1000.0
+MOON_ORBIT_RADIUS_KM = LD_KM
 SUN_RADIUS_TO_DISTANCE = SUN_RADIUS_KM / SUN_EARTH_AVERAGE_DISTANCE_KM
 
 
@@ -130,7 +129,7 @@ def earth_rotation_deg_from_time(time=None, *, epoch_jd=None, relative_seconds=0
         mjd_tt = 44244.0 + (gps_seconds + 51.184) / 86400.0
         return float(np.degrees(gst94(2400000.5, mjd_tt)) % 360.0)
     except Exception:
-        return float((gps_seconds / 86164.0905 * 360.0) % 360.0)
+        return float((gps_seconds / SIDEREAL_DAY_SECONDS * 360.0) % 360.0)
 
 def _gps_seconds(value):
     if value is None:

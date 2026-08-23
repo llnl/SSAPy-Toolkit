@@ -22,6 +22,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 
+from ssapy_toolkit.constants import EARTH_MEAN_RADIUS_KM, EARTH_MU_KM3_S2, MOON_MEAN_RADIUS_KM
+
 try:
     from .globe_orbit_daynight_plotly import _earth_mesh, _sun_sphere_traces, _earth_atmosphere_trace, RE_KM
     from .moon_render import moon_mesh_plotly
@@ -38,7 +40,7 @@ except ImportError:
 D_MOON_A_KM = 384_748.0
 D_MOON_E = 0.0549
 D_MOON_INC_DEG = 5.145
-R_MOON_KM = 1_737.4
+R_MOON_KM = MOON_MEAN_RADIUS_KM
 
 
 REAL_LUNAR_ECLIPSE_2014 = {
@@ -882,7 +884,7 @@ def _synthetic_eclipse_window(mode, search_days=None, *, n_steps=4000, verbose=T
               f"deepest illumination minimum = {illum_coarse[best_idx]:.4f} "
               f"at t={best_t/86400:.1f} days")
 
-    MU_EARTH_KM3S2 = 398_600.4418
+    MU_EARTH_KM3S2 = EARTH_MU_KM3_S2
     window_days = 2.0
     n_rad_s = np.sqrt(MU_EARTH_KM3S2 / D_MOON_A_KM**3)
     t_window_start = best_t - window_days * 86400
@@ -1755,7 +1757,7 @@ def _ground_latlon_path_to_eci(ground_latlon, time, radius_scale=1.0, radius_km=
     return np.asarray(points, dtype=float)
 
 
-def _great_circle_distance_km(lat1, lon1, lat2, lon2, radius_km=6371.0):
+def _great_circle_distance_km(lat1, lon1, lat2, lon2, radius_km=EARTH_MEAN_RADIUS_KM):
     lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
     dlat = lat2 - lat1
     dlon = lon2 - lon1

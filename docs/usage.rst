@@ -113,7 +113,7 @@ returns a GCRF vector.
 High-accuracy propagation
 -------------------------
 
-Use :func:`ssapy_toolkit.propagators_6dof.propagate_orbit_state` for adaptive
+Use :func:`ssapy_toolkit.propagators.propagate_orbit_state` for adaptive
 high-accuracy translational propagation. It defaults to SciPy's eighth-order
 ``DOP853`` method and accepts inertial perturbing acceleration callbacks.
 
@@ -121,7 +121,7 @@ high-accuracy translational propagation. It defaults to SciPy's eighth-order
 
    import numpy as np
    from ssapy_toolkit.constants import EARTH_MU
-   from ssapy_toolkit.propagators_6dof import propagate_orbit_state
+   from ssapy_toolkit.propagators import propagate_orbit_state
 
    radius = 7_000_000.0
    speed = np.sqrt(EARTH_MU / radius)
@@ -182,7 +182,95 @@ Reusable models live in :mod:`ssapy_toolkit.accelerations_6dof` and include
 ``SpacecraftAccelThirdBody``, ``SpacecraftAccelDrag``,
 ``SpacecraftAccelSolRad``, ``SpacecraftAccelConstInertial``,
 ``SpacecraftAccelConstNTW``, ``SpacecraftAccelConstBody``,
-``SpacecraftAccelSum``, and constant thrust/torque callback helpers.
+``SpacecraftFlatPlateDrag``, ``SpacecraftFlatPlateSolRad``,
+``SpacecraftFacetDrag``, ``SpacecraftFacetSolRad``, ``SpacecraftThrusterAccel``,
+``SpacecraftMagneticTorque``, ``SpacecraftReactionWheelTorque``,
+``SpacecraftAttitudePD``, ``SpacecraftAccelSum``, ``SpacecraftTorqueSum``, and
+constant thrust/torque callback helpers. Flat-plate models use spacecraft
+``mass``, ``area``, ``cd``/``cr``, and body-frame ``center_of_pressure`` when
+those values are not provided directly to the model. Thruster models also report
+positive propellant mass flow from thrust and specific impulse, but mass
+depletion is not yet a propagated state.
+
+For normal finite satellite maneuvers, use ``SpacecraftManeuverAccel`` with an
+explicit ``frame``. ``frame="rtn"``/``"lvlh"``/``"ric"`` maps to the common
+radial-transverse-normal operations convention, ``frame="vnb"`` maps to
+velocity-normal-binormal, ``frame="body"`` maps body-mounted thrust through the
+current attitude, and ``frame="ntw"`` preserves exact SSAPy ``[N, T, W]``
+compatibility. Thrust can be constant, trapezoidal, smoothstep, exponential,
+pulsed, callable, or loaded from a CSV file through ``ThrustCurve``. Citable
+engine curves should live in SSAPy-Data, not this source repository, and can be
+loaded with ``load_thrust_curve_data(...)`` once packaged.
+
+Representative propulsion presets live in :mod:`ssapy_toolkit.propulsion` and
+are also re-exported from :mod:`ssapy_toolkit.rockets`.  Use
+``available_thruster_families()``, ``available_thruster_specs(...)``, and
+``thruster_spec(...)`` to select cold-gas, monopropellant, bipropellant, solid
+kick-motor, liquid, Hall-effect, gridded-ion, resistojet, arcjet,
+electrospray, or dual-mode chemical/electric propulsion classes.  Each
+``ThrusterSpec`` stores representative thrust and specific-impulse ranges,
+power and dry-mass ranges where applicable, and builders for
+``Thruster`` body components or ``SpacecraftManeuverAccel`` finite burns.
+These values are engineering-scale defaults for analysis setup; replace them
+with vendor or mission thrust curves from SSAPy-Data when flight-specific
+validation is required.
+
+Preset body designs live in :mod:`ssapy_toolkit.satellites`. Use
+``satellite_design(...)`` to start from a common bus, override dimensions or
+mass, then add components, tanks, facets, thrusters, magnetic dipoles, or
+reaction wheels as needed. ``Spacecraft`` uses the body's aggregate mass,
+center of mass, and inertia when those values are not provided directly.
+
+.. code-block:: python
+
+   from ssapy_toolkit.accelerations_6dof import (
+       SpacecraftFacetDrag,
+       SpacecraftFacetSolRad,
+       SpacecraftManeuverAccel,
+       SpacecraftThrusterAccel,
+   )
+
+   body = ssatk.satellite_design(
+       "earth_observation",
+       mass=500.0,
+       solar_array_area=10.0,
+   ).with_thrusters(
+       ssatk.Thruster(thrust=0.2, direction_body=[1, 0, 0], position_body=[0, 0.5, 0]),
+   ).with_components(
+       ssatk.Component(mass=25.0, position_body=[0.0, 0.0, 0.7], name="payload"),
+   ).with_magnetic_dipoles(
+       ssatk.MagneticDipole(moment_body=[0.2, 0.0, 0.0], name="x_magnetorquer"),
+   ).with_reaction_wheels(
+       *ssatk.reaction_wheel_triplet(max_torque=0.02),
+   )
+
+   hall = ssatk.thruster_spec("hall_effect", scale="small")
+   body = body.with_thrusters(
+       hall.to_thruster(direction_body=[1, 0, 0], position_body=[0, 0.7, 0]),
+   )
+
+   sat = ssatk.Spacecraft(r=[7e6, 0, 0], v=[0, 7500, 0], body=body)
+   q_target = ssatk.attitude_quaternion_from_frame("nadir_velocity", r=sat.r, v=sat.v)
+   burn = hall.maneuver_acceleration(
+       start=120.0,
+       burn_time=60.0,
+       rise_time=5.0,
+       frame="rtn",
+       direction=[0, 1, 0],
+       mass=body.current_mass,
+   )
+   traj = sat.propagate(
+       times=np.linspace(0.0, 600.0, 61),
+       models=[
+           SpacecraftFacetDrag(density=1e-12),
+           SpacecraftFacetSolRad([ssatk.AU, 0, 0]),
+           burn,
+           ssatk.SpacecraftMagneticTorque([0, 2e-5, 0]),
+           ssatk.SpacecraftReactionWheelTorque([0, 0, 0.01]),
+           ssatk.SpacecraftAttitudePD(q_target=q_target, kp=0.05, kd=0.2, max_torque=0.02),
+           SpacecraftThrusterAccel(),
+       ],
+   )
 
 Packaged data
 -------------

@@ -1,4 +1,4 @@
-# ssapy_toolkit/accelerations_6dof/accel_plane.py
+# ssapy_toolkit/orbit_accelerations/accel_plane.py
 
 import numpy as np
 from ._state import state

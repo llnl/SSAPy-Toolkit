@@ -175,6 +175,32 @@ def test_figsave_save_plot_display_and_theme_helpers(tmp_path, monkeypatch, caps
     plt.close(fig)
 
 
+def test_auto_log_scale_uses_meaningful_lower_bound():
+    fig, ax = plt.subplots()
+    values = [
+        np.array([0.0, 0.2, 10.0, 1000.0]),
+        np.array([0.0, 0.6, 20.0, 2000.0]),
+    ]
+
+    assert plotutils.should_use_log_scale(values)
+    np.testing.assert_allclose(
+        plotutils.log_safe_values([0.0, -1.0, 2.0]),
+        [np.nan, np.nan, 2.0],
+        equal_nan=True,
+    )
+    assert plotutils.apply_auto_log_scale(ax, values)
+    assert ax.get_yscale() == "log"
+    assert ax.get_ylim()[0] == pytest.approx(0.2)
+    plt.close(fig)
+
+
+def test_auto_log_scale_skips_small_dynamic_range():
+    fig, ax = plt.subplots()
+    assert not plotutils.apply_auto_log_scale(ax, [np.array([1.0, 2.0, 3.0])])
+    assert ax.get_yscale() == "linear"
+    plt.close(fig)
+
+
 def test_draw_earth_and_moon_with_fake_ipyvolume(monkeypatch):
     calls = []
 

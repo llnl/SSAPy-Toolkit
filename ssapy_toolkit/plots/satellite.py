@@ -33,6 +33,8 @@ from typing import Literal, Optional
 
 import numpy as np
 
+from ssapy_toolkit.constants import G0
+
 from .frames import ntw_axes, lvlh_axes, _unit
 
 
@@ -95,8 +97,7 @@ class BurnEvent:
         """Estimated finite-burn duration using rocket equation."""
         if self.mode == "impulsive":
             return 0.0
-        g0 = 9.80665
-        ve = self.isp_s * g0 / 1000  # km/s
+        ve = self.isp_s * G0 / 1000  # km/s
         mass_final = self.mass_kg * np.exp(-self.dv_mag_km_s / ve)
         dm = self.mass_kg - mass_final
         thrust_km_s2 = self.thrust_N / (self.mass_kg * 1000)  # km/s²
@@ -250,8 +251,8 @@ class Satellite3D:
         Returns post-burn velocity in km/s.
         """
         from .orbit_state import MU
-        g0 = 9.80665 / 1000  # km/s²
-        ve = burn.isp_s * g0  # km/s exhaust velocity
+        g0_km_s2 = G0 / 1000  # km/s²
+        ve = burn.isp_s * g0_km_s2  # km/s exhaust velocity
 
         # Burn direction: NTW Δv unit vector
         dv_dir_eci = burn.dv_eci(r0_km, v0_km_s)

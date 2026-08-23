@@ -32,6 +32,116 @@ _SAVE_PATH_ALIAS_KEYS = (
 )
 
 
+def _plot_series_arrays(values):
+    if isinstance(values, np.ndarray):
+        array = np.asarray(values, dtype=float)
+        if array.ndim <= 1:
+            return [array.reshape(-1)]
+        return [np.asarray(row, dtype=float).reshape(-1) for row in array]
+    return [np.asarray(value, dtype=float).reshape(-1) for value in values]
+
+
+def log_safe_values(values):
+    """Return ``values`` with non-positive or non-finite samples masked for log plots."""
+    array = np.asarray(values, dtype=float)
+    return np.where(np.isfinite(array) & (array > 0.0), array, np.nan)
+
+
+def positive_dynamic_range(values):
+    """Return max/min over positive finite samples, or 1 when no log scale is useful."""
+    positive = []
+    for array in _plot_series_arrays(values):
+        positive_value = array[np.isfinite(array) & (array > 0.0)]
+        if positive_value.size:
+            positive.append(positive_value)
+    if not positive:
+        return 1.0
+    combined = np.concatenate(positive)
+    return float(combined.max() / combined.min())
+
+
+def should_use_log_scale(values, *, min_dynamic_range=100.0):
+    """Return True when positive finite data span enough range for log scaling."""
+    return positive_dynamic_range(values) >= min_dynamic_range
+
+
+def auto_log_lower_bound(values, *, divergence_fraction=1e-4, max_decades=4.0):
+    """Choose a non-tiny lower bound for log-scaled difference curves."""
+    arrays = _plot_series_arrays(values)
+    positive = [
+        array[np.isfinite(array) & (array > 0.0)]
+        for array in arrays
+    ]
+    positive = [array for array in positive if array.size]
+    if not positive:
+        return None
+
+    combined = np.concatenate(positive)
+    fallback = float(max(combined.min(), combined.max() * 10.0 ** -float(max_decades)))
+
+    same_size = arrays and all(array.size == arrays[0].size for array in arrays)
+    if len(arrays) < 2 or not same_size:
+        return fallback
+
+    stack = np.vstack(arrays)
+    valid = np.isfinite(stack) & (stack > 0.0)
+    row_count = valid.sum(axis=0)
+    valid_spread = row_count >= 2
+    if not np.any(valid_spread):
+        return fallback
+
+    masked = np.where(valid, stack, np.nan)
+    row_min = np.full(stack.shape[1], np.nan)
+    row_max = np.full(stack.shape[1], np.nan)
+    row_min[valid_spread] = np.nanmin(masked[:, valid_spread], axis=0)
+    row_max[valid_spread] = np.nanmax(masked[:, valid_spread], axis=0)
+    spread = row_max - row_min
+    max_spread = np.nanmax(spread[valid_spread])
+    if not np.isfinite(max_spread) or max_spread <= 0.0:
+        return fallback
+
+    first = np.flatnonzero(valid_spread & (spread >= max_spread * divergence_fraction))
+    if not first.size:
+        return fallback
+    return float(row_min[first[0]])
+
+
+def apply_auto_log_scale(
+    ax,
+    values,
+    *,
+    axis="y",
+    min_dynamic_range=100.0,
+    lower_bound=None,
+    divergence_fraction=1e-4,
+    max_decades=4.0,
+):
+    """Apply log scaling when data span enough range; return whether it was applied."""
+    if not should_use_log_scale(values, min_dynamic_range=min_dynamic_range):
+        return False
+
+    lower = lower_bound
+    if lower is None:
+        lower = auto_log_lower_bound(
+            values,
+            divergence_fraction=divergence_fraction,
+            max_decades=max_decades,
+        )
+
+    axis_key = str(axis).lower()
+    if axis_key == "y":
+        ax.set_yscale("log")
+        if lower is not None:
+            ax.set_ylim(bottom=lower)
+    elif axis_key == "x":
+        ax.set_xscale("log")
+        if lower is not None:
+            ax.set_xlim(left=lower)
+    else:
+        raise ValueError("axis must be 'x' or 'y'")
+    return True
+
+
 class VarType(Enum):
     NONE = auto()
     TIME = auto()

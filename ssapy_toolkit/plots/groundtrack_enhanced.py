@@ -54,8 +54,7 @@ from astropy.time import Time
 from astropy.coordinates import GCRS, ITRS, CartesianRepresentation, get_sun
 import astropy.units as u
 
-from astropy import constants as _const
-from ssapy_toolkit.constants import EARTH_RADIUS
+from ssapy_toolkit.constants import AU_KM, EARTH_MU_KM3_S2, EARTH_RADIUS_KM, SUN_RADIUS_KM
 
 from .plotutils import (
     _figure_save_path,
@@ -68,9 +67,8 @@ from .plotutils import (
 # (same pattern as sun_view.py) rather than hardcoded literals -- these
 # were independently duplicated (at the same value, by coincidence)
 # across this file, orbit_state.py, and layers.py.
-RE_KM = EARTH_RADIUS / 1000.0
-R_SUN_KM = _const.R_sun.to(u.km).value
-AU_KM = (1 * u.au).to(u.km).value
+RE_KM = EARTH_RADIUS_KM
+R_SUN_KM = SUN_RADIUS_KM
 
 # ── Optional real-toolkit imports (all soft — each falls back cleanly) ──────
 try:
@@ -412,7 +410,7 @@ def plot_enhanced_groundtrack(r_eci_km: np.ndarray | None = None, t: Time | None
 if __name__ == "__main__":
     from ssapy_toolkit.plots.figpath import figpath
 
-    MU = 398_600.4418
+    MU = EARTH_MU_KM3_S2
 
     def _solve_kepler(M, e):
         E = M.copy()

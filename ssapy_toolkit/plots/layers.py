@@ -35,7 +35,7 @@ from typing import Optional
 
 import numpy as np
 
-from ssapy_toolkit.constants import EARTH_RADIUS, MOON_RADIUS, LD
+from ssapy_toolkit.constants import EARTH_RADIUS_KM, LD_KM, MOON_RADIUS_KM
 from ssapy_toolkit.plots.scene_primitives import earth_rotation_deg_from_time
 
 # ── optional heavy imports ────────────────────────────────────────────────────
@@ -69,9 +69,9 @@ except ImportError:
 # hardcoded literals -- these were independently duplicated (at the same
 # value, by coincidence) across this file, orbit_state.py, and
 # groundtrack_enhanced.py.
-RE_KM      = EARTH_RADIUS / 1000.0
-MOON_A_KM  = LD / 1000.0
-MOON_R_KM  = MOON_RADIUS / 1000.0
+RE_KM      = EARTH_RADIUS_KM
+MOON_A_KM  = LD_KM
+MOON_R_KM  = MOON_RADIUS_KM
 
 _SPECTRAL_COLOR = {
     "O": "#9bb0ff", "B": "#aabfff", "A": "#cad7ff",

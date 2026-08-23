@@ -34,6 +34,8 @@ from pathlib import Path
 import numpy as np
 import plotly.graph_objects as go
 
+from ssapy_toolkit.constants import EARTH_MEAN_RADIUS_KM
+
 try:
     from .eclipse_brightness_plot import sun_direction_eci
 except ImportError:
@@ -280,7 +282,7 @@ def _satellite_marker(pos):
     )
 
 
-def _target_marker(pos, earth_radius_km=6371.0):
+def _target_marker(pos, earth_radius_km=EARTH_MEAN_RADIUS_KM):
     norm = np.linalg.norm(pos)
     if norm <= earth_radius_km:
         return go.Scatter3d(x=[], y=[], z=[], mode="markers", showlegend=False)
@@ -294,7 +296,7 @@ def _target_marker(pos, earth_radius_km=6371.0):
     )
 
 
-def _surface_track_trace(r_km, earth_radius_km=6371.0):
+def _surface_track_trace(r_km, earth_radius_km=EARTH_MEAN_RADIUS_KM):
     norms = np.linalg.norm(r_km, axis=1)
     valid = norms > earth_radius_km
     if not np.any(valid):

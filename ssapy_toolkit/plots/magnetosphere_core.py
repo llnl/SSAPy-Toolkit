@@ -23,6 +23,11 @@ from pathlib import Path
 import numpy as np
 
 try:
+    from ..constants import EARTH_MEAN_RADIUS_KM, EARTH_OBLIQUITY_J2000_DEG, WGS84_A_KM, WGS84_B_KM
+except ImportError:
+    from ssapy_toolkit.constants import EARTH_MEAN_RADIUS_KM, EARTH_OBLIQUITY_J2000_DEG, WGS84_A_KM, WGS84_B_KM
+
+try:
     from .scene_primitives import stabilize_sphere_poles
 except ImportError:
     from scene_primitives import stabilize_sphere_poles
@@ -74,13 +79,7 @@ except ImportError:
     _HAS_PLOTLY = False
 
 
-EARTH_RADIUS_KM = 6_371.0
-
-
-WGS84_A_KM      = 6_378.137
-
-
-WGS84_B_KM      = 6_356.752314245
+EARTH_RADIUS_KM = EARTH_MEAN_RADIUS_KM
 
 
 STAR_SPHERE_FACTOR = 50.0
@@ -250,7 +249,7 @@ def _subsolar_point(date):
     Lm = (280.460 + 0.9856474*n) % 360.0                 # mean longitude
     g = np.radians((357.528 + 0.9856003*n) % 360.0)      # mean anomaly
     lam = np.radians(Lm + 1.915*np.sin(g) + 0.020*np.sin(2*g))   # ecliptic longitude
-    eps = np.radians(23.439 - 3.6e-7*n)                  # obliquity
+    eps = np.radians(EARTH_OBLIQUITY_J2000_DEG - 3.6e-7*n)                  # obliquity
     dec = np.degrees(np.arcsin(np.sin(eps)*np.sin(lam)))
     ra = np.degrees(np.arctan2(np.cos(eps)*np.sin(lam), np.cos(lam)))
     gmst_deg = np.degrees(_gmst_rad(date))

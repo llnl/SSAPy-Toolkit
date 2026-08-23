@@ -1,5 +1,7 @@
 """Reference data for common launch vehicle engines and stages."""
 
+from .propulsion import thruster_catalog_dict
+
 rockets = {
     "Falcon 9 Full Thrust": {
         "stages": [
@@ -193,3 +195,6 @@ thrusters = {
         "redundancy": "single fault tolerant"
     }
 }
+
+thruster_specs = thruster_catalog_dict()
+thrusters.update(thruster_catalog_dict(legacy=True))

@@ -6,7 +6,7 @@
 provides the core high-fidelity propagation and modeling engine, the Toolkit
 adds astrodynamics utilities, orbital-transfer design, coordinate/time
 conversions, brightness and observables modeling, launch and rocket helpers,
-6-DoF propagators, rich plotting, and data I/O to support day-to-day research and
+orbit and 6-DoF propagators, rich plotting, and data I/O to support day-to-day research and
 engineering workflows.
 
 SSAPy itself is a fast, flexible, high-fidelity orbital modeling and analysis
@@ -16,6 +16,19 @@ planetary perturbations, maneuvers), multiple propagators, orbit determination,
 Monte Carlo / uncertainty-quantification workflows, and ground/space observer
 models. See the SSAPy repository for full details:
 <https://github.com/llnl/SSAPy>.
+
+## Why SSATK?
+
+SSATK is the analyst-facing layer around SSAPy: it keeps common orbital
+mechanics, plotting, transfer-design, data I/O, and early 6-DoF spacecraft
+workflows in one import path while preserving SSAPy as the core propagation
+engine. The benchmarking review compares SSATK against adjacent astrodynamics,
+mission-design, and 6-DoF tools:
+[`docs/benchmarking_ssatk.rst`](docs/benchmarking_ssatk.rst). The 6-DoF design
+study explains why SSATK is adding a lightweight spacecraft body/component
+layer instead of trying to replace established tools such as Basilisk, Tudat,
+GMAT, Orekit, STK, or FreeFlyer:
+[`docs/design/6dof_architecture.rst`](docs/design/6dof_architecture.rst).
 
 ---
 
@@ -37,10 +50,11 @@ models. See the SSAPy repository for full details:
   reflectance.
 - **Plotting & visualization** — orbit, ground-track, cislunar (2-D and 3-D),
   and transfer plots; interactive dashboards; and animated GIF/video output.
-- **6-DoF Propagators** — adaptive DOP853 propagation plus fixed-step RK4/leapfrog helpers.
+- **Propagators** — adaptive DOP853 translational propagation, fixed-step RK4/leapfrog helpers, and 6-DoF propagation.
 - **6-DoF dynamics** — coupled translational and rigid-body attitude
   propagation with quaternion attitude states, optional user acceleration and
-  torque models, and gravity-gradient torque.
+  torque models, gravity-gradient torque, fixed-facet drag/SRP, thrusters,
+  magnetic torquers, reaction wheels, and a basic quaternion PD controller.
 - **Launch & rockets** — launch-pad definitions, gravity-turn ascent, and
   fuel/burn utilities.
 - **Data I/O** — HDF5 helpers (including dictionary/HDF5 conversion with array
@@ -119,12 +133,12 @@ from ssapy_toolkit.plots import orbit_plot
 ```
 
 For high-accuracy translational propagation, use the adaptive DOP853 wrapper in
-`propagators_6dof` instead of the older fixed-step helpers:
+`propagators` instead of the older fixed-step helpers:
 
 ```
 import numpy as np
 from ssapy_toolkit.constants import EARTH_MU
-from ssapy_toolkit.propagators_6dof import propagate_orbit_state
+from ssapy_toolkit.propagators import propagate_orbit_state
 
 radius = 7_000_000.0
 speed = np.sqrt(EARTH_MU / radius)
@@ -167,7 +181,70 @@ orbit_plot(traj.r, traj.t, view="3d")
 Reusable 6-DoF acceleration models live in ``ssapy_toolkit.accelerations_6dof`` and
 include SSAPy-like classes for Kepler gravity, J2, third-body gravity,
 cannonball drag, cannonball solar radiation pressure, constant inertial/NTW/body
-accelerations, and summed acceleration models.
+accelerations, summed acceleration/torque models, and attitude-dependent
+flat-plate drag/SRP models, facet drag/SRP models, thruster torque, and
+magnetic-dipole torque. Reaction wheels and ``SpacecraftAttitudePD`` provide a
+small actuator/control layer for attitude studies; wheel momentum states are
+described by the body model but are not yet propagated as separate states.
+Thrusters report positive propellant mass flow from thrust and specific impulse;
+mass depletion is not yet part of the propagated state vector.
+
+Finite maneuver accelerations use ``SpacecraftManeuverAccel``. Use
+``frame="rtn"``/``"lvlh"``/``"ric"`` for common radial-transverse-normal
+operations, ``frame="vnb"`` for velocity-normal-binormal commands,
+``frame="body"`` for body-mounted thrust, or ``frame="ntw"`` for exact SSAPy
+``[N, T, W]`` compatibility. Thrust can be constant, trapezoidal, smoothstep,
+exponential, pulsed, callable, or loaded from CSV with ``ThrustCurve``; citable
+engine data belongs in SSAPy-Data rather than this source repository and can be
+loaded with ``load_thrust_curve_data(...)`` once packaged.
+
+Preset spacecraft bodies live in `ssapy_toolkit.satellites`. Use
+`satellite_design(...)` to start from a common bus, override dimensions or
+mass, then add components, tanks, facets, or thrusters as needed:
+
+```
+from ssapy_toolkit.accelerations_6dof import (
+    SpacecraftFacetDrag,
+    SpacecraftFacetSolRad,
+    SpacecraftManeuverAccel,
+    SpacecraftThrusterAccel,
+)
+
+body = ssatk.satellite_design(
+    "earth_observation",
+    mass=500.0,
+    solar_array_area=10.0,
+).with_thrusters(
+    ssatk.Thruster(thrust=0.2, direction_body=[1, 0, 0], position_body=[0, 0.5, 0]),
+).with_components(
+    ssatk.Component(mass=25.0, position_body=[0.0, 0.0, 0.7], name="payload"),
+).with_magnetic_dipoles(
+    ssatk.MagneticDipole(moment_body=[0.2, 0.0, 0.0], name="x_magnetorquer"),
+).with_reaction_wheels(
+    *ssatk.reaction_wheel_triplet(max_torque=0.02),
+)
+
+sat = ssatk.Spacecraft(r=[7e6, 0, 0], v=[0, 7500, 0], body=body)
+q_target = ssatk.attitude_quaternion_from_frame("nadir_velocity", r=sat.r, v=sat.v)
+burn = SpacecraftManeuverAccel(
+    ssatk.thrust_profile_trapezoid(0.2, start=120.0, burn_time=60.0, rise_time=5.0),
+    frame="rtn",
+    direction=[0, 1, 0],
+    isp=220.0,
+)
+traj = sat.propagate(
+    times=np.linspace(0.0, 600.0, 61),
+    models=[
+        SpacecraftFacetDrag(density=1e-12),
+        SpacecraftFacetSolRad([ssatk.AU, 0, 0]),
+        burn,
+        ssatk.SpacecraftMagneticTorque([0, 2e-5, 0]),
+        ssatk.SpacecraftReactionWheelTorque([0, 0, 0.01]),
+        ssatk.SpacecraftAttitudePD(q_target=q_target, kp=0.05, kd=0.2, max_torque=0.02),
+        SpacecraftThrusterAccel(),
+    ],
+)
+```
 
 `transfer_bielliptic` computes the analytic three-impulse, two-half-ellipse
 transfer between coplanar circular orbits through an intermediate apoapsis

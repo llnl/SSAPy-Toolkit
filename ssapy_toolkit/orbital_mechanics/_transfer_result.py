@@ -8,11 +8,11 @@ import numpy as np
 from ssapy import Orbit
 from ssapy.constants import EARTH_MU
 
+from ssapy_toolkit.constants import G0
 from ssapy_toolkit.coordinates import gcrf_to_ntw
 from ssapy_toolkit.time_functions._gps import _to_gps_seconds
 
 TRANSFER_SCHEMA_VERSION = "ssatk.transfer.v2"
-G0 = 9.80665
 
 
 def as_vector(value, name):

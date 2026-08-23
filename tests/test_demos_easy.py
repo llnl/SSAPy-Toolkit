@@ -33,6 +33,10 @@ DEMO_MODULES = {
     "demo_parsing_3le": "demos.getting_started.demo_parsing_3le",
     "demo_photometry_application": "demos.photometry.demo_photometry_application",
     "demo_plotting_quickstart": "demos.getting_started.demo_plotting_quickstart",
+    "demo_6dof_attitude_control": "demos.six_dof.demo_6dof_attitude_control",
+    "demo_6dof_finite_burn": "demos.six_dof.demo_6dof_finite_burn",
+    "demo_6dof_gravity_gradient": "demos.six_dof.demo_6dof_gravity_gradient",
+    "demo_6dof_srp_facets": "demos.six_dof.demo_6dof_srp_facets",
     "demo_sampling": "demos.data_io.demo_sampling",
     "demo_sphere_generation": "demos.data_io.demo_sphere_generation",
     "demo_ssapy_ground_lambertian_reflectance": "demos.photometry.demo_ssapy_ground_lambertian_reflectance",
@@ -97,6 +101,53 @@ def test_demo_orbital_maneuvers():
         assert split[f"{name} split"]["delta_v_total"] < split[f"{name} all departure"]["delta_v_total"]
         assert split[f"{name} split"]["delta_v_total"] < split[f"{name} all arrival"]["delta_v_total"]
         assert 0.0 < split[f"{name} split"]["diagnostics"]["split_inclination"] < split[f"{name} split"]["diagnostics"]["inclination_change"]
+
+
+def test_demo_6dof_attitude_control():
+    demo_6dof_attitude_control = demo_main("demo_6dof_attitude_control")
+    out = demo_6dof_attitude_control(make_figures=False, fast=True)
+    assert out["controlled_error_deg"][-1] < out["uncontrolled_error_deg"][-1]
+    assert np.linalg.norm(out["controlled"].omega[-1]) < np.linalg.norm(out["uncontrolled"].omega[-1])
+    assert out["figure"] is None
+
+
+def test_demo_6dof_finite_burn():
+    demo_6dof_finite_burn = demo_main("demo_6dof_finite_burn")
+    out = demo_6dof_finite_burn(make_figures=False, fast=True)
+    assert out["times"][-1] > 600.0
+    assert set(out["fidelity_order"]) == {
+        "coast",
+        "fixed inertial burn",
+        "RTN guided burn",
+        "centered body thruster",
+        "centered body + RTN hold",
+        "off-axis body thruster",
+        "off-axis body + RTN hold",
+    }
+    assert out["ideal_offset_m"][-1] > 0.0
+    assert out["body_offset_m"][-1] > 0.0
+    assert out["body_vs_ideal_m"][-1] > 0.0
+    assert out["body_thruster"].omega[-1, 2] > 0.0
+    assert out["summary"]["off-axis body thruster"]["max_angular_rate_deg_s"] > 1.0
+    for offset in out["offset_vs_coast_m"].values():
+        assert np.all(np.isfinite(offset))
+    assert out["throttle"].max() == 1.0
+
+
+def test_demo_6dof_gravity_gradient():
+    demo_6dof_gravity_gradient = demo_main("demo_6dof_gravity_gradient")
+    out = demo_6dof_gravity_gradient(make_figures=False, fast=True)
+    assert np.max(np.linalg.norm(out["torque_free"].omega, axis=1)) == 0.0
+    assert np.max(np.linalg.norm(out["gravity_gradient"].omega, axis=1)) > 0.0
+    assert np.max(np.abs(out["gravity_gradient_radial_angle_deg"] - out["free_radial_angle_deg"])) > 1.0
+
+
+def test_demo_6dof_srp_facets():
+    demo_6dof_srp_facets = demo_main("demo_6dof_srp_facets")
+    out = demo_6dof_srp_facets(make_figures=False, fast=True)
+    assert np.linalg.norm(out["no_shadow"].v[-1]) > np.linalg.norm(out["with_shadow"].v[-1])
+    assert out["no_shadow_torque"][0, 2] > out["with_shadow_torque"][0, 2] > 0.0
+    assert np.linalg.norm(out["no_shadow"].omega[-1]) > np.linalg.norm(out["with_shadow"].omega[-1])
 
 
 def test_demo_coordinate_frames():

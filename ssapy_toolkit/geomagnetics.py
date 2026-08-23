@@ -35,6 +35,8 @@ from datetime import datetime
 
 import numpy as np
 
+from .constants import EARTH_GEOMAGNETIC_REFERENCE_RADIUS_KM
+
 try:
     import ppigrf.ppigrf as _pp
     _HAS_PPIGRF = True
@@ -239,7 +241,7 @@ class _T89Grid:
         self.step = step
 
     def __call__(self, pos_geo_km):
-        RE = 6371.2
+        RE = EARTH_GEOMAGNETIC_REFERENCE_RADIUS_KM
         p = (np.asarray(pos_geo_km) / RE) @ self.M.T   # GEO -> GSM (rows)
         nx, ny, nz = len(self.x), len(self.y), len(self.z)
         gx = (p[:, 0] - self.x[0]) / self.step

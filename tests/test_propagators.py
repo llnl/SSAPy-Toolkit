@@ -5,10 +5,8 @@ import pytest
 
 from ssapy_toolkit.accelerations_6dof import SpacecraftAccelConstInertial
 from ssapy_toolkit.constants import EARTH_MU
-from ssapy_toolkit.propagators_6dof import (
-    propagate_6dof_high_accuracy,
-    propagate_orbit_state,
-)
+from ssapy_toolkit.propagators import propagate_orbit_state
+from ssapy_toolkit.propagators_6dof import propagate_6dof_high_accuracy
 
 
 def test_high_accuracy_orbit_propagator_returns_near_circular_state_after_period():

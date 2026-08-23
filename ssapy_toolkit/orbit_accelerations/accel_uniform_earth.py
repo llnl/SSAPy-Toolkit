@@ -1,4 +1,4 @@
-# ssapy_toolkit/accelerations_6dof/accel_uniform_earth.py
+# ssapy_toolkit/orbit_accelerations/accel_uniform_earth.py
 
 import numpy as np
 from ..constants import EARTH_RADIUS, EARTH_MU

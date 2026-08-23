@@ -63,6 +63,8 @@ from astropy.coordinates import (
     GCRS, AltAz, EarthLocation, get_sun, get_body, CartesianRepresentation,
 )
 
+from ssapy_toolkit.constants import SOLAR_FLUX_1_AU
+
 # ----------------------------------------------------------------------
 # Fundamental constants (SI; not model parameters)
 # ----------------------------------------------------------------------
@@ -76,7 +78,7 @@ AU_M     = 149_597_870_700.0           # [m]
 # Default model parameters -- every one of these is a kwarg of the
 # public functions below; override there, not here.
 # ----------------------------------------------------------------------
-SOLAR_CONST      = 1361.0              # TSI at 1 AU [W m^-2]
+SOLAR_CONST      = SOLAR_FLUX_1_AU     # TSI at 1 AU [W m^-2]
 T_SUN            = 5772.0              # solar effective temperature [K]
 R_SUN            = 6.957e8             # solar radius [m]
 R_EARTH          = 6_378_137.0         # Earth equatorial radius [m]

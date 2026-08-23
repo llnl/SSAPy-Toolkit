@@ -1,4 +1,4 @@
-# ssapy_toolkit/propagators_6dof/int_utils.py
+# ssapy_toolkit/propagators/int_utils.py
 
 import numpy as np
 from scipy.interpolate import interp1d

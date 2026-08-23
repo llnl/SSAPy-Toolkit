@@ -3,11 +3,11 @@ import numpy as np
 from ..constants import EARTH_MU
 from ..time_functions import to_gps
 
-from ..accelerations_6dof.accel_moon import accel_point_moon
-from ..accelerations_6dof.accel_sun import accel_point_sun
-from ..accelerations_6dof.accel_radial import accel_radial
-from ..accelerations_6dof.accel_velocity import accel_velocity
-from ..accelerations_6dof.accel_inclination import accel_inclination
+from ..orbit_accelerations.accel_moon import accel_point_moon
+from ..orbit_accelerations.accel_sun import accel_point_sun
+from ..orbit_accelerations.accel_radial import accel_radial
+from ..orbit_accelerations.accel_velocity import accel_velocity
+from ..orbit_accelerations.accel_inclination import accel_inclination
 
 from .int_utils import build_profile
 

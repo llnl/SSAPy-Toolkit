@@ -4,8 +4,8 @@ import sys
 import numpy as np
 
 from ssapy_toolkit.plots.orbit_plot_xy import orbit_plot_xy
-from ssapy_toolkit.propagators_6dof.leap_frog import leapfrog
-from ssapy_toolkit.accelerations_6dof.accel_uniform_earth import accel_uniform_earth
+from ssapy_toolkit.propagators.leap_frog import leapfrog
+from ssapy_toolkit.orbit_accelerations.accel_uniform_earth import accel_uniform_earth
 from ssapy_toolkit.plots.figpath import figpath
 from ssapy_toolkit.constants import RGEO, VGEO  # inferred from context [21]
 

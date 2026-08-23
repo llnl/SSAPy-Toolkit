@@ -32,8 +32,7 @@ from typing import Callable, NamedTuple, Optional
 
 import numpy as np
 
-from astropy import units as _u
-from ssapy_toolkit.constants import EARTH_RADIUS, WGS84_EARTH_OMEGA, LD
+from ssapy_toolkit.constants import AU_KM, EARTH_MU_KM3_S2, EARTH_RADIUS_KM, J2_wgs, LD_KM, WGS84_EARTH_OMEGA
 from .plotutils import normalize_orbit_trajectory
 
 # ── Optional SSAPy ────────────────────────────────────────────────────────────
@@ -52,12 +51,11 @@ except ImportError:
 # these used to be independently duplicated across several files in this
 # package (layers.py, frames.py, groundtrack_enhanced.py), all at the same
 # value by coincidence rather than by having one shared source.
-RE_KM      = EARTH_RADIUS / 1000.0   # Earth equatorial radius (WGS84), km
-MU         = 398_600.4418     # GM Earth, km³ s⁻²
-J2         = 1.082_626_68e-3  # Earth J2
+RE_KM      = EARTH_RADIUS_KM   # Earth equatorial radius (WGS84), km
+MU         = EARTH_MU_KM3_S2   # GM Earth, km³ s⁻²
+J2         = J2_wgs            # Earth J2
 OMEGA_E    = WGS84_EARTH_OMEGA        # Earth rotation rate, rad s⁻¹
-AU_KM      = (1 * _u.au).to(_u.km).value  # 1 AU in km
-MOON_A_KM  = LD / 1000.0
+MOON_A_KM  = LD_KM
 
 
 # ─── PropagatorConfig ────────────────────────────────────────────────────────
