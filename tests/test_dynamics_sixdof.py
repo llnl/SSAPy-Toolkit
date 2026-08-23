@@ -33,9 +33,13 @@ from ssapy_toolkit.accelerations_6dof import (
     flat_plate_drag_acceleration_torque,
     flat_plate_srp_acceleration_torque,
     integrated_thrust_impulse,
+    load_digitized_thrust_curve,
+    load_packaged_thrust_curve,
+    load_packaged_thrust_curve_metadata,
     j2_acceleration,
     load_thrust_curve_csv,
     load_thrust_curve_data,
+    packaged_thrust_curve_index,
     magnetic_dipole_torque,
     reaction_wheel_torque,
     srp_acceleration,
@@ -241,6 +245,9 @@ def test_satellite_design_library_supports_common_presets_and_overrides():
     assert ssatk.mesh_facets is mesh_facets
     assert ssatk.load_obj_facets is load_obj_facets
     assert ssatk.load_thrust_curve_data is load_thrust_curve_data
+    assert ssatk.load_packaged_thrust_curve is load_packaged_thrust_curve
+    assert ssatk.load_digitized_thrust_curve is load_digitized_thrust_curve
+    assert ssatk.packaged_thrust_curve_index is packaged_thrust_curve_index
     assert ssatk.attitude_quaternion_from_frame is attitude_quaternion_from_frame
     assert ssatk.thrust_profile_trapezoid(1.0, burn_time=1.0)(0.5) == pytest.approx(1.0)
     assert ssatk.constant_body_thrust([1.0, 0.0, 0.0], 2.0)(0.0, np.zeros(3), np.zeros(3), [1, 0, 0, 0], [0, 0, 0])[0] == pytest.approx(0.5)
@@ -746,6 +753,28 @@ def test_thrust_profiles_and_csv_curve(tmp_path):
     csv_path.write_text("time_s,thrust_n\n0,0\n1,3\n2,0\n")
     loaded = load_thrust_curve_csv(csv_path)
     assert loaded(0.5) == pytest.approx(1.5)
+
+
+def test_packaged_ssapy_data_thrust_curves_load_by_identifier():
+    digitized = packaged_thrust_curve_index("nasa_ntrs")
+    assert {row["ntrs_id"] for row in digitized} >= {"19730015083", "19900003335", "20090026004"}
+
+    motor = load_digitized_thrust_curve("19730015083")
+    assert motor(0.0) == pytest.approx(0.0)
+    assert motor(0.4) > 10_000.0
+    assert motor.total_impulse == pytest.approx(270_574.200, rel=1e-3)
+
+    metadata = load_packaged_thrust_curve_metadata("19900003335")
+    assert metadata["source"]["ntrs_id"] == "19900003335"
+    assert metadata["source"]["export_control"] == "NO ITAR, NO EAR"
+
+    normalized = load_digitized_thrust_curve("20090026004", steady_state_thrust_n=1_000.0)
+    assert normalized(0.275) == pytest.approx(2_000.0)
+
+    public_domain = packaged_thrust_curve_index("thrustcurve_org_pd")
+    assert len(public_domain) >= 500
+    first_curve = load_packaged_thrust_curve(public_domain[0]["csv_path"], collection="thrustcurve_org_pd")
+    assert first_curve.total_impulse > 0.0
 
 
 def test_spacecraft_maneuver_accel_supports_operational_frames():

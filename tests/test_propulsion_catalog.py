@@ -4,10 +4,12 @@ import pytest
 from ssapy_toolkit.constants import G0
 from ssapy_toolkit.propulsion import (
     ThrusterSpec,
+    available_throttle_maps,
     available_thruster_families,
     available_thruster_scales,
     available_thruster_specs,
     build_thruster,
+    load_throttle_map,
     make_thruster_acceleration,
     make_thruster_profile,
     mass_flow_rate,
@@ -87,9 +89,22 @@ def test_propulsion_catalog_is_available_from_top_level_rockets_and_engines():
     from ssapy_toolkit.rockets import thruster_spec as rocket_thruster_spec
 
     assert ssatk.thruster_spec("AEPS").family == "hall_effect"
+    assert ssatk.available_throttle_maps is available_throttle_maps
+    assert ssatk.load_throttle_map is load_throttle_map
     assert rocket_thruster_spec("AEPS") is ssatk.thruster_spec("AEPS")
     assert "Mira" in thrusters
     assert "hall_effect_high_power" in thrusters
     assert "hall_effect_high_power" in thruster_specs
     assert thruster_catalog_dict(legacy=True)["hall_effect_high_power"]["ISP"] == pytest.approx(2800.0)
 
+
+def test_packaged_electric_throttle_maps_load_from_ssapy_data():
+    assert {"aeps_etu2", "spt140", "next_tt10", "hermes_tdu3"} <= set(available_throttle_maps())
+
+    aeps = load_throttle_map("AEPS ETU2")
+    assert len(aeps) == 12
+    assert any(row["dataset"] == "ppe_aeps_rfc" and row["average_thrust_mn"] == pytest.approx(594.0) for row in aeps)
+
+    spt140 = load_throttle_map("spt140")
+    assert len(spt140) == 26
+    assert max(row["thrust_mn"] for row in spt140) == pytest.approx(287.0)

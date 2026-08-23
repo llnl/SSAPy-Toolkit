@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import csv as _csv
+import json as _json
+from io import StringIO as _StringIO
 from pathlib import Path as _Path
 
 import numpy as _np
@@ -19,6 +21,17 @@ from .spacecraft import (
     _unit_vector,
     _validate_positive,
 )
+
+NASA_NTRS_DIGITIZED_THRUST_CURVE_DIR = "propulsion/thrust_curves/digitized/nasa_ntrs"
+THRUSTCURVE_ORG_PD_THRUST_CURVE_DIR = "propulsion/thrust_curves/solid_motor_pd/thrustcurve_org"
+PACKAGED_THRUST_CURVE_COLLECTIONS = {
+    "nasa_ntrs": NASA_NTRS_DIGITIZED_THRUST_CURVE_DIR,
+    "digitized_nasa_ntrs": NASA_NTRS_DIGITIZED_THRUST_CURVE_DIR,
+    "digitized": NASA_NTRS_DIGITIZED_THRUST_CURVE_DIR,
+    "thrustcurve_org_pd": THRUSTCURVE_ORG_PD_THRUST_CURVE_DIR,
+    "public_domain": THRUSTCURVE_ORG_PD_THRUST_CURVE_DIR,
+    "solid_motor_pd": THRUSTCURVE_ORG_PD_THRUST_CURVE_DIR,
+}
 
 
 class ThrustCurve:
@@ -261,6 +274,83 @@ def load_thrust_curve_data(relative_path, **kwargs) -> ThrustCurve:
         return load_thrust_curve_csv(path, **kwargs)
 
 
+def packaged_thrust_curve_index(collection: str = "nasa_ntrs") -> tuple[dict[str, str], ...]:
+    """Return rows from a packaged SSAPy-Data thrust-curve index.
+
+    Parameters
+    ----------
+    collection
+        ``"nasa_ntrs"`` for digitized NASA NTRS plot curves, or
+        ``"thrustcurve_org_pd"`` for public-domain ThrustCurve.org RASP/RockSim
+        motor files.
+    """
+
+    return tuple(_read_packaged_csv(f"{_curve_collection_dir(collection)}/index.csv"))
+
+
+def load_packaged_thrust_curve_metadata(identifier: str, *, collection: str = "nasa_ntrs") -> dict:
+    """Load sidecar metadata for a packaged thrust curve selected by ID/path."""
+
+    record = _find_packaged_thrust_curve(identifier, collection=collection)
+    metadata_path = record.get("metadata_path")
+    if not metadata_path:
+        raise ValueError(f"Thrust curve record {identifier!r} has no metadata_path column.")
+
+    from ..data import read_data_text
+
+    return _json.loads(read_data_text(f"{_curve_collection_dir(collection)}/{metadata_path}"))
+
+
+def load_packaged_thrust_curve(
+    identifier: str,
+    *,
+    collection: str = "nasa_ntrs",
+    steady_state_thrust_n: float | None = None,
+    normalized_column: str = "filtered_fraction_steady_state",
+    clamp_normalized: bool = True,
+    fill_value: float = 0.0,
+) -> ThrustCurve:
+    """Load a named thrust curve packaged in SSAPy-Data.
+
+    Absolute curves with a ``thrust_n`` column load directly. Normalized curves,
+    such as the RS-18 startup shape, require ``steady_state_thrust_n`` so the
+    selected normalized column can be converted to newtons.
+    """
+
+    record = _find_packaged_thrust_curve(identifier, collection=collection)
+    csv_path = record.get("csv_path")
+    if not csv_path:
+        raise ValueError(f"Thrust curve record {identifier!r} has no csv_path column.")
+
+    resource_path = f"{_curve_collection_dir(collection)}/{csv_path}"
+    rows = _read_packaged_csv(resource_path)
+    columns = set(rows[0])
+    if "thrust_n" in columns:
+        return load_thrust_curve_data(resource_path, fill_value=fill_value)
+    if normalized_column not in columns:
+        raise ValueError(
+            f"Packaged curve {identifier!r} lacks {normalized_column!r}; "
+            f"available columns are {sorted(columns)}."
+        )
+    if steady_state_thrust_n is None:
+        raise ValueError(
+            f"Packaged curve {identifier!r} is normalized. Provide steady_state_thrust_n "
+            "to convert it to an absolute ThrustCurve."
+        )
+    scale = _validate_nonnegative(steady_state_thrust_n, "steady_state_thrust_n")
+    times = [float(row["time_s"]) for row in rows]
+    thrusts = [float(row[normalized_column]) * scale for row in rows]
+    if clamp_normalized:
+        thrusts = [max(0.0, thrust) for thrust in thrusts]
+    return ThrustCurve(times, thrusts, fill_value=fill_value)
+
+
+def load_digitized_thrust_curve(identifier: str, **kwargs) -> ThrustCurve:
+    """Load a digitized NASA NTRS thrust curve by NTRS ID or file stem."""
+
+    return load_packaged_thrust_curve(identifier, collection="nasa_ntrs", **kwargs)
+
+
 def integrated_thrust_impulse(profile, start: float, stop: float, *, samples: int = 1001) -> float:
     """Numerically integrate a thrust profile over ``[start, stop]`` in N s."""
 
@@ -293,6 +383,54 @@ def _validate_nonnegative(value: float, name: str) -> float:
     if value < 0.0:
         raise ValueError(f"{name} must be non-negative.")
     return value
+
+
+def _read_packaged_csv(relative_path: str) -> list[dict[str, str]]:
+    from ..data import read_data_text
+
+    rows = list(_csv.DictReader(_StringIO(read_data_text(relative_path))))
+    if not rows:
+        raise ValueError(f"Packaged CSV {relative_path!r} has no data rows.")
+    return rows
+
+
+def _curve_collection_dir(collection: str) -> str:
+    key = str(collection).strip().lower().replace("-", "_").replace(" ", "_")
+    try:
+        return PACKAGED_THRUST_CURVE_COLLECTIONS[key]
+    except KeyError as exc:
+        choices = ", ".join(sorted(PACKAGED_THRUST_CURVE_COLLECTIONS))
+        raise ValueError(f"Unknown thrust-curve collection {collection!r}. Available: {choices}.") from exc
+
+
+def _find_packaged_thrust_curve(identifier: str, *, collection: str) -> dict[str, str]:
+    key = _resource_key(identifier)
+    matches = []
+    for record in packaged_thrust_curve_index(collection):
+        candidates = {
+            record.get("ntrs_id", ""),
+            record.get("simfile_id", ""),
+            record.get("csv_path", ""),
+            record.get("metadata_path", ""),
+            _Path(record.get("csv_path", "")).stem,
+            _Path(record.get("metadata_path", "")).stem,
+            record.get("designation", ""),
+            f"{record.get('manufacturer', '')}_{record.get('designation', '')}",
+        }
+        if key in {_resource_key(candidate) for candidate in candidates if candidate}:
+            matches.append(record)
+    if len(matches) == 1:
+        return matches[0]
+    if not matches:
+        raise KeyError(f"No packaged thrust curve {identifier!r} in collection {collection!r}.")
+    raise KeyError(
+        f"Identifier {identifier!r} matches {len(matches)} thrust curves; "
+        "use csv_path or metadata_path."
+    )
+
+
+def _resource_key(value) -> str:
+    return str(value).strip().lower().replace("-", "_").replace(" ", "_")
 
 
 def _mass_from_spacecraft(value, spacecraft) -> float:

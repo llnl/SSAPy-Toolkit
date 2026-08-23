@@ -8,7 +8,9 @@ flight-specific fidelity is required.
 
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass, replace
+from io import StringIO
 
 import numpy as np
 
@@ -19,9 +21,17 @@ from .accelerations_6dof import (
     thrust_profile_trapezoid,
 )
 from .constants import G0
+from .data import read_data_text
 from .satellites import Thruster
 
 Range = tuple[float, float]
+
+PACKAGED_THROTTLE_MAPS = {
+    "aeps_etu2": "propulsion/throttle_maps/electric/aeps_etu2_throttle_map.csv",
+    "spt140": "propulsion/throttle_maps/electric/spt140_performance_map.csv",
+    "next_tt10": "propulsion/throttle_maps/electric/next_tt10_thrust_comparison.csv",
+    "hermes_tdu3": "propulsion/throttle_maps/electric/hermes_tdu3_throttle_map.csv",
+}
 
 
 @dataclass(frozen=True)
@@ -283,6 +293,29 @@ def thruster_catalog_dict(*, legacy: bool = False) -> dict[str, ThrusterSpec | d
     return dict(_CATALOG)
 
 
+def available_throttle_maps() -> tuple[str, ...]:
+    """Return packaged electric-propulsion throttle-map names."""
+
+    return tuple(sorted(PACKAGED_THROTTLE_MAPS))
+
+
+def load_throttle_map(name: str) -> tuple[dict[str, object], ...]:
+    """Load a packaged electric-propulsion throttle/performance map.
+
+    Values are returned as dictionaries with numeric fields converted to
+    ``float`` where possible. The source CSV remains in SSAPy-Data.
+    """
+
+    key = _key(name)
+    try:
+        relative_path = PACKAGED_THROTTLE_MAPS[key]
+    except KeyError as exc:
+        choices = ", ".join(available_throttle_maps())
+        raise KeyError(f"Unknown throttle map {name!r}. Available: {choices}.") from exc
+    rows = csv.DictReader(StringIO(read_data_text(relative_path)))
+    return tuple(_typed_row(row) for row in rows)
+
+
 def mass_flow_rate(thrust_n: float, isp_s: float) -> float:
     """Return ideal rocket mass flow rate in kg/s."""
 
@@ -296,6 +329,21 @@ def propellant_mass_for_delta_v(delta_v_mps: float, wet_mass_kg: float, isp_s: f
     wet_mass_kg = _positive(wet_mass_kg, "wet_mass_kg")
     mass_ratio = np.exp(delta_v_mps / (_positive(isp_s, "isp_s") * G0))
     return float(wet_mass_kg * (1.0 - 1.0 / mass_ratio))
+
+
+def _typed_row(row: dict[str, str]) -> dict[str, object]:
+    typed: dict[str, object] = {}
+    for key, value in row.items():
+        if key is None:
+            continue
+        if value in {"", None}:
+            typed[key] = None
+            continue
+        try:
+            typed[key] = float(value)
+        except ValueError:
+            typed[key] = value
+    return typed
 
 
 def _spec(
