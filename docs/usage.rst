@@ -113,7 +113,7 @@ returns a GCRF vector.
 High-accuracy propagation
 -------------------------
 
-Use :func:`ssapy_toolkit.propagators.propagate_orbit_state` for adaptive
+Use :func:`ssapy_toolkit.propagators_orbit.propagate_orbit_state` for adaptive
 high-accuracy translational propagation. It defaults to SciPy's eighth-order
 ``DOP853`` method and accepts inertial perturbing acceleration callbacks.
 
@@ -121,7 +121,7 @@ high-accuracy translational propagation. It defaults to SciPy's eighth-order
 
    import numpy as np
    from ssapy_toolkit.constants import EARTH_MU
-   from ssapy_toolkit.propagators import propagate_orbit_state
+   from ssapy_toolkit.propagators_orbit import propagate_orbit_state
 
    radius = 7_000_000.0
    speed = np.sqrt(EARTH_MU / radius)
@@ -135,13 +135,15 @@ high-accuracy translational propagation. It defaults to SciPy's eighth-order
 6-DoF dynamics
 --------------
 
-Use :class:`ssapy_toolkit.dynamics.Spacecraft` for an ``Orbit``-like object
+Use :class:`ssapy_toolkit.propagators_6dof.Spacecraft` for an ``Orbit``-like object
 with attitude, angular rate, inertia, and mass attached. Use
-:func:`ssapy_toolkit.dynamics.propagate_6dof` directly for lower-level coupled
+:func:`ssapy_toolkit.propagators_6dof.propagate_6dof` directly for lower-level coupled
 translational and rigid-body attitude propagation. The state uses inertial
 ``r``/``v`` vectors, a quaternion ``q=[w, x, y, z]`` that rotates body-frame
 vectors into the inertial frame, and body-frame angular rates ``omega`` in
-rad/s.
+rad/s. Use ``Spacecraft.from_orbit(orbit, ...)`` to attach attitude/body state
+to an SSAPy ``Orbit`` and ``spacecraft.to_orbit()`` to return the translational
+state to SSAPy workflows.
 
 .. code-block:: python
 
@@ -168,6 +170,17 @@ rad/s.
 
    orbit_plot(traj.r, traj.t, view="3d")
 
+The high-accuracy convenience wrapper accepts the same environment presets:
+
+.. code-block:: python
+
+   traj = ssatk.propagate_spacecraft_high_accuracy(
+       sat,
+       times=np.linspace(0.0, 3600.0, 121),
+       environment=ssatk.SpaceEnvironment(epoch="2025-01-01T00:00:00"),
+       environment_models="leo",
+   )
+
 Without an attitude-dependent ``acceleration`` callback, attitude does not feed
 back into the orbital trajectory. Provide ``acceleration(t, r, v, q, omega)``
 for inertial/GCRF m/s², ``ntw_acceleration(t, r, v, q, omega)`` for SSAPy
@@ -184,26 +197,67 @@ Reusable models live in :mod:`ssapy_toolkit.accelerations_6dof` and include
 ``SpacecraftAccelConstNTW``, ``SpacecraftAccelConstBody``,
 ``SpacecraftFlatPlateDrag``, ``SpacecraftFlatPlateSolRad``,
 ``SpacecraftFacetDrag``, ``SpacecraftFacetSolRad``, ``SpacecraftThrusterAccel``,
-``SpacecraftMagneticTorque``, ``SpacecraftReactionWheelTorque``,
+``SpacecraftGravityGradientTorque``, ``SpacecraftMagneticTorque``,
+``SpacecraftReactionWheelTorque``,
 ``SpacecraftAttitudePD``, ``SpacecraftAccelSum``, ``SpacecraftTorqueSum``, and
 constant thrust/torque callback helpers. Flat-plate models use spacecraft
 ``mass``, ``area``, ``cd``/``cr``, and body-frame ``center_of_pressure`` when
-those values are not provided directly to the model. Thruster models also report
-positive propellant mass flow from thrust and specific impulse, but mass
-depletion is not yet a propagated state.
+those values are not provided directly to the model. Thruster models report
+positive propellant mass flow from thrust and specific impulse, and
+``propagate_6dof`` can propagate mass when a mass-flow model is supplied. For
+``SpacecraftBody`` objects with tanks, propagated mass is distributed across
+tanks in proportion to their configured propellant mass, so center of mass and
+inertia can evolve during finite burns. ``Spacecraft.propagate`` continues
+tanked spacecraft at dry mass by default after propellant depletion, with
+propulsive acceleration, torque, and mass flow set to zero. Set
+``stop_at_dry_mass=True`` for terminal depletion, or use
+``propellant_empty_event``/``mass_floor_event`` directly for lower-level
+``propagate_6dof`` calls.
+If the body defines reaction wheels, ``Spacecraft`` initializes wheel momentum
+from ``wheel_inertia * speed`` when available, ``propagate_6dof`` appends those
+momenta to the numerical state, and ``SixDOFTrajectory.wheel_momentum`` returns
+the propagated wheel angular momenta in wheel order. Configured
+``momentum_capacity`` values clip torque commands that would drive a wheel past
+its stored angular-momentum limit.
+Facet drag/SRP models accept ``facet_transform=...`` for time- or
+state-dependent articulated panels; use ``rotate_facets(...)`` for simple
+hinged-panel rotations. Facet and flat-plate drag use each surface point's
+local rigid-body velocity, including the ``omega × r`` contribution from the
+spacecraft angular rate, so spinning appendages can change both aerodynamic
+force and torque. Pass ``atmosphere_velocity=...`` to drag models for explicit
+GCRF wind/corotation velocity, or set
+``SpaceEnvironment(atmosphere_velocity_model=...)`` when assembling
+environment-backed drag models.
+``SpaceEnvironment.force_models(...)`` can assemble environment-backed drag,
+solar-radiation pressure, magnetic torque, and named third-body perturbations
+such as ``third_bodies=("moon", "sun")``. Use ``third_bodies=True`` for
+Moon/Sun, ``third_bodies="planets"`` for Mercury through Neptune except Earth,
+or ``third_bodies="all"`` for Moon, Sun, and planets. For common setups, pass
+``preset="leo"``, ``preset="earth_orbit"``, ``preset="cislunar"``, or
+``preset="all"`` and override individual options as needed. Pass
+``gravity_gradient=True`` for central-Earth gravity-gradient torque or
+``gravity_gradient="all"`` for Earth/Moon/Sun torque models. Its default conical
+eclipse model uses
+disk-overlap geometry for Earth and Moon occultation of the Sun; set
+``solar_occulting_bodies=("earth",)`` or ``eclipse_model=None`` for simpler SRP
+studies. Its default magnetic field is a centered Earth dipole in GCRF using
+``EARTH_DIPOLE_EQUATOR_FIELD``; use ``magnetic_field_model="igrf"`` for
+optional ``ppigrf``-backed IGRF field synthesis. Set ``epoch=...`` when
+propagation times are relative seconds that should map onto an absolute
+calendar date.
 
 For normal finite satellite maneuvers, use ``SpacecraftManeuverAccel`` with an
 explicit ``frame``. ``frame="rtn"``/``"lvlh"``/``"ric"`` maps to the common
 radial-transverse-normal operations convention, ``frame="vnb"`` maps to
 velocity-normal-binormal, ``frame="body"`` maps body-mounted thrust through the
 current attitude, and ``frame="ntw"`` preserves exact SSAPy ``[N, T, W]``
-compatibility. Thrust can be constant, trapezoidal, smoothstep, exponential,
+convention. Thrust can be constant, trapezoidal, smoothstep, exponential,
 pulsed, callable, or loaded from a CSV file through ``ThrustCurve``. Citable
 engine curves should live in SSAPy-Data, not this source repository, and can be
 loaded with ``load_thrust_curve_data(...)`` once packaged.
 
-Representative propulsion presets live in :mod:`ssapy_toolkit.propulsion` and
-are also re-exported from :mod:`ssapy_toolkit.rockets`.  Use
+Representative propulsion presets live in :mod:`ssapy_toolkit.engines` and
+launch-vehicle presets live in :mod:`ssapy_toolkit.launch`. Use
 ``available_thruster_families()``, ``available_thruster_specs(...)``, and
 ``thruster_spec(...)`` to select cold-gas, monopropellant, bipropellant, solid
 kick-motor, liquid, Hall-effect, gridded-ion, resistojet, arcjet,

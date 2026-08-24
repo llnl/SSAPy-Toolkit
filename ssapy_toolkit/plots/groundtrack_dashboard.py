@@ -9,7 +9,7 @@ from ssapy import groundTrack
 from ..compute import find_smallest_bounding_cube
 from ..constants import EARTH_RADIUS
 from ..time_functions import to_gps
-from .plotutils import save_plot, valid_orbits, _pop_save_path_aliases, _raise_unrecognized_kwargs
+from .plotutils import figsave, valid_orbits, _pop_save_path_aliases, _raise_unrecognized_kwargs
 from ._groundtrack_helpers import clean_lonlat, force_title
 
 
@@ -246,7 +246,7 @@ def groundtrack_dashboard(
             pass
 
     if save_path:
-        save_plot(fig, save_path)
+        figsave(fig, save_path)
     if show:
         plt.show()
     return fig

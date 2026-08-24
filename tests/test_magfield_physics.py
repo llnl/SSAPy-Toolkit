@@ -118,20 +118,20 @@ def test_sun_direction_matches_independent_solar_position():
 
 
 @needs_geopack
-def test_t89_wrapper_evaluates_at_the_right_place():
+def test_t89_external_model_evaluates_at_the_right_place():
     """
     Decisive frame test: take a point defined in GSM, express it in GEO, and
-    push it through the interpolating wrapper.  The wrapper converts back to
+    push it through the interpolating model.  The model converts back to
     GSM internally, so the answer must match t89 called directly on the
     original GSM point.  A transposed rotation cannot pass this.
     """
     from geopack import t89
-    grid = mf._get_t89(DATE, kp=3)
+    grid = mf._get_external(DATE, kp=3, model="t89")
     M = grid.M
     for gsm in ([6.0, 1.0, 2.0], [-9.0, -2.0, 1.5], [4.0, -3.0, -2.0]):
         gsm = np.array(gsm, dtype=float)
         geo_km = (gsm @ M) * 6371.2                      # GSM -> GEO (row vector)
-        got = grid(geo_km[None, :])[0]                   # wrapper: GEO -> GSM -> field -> GEO
+        got = grid(geo_km[None, :])[0]                   # GEO -> GSM -> field -> GEO
         want_gsm = np.array(t89.t89(grid.iopt, grid.ps, *gsm))
         want_geo = want_gsm @ M                          # GSM -> GEO
         err = np.linalg.norm(got - want_geo)

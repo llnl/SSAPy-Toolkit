@@ -18,7 +18,7 @@ from ssapy import groundTrack
 from ._groundtrack_helpers import as_list as _as_list
 from ._groundtrack_helpers import broadcast_time_list as _broadcast_time_list
 from ._groundtrack_helpers import clean_lonlat_wrap as _clean_lonlat_wrap
-from .plotutils import load_earth_file, save_plot, _pop_save_path_aliases, _raise_unrecognized_kwargs
+from .plotutils import load_earth_file, figsave, _pop_save_path_aliases, _raise_unrecognized_kwargs
 
 
 def _wrap_longitudes(lon_deg, central_longitude=0.0):
@@ -323,6 +323,6 @@ def groundtrack_plot(
 
     # Save if requested
     if save_path:
-        save_plot(fig, save_path)
+        figsave(fig, save_path)
 
     return fig

@@ -18,7 +18,7 @@ they're available, instead of reimplementing them:
     with ssapy installed, this will show the same continents as the rest
     of the toolkit's plots.
   - Coordinate transform: tries this toolkit's real
-    `ssapy_toolkit.plots.frames.eci_to_ecf_matrix` (GMST rotation, matches
+    `ssapy_toolkit.coordinates.frames.eci_to_ecf_matrix` (GMST rotation, matches
     the rest of this toolkit's frame conventions) first; falls back to
     astropy's GCRS->ITRS (higher precision, no toolkit dependency) if
     frames.py isn't importable.
@@ -75,7 +75,7 @@ try:
     # frames.py moved from the old repo-root core/ package into
     # ssapy_toolkit/plots/ (a sibling of this file) -- relative import
     # instead of the old core.frames path, which no longer exists.
-    from .frames import eci_to_ecf_matrix as _tk_eci_to_ecf_matrix
+    from ssapy_toolkit.coordinates.frames import eci_to_ecf_matrix as _tk_eci_to_ecf_matrix
     _HAS_TK_FRAMES = True
 except ImportError:
     _HAS_TK_FRAMES = False

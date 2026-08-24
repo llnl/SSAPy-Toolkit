@@ -20,13 +20,13 @@ from ssapy_toolkit.accelerations_6dof import (
     SpacecraftThrusterAccel,
     thrust_profile_trapezoid,
 )
-from ssapy_toolkit.dynamics import Spacecraft, attitude_quaternion_from_frame
+from ssapy_toolkit.propagators_6dof import Spacecraft, attitude_quaternion_from_frame
 from ssapy_toolkit.plots.plotutils import (
     apply_auto_log_scale,
     log_safe_values,
     should_use_log_scale,
 )
-from ssapy_toolkit.propulsion import thruster_spec
+from ssapy_toolkit.engines import thruster_spec
 from ssapy_toolkit.satellites import SpacecraftBody
 
 TITLE = "6-DoF Finite-Burn Fidelity"

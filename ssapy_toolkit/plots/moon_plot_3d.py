@@ -23,7 +23,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from PIL import Image
 
 from .starfield import add_starfield
-from .plotutils import valid_orbits, save_plot
+from .plotutils import valid_orbits, figsave
 from ..constants import RGEO, MOON_RADIUS, EARTH_RADIUS
 from ..coordinates import gcrf_to_lunar_fixed
 from ..compute import find_smallest_bounding_cube
@@ -462,9 +462,8 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
             moon_pos_gcrf_m = moon_body.position(t_single).T
             moon_pos_gcrf_m = np.atleast_2d(moon_pos_gcrf_m)[0]
             # Earth relative to Moon = -(Moon relative to Earth).
-            # get_body().position() returns meters (same convention used
-            # elsewhere, e.g. cislunar_plot_3d.py's r_moon / unit_conversion
-            # pattern) — convert to km to match this function's internal
+            # get_body().position() returns meters; convert to km to match this
+            # function's internal
             # units (unit_conversion=1e3, unit_label='km').
             earth_pos_km = -moon_pos_gcrf_m / 1e3
         except Exception as e:
@@ -579,7 +578,7 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
                  color=textcolor, fontsize=11, pad=15)
 
     if save_path:
-        save_plot(fig, save_path)
+        figsave(fig, save_path)
     if show:
         plt.show()
     plt.close()

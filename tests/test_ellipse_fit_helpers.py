@@ -69,7 +69,7 @@ def test_ellipse_fit_plot_save_path_with_fake_ssapy_overlay(monkeypatch, tmp_pat
 
     saved = []
     monkeypatch.setattr(ssapy_orbits, "ssapy_orbit", fake_ssapy_orbit)
-    monkeypatch.setattr(ellipse_module, "save_plot", lambda fig, path: saved.append(path))
+    monkeypatch.setattr(ellipse_module, "figsave", lambda fig, path: saved.append(path))
     monkeypatch.setattr(plt, "show", lambda: None)
 
     save_path = tmp_path / "ellipse.png"

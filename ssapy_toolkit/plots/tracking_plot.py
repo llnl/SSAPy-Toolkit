@@ -6,7 +6,7 @@ from PIL import Image as PILImage
 from ssapy import groundTrack
 from ssapy.utils import find_file, norm
 from ..constants import RGEO, EARTH_RADIUS
-from .plotutils import save_plot, make_black, valid_orbits, _pop_save_path_aliases, _raise_unrecognized_kwargs
+from .plotutils import figsave, make_black, valid_orbits, _pop_save_path_aliases, _raise_unrecognized_kwargs
 
 
 def tracking_plot(
@@ -154,7 +154,7 @@ def tracking_plot(
         plt.tight_layout()
 
         if save_path:
-            save_plot(fig, save_path)
+            figsave(fig, save_path)
         return fig
 
     # Compute a consistent limit across all orbits if not provided

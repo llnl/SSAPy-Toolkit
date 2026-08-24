@@ -54,8 +54,8 @@ def test_lagrange_points_and_lunar_frame_helpers(monkeypatch):
 
 
 def test_bbox_and_lonlat_perigee_helpers(monkeypatch):
-    from ssapy_toolkit.coordinates.lon_lat_bbox import bbox_min
-    perigee = importlib.import_module("ssapy_toolkit.coordinates.lonlat_perigee")
+    from ssapy_toolkit.coordinates.geodetic import bbox_min
+    perigee = importlib.import_module("ssapy_toolkit.coordinates.geodetic")
 
     assert bbox_min([10], [20]) == (20, 20, 10.0, 10.0, 0.0)
     lat_min, lat_max, lon_left, lon_right, span = bbox_min([170, -170, 175], [-5, 10, 0])
@@ -83,8 +83,8 @@ def test_bbox_and_lonlat_perigee_helpers(monkeypatch):
 
 
 def test_gcrf_to_itrf_and_llh_helpers(monkeypatch):
-    itrf = importlib.import_module("ssapy_toolkit.coordinates.gcrf_to_itrf")
-    from ssapy_toolkit.coordinates.gcrf_to_llh import gcrf_to_llh
+    itrf = importlib.import_module("ssapy_toolkit.coordinates.earth_fixed")
+    from ssapy_toolkit.coordinates.geodetic import gcrf_to_llh
     from astropy.time import Time
 
     monkeypatch.setattr(itrf, "to_gps", lambda t: np.asarray(t, dtype=float))
@@ -106,7 +106,7 @@ def test_gcrf_to_itrf_and_llh_helpers(monkeypatch):
 
 
 def test_gcrf_to_lunar_and_fixed_helpers(monkeypatch):
-    module = importlib.import_module("ssapy_toolkit.coordinates.gcrf_to_lunar")
+    module = importlib.import_module("ssapy_toolkit.coordinates.lunar")
 
     class FakeMoonPosition:
         def __call__(self, t):
@@ -139,7 +139,7 @@ def test_gcrf_to_lunar_and_fixed_helpers(monkeypatch):
 
 def test_v_from_r_validation_and_time_inputs():
     from astropy.time import Time
-    from ssapy_toolkit.coordinates.v_from_r import v_from_r
+    from ssapy_toolkit.coordinates.velocity import v_from_r
 
     positions = np.array([[0.0, 0.0, 0.0], [2.0, 4.0, 6.0], [4.0, 8.0, 12.0]])
     times = Time([0.0, 2.0, 4.0], format="gps", scale="utc")
@@ -158,7 +158,7 @@ def test_v_from_r_validation_and_time_inputs():
 
 
 def test_surface_rv_wrappers_forward_arguments(monkeypatch):
-    module = importlib.import_module("ssapy_toolkit.coordinates.surface_rv")
+    module = importlib.import_module("ssapy_toolkit.coordinates.geodetic")
     astropy_calls = []
 
     def fake_astropy_surface_rv(**kwargs):
@@ -190,7 +190,7 @@ def test_surface_rv_wrappers_forward_arguments(monkeypatch):
 
 
 def test_lunar_rv_scalar_and_time_sequence(monkeypatch):
-    module = importlib.import_module("ssapy_toolkit.coordinates.lunar_position")
+    module = importlib.import_module("ssapy_toolkit.coordinates.lunar")
 
     class FakeTimeValue:
         def __init__(self, gps):
@@ -214,7 +214,7 @@ def test_lunar_rv_scalar_and_time_sequence(monkeypatch):
 
 
 def test_j2000_validation_and_time_parsing():
-    from ssapy_toolkit.coordinates.j2000_to_gcrf import j2000_to_gcrf
+    from ssapy_toolkit.coordinates.inertial import j2000_to_gcrf
     from astropy.time import Time
 
     positions = np.eye(3)
@@ -230,9 +230,9 @@ def test_j2000_validation_and_time_parsing():
 
 
 def test_local_equatorial_and_earth_trojan_helpers():
-    from ssapy_toolkit.coordinates import local_and_equatorial as local
+    from ssapy_toolkit.coordinates import local_equatorial as local
 
-    from ssapy_toolkit.coordinates.earth_trojan_sim import inert2rot, sim_lonlatrad
+    from ssapy_toolkit.coordinates.rotating_frames import inert2rot, sim_lonlatrad
 
     assert local.rightascension2hourangle("23:00:00", "01:00:00") == "30:0:0"
     assert isinstance(local.rightascension2hourangle(15.0, 2.0), str)
@@ -261,8 +261,8 @@ def test_local_equatorial_and_earth_trojan_helpers():
 
 
 def test_point_mass_accelerations_with_fake_ephemerides(monkeypatch):
-    moon = importlib.import_module("ssapy_toolkit.orbit_accelerations.accel_moon")
-    sun = importlib.import_module("ssapy_toolkit.orbit_accelerations.accel_sun")
+    moon = importlib.import_module("ssapy_toolkit.accelerations_orbit.accel_moon")
+    sun = importlib.import_module("ssapy_toolkit.accelerations_orbit.accel_sun")
 
     class FakeContext:
         def __enter__(self):

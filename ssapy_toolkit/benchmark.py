@@ -258,19 +258,64 @@ def build_benchmark_cases(
             tags=("photometry", "array"),
         ),
         BenchmarkCase(
-            name="orbit_accelerations.accel_point_earth",
-            group="orbit_accelerations",
+            name="accelerations_orbit.accel_point_earth",
+            group="accelerations_orbit",
             description="Point-Earth gravity acceleration for one position vector.",
             factory=lambda _ctx: _call(lambda: _accel_point_earth(r0)),
-            tags=("dynamics", "scalar"),
+            tags=("propagators_6dof", "scalar"),
         ),
         BenchmarkCase(
-            name="propagators.leapfrog_32_steps",
-            group="propagators",
+            name="propagators_orbit.leapfrog_32_steps",
+            group="propagators_orbit",
             description="Leapfrog propagation over 32 short time steps.",
             factory=lambda _ctx: _call(lambda: _propagator_leapfrog(r0, v0, times)),
-            tags=("dynamics", "propagation"),
+            tags=("propagators_6dof", "propagation"),
             default_min_sample_time=0.01,
+        ),
+        BenchmarkCase(
+            name="propagators_6dof.point_mass_32_steps",
+            group="propagators_6dof",
+            description="6-DoF high-accuracy point-mass propagation over 32 short time steps.",
+            factory=lambda _ctx: _call(lambda: _propagator_6dof_point_mass(r0, v0, times)),
+            tags=("propagators_6dof", "propagation", "6dof"),
+            default_repeats=3,
+            default_min_sample_time=0.0,
+        ),
+        BenchmarkCase(
+            name="propagators_6dof.thruster_mass_32_steps",
+            group="propagators_6dof",
+            description="6-DoF spacecraft propagation with body thruster torque and mass depletion.",
+            factory=lambda _ctx: _call(lambda: _propagator_6dof_thruster_mass(times)),
+            tags=("propagators_6dof", "propulsion", "6dof"),
+            default_repeats=3,
+            default_min_sample_time=0.0,
+        ),
+        BenchmarkCase(
+            name="propagators_6dof.reaction_wheel_32_steps",
+            group="propagators_6dof",
+            description="6-DoF attitude propagation with reaction-wheel momentum states.",
+            factory=lambda _ctx: _call(lambda: _propagator_6dof_reaction_wheel(times)),
+            tags=("propagators_6dof", "attitude", "6dof"),
+            default_repeats=3,
+            default_min_sample_time=0.0,
+        ),
+        BenchmarkCase(
+            name="propagators_6dof.environment_facet_32_steps",
+            group="propagators_6dof",
+            description="6-DoF spacecraft propagation with environment-backed facet SRP and drag.",
+            factory=lambda _ctx: _call(lambda: _propagator_6dof_environment(times)),
+            tags=("propagators_6dof", "environment", "6dof"),
+            default_repeats=3,
+            default_min_sample_time=0.0,
+        ),
+        BenchmarkCase(
+            name="propagators_6dof.articulated_facet_32_steps",
+            group="propagators_6dof",
+            description="6-DoF spacecraft propagation with prescribed rotating SRP facets.",
+            factory=lambda _ctx: _call(lambda: _propagator_6dof_articulated_facet(times)),
+            tags=("propagators_6dof", "environment", "articulated", "6dof"),
+            default_repeats=3,
+            default_min_sample_time=0.0,
         ),
         BenchmarkCase(
             name="orbital.kepler_to_state",
@@ -354,9 +399,9 @@ def build_benchmark_cases(
                     default_min_sample_time=0.0,
                 ),
                 BenchmarkCase(
-                    name="io.ssatk_load_json",
+                    name="io.ssatk_read_json",
                     group="io",
-                    description="Read a small nested dict from JSON with ssatk_load.",
+                    description="Read a small nested dict from JSON with ssatk_read.",
                     factory=lambda ctx: _io_load_json_case(data, ctx.output_dir),
                     tags=("io", "json"),
                     default_min_sample_time=0.0,
@@ -367,7 +412,7 @@ def build_benchmark_cases(
     if include_plots:
         cases.append(
             BenchmarkCase(
-                name="plots.orbit_plot_xy",
+                name="plots.orbit_plot_view_xy",
                 group="plots",
                 description="Render a 2-D orbit_plot view without saving the figure.",
                 factory=lambda _ctx: _call(lambda: _plot_orbit_xy(positions)),
@@ -381,11 +426,11 @@ def build_benchmark_cases(
         cases.extend(
             [
                 BenchmarkCase(
-                    name="propagators.rk4_32_steps",
-                    group="propagators",
+                    name="propagators_orbit.rk4_32_steps",
+                    group="propagators_orbit",
                     description="RK4 propagation over 32 short time steps including third-body terms.",
                     factory=lambda _ctx: _call(lambda: _propagator_rk4(r0, v0, times)),
-                    tags=("dynamics", "propagation", "slow"),
+                    tags=("propagators_6dof", "propagation", "slow"),
                     default_repeats=3,
                     default_min_sample_time=0.0,
                 ),
@@ -505,21 +550,139 @@ def _compute_airmass_kasten_young(zenith_deg):
 
 
 def _accel_point_earth(r):
-    from ssapy_toolkit.orbit_accelerations.accel_point_earth import accel_point_earth
+    from ssapy_toolkit.accelerations_orbit.accel_point_earth import accel_point_earth
 
     return accel_point_earth(r)
 
 
 def _propagator_leapfrog(r0, v0, t):
-    from ssapy_toolkit.propagators.leap_frog import leapfrog
+    from ssapy_toolkit.propagators_orbit.leap_frog import leapfrog
 
     return leapfrog(r0, v0, t)
 
 
 def _propagator_rk4(r0, v0, t):
-    from ssapy_toolkit.propagators.rk4 import rk4
+    from ssapy_toolkit.propagators_orbit.rk4 import rk4
 
     return rk4(r0, v0, t)
+
+
+def _propagator_6dof_point_mass(r0, v0, times):
+    from ssapy_toolkit.propagators_6dof import propagate_6dof_high_accuracy
+
+    return propagate_6dof_high_accuracy(
+        r0=r0,
+        v0=v0,
+        times=times,
+        inertia=np.diag([10.0, 12.0, 8.0]),
+        omega0=[0.0, 0.0, 1e-3],
+    )
+
+
+def _propagator_6dof_thruster_mass(times):
+    from ssapy_toolkit.accelerations_6dof import SpacecraftThrusterAccel
+    from ssapy_toolkit.propagators_6dof import Spacecraft
+    from ssapy_toolkit.propagators_6dof import propagate_spacecraft_high_accuracy
+    from ssapy_toolkit.satellites import SpacecraftBody, Thruster
+
+    body = SpacecraftBody.box(name="benchmark_bus", mass=25.0, size=(1.0, 1.0, 1.0)).with_thrusters(
+        Thruster(thrust=0.5, direction_body=[1.0, 0.0, 0.0], position_body=[0.0, 0.2, 0.0], isp=220.0),
+        append=False,
+    )
+    spacecraft = Spacecraft(r=[0.0, 0.0, 0.0], v=[0.0, 0.0, 0.0], body=body)
+    return propagate_spacecraft_high_accuracy(
+        spacecraft,
+        times=times,
+        models=[SpacecraftThrusterAccel()],
+        mu=0.0,
+    )
+
+
+def _propagator_6dof_reaction_wheel(times):
+    from ssapy_toolkit.accelerations_6dof import SpacecraftReactionWheelTorque
+    from ssapy_toolkit.propagators_6dof import Spacecraft
+    from ssapy_toolkit.propagators_6dof import propagate_spacecraft_high_accuracy
+    from ssapy_toolkit.satellites import SpacecraftBody, reaction_wheel_triplet
+
+    body = SpacecraftBody(
+        name="benchmark_wheel_bus",
+        mass=20.0,
+        inertia=np.diag([4.0, 5.0, 6.0]),
+    ).with_reaction_wheels(
+        *reaction_wheel_triplet(max_torque=0.02, momentum_capacity=0.2, wheel_inertia=0.01)
+    )
+    spacecraft = Spacecraft(r=[0.0, 0.0, 0.0], v=[0.0, 0.0, 0.0], body=body)
+    return propagate_spacecraft_high_accuracy(
+        spacecraft,
+        times=times,
+        models=[SpacecraftReactionWheelTorque([0.0, 0.0, 0.01])],
+        mu=0.0,
+    )
+
+
+def _propagator_6dof_environment(times):
+    from ssapy_toolkit.constants import AU, EARTH_RADIUS
+    from ssapy_toolkit.propagators_6dof import Spacecraft
+    from ssapy_toolkit.environment import SpaceEnvironment
+    from ssapy_toolkit.propagators_6dof import propagate_spacecraft_high_accuracy
+    from ssapy_toolkit.satellites import SpacecraftBody
+
+    body = SpacecraftBody.box(name="benchmark_plate", mass=50.0, size=(1.0, 1.0, 1.0))
+    spacecraft = Spacecraft(
+        r=[EARTH_RADIUS + 400_000.0, 0.0, 0.0],
+        v=[0.0, 7_700.0, 0.0],
+        body=body,
+    )
+    environment = SpaceEnvironment(
+        sun_position_model=[AU, 0.0, 0.0],
+        atmosphere_density_model=1e-12,
+        eclipse_model=None,
+    )
+    return propagate_spacecraft_high_accuracy(
+        spacecraft,
+        times=times,
+        environment=environment,
+        environment_models={"drag": True, "solar_radiation": True},
+        mu=0.0,
+    )
+
+
+def _propagator_6dof_articulated_facet(times):
+    from ssapy_toolkit.accelerations_6dof import SpacecraftFacetSolRad
+    from ssapy_toolkit.constants import AU, EARTH_RADIUS
+    from ssapy_toolkit.propagators_6dof import Spacecraft
+    from ssapy_toolkit.propagators_6dof import propagate_spacecraft_high_accuracy
+    from ssapy_toolkit.satellites import SpacecraftBody, rotate_facets
+
+    body = SpacecraftBody.box_wing(
+        name="benchmark_articulated",
+        mass=60.0,
+        bus_size=(1.0, 1.0, 1.0),
+        solar_array_area=4.0,
+        solar_array_axis="y",
+        solar_array_mass=5.0,
+    )
+
+    def track_panel(facets, *, t, **_kwargs):
+        return rotate_facets(facets, axis_body=(0.0, 0.0, 1.0), angle_rad=0.02 * t)
+
+    spacecraft = Spacecraft(
+        r=[EARTH_RADIUS + 700_000.0, 0.0, 0.0],
+        v=[0.0, 7_500.0, 0.0],
+        body=body,
+    )
+    return propagate_spacecraft_high_accuracy(
+        spacecraft,
+        times=times,
+        models=[
+            SpacecraftFacetSolRad(
+                [AU, 0.0, 0.0],
+                body=body,
+                facet_transform=track_panel,
+            )
+        ],
+        mu=0.0,
+    )
 
 
 def _orbital_kepler_to_state(**kwargs):
@@ -565,10 +728,10 @@ def _io_ssatk_save_json(data, output_dir: Path):
 
 
 def _io_load_json_case(data, output_dir: Path):
-    from ssapy_toolkit.io.ssatk_save import ssatk_load
+    from ssapy_toolkit.io.ssatk_save import ssatk_read
 
     path = _io_ssatk_save_json(data, output_dir)
-    return lambda: ssatk_load(path, root="cwd")
+    return lambda: ssatk_read(path, root="cwd")
 
 
 def _plot_orbit_xy(positions):

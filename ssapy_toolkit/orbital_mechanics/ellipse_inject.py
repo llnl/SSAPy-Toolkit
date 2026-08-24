@@ -6,9 +6,8 @@ spacecraft's initial velocity with the fitted-ellipse departure velocity and,
 optionally, comparing the fitted-ellipse arrival velocity with a target velocity.
 
 Use ``ellipse_inject`` when the desired workflow is "burn from this state onto an
-elliptic arc that reaches this endpoint". Use ``transfer_to_endpoint`` when you
-want the same endpoint-input convenience but want to choose another solver such
-as Lambert, Hohmann, bi-elliptic, or transfer_optimal.
+elliptic arc that reaches this endpoint". Use ``transfer_to_endpoint`` to route
+the same endpoint inputs to another canonical solver.
 """
 
 from __future__ import annotations
@@ -32,65 +31,27 @@ __all__ = [
     "ellipse_inject",
     "ellipse_intercept",
     "ellipse_rendezvous",
-    "ellipse_insert",
     "ellipse_insertion",
     "transfer_to_endpoint",
-    "endpoint_transfer",
 ]
 
 _ARRIVAL_MODE_ALIASES = {
     "inject": "inject",
-    "injection": "inject",
     "intercept": "intercept",
-    "flyby": "intercept",
-    "position": "intercept",
-    "position_only": "intercept",
-    "no_arrival_burn": "intercept",
     "rendezvous": "rendezvous",
-    "match": "rendezvous",
-    "match_state": "rendezvous",
-    "match_velocity": "rendezvous",
-    "insert": "insertion",
     "insertion": "insertion",
-    "orbit_insert": "insertion",
-    "orbit_insertion": "insertion",
-    "target_orbit": "insertion",
-    "free_phase": "insertion",
 }
 
 _ENDPOINT_METHOD_ALIASES = {
     "ellipse": "ellipse",
-    "ellipse_fit": "ellipse",
-    "ellipse_inject": "ellipse",
-    "inject_ellipse": "ellipse",
-    "inject": "ellipse",
-    "injection": "ellipse",
     "ellipse_intercept": "ellipse_intercept",
-    "intercept_ellipse": "ellipse_intercept",
-    "ellipse_position": "ellipse_intercept",
     "ellipse_rendezvous": "ellipse_rendezvous",
-    "rendezvous_ellipse": "ellipse_rendezvous",
-    "ellipse_match": "ellipse_rendezvous",
-    "ellipse_insert": "ellipse_insertion",
     "ellipse_insertion": "ellipse_insertion",
-    "insert_ellipse": "ellipse_insertion",
-    "insertion_ellipse": "ellipse_insertion",
     "lambert": "lambert",
-    "lambertian": "lambert",
-    "fixed_time": "lambert",
-    "fixed_time_lambert": "lambert",
     "ssapy": "ssapy",
-    "transfer_ssapy": "ssapy",
-    "shooter": "shooter",
-    "transfer_shooter": "shooter",
     "optimal": "optimal",
-    "transfer_optimal": "optimal",
     "hohmann": "hohmann",
-    "transfer_hohmann": "hohmann",
     "bielliptic": "bielliptic",
-    "bi_elliptic": "bielliptic",
-    "bi-elliptic": "bielliptic",
-    "transfer_bielliptic": "bielliptic",
 }
 
 
@@ -567,9 +528,6 @@ def ellipse_insertion(*args, **kwargs):
     )
 
 
-ellipse_insert = ellipse_insertion
-
-
 def transfer_to_endpoint(method="ellipse", *args, **kwargs):
     """Dispatch endpoint-transfer inputs to an SSATK transfer method.
 
@@ -583,8 +541,9 @@ def transfer_to_endpoint(method="ellipse", *args, **kwargs):
         Use fixed-time endpoint modes. Supply ``tof``, ``t2``, or a target epoch.
     ``method="ellipse_insertion"``
         Use free-time target-orbit insertion on the fitted endpoint ellipse.
-    ``method="lambert"`` / ``"ssapy"`` / ``"shooter"``
-        Use fixed-time Lambert-style solvers; supply ``tof`` or ``t2``.
+    ``method="lambert"`` / ``"ssapy"``
+        Use :func:`transfer_ssapy` for a fixed-time Lambert solve; supply
+        ``tof`` or ``t2``.
     ``method="optimal"``
         Use :func:`transfer_optimal` for a searched Lambert design space.
     ``method="hohmann"`` / ``"bielliptic"``
@@ -599,18 +558,10 @@ def transfer_to_endpoint(method="ellipse", *args, **kwargs):
         return ellipse_rendezvous(*args, **kwargs)
     if normalized == "ellipse_insertion":
         return ellipse_insertion(*args, **kwargs)
-    if normalized == "lambert":
-        from ssapy_toolkit.orbital_mechanics.transfer_lambertian import transfer_lambertian
-
-        return transfer_lambertian(*args, **kwargs)
-    if normalized == "ssapy":
+    if normalized in {"lambert", "ssapy"}:
         from ssapy_toolkit.orbital_mechanics.transfer_ssapy_function import transfer_ssapy
 
         return transfer_ssapy(*args, **kwargs)
-    if normalized == "shooter":
-        from ssapy_toolkit.orbital_mechanics.transfer_shooter import transfer_shooter
-
-        return transfer_shooter(*args, **kwargs)
     if normalized == "optimal":
         from ssapy_toolkit.orbital_mechanics.transfer_optimal_function import transfer_optimal
 
@@ -624,6 +575,3 @@ def transfer_to_endpoint(method="ellipse", *args, **kwargs):
 
         return transfer_bielliptic(*args, **kwargs)
     raise AssertionError(f"Unhandled endpoint method {normalized!r}")
-
-
-endpoint_transfer = transfer_to_endpoint

@@ -3,9 +3,9 @@ import sys
 
 import numpy as np
 
-from ssapy_toolkit.plots.orbit_plot_xy import orbit_plot_xy
-from ssapy_toolkit.propagators.leap_frog import leapfrog
-from ssapy_toolkit.orbit_accelerations.accel_uniform_earth import accel_uniform_earth
+from ssapy_toolkit.plots.orbit_plot import orbit_plot
+from ssapy_toolkit.propagators_orbit.leap_frog import leapfrog
+from ssapy_toolkit.accelerations_orbit.accel_uniform_earth import accel_uniform_earth
 from ssapy_toolkit.plots.figpath import figpath
 from ssapy_toolkit.constants import RGEO, VGEO  # inferred from context [21]
 
@@ -24,15 +24,17 @@ def main(make_figures=None, fast=None):
     r2, v2 = leapfrog(r0=[RGEO, 0, 0], v0=[0, VGEO, 0], t=t, velocity=(0, 600, -1))
 
     if make_figures:
-        orbit_plot_xy(
+        orbit_plot(
             r1,
+            view="xy",
             save_path=figpath("demo_gallery/figures/testing_leapfrog_RGEO.jpg"),
             pad=0.1,
             title="GEO",
             show=False,
         )
-        orbit_plot_xy(
+        orbit_plot(
             r2,
+            view="xy",
             save_path=figpath("demo_gallery/figures/testing_leapfrog_RGEO_velocity_burn.jpg"),
             pad=0.1,
             title="GEO",

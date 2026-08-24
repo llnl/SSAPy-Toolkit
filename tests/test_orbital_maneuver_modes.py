@@ -4,8 +4,8 @@ Benchmark provenance:
 * Hohmann and bi-elliptic checks use the closed-form two-body equations in
   Bate, Mueller, and White, *Fundamentals of Astrodynamics*, Ch. 3, and Curtis,
   *Orbital Mechanics for Engineering Students*, Sec. 6.3--6.4.
-* Lambert-wrapper checks compare equivalent wrappers against the same fixed
-  two-point boundary-value solution, the standard Lambert problem described in
+* Fixed-time transfer checks compare against the standard Lambert
+  two-point boundary-value solution described in
   Vallado, *Fundamentals of Astrodynamics and Applications*, Ch. 7.
 * Continuous-burn checks use constant-acceleration identities, delta-v = a t,
   with inclination/velocity direction conventions verified through the canonical
@@ -26,14 +26,10 @@ from ssapy_toolkit.orbital_mechanics.burn_to_deltav import burn_to_deltav
 from ssapy_toolkit.orbital_mechanics.deltav_to_burn import deltav_to_burn
 from ssapy_toolkit.orbital_mechanics.misc import bi_elliptic_transfer_delta_v, hohmann_transfer_delta_v
 from ssapy_toolkit.orbital_mechanics.transfer_bielliptic import transfer_bielliptic
-from ssapy_toolkit.orbital_mechanics.transfer_coplanar import transfer_coplanar
 from ssapy_toolkit.orbital_mechanics.transfer_coplanar_continuous import transfer_coplanar_continuous
 from ssapy_toolkit.orbital_mechanics.transfer_hohmann import transfer_hohmann
 from ssapy_toolkit.orbital_mechanics.transfer_inclination_continuous import transfer_inclination_continuous
-from ssapy_toolkit.orbital_mechanics.transfer_lambertian import transfer_lambertian
 from ssapy_toolkit.orbital_mechanics.transfer_optimal_function import transfer_optimal
-from ssapy_toolkit.orbital_mechanics.transfer_optimal_function import transfer_rendezvous
-from ssapy_toolkit.orbital_mechanics.transfer_shooter import transfer_shooter
 from ssapy_toolkit.orbital_mechanics.transfer_ssapy_function import transfer_ssapy
 from ssapy_toolkit.orbital_mechanics.transfer_velocity_and_inclination_continuous import (
     transfer_velocity_and_inclination_continuous,
@@ -86,43 +82,23 @@ def test_bielliptic_outward_and_inward_cases_match_closed_form(radius1, radius2)
     assert result["trajectory"]["r"].shape == (11, 3)
 
 
-@pytest.mark.parametrize(
-    "name,func,kwargs",
-    [
-        ("transfer_ssapy", transfer_ssapy, {}),
-        ("transfer_lambertian", transfer_lambertian, {}),
-        ("transfer_shooter", transfer_shooter, {}),
-        ("transfer_coplanar", transfer_coplanar, {"coplanar_tol": 1e-9}),
-    ],
-)
-def test_fixed_time_lambert_wrappers_share_canonical_solution(name, func, kwargs):
+def test_transfer_ssapy_fixed_time_matches_reference_solution():
     departure = _state(theta=0.0, t=0.0)
     arrival = _state(theta=0.2, t=1000.0)
-    result = func(departure, arrival, propagate=False, refine=False, burn_duration=1.0, **kwargs)
-    baseline = transfer_ssapy(departure, arrival, propagate=False, refine=False, burn_duration=1.0)
+    result = transfer_ssapy(departure, arrival, propagate=False, refine=False, burn_duration=1.0)
 
-    _assert_standard_transfer(result, name, min_burns=2)
-    assert result["delta_v_total"] == pytest.approx(baseline["delta_v_total"], rel=1e-12)
+    _assert_standard_transfer(result, "transfer_ssapy", min_burns=2)
     assert result["delta_v_total"] == pytest.approx(13624.643379536796, rel=1e-9)
 
 
-@pytest.mark.parametrize(
-    "func,kwargs",
-    [
-        (transfer_ssapy, {}),
-        (transfer_lambertian, {}),
-        (transfer_shooter, {}),
-        (transfer_coplanar, {"coplanar_tol": 1e-9}),
-    ],
-)
-def test_fixed_time_transfers_accept_raw_state_vectors(func, kwargs):
+def test_transfer_ssapy_accepts_raw_state_vectors():
     r0, v0, _ = _state(theta=0.0)
     r1, v1, _ = _state(theta=0.2)
 
-    vector_result = func(r0, v0, r1, v1, tof=1000.0, propagate=False, refine=False, burn_duration=1.0, **kwargs)
-    tuple_result = func((r0, v0, 0.0), (r1, v1, 1000.0), propagate=False, refine=False, burn_duration=1.0, **kwargs)
+    vector_result = transfer_ssapy(r0, v0, r1, v1, tof=1000.0, propagate=False, refine=False, burn_duration=1.0)
+    tuple_result = transfer_ssapy((r0, v0, 0.0), (r1, v1, 1000.0), propagate=False, refine=False, burn_duration=1.0)
 
-    _assert_standard_transfer(vector_result, vector_result["method"], min_burns=2)
+    _assert_standard_transfer(vector_result, "transfer_ssapy", min_burns=2)
     assert vector_result["delta_v_total"] == pytest.approx(tuple_result["delta_v_total"], rel=1e-12)
     assert vector_result["tof"] == pytest.approx(1000.0)
 
@@ -144,7 +120,7 @@ def test_fixed_time_raw_state_vectors_require_time_of_flight():
     r1, v1, _ = _state(theta=0.2)
 
     with pytest.raises(ValueError, match="tof/t2"):
-        transfer_lambertian(r0, v0, r1, v1, propagate=False, refine=False)
+        transfer_ssapy(r0, v0, r1, v1, propagate=False, refine=False)
 
 
 def test_transfer_ssapy_catalog_cases_cover_raise_phasing_and_plane_change():
@@ -244,7 +220,7 @@ def test_transfer_optimal_delta_v_modes(delta_v_mode, arrival_burn, expected_bur
     assert result["diagnostics"]["objective_delta_v"] == pytest.approx(expected_objective, rel=1e-9)
 
 
-def test_transfer_optimal_time_budget_and_rendezvous_wrapper_cases():
+def test_transfer_optimal_time_budget_and_rendezvous_cases():
     r0, v0, _ = _state()
     r1, v1, _ = _state(theta=0.2)
     kwargs = {
@@ -258,16 +234,16 @@ def test_transfer_optimal_time_budget_and_rendezvous_wrapper_cases():
     }
 
     min_time = transfer_optimal((r0, v0, 0.0), (r1, v1, 0.0), objective="time", dv_budget=5000.0, **kwargs)
-    rendezvous = transfer_rendezvous((r0, v0, 0.0), (r1, v1, 0.0), **kwargs)
+    rendezvous = transfer_optimal((r0, v0, 0.0), (r1, v1, 0.0), arrival_mode="rendezvous", **kwargs)
 
     _assert_standard_transfer(min_time, "transfer_optimal", min_burns=2)
-    _assert_standard_transfer(rendezvous, "transfer_rendezvous", min_burns=2)
+    _assert_standard_transfer(rendezvous, "transfer_optimal", min_burns=2)
     assert min_time["diagnostics"]["objective"] == "min_time"
     assert min_time["tof"] == pytest.approx(1000.0)
     assert rendezvous["delta_v_total"] == pytest.approx(min_time["delta_v_total"], rel=1e-9)
 
 
-def test_transfer_optimal_and_rendezvous_accept_raw_state_vectors_for_all_objectives():
+def test_transfer_optimal_accepts_raw_state_vectors_for_all_objectives():
     r0, v0, _ = _state()
     r1, v1, _ = _state(theta=0.2)
     kwargs = {
@@ -284,13 +260,13 @@ def test_transfer_optimal_and_rendezvous_accept_raw_state_vectors_for_all_object
     first = transfer_optimal(r0, v0, r1, v1, delta_v_mode="first", arrival_burn=False, **kwargs)
     last = transfer_optimal(r0, v0, r1, v1, delta_v_mode="last", **kwargs)
     fastest = transfer_optimal(r0, v0, r1, v1, objective="time", dv_budget=5000.0, **kwargs)
-    rendezvous = transfer_rendezvous(r0, v0, r1, v1, **kwargs)
+    rendezvous = transfer_optimal(r0, v0, r1, v1, arrival_mode="rendezvous", **kwargs)
 
     assert total["diagnostics"]["delta_v_mode"] == "total"
     assert first["diagnostics"]["delta_v_mode"] == "first"
     assert last["diagnostics"]["delta_v_mode"] == "last"
     assert fastest["diagnostics"]["objective"] == "min_time"
-    assert rendezvous["method"] == "transfer_rendezvous"
+    assert rendezvous["method"] == "transfer_optimal"
     assert len(first["burns"]) == 1
     assert len(total["burns"]) == len(last["burns"]) == len(rendezvous["burns"]) == 2
 

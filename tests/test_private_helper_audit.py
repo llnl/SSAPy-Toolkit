@@ -200,7 +200,7 @@ def test_geomagnetic_optional_grid_helpers_with_fake_geopack(monkeypatch, tmp_pa
     assert isinstance(external, TinyGrid)
     np.testing.assert_allclose(external.parmod[:4], [2.0, -5.0, 1.0, -2.0])
     assert gm._get_external(date, kp=3, step=2.0, model="t96", solar_wind={"dp_nPa": 2.0, "dst": -5.0, "by_nT": 1.0, "bz_nT": -2.0}) is external
-    assert isinstance(gm._get_t89(date, kp=1, step=2.0), TinyGrid)
+    assert isinstance(gm._get_external(date, kp=1, step=2.0, model="t89"), TinyGrid)
 
 
 def test_geomagnetic_aep8_builder_with_fake_spacepy(monkeypatch, tmp_path):

@@ -26,7 +26,8 @@ or inertial position/velocity arrays and needs to add:
 * quaternion attitude state,
 * body-frame angular rate,
 * spacecraft mass and inertia,
-* attitude-dependent drag and solar-radiation-pressure forces,
+* attitude- and angular-rate-dependent drag plus solar-radiation-pressure
+  forces,
 * body-frame torques,
 * finite thrust and mass depletion,
 * optional hardware components such as facets, tanks, thrusters, and wheels.
@@ -277,8 +278,9 @@ SSATK should implement a small, composable 6-DoF layer with these boundaries:
 ``ReactionWheel``
     A body-frame actuator with a torque axis, torque limit, and optional
     momentum-capacity metadata. The current SSATK implementation contributes
-    saturated body-frame torque; separate wheel-speed/momentum-state
-    propagation remains a later extension.
+    saturated body-frame torque and can propagate wheel angular momentum as
+    separate states when wheels are attached to a ``SpacecraftBody``. Commands
+    are clipped at configured momentum-capacity limits.
 
 ``Environment``
     A provider for atmosphere density, wind, Sun position, third-body positions,
@@ -318,7 +320,6 @@ architecture:
 * flexible bodies,
 * fuel slosh,
 * articulated solar arrays,
-* reaction-wheel momentum-state propagation,
 * contact dynamics,
 * high-order geopotential torque,
 * full finite-element or CAD-derived spacecraft geometry,
@@ -334,29 +335,105 @@ Current SSATK State
 The current SSATK 6-DoF implementation already has the correct minimal
 numerical backbone:
 
-* ``ssapy_toolkit.dynamics.Spacecraft`` stores inertial position, inertial
+* ``ssapy_toolkit.propagators_6dof.Spacecraft`` stores inertial position, inertial
   velocity, quaternion attitude, angular rate, inertia, mass, area, drag
   coefficient, reflectivity coefficient, and center of pressure.
-* ``ssapy_toolkit.dynamics.propagate_6dof`` propagates position, velocity,
-  quaternion, and angular rate with user-provided acceleration and torque
-  models.
+* ``ssapy_toolkit.propagators_6dof.propagate_6dof`` propagates position, velocity,
+  quaternion, angular rate, and solver diagnostics with user-provided
+  acceleration and torque models.
+* ``ssapy_toolkit.propagators_6dof.propagate_6dof`` forwards SciPy ``solve_ivp`` events
+  and dense output for event-driven propagation segments without adding an
+  SSATK-specific event framework.
+* ``ssapy_toolkit.propagators_6dof.radius_crossing_event``,
+  ``altitude_crossing_event``, ``mass_floor_event``, and
+  ``propellant_empty_event`` provide small reusable physical event helpers for
+  altitude/radius crossings and burn mass limits.
 * ``ssapy_toolkit.accelerations_6dof`` contains point-mass gravity, J2,
   third-body gravity, cannonball drag, cannonball solar-radiation pressure,
   constant inertial/NTW/body acceleration, summed force/torque helpers, and
-  flat-plate/facet drag/SRP, thruster, magnetic-dipole, reaction-wheel, and
-  quaternion PD attitude-control torque models.
+  flat-plate/facet drag/SRP, thruster, gravity-gradient, magnetic-dipole,
+  reaction-wheel, and quaternion PD attitude-control torque models.
+  Flat-plate and facet drag include the local surface velocity from body-frame
+  angular rate and accept explicit atmosphere velocity inputs, so force and
+  torque change when exposed surfaces spin relative to winds or rigid
+  co-rotation.
 * ``ssapy_toolkit.accelerations_6dof.SpacecraftManeuverAccel`` adds finite
   maneuver acceleration with explicit ``frame`` selection and scalar, callable,
   analytical, or CSV-loaded thrust curves.
-* ``ssapy_toolkit.dynamics.attitude_quaternion_from_frame`` converts existing
+* ``ssapy_toolkit.accelerations_6dof.SpacecraftAccelSSAPy`` adapts SSAPy
+  translational accelerations into the SSATK 6-DoF force-model interface. This
+  allows SSATK to reuse SSAPy's mature Earth harmonics, third-body gravity,
+  Harris-Priester drag, solar radiation, and Earth radiation models without
+  forcing all spacecraft body physics into SSAPy.
+* ``ssapy_toolkit.propagators_6dof.propagate_6dof`` can optionally propagate spacecraft
+  mass as a 14th state when a mass-flow model is supplied. Thruster force models
+  therefore see the current propagated mass instead of a fixed initial mass.
+  When a ``SpacecraftBody`` has tanks, propagated mass updates tank propellant
+  proportionally for state-dependent center of mass and inertia.
+  ``Spacecraft.propagate`` continues tanked bodies at dry mass by default after
+  depletion and disables propulsive acceleration, torque, and mass flow. Set
+  ``stop_at_dry_mass=True`` for a terminal dry-mass event; lower-level
+  ``propagate_6dof`` calls should pass ``propellant_empty_event`` or
+  ``mass_floor_event`` explicitly.
+* ``ssapy_toolkit.propagators_6dof.propagate_spacecraft_high_accuracy`` provides
+  the current analyst-facing high-accuracy entry point for combining SSATK
+  body/torque/thrust models with optional SSAPy translational perturbations.
+* ``ssapy_toolkit.propagators_6dof.propagate_spacecraft_segments`` chains
+  consecutive coast/burn/environment segments while preserving state, propagated
+  mass, event diagnostics, and solver evaluation counts.
+* ``ssapy_toolkit.environment.SpaceEnvironment`` centralizes epoch-aware
+  Sun/Moon position, atmosphere density/velocity, magnetic-field,
+  eclipse-fraction, and environment-backed SSATK force-model construction,
+  including named third-body perturbations. The conical eclipse model applies
+  disk-overlap visibility for Earth and Moon solar occultation by default so
+  cislunar SRP cases do not remain fully illuminated behind the Moon. The
+  default atmosphere velocity is rigid Earth co-rotation; the default magnetic
+  field is a dependency-light centered Earth dipole; ``magnetic_field_model="igrf"``
+  uses optional ``ppigrf`` for epoch-dependent internal-field synthesis.
+* ``ssapy_toolkit.coordinates.attitude_quaternion_from_frame`` converts existing
   SSATK satellite-operation frame definitions, such as ``ntw``, ``vnb``, and
   ``nadir_velocity``, into body-to-GCRF target quaternions for attitude-control
   studies.
 
-The missing layer is not the integrator. The remaining major gaps are higher
-fidelity body/component state propagation: wheel momentum states, articulated
-appendages, flexible bodies, propellant slosh, and event-driven finite-burn
-segments.
+The package boundary for new 6-DoF work is:
+
+* ``ssapy_toolkit.coordinates`` owns coordinate-frame and quaternion attitude
+  transforms.
+* ``ssapy_toolkit.propagators_6dof`` owns spacecraft state containers, rigid-body
+  equations of motion, and the low-level right-hand side.
+* ``ssapy_toolkit.accelerations_6dof`` owns 6-DoF force, acceleration, torque,
+  thrust-curve, and mass-flow models. Do not move state propagation into this
+  namespace; doing so would mix equations of motion with force models.
+  Facet drag/SRP models support callable ``facet_transform`` hooks for
+  prescribed articulated panels without adding extra propagated states.
+* ``ssapy_toolkit.propagators_6dof`` owns analyst-facing integration wrappers
+  and segmented propagation.
+* ``ssapy_toolkit.accelerations_orbit`` and
+  ``ssapy_toolkit.propagators_orbit`` are the canonical names for translational
+  orbit-only acceleration callbacks and propagators.
+* ``ssapy_toolkit.engines`` owns propulsion catalogs, thrust profiles,
+  propellant estimates, and stationkeeping/maneuver engine helpers.
+* ``ssapy_toolkit.launch`` owns launch-vehicle and launch-to-orbit utilities.
+  It is intentionally small until launch-ascent modeling is implemented.
+* ``ssapy_toolkit.compute`` should stay as a lightweight numerical-helper
+  namespace for now. If it grows, split by function rather than moving all at
+  once: photometry to a photometry namespace, geometry helpers to geometry,
+  time-series tools to numerics/signal, and chaos metrics to dynamics analysis.
+
+Propagation speed is a first-class development goal. New force, torque,
+environment, and propagator work should add representative cases to
+``ssapy_toolkit.benchmark`` before broad optimization. The initial benchmark
+coverage includes point-mass 6-DoF propagation, thruster propagation with
+mass depletion, environment-backed facet drag/SRP propagation, and a prescribed
+articulated-facet SRP case. Optimization work should preserve the public API,
+avoid duplicated solver logic, and move shared math into reusable helpers rather
+than copying code between force models, propagators, demos, and tests.
+
+The remaining major gaps are higher-fidelity body/component state propagation:
+dynamically propagated appendage angles, flexible bodies, propellant slosh,
+maneuver targeting/optimization over multiple segments, high-fidelity atmosphere
+models, and validation benchmarks against SSAPy, GMAT, Orekit, Basilisk, or
+Tudat reference cases.
 
 Recommended Direction
 ---------------------
@@ -398,10 +475,11 @@ The public workflow should remain:
        ssatk.Component(mass=25.0, position_body=[0.0, 0.0, 0.7], name="payload"),
    )
 
-   trajectory = ssatk.Spacecraft(r=spacecraft.r, v=spacecraft.v, body=body).propagate(
+   trajectory = ssatk.propagate_spacecraft_high_accuracy(
+       ssatk.Spacecraft(r=spacecraft.r, v=spacecraft.v, body=body),
        times=np.linspace(0.0, 600.0, 61),
+       ssapy_perturbations=True,
        models=[
-           ssatk.SpacecraftAccelJ2(),
            ssatk.SpacecraftFacetDrag(density=1e-12),
            ssatk.SpacecraftFacetSolRad([ssatk.AU, 0.0, 0.0]),
        ],

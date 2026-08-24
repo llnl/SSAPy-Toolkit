@@ -4,9 +4,10 @@
 # flake8: noqa: E501
 import numpy as np
 from ssapy.body import get_body
+from astropy.time import Time
+
 from ..constants import RGEO, EARTH_MU, MOON_MU
-from ..time_functions import Time
-from .plotutils import make_black, make_white, save_plot, _pop_save_path_aliases, _raise_unrecognized_kwargs
+from .plotutils import make_black, make_white, figsave, _pop_save_path_aliases, _raise_unrecognized_kwargs
 
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -215,7 +216,7 @@ def koe_2dhist(stable_data, title: str = "Initial orbital elements of\n1 year st
     fig, ax = make_white(fig, ax)
 
     if save_path:
-        save_plot(fig, save_path)
+        figsave(fig, save_path)
     return fig
 
 
@@ -253,7 +254,7 @@ def scatter2d(x: list, y: list, cs: list, xlabel: str = 'x', ylabel: str = 'y', 
     fig, ax = make_black(fig, ax)
     plt.show(block=False)
     if save_path:
-        save_plot(fig, save_path)
+        figsave(fig, save_path)
     return
 
 
@@ -296,7 +297,7 @@ def scatter3d(x: list, y: list = None, z: list = None, cs: list = None,
     fig, ax = make_black(fig, ax)
     plt.show(block=False)
     if save_path:
-        save_plot(fig, save_path)
+        figsave(fig, save_path)
     return fig, ax
 
 
@@ -387,6 +388,6 @@ def orbit_divergence_plot(rs: np.ndarray, r_moon: np.ndarray = None, t=None,
     if show:
         plt.show(block=False)
     if save_path:
-        save_plot(fig, save_path)
+        figsave(fig, save_path)
         return None
     return fig

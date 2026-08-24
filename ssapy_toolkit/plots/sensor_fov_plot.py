@@ -462,9 +462,6 @@ def build_figure(cfg: dict, r_km: np.ndarray, v_kms: np.ndarray, t=None) -> go.F
         default_radius_mode = "match_moon" if moon_norm > 0.0 else "angular"
         sun_radius_mode = cfg.get("sun_radius_mode", default_radius_mode)
         sun_radius_scale = float(cfg.get("sun_radius_scale", 1.0))
-        if "sun_radius_factor" in cfg and "sun_radius_mode" not in cfg and "sun_radius_scale" not in cfg:
-            sun_radius_mode = "legacy"
-            sun_radius_scale = float(cfg["sun_radius_factor"])
         sun_distance_mode = cfg.get("sun_distance_mode", "angular")
         sun_distance_factor = float(cfg.get("sun_distance_factor", 2.5))
         sun_distance_km = cfg.get("sun_distance_km")

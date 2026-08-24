@@ -3,8 +3,8 @@ from scipy.integrate import solve_ivp
 import warnings
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from ..orbit_accelerations import accel_velocity
-from ..plots import set_axes_equal, save_plot
+from ..accelerations_orbit import accel_velocity
+from ..plots import set_axes_equal, figsave
 from ..plots.plotutils import _pop_save_path_aliases, _raise_unrecognized_kwargs
 from ..constants import EARTH_MU, EARTH_RADIUS
 from ._transfer_result import maneuver_burn, trajectory_dict, transfer_result, transfer_state
@@ -244,4 +244,4 @@ def _plot_transfer(sol, r0, v0, r_final, v_final, t0, t_final, mu, body_radius, 
     plt.show()
 
     if save_path:
-        save_plot(fig, save_path)
+        figsave(fig, save_path)

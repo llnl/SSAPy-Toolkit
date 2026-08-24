@@ -1,7 +1,8 @@
 import numpy as np
 from ssapy import get_body, groundTrack, rv, SciPyPropagator, AccelKepler, Orbit
+from astropy.time import Time
+
 from ..constants import RGEO
-from ..time_functions import Time
 from .angle_units import rad0to2pi
 
 

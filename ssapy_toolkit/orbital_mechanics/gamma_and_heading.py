@@ -1,7 +1,8 @@
 import numpy as np
+from astropy.time import Time
+
 from ..coordinates import gcrf_to_itrf, v_from_r
 from ..vectors import angle_between_vectors
-from ..time_functions import Time
 
 
 def calc_gamma(r, t):

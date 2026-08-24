@@ -2,8 +2,8 @@ import numpy as np
 from ssapy import get_body
 from ssapy.body import MoonPosition
 from ssapy.utils import normed
+from astropy.time import Time
 
-from ..time_functions import Time
 from .velocity import v_from_r
 
 

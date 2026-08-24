@@ -314,10 +314,6 @@ def _get_external(date, kp=2, step=None, model="t89", solar_wind=None):
     return g
 
 
-def _get_t89(date, kp=2, step=None):        # back-compat
-    return _get_external(date, kp=kp, step=step, model="t89")
-
-
 def _enu_to_cartesian_batch(Be, Bn, Bu, lons_deg, lats_deg):
     lo = np.radians(lons_deg)
     la = np.radians(lats_deg)

@@ -23,7 +23,7 @@ from ssapy_toolkit.compute.lambertian_magnitude import lambertian_reflection
 from ssapy_toolkit.plots.figpath import figpath
 from ssapy_toolkit.plots.groundtrack_plot import groundtrack_plot
 from ssapy_toolkit.plots.orbit_plot import orbit_plot
-from ssapy_toolkit.plots.plotutils import save_plot
+from ssapy_toolkit.plots.plotutils import figsave
 from ssapy_toolkit.time_functions.get_times import get_times
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
@@ -139,11 +139,11 @@ def main(make_figures=None, fast=None):
     if make_figures:
         fig, _ax = orbit_plot(r, times, frame="gcrf")
         out_gcrf = figpath("demo_gallery/figures/ssapy_orbit_gcrf")
-        save_plot(fig, save_path=out_gcrf)
+        figsave(fig, save_path=out_gcrf)
 
         fig, _ax = orbit_plot(r, times, frame="lunar")
         out_lunar = figpath("demo_gallery/figures/ssapy_orbit_lunar")
-        save_plot(fig, save_path=out_lunar)
+        figsave(fig, save_path=out_lunar)
 
         # Ground track
         groundtrack_plot(r, times, save_path=figpath("demo_gallery/figures/ssapy_ground_track"))

@@ -1,8 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from ..constants import EARTH_MU, EARTH_RADIUS
-from .plotutils import save_plot, _pop_save_path_aliases, _raise_unrecognized_kwargs
-from ..propagators import leapfrog
+from .plotutils import figsave, _pop_save_path_aliases, _raise_unrecognized_kwargs
+from ..propagators_orbit import leapfrog
 from ssapy import Orbit
 
 
@@ -108,7 +108,7 @@ def orbit_plot_rv(state_vectors, colors=False, mu=EARTH_MU, show=True, c='black'
     plt.axis('equal')
 
     if save_path:
-        save_plot(fig, save_path)
+        figsave(fig, save_path)
     if show:
         plt.show()
     else:

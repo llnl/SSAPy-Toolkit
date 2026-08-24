@@ -11,7 +11,7 @@ Belt geometry (belt_style)
              South Atlantic Anomaly.  Requires ppigrf (falls back
              automatically if unavailable).
   'lshell' — analytic dipole L-shell crescent (no ppigrf needed).
-  'torus'  — legacy circular torus.
+  'torus'  — analytic circular torus.
 
 Belt dimensions (approximate, L-shell based):
   Inner belt : 1.0 - 2.0 RE  (proton-dominated, warm)
@@ -136,7 +136,6 @@ def _igrf_belt_backend():
 # but catalogues are J2000 equatorial.  Plotting RA/Dec straight into this
 # frame leaves the sky misaligned by GMST: measured median 68.6 deg, max 80.3.
 # ---------------------------------------------------------------------------
-# back-compat alias
 # ===========================================================================
 # Public API
 # ===========================================================================
@@ -262,7 +261,7 @@ def plot_van_allen_3d(
                 # set/get_external_model() rather than attribute assignment: the
                 # state lives in ssapy_toolkit.geomagnetics, and assigning it on a
                 # module that merely re-exports the physics is a silent no-op.
-                _mfx.set_external_model(_mfx._get_t89(_sky_date, kp=kp))
+                _mfx.set_external_model(_mfx._get_external(_sky_date, kp=kp, model="t89"))
             _fx = _mfx._flux_isosurfaces(_sky_date, axis,
                                          pitch_angle_deg=pitch_angle_deg,
                                          n_L=22 if hi else 16, n_azim=24 if hi else 18,
@@ -302,7 +301,7 @@ def plot_van_allen_3d(
                 _mf = None
         if _mf is not None and external_field and str(external_field).lower() == "t89" \
                 and getattr(_mf, "_HAS_GEOPACK", False):
-            _mf.set_external_model(_mf._get_t89(date, kp=kp))
+            _mf.set_external_model(_mf._get_external(date, kp=kp, model="t89"))
         print("  belts: tracing IGRF L-shells...", flush=True)
         ox, oy, oz, oi, oj, ok, ocol = igrf_mesh(
             outer_min_RE, outer_max_RE, date, axis, base_rgb=(60, 150, 255),

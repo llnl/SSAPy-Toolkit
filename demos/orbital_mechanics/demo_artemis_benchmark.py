@@ -12,7 +12,7 @@ from ssapy import Orbit, rv, SciPyPropagator, AccelKepler
 
 from ssapy_toolkit.plots.figpath import figpath
 from ssapy_toolkit.io.demo_data import ensure_demo_data_file
-from ssapy_toolkit.plots.cislunar_plot_3d import cislunar_plot_3d
+from ssapy_toolkit.plots.orbit_plot import orbit_plot
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
@@ -199,9 +199,10 @@ def main(make_figures=None, fast=None, verbose=None, sync_threshold_km=50.0, all
         r_model_plot = r_model[::step]
         t_plot = t_ref.gps[::step]
 
-        fig3d, ax3d = cislunar_plot_3d(
+        fig3d, ax3d = orbit_plot(
             [r_truth_plot, r_model_plot],
             t=[t_plot, t_plot],
+            view="cislunar_3d",
             figsize=(8, 8),
             fontsize=12,
             save_path=str(out3),

@@ -7,7 +7,6 @@ from ssapy_toolkit.orbital_mechanics.ellipse_inject import (
     ellipse_insertion,
     ellipse_intercept,
     ellipse_rendezvous,
-    endpoint_transfer,
     transfer_to_endpoint,
 )
 
@@ -46,7 +45,7 @@ def test_ellipse_inject_intercept_accepts_position_only_target():
     r1, v1, _ = _circular_state(7000e3)
     r2, _v2, _ = _circular_state(9000e3, theta=0.7)
 
-    result = ellipse_inject(r1, v1, r2, n_pts=16, arrival_mode="injection")
+    result = ellipse_inject(r1, v1, r2, n_pts=16, arrival_mode="inject")
 
     assert len(result["burns"]) == 1
     assert result["diagnostics"]["arrival_mode"] == "inject"
@@ -147,15 +146,14 @@ def test_ellipse_inject_rejects_enforced_incompatible_tof():
         ellipse_inject(r1, v1, r2, v2, tof=10.0, enforce_tof=True, n_pts=16)
 
 
-def test_transfer_to_endpoint_dispatches_ellipse_and_lambert():
+def test_transfer_to_endpoint_dispatches_canonical_methods():
     r1, v1, _ = _circular_state(7000e3)
     r2, v2, _ = _circular_state(7000e3, theta=0.2)
 
     ellipse_result = transfer_to_endpoint("ellipse", r1, v1, r2, v2, n_pts=12)
-    alias_result = endpoint_transfer("ellipse_fit", r1, v1, r2, v2, n_pts=12)
     intercept_result = transfer_to_endpoint("ellipse_intercept", r1, v1, r2, tof=ellipse_result["tof"], n_pts=12)
-    insertion_result = transfer_to_endpoint("ellipse_insert", r1, v1, r2, v2, n_pts=12)
-    rendezvous_result = transfer_to_endpoint("rendezvous_ellipse", r1, v1, r2, v2, tof=insertion_result["tof"], n_pts=12)
+    insertion_result = transfer_to_endpoint("ellipse_insertion", r1, v1, r2, v2, n_pts=12)
+    rendezvous_result = transfer_to_endpoint("ellipse_rendezvous", r1, v1, r2, v2, tof=insertion_result["tof"], n_pts=12)
     lambert_result = transfer_to_endpoint(
         "lambert",
         r1,
@@ -169,7 +167,6 @@ def test_transfer_to_endpoint_dispatches_ellipse_and_lambert():
     )
 
     assert ellipse_result["method"] == "ellipse_inject"
-    assert alias_result["method"] == "ellipse_inject"
     assert ellipse_result["diagnostics"]["arrival_mode"] == "inject"
     assert intercept_result["diagnostics"]["arrival_mode"] == "intercept"
     assert len(intercept_result["burns"]) == 1
@@ -177,7 +174,7 @@ def test_transfer_to_endpoint_dispatches_ellipse_and_lambert():
     assert len(insertion_result["burns"]) == 2
     assert rendezvous_result["diagnostics"]["arrival_mode"] == "rendezvous"
     assert len(rendezvous_result["burns"]) == 2
-    assert lambert_result["method"] == "transfer_lambertian"
+    assert lambert_result["method"] == "transfer_ssapy"
     assert lambert_result["tof"] == pytest.approx(1000.0)
 
     with pytest.raises(ValueError, match="Unsupported method"):

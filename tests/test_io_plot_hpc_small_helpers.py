@@ -108,7 +108,6 @@ def test_hpc_partition_helpers_cover_remainder_and_empty_slices():
     from ssapy_toolkit import hpc
 
     assert hpc.get_unique_id(rank=2, run_number=3, cpus_per_node=8) == 26
-    assert hpc.get_unique_id2(rank=2, run_number=3, cpus_per_node=8) == 26
     assert hpc.distribute_array_no_mpi(unique_id=0, total_jobs=3, array_size=10) == (0, 4)
     assert hpc.distribute_array_no_mpi(unique_id=1, total_jobs=3, array_size=10) == (4, 7)
     assert hpc.distribute_array_no_mpi(unique_id=2, total_jobs=3, array_size=10) == (7, 10)

@@ -8,7 +8,7 @@ from ssapy.utils import find_file
 from .plotutils import (
     make_black,
     make_white,
-    save_plot,
+    figsave,
     valid_orbits,
     _pop_save_path_aliases,
     _raise_unrecognized_kwargs,
@@ -281,7 +281,7 @@ def globe_plot(
         zlim = tuple(limits[2])
         limits_is_scalar_or_none = False
 
-    # Backward compatibility with old large values (e.g., meters)
+    # Treat very large scalar limits as meters and convert to GEO units.
     if limits_is_scalar_or_none and max(abs(xlim[0]), abs(xlim[1])) > 1e5:
         xlim = (xlim[0] / RGEO, xlim[1] / RGEO)
         ylim = (ylim[0] / RGEO, ylim[1] / RGEO)
@@ -347,6 +347,6 @@ def globe_plot(
         ax = axes[0]
 
     if save_path:
-        save_plot(fig, save_path)
+        figsave(fig, save_path)
 
     return fig, ax

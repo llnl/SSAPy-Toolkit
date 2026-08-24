@@ -1,8 +1,8 @@
 import numpy as np
+from astropy.time import Time
 from scipy.integrate import solve_ivp
 
 from ..constants import EARTH_MU
-from ..time_functions import Time
 from ._transfer_result import maneuver_burn, trajectory_dict, transfer_result, transfer_state
 
 

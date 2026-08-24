@@ -35,7 +35,7 @@ import numpy as np
 
 from ssapy_toolkit.constants import G0
 
-from .frames import ntw_axes, lvlh_axes, _unit
+from ssapy_toolkit.coordinates.frames import ntw_axes, lvlh_axes, _unit
 
 
 # ─── BurnEvent ────────────────────────────────────────────────────────────────

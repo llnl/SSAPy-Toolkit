@@ -8,9 +8,8 @@ from ssapy_toolkit._paths import safe_relative_parts
 DEFAULT_DATA_DIR_NAME = "ssatk_data"
 SSATK_DATA_ENV = "SSATK_DATA_DIR"
 HOME_DATA_DIR = Path.home() / DEFAULT_DATA_DIR_NAME
-FALLBACK_DATA_DIR = None  # Deprecated compatibility name; CWD fallback is intentionally disabled.
 
-__all__ = ["datapath", "dpath"]
+__all__ = ["datapath"]
 
 # Common data extensions (case-insensitive). We check only the final suffix.
 _KNOWN_DATA_EXTS = {
@@ -72,6 +71,3 @@ def _data_root():
     if override:
         return Path(override).expanduser()
     return HOME_DATA_DIR
-
-
-dpath = datapath

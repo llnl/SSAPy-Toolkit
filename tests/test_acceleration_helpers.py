@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-from ssapy_toolkit.orbit_accelerations.accel_add import accel_add
-from ssapy_toolkit.orbit_accelerations.accel_circularize import accel_to_circular, reset_orbit_status
-from ssapy_toolkit.orbit_accelerations.accel_earth_harmonics import (
+from ssapy_toolkit.accelerations_orbit.accel_add import accel_add
+from ssapy_toolkit.accelerations_orbit.accel_circularize import accel_to_circular, reset_orbit_status
+from ssapy_toolkit.accelerations_orbit.accel_earth_harmonics import (
     accel_J2,
     accel_J3,
     accel_J4,
@@ -13,15 +13,15 @@ from ssapy_toolkit.orbit_accelerations.accel_earth_harmonics import (
     accel_J8,
     accel_earth_harmonics,
 )
-from ssapy_toolkit.orbit_accelerations.accel_equatorial import accel_equatorial
-from ssapy_toolkit.orbit_accelerations.accel_inclination import accel_inclination
-from ssapy_toolkit.orbit_accelerations.accel_plane import accel_plane
-from ssapy_toolkit.orbit_accelerations.accel_point_earth import accel_point_earth
-from ssapy_toolkit.orbit_accelerations.accel_radial import accel_radial
-from ssapy_toolkit.orbit_accelerations.accel_uniform_earth import accel_uniform_earth
-from ssapy_toolkit.orbit_accelerations.accel_velocity import accel_velocity
+from ssapy_toolkit.accelerations_orbit.accel_equatorial import accel_equatorial
+from ssapy_toolkit.accelerations_orbit.accel_inclination import accel_inclination
+from ssapy_toolkit.accelerations_orbit.accel_plane import accel_plane
+from ssapy_toolkit.accelerations_orbit.accel_point_earth import accel_point_earth
+from ssapy_toolkit.accelerations_orbit.accel_radial import accel_radial
+from ssapy_toolkit.accelerations_orbit.accel_uniform_earth import accel_uniform_earth
+from ssapy_toolkit.accelerations_orbit.accel_velocity import accel_velocity
 from ssapy_toolkit.constants import EARTH_MU, EARTH_RADIUS, RGEO
-from ssapy_toolkit.dynamics import Spacecraft
+from ssapy_toolkit.propagators_6dof import Spacecraft
 
 
 def test_accel_add_supports_time_and_position_only_functions():

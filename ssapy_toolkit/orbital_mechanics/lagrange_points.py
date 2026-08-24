@@ -1,9 +1,10 @@
 import numpy as np
 from ssapy import get_body
+from astropy.time import Time
+
 from ..vectors import rotation_matrix_from_vectors
 from ..constants import EARTH_MU, MOON_MU
 from ..coordinates import gcrf_to_lunar, gcrf_to_lunar_fixed
-from ..time_functions import Time
 
 
 def moon_normal_vector(t):

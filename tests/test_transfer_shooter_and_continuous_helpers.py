@@ -6,14 +6,8 @@ import pytest
 from ssapy_toolkit.constants import EARTH_MU
 from ssapy_toolkit.orbital_mechanics.transfer_coplanar_continuous import transfer_coplanar_continuous
 from ssapy_toolkit.orbital_mechanics.transfer_inclination_continuous import transfer_inclination_continuous
-from ssapy_toolkit.orbital_mechanics.transfer_lambertian import transfer_lambertian
-from ssapy_toolkit.orbital_mechanics.transfer_optimal_function import (
-    transfer_inject,
-    transfer_insertion,
-    transfer_intercept,
-    transfer_rendezvous,
-)
-from ssapy_toolkit.orbital_mechanics.transfer_shooter import transfer_shooter
+from ssapy_toolkit.orbital_mechanics.transfer_optimal_function import transfer_optimal
+from ssapy_toolkit.orbital_mechanics.transfer_ssapy_function import transfer_ssapy
 from ssapy_toolkit.orbital_mechanics.transfer_velocity_and_inclination_continuous import (
     transfer_velocity_and_inclination_continuous,
 )
@@ -34,34 +28,20 @@ def _assert_standard(result, method, min_burns=1):
     assert result["delta_v_total"] == pytest.approx(sum(burn["delta_v_mag"] for burn in result["burns"]))
 
 
-def test_fixed_time_wrappers_use_standard_schema():
+def test_transfer_ssapy_uses_standard_schema():
     dep = _state(theta=0.0, t=0.0)
     arr = _state(theta=np.deg2rad(45.0), t=900.0)
-    lambert = transfer_lambertian(dep, arr, propagate=False, refine=False, burn_duration=1.0)
-    shooter = transfer_shooter(dep, arr, propagate=False, refine=False, burn_duration=1.0)
-    _assert_standard(lambert, "transfer_lambertian", min_burns=2)
-    _assert_standard(shooter, "transfer_shooter", min_burns=2)
-    assert shooter["delta_v_total"] == pytest.approx(lambert["delta_v_total"])
+    result = transfer_ssapy(dep, arr, propagate=False, refine=False, burn_duration=1.0)
+    _assert_standard(result, "transfer_ssapy", min_burns=2)
 
 
-def test_transfer_mode_standard_wrappers(monkeypatch):
-    rendezvous_module = importlib.import_module("ssapy_toolkit.orbital_mechanics.transfer_optimal_function")
+def test_transfer_arrival_modes_use_single_entry_point():
+    kwargs = {"n_grid": (2, 2), "polish": False, "propagate": False, "refine": False}
 
-    expected = {"schema_version": "ssatk.transfer.v2", "method": "transfer_optimal", "assumptions": [], "burns": [], "trajectory": None, "delta_v_total": 0.0}
-    seen_modes = []
-
-    def fake_optimal(initial, target, arrival_mode, **kwargs):
-        seen_modes.append(arrival_mode)
-        return dict(expected)
-
-    monkeypatch.setattr(rendezvous_module, "transfer_optimal", fake_optimal)
-    assert transfer_inject(_state(), _state(theta=0.1), n_grid=(2, 2))["method"] == "transfer_inject"
-    assert transfer_intercept(_state(), _state(theta=0.1), n_grid=(2, 2))["method"] == "transfer_intercept"
-    result = transfer_rendezvous(_state(), _state(theta=0.1), n_grid=(2, 2))
-    assert result["method"] == "transfer_rendezvous"
-    assert "transfer_optimal" in result["assumptions"][-1]
-    assert transfer_insertion(_state(), _state(theta=0.1), n_grid=(2, 2))["method"] == "transfer_insertion"
-    assert seen_modes == ["inject", "intercept", "rendezvous", "insertion"]
+    assert transfer_optimal(_state(), _state(theta=0.1), arrival_mode="inject", **kwargs)["diagnostics"]["arrival_mode"] == "inject"
+    assert transfer_optimal(_state(), _state(theta=0.1), arrival_mode="intercept", **kwargs)["diagnostics"]["arrival_mode"] == "intercept"
+    assert transfer_optimal(_state(), _state(theta=0.1), arrival_mode="rendezvous", **kwargs)["diagnostics"]["arrival_mode"] == "rendezvous"
+    assert transfer_optimal(_state(), _state(theta=0.1), arrival_mode="insertion", **kwargs)["diagnostics"]["arrival_mode"] == "insertion"
 
 
 def test_velocity_continuous_schema():

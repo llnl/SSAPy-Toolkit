@@ -37,7 +37,6 @@ def orbit_animation(
     *,
     views=("xy", "xz", "yz", "3d"),
     lunar_transform="standard",
-    layout="auto",
     tail_points=30,
     tail=None,
     fps=20,
@@ -95,7 +94,7 @@ def orbit_animation(
     )
 
     fig = _plt.figure(dpi=dpi, figsize=figsize, facecolor=plotcolor)
-    axes = _create_orbit_axes(fig, views, layout=layout)
+    axes = _create_orbit_axes(fig, views)
     _draw_animation_backgrounds(axes, views, prepared, title, textcolor)
     _set_orbit_limits(axes, prepared["bounds"])
     _style_orbit_axes([axes[view] for view in views], plotcolor, textcolor)

@@ -8,7 +8,6 @@ from astropy.time import Time
 
 from ssapy_toolkit.plots.figpath import figpath
 from ssapy_toolkit.constants import RGEO
-from ssapy_toolkit.plots.orbit_plot_xy import orbit_plot_xy
 from ssapy_toolkit.plots.orbit_plot import orbit_plot  # [30]
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
@@ -38,7 +37,7 @@ def main(make_figures=None, fast=None):
         rs.append(orbit.r)
 
     if make_figures:
-        orbit_plot_xy(rs, show=False, save_path=figpath("demo_gallery/figures/ssapy_orbit_sampling_trueAnomaly"))
+        orbit_plot(rs, view="xy", show=False, save_path=figpath("demo_gallery/figures/ssapy_orbit_sampling_trueAnomaly"))
 
     print("Time sampling")
     rs = []

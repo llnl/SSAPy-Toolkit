@@ -72,23 +72,22 @@ _SSAPY_ALIAS_NAMES = frozenset(
 _TOOLKIT_SUBMODULE_NAMES = frozenset(
     {
         "accelerations_6dof",
+        "accelerations_orbit",
         "asteroids",
         "compute",
         "constants",
         "coordinates",
         "data",
         "demo_gallery",
-        "dynamics",
         "engines",
+        "environment",
         "hpc",
         "io",
-        "orbit_accelerations",
+        "launch",
         "orbital_mechanics",
         "plots",
-        "propulsion",
-        "propagators",
+        "propagators_orbit",
         "propagators_6dof",
-        "rockets",
         "run_all_demos",
         "satellites",
         "ssapy_wrappers",
@@ -128,16 +127,25 @@ _TOOLKIT_DUPLICATE_ALIASES = {
     "normSq": ".vectors",
     "normed": ".vectors",
     "periapsis": ".orbital_mechanics.keplerian",
-    "propagate_orbit_state": ".propagators",
-    "propagate_6dof": ".dynamics",
-    "attitude_quaternion_from_frame": ".dynamics",
+    "propagate_orbit_state": ".propagators_orbit",
+    "propagate_6dof": ".propagators_6dof",
+    "propagate_6dof_high_accuracy": ".propagators_6dof",
+    "propagate_spacecraft_high_accuracy": ".propagators_6dof",
+    "propagate_spacecraft_segments": ".propagators_6dof",
+    "altitude_crossing_event": ".propagators_6dof",
+    "attitude_quaternion_from_frame": ".coordinates.attitude",
     "constant_body_thrust": ".accelerations_6dof",
     "constant_body_torque": ".accelerations_6dof",
     "constant_inertial_thrust": ".accelerations_6dof",
     "constant_ntw_thrust": ".accelerations_6dof",
     "attitude_error_quaternion": ".accelerations_6dof",
     "Component": ".satellites",
-    "Spacecraft": ".dynamics",
+    "ALL_THIRD_BODY_NAMES": ".environment",
+    "DEFAULT_THIRD_BODY_NAMES": ".environment",
+    "FORCE_MODEL_PRESETS": ".environment",
+    "PLANET_THIRD_BODY_NAMES": ".environment",
+    "Spacecraft": ".propagators_6dof",
+    "SpaceEnvironment": ".environment",
     "SpacecraftAccelConstBody": ".accelerations_6dof",
     "SpacecraftAccelConstInertial": ".accelerations_6dof",
     "SpacecraftAccelConstNTW": ".accelerations_6dof",
@@ -146,12 +154,14 @@ _TOOLKIT_DUPLICATE_ALIASES = {
     "SpacecraftAccelKepler": ".accelerations_6dof",
     "SpacecraftAccelSolRad": ".accelerations_6dof",
     "SpacecraftAccelSum": ".accelerations_6dof",
+    "SpacecraftAccelSSAPy": ".accelerations_6dof",
     "SpacecraftAccelThirdBody": ".accelerations_6dof",
     "SpacecraftManeuverAccel": ".accelerations_6dof",
     "SpacecraftFacetDrag": ".accelerations_6dof",
     "SpacecraftFacetSolRad": ".accelerations_6dof",
     "SpacecraftFlatPlateDrag": ".accelerations_6dof",
     "SpacecraftFlatPlateSolRad": ".accelerations_6dof",
+    "SpacecraftGravityGradientTorque": ".accelerations_6dof",
     "SpacecraftAttitudePD": ".accelerations_6dof",
     "SpacecraftMagneticTorque": ".accelerations_6dof",
     "SpacecraftReactionWheelTorque": ".accelerations_6dof",
@@ -165,19 +175,41 @@ _TOOLKIT_DUPLICATE_ALIASES = {
     "Thruster": ".satellites",
     "available_satellite_designs": ".satellites",
     "cislunar_probe": ".satellites",
+    "cylindrical_eclipse_fraction": ".environment",
+    "body_mu": ".environment",
+    "body_radius": ".environment",
     "debris_panel": ".satellites",
     "earth_observation_sat": ".satellites",
+    "earth_dipole_magnetic_field": ".environment",
+    "exponential_atmosphere": ".environment",
     "gnss_sat": ".satellites",
+    "igrf_magnetic_field": ".environment",
     "magnetic_dipole_torque": ".accelerations_6dof",
+    "mass_floor_event": ".propagators_6dof",
+    "normalize_quaternion": ".coordinates.attitude",
+    "propellant_empty_event": ".propagators_6dof",
     "make_attitude_pd": ".accelerations_6dof",
     "make_finite_burn_acceleration": ".accelerations_6dof",
+    "make_gravity_gradient_torque": ".accelerations_6dof",
     "make_magnetic_torque": ".accelerations_6dof",
     "make_maneuver_acceleration": ".accelerations_6dof",
     "make_reaction_wheel_torque": ".accelerations_6dof",
+    "make_space_environment": ".environment",
+    "make_ssapy_drag": ".accelerations_6dof",
+    "make_ssapy_earth_harmonics": ".accelerations_6dof",
+    "make_ssapy_earth_radiation": ".accelerations_6dof",
+    "make_ssapy_perturbation_acceleration": ".accelerations_6dof",
+    "make_ssapy_solar_radiation": ".accelerations_6dof",
+    "make_ssapy_third_body": ".accelerations_6dof",
     "point_mass_inertia": ".satellites",
-    "quaternion_from_matrix": ".dynamics",
+    "quaternion_conjugate": ".coordinates.attitude",
+    "quaternion_from_matrix": ".coordinates.attitude",
+    "quaternion_multiply": ".coordinates.attitude",
+    "radius_crossing_event": ".propagators_6dof",
     "reaction_wheel_torque": ".accelerations_6dof",
+    "reaction_wheel_torque_commands": ".accelerations_6dof",
     "reaction_wheel_triplet": ".satellites",
+    "rotate_facets": ".satellites",
     "satellite_design": ".satellites",
     "sum_accelerations": ".accelerations_6dof",
     "sum_torques": ".accelerations_6dof",
@@ -188,10 +220,12 @@ _TOOLKIT_DUPLICATE_ALIASES = {
     "sim_lonlatrad": ".coordinates.rotating_frames",
     "ssatk_load_cache": ".io.ssatk_cache",
     "ssatk_save_cache": ".io.ssatk_cache",
-    "ssatk_load": ".io.ssatk_save",
+    "ssatk_read": ".io.ssatk_save",
     "ssatk_save": ".io.ssatk_save",
     "supported_save_formats": ".io.ssatk_save",
     "sun_ra_dec": ".coordinates.sky",
+    "solar_disk_visible_fraction": ".environment",
+    "solar_occultation_fraction": ".environment",
     "ThrustCurve": ".accelerations_6dof",
     "integrated_thrust_impulse": ".accelerations_6dof",
     "load_digitized_thrust_curve": ".accelerations_6dof",
@@ -208,19 +242,20 @@ _TOOLKIT_DUPLICATE_ALIASES = {
     "thrust_profile_smoothstep": ".accelerations_6dof",
     "thrust_profile_trapezoid": ".accelerations_6dof",
     "thruster_mass_flow_rate": ".accelerations_6dof",
-    "ThrusterSpec": ".propulsion",
-    "available_thruster_families": ".propulsion",
-    "available_thruster_scales": ".propulsion",
-    "available_thruster_specs": ".propulsion",
-    "available_throttle_maps": ".propulsion",
-    "build_thruster": ".propulsion",
-    "load_throttle_map": ".propulsion",
-    "make_thruster_profile": ".propulsion",
-    "make_thruster_acceleration": ".propulsion",
-    "propellant_mass_for_delta_v": ".propulsion",
-    "thruster_catalog_dict": ".propulsion",
-    "thruster_spec": ".propulsion",
+    "ThrusterSpec": ".engines",
+    "available_thruster_families": ".engines",
+    "available_thruster_scales": ".engines",
+    "available_thruster_specs": ".engines",
+    "available_throttle_maps": ".engines",
+    "build_thruster": ".engines",
+    "load_throttle_map": ".engines",
+    "make_thruster_profile": ".engines",
+    "make_thruster_acceleration": ".engines",
+    "propellant_mass_for_delta_v": ".engines",
+    "thruster_catalog_dict": ".engines",
+    "thruster_spec": ".engines",
     "unit_vector": ".vectors",
+    "wrap_ssapy_acceleration": ".accelerations_6dof",
     "xyz_to_ecliptic": ".coordinates.equatorial_ecliptic",
     "xyz_to_equatorial": ".coordinates.equatorial_ecliptic",
 }
@@ -279,33 +314,3 @@ try:
     iers.conf.auto_max_age = 365
 except ImportError:
     pass
-
-# # Folders
-# from .yastropy import *
-# from .accelerations_6dof import *
-# from .compute import *
-# from .coordinates import *
-# from .orbit_accelerations import *
-# from .propagators_6dof import *
-# from .propagators import *
-# from .io import *
-# from .orbital_mechanics import *
-# from .plots import *
-# from .ssapy_wrappers import *
-# from .rockets import *
-# from .time_functions import *
-
-# # Single Files
-# from .asteroids import *
-# from .constants import *
-# from .hpc import *
-# from .orbit_initializer import *
-# from .utils import *
-# from .vectors import *
-
-# try:
-#     import ssapy
-# except ImportError:
-#     pass  # ssapy simply won't be exported if not installed
-
-# __all__ = [name for name in globals() if not name.startswith("_")]

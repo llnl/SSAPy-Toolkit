@@ -144,17 +144,6 @@ PRESETS: dict[str, dict] = {
     "Cislunar Transfer Test Orbit":  dict(a_km=RE_KM+400_000, e=0.97, inc_deg=90,  raan_deg=0,  argp_deg=180, nu_deg=0),
 }
 
-# Backward-compatible aliases for the old, misleadingly-named keys — any
-# existing code (e.g. toolkit_gui.py) referencing these strings keeps
-# working. from_preset() warns when these are used (see below).
-_PRESET_ALIASES = {
-    "Cislunar L1 Halo":    "Cislunar Test Orbit",
-    "Artemis Lunar Orbit": "Cislunar Transfer Test Orbit",
-}
-
-
-
-
 # ─── OrbitalState ────────────────────────────────────────────────────────────
 class OrbitalState:
     """
@@ -606,21 +595,9 @@ class OrbitalState:
     # ── alternate constructors ────────────────────────────────────────────────
     @classmethod
     def from_preset(cls, name: str, **kwargs) -> "OrbitalState":
-        resolved_name = _PRESET_ALIASES.get(name, name)
-
-        if name in _PRESET_ALIASES:
+        if name in ("Cislunar Test Orbit", "Cislunar Transfer Test Orbit"):
             warnings.warn(
-                f"Preset '{name}' is a legacy alias for '{resolved_name}'. "
-                f"That name was renamed because it implied a real CR3BP "
-                f"halo orbit / real Artemis trajectory, when it's actually "
-                f"a coarse two-body Keplerian approximation used only for "
-                f"cislunar-scale plotting tests. See the PRESETS comment "
-                f"in this module for details.",
-                stacklevel=2,
-            )
-        elif resolved_name in ("Cislunar Test Orbit", "Cislunar Transfer Test Orbit"):
-            warnings.warn(
-                f"Preset '{resolved_name}' is a two-body Keplerian "
+                f"Preset '{name}' is a two-body Keplerian "
                 f"approximation, not a real CR3BP libration-point orbit or "
                 f"real mission trajectory. See the PRESETS comment in this "
                 f"module for details, or use "
@@ -629,9 +606,9 @@ class OrbitalState:
                 stacklevel=2,
             )
 
-        if resolved_name not in PRESETS:
+        if name not in PRESETS:
             raise KeyError(f"Unknown preset '{name}'. Available: {list(PRESETS)}")
-        return cls(**{**PRESETS[resolved_name], **kwargs})
+        return cls(**{**PRESETS[name], **kwargs})
 
     @classmethod
     def from_tle(cls, tle_text: str, **kwargs) -> "OrbitalState":

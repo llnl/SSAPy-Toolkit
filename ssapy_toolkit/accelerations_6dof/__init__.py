@@ -1,4 +1,4 @@
-"""Acceleration models and utilities for orbit propagation."""
+"""6-DoF force, acceleration, torque, thrust, and mass-flow models."""
 
 from ssapy_toolkit._namespace import import_public_modules
 

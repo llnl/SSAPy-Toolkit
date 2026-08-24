@@ -145,7 +145,7 @@ def test_orbit_animation_private_helpers(monkeypatch, tmp_path):
         orbit_animation._prepare_animation_tracks([np.eye(3)], [np.arange(3.0)], frame="bad", lunar_transform="standard", pad=0)
 
     fig = plt.figure()
-    axes = orbit_animation._create_orbit_axes(fig, ("xy", "groundtrack", "3d"), layout="auto")
+    axes = orbit_animation._create_orbit_axes(fig, ("xy", "groundtrack", "3d"))
     orbit_animation._draw_animation_backgrounds(axes, ("xy", "groundtrack", "3d"), prepared, "Title", "black")
     artists = orbit_animation._init_animation_artists(axes, ("xy", "groundtrack", "3d"), prepared["tracks"], [np.array([1.0, 0.0, 0.0, 1.0])])
     frame_artists = []

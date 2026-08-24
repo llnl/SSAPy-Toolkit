@@ -35,7 +35,7 @@ from ssapy.utils import normed, rv_to_ntw
 from ssapy.constants import EARTH_MU
 from ssapy_toolkit.constants import G0
 from ssapy_toolkit.time_functions._gps import _to_gps_seconds
-from ssapy_toolkit.orbital_mechanics._transfer_result import maneuver_burn, trajectory_dict, transfer_boundary_states, transfer_result
+from ssapy_toolkit.orbital_mechanics._transfer_result import _is_state_vector, maneuver_burn, trajectory_dict, transfer_boundary_states, transfer_result
 
 
 _ARRIVAL_MODE_ALIASES = {
@@ -56,6 +56,16 @@ _ARRIVAL_MODE_ALIASES = {
     "orbit_insertion": "insertion",
     "target_orbit": "insertion",
 }
+
+
+def _is_state_tuple_without_time(value):
+    if isinstance(value, Orbit) or np.isscalar(value) or isinstance(value, dict):
+        return False
+    try:
+        values = tuple(value)
+    except TypeError:
+        return False
+    return len(values) == 2 and all(_is_state_vector(item) for item in values)
 
 
 def _normalize_keyword(value, aliases, name):
@@ -485,6 +495,14 @@ def transfer_ssapy(
       target to ``refine_tol``.
     """
     # --- normalize inputs ------------------------------------------------
+    raw_four_vector_state = len(args) == 4 and all(_is_state_vector(value) for value in args)
+    raw_tuple_state_pair = (
+        len(args) == 2
+        and all(_is_state_tuple_without_time(value) for value in args)
+    )
+    if (raw_four_vector_state or raw_tuple_state_pair) and t2 is None and tof is None:
+        raise ValueError("transfer_ssapy raw-vector input requires tof/t2")
+
     if accel is None:
         accel = AccelKepler()
     elif isinstance(accel, (list, tuple)):

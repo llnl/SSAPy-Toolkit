@@ -1,5 +1,5 @@
 import numpy as np
-from ..time_functions import Time
+from astropy.time import Time
 
 
 def v_from_r(r: np.ndarray, t: np.ndarray) -> np.ndarray:

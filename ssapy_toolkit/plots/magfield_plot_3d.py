@@ -105,9 +105,8 @@ except ImportError:
 # or executed directly as a script. sys.path was extended above, so the
 # absolute form works in script mode.
 try:
-    from ..geomagnetics import (  # noqa: F401  (re-exported for back-compat)
-  # noqa: F401  (re-exported for backwards compat)
-    _geo_to_gsm_matrix, _get_external, _get_t89, _enu_to_cartesian_batch,
+    from ..geomagnetics import (  # noqa: F401
+    _geo_to_gsm_matrix, _get_external, _enu_to_cartesian_batch,
     _bfield_batch, _bunit_batch, _field_magnitude_along, _surface_radius_km,
     _adaptive_step_km, _trace_batch_rk4, _trace_all_closed, _resample_curve,
     _make_seeds_lshell, _make_seeds_magnetic, _physics_fingerprint,
@@ -120,8 +119,7 @@ try:
 )
 except ImportError:
     from ssapy_toolkit.geomagnetics import (  # noqa: F401
-  # noqa: F401  (re-exported for backwards compat)
-    _geo_to_gsm_matrix, _get_external, _get_t89, _enu_to_cartesian_batch,
+    _geo_to_gsm_matrix, _get_external, _enu_to_cartesian_batch,
     _bfield_batch, _bunit_batch, _field_magnitude_along, _surface_radius_km,
     _adaptive_step_km, _trace_batch_rk4, _trace_all_closed, _resample_curve,
     _make_seeds_lshell, _make_seeds_magnetic, _physics_fingerprint,
@@ -280,7 +278,6 @@ _sys.modules[__name__].__class__ = _GuardedModule
 # Helpers
 # ===========================================================================
 
-# back-compat alias
 # ===========================================================================
 # Magnetic geometry
 # ===========================================================================
@@ -706,8 +703,7 @@ def plot_magfield_3d(
     width=1400,
     height=1000,
     fidelity="high",                # 'high' | 'draft'
-    field_cmap="cool",              # back-compat; see color_by_field
-    color_by_field=True,
+        color_by_field=True,
     field_colorscale=_FIELD_CMAP,
     max_r_re=10.0,
     seed_mode="lshell",
@@ -764,7 +760,7 @@ def plot_magfield_3d(
     belt_style  : 'igrf'   — belts from real IGRF-traced L-shells (shows the
                              South Atlantic Anomaly);
                   'lshell' — analytic dipole L-shell crescent;
-                  'torus'  — legacy circular torus.
+                  'torus'  — analytic circular torus.
     zoom        : >1 tightens framing, <1 pulls back.
     save_path   : writes an interactive .html (and .png if save_png).
     """
@@ -1206,10 +1202,8 @@ if __name__ == "__main__":
               if k in _params and not k.startswith("_") and k != "epoch"}
     kwargs.setdefault("save_path", str(output_dir / "magfield_plot_3d"))
     kwargs.setdefault("show", False)
-    if cfg.get("seed_lats") is not None:          # legacy GUI key
-        kwargs.setdefault("lats", cfg["seed_lats"])
     unknown = sorted(k for k in cfg
-                     if k not in _params and k not in ("seed_lats", "epoch")
+                     if k not in _params and k != "epoch"
                      and not k.startswith("_") and not callable(cfg[k]))
     if unknown:
         print(f"[magfield_plot_3d] ignoring unknown config keys: {unknown}")

@@ -144,28 +144,6 @@ def _wrapped_case_label(case, width=24):
     return f"{_case_number(case)} {wrapped.replace(chr(10), chr(10) + '   ')}"
 
 
-def _cleanup_legacy_overview_outputs():
-    output_dir = Path(figpath(f"{FIGDIR}/structured_transfer_api_overview.jpg")).parent
-    legacy_dir = output_dir / "structured_transfers"
-    for pattern in (
-        "*_trajectory.jpg",
-        "*_designer.jpg",
-        "*_burn_profile.jpg",
-        "structured_transfer_burns_overview.jpg",
-        "structured_transfer_api_triptychs.jpg",
-    ):
-        for path in output_dir.glob(pattern):
-            path.unlink(missing_ok=True)
-        for path in legacy_dir.glob(pattern):
-            path.unlink(missing_ok=True)
-    legacy_overview = legacy_dir / "structured_transfer_api_overview.jpg"
-    legacy_overview.unlink(missing_ok=True)
-    try:
-        legacy_dir.rmdir()
-    except OSError:
-        pass
-
-
 def _sample_transfer_leg(leg, samples=90):
     transfer_orbits = leg.get("transfer_orbits") or []
     if not transfer_orbits:
@@ -338,8 +316,6 @@ def _save_three_panel_overview(results, cases, *, make_figures=True):
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-
-    _cleanup_legacy_overview_outputs()
 
     colors = plt.get_cmap("tab10")
     fig, axes = plt.subplots(

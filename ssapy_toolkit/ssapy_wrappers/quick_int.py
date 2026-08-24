@@ -1,9 +1,11 @@
-from ..propagators import leapfrog
-from ..constants import EARTH_MU
-from ..time_functions import get_times, Time
-from ssapy import Orbit
 import numpy as np
 import warnings
+from astropy.time import Time
+from ssapy import Orbit
+
+from ..constants import EARTH_MU
+from ..propagators_orbit import leapfrog
+from ..time_functions import get_times
 
 
 def _validate_period(period, max_period_days=30):

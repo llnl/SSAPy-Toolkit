@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from ssapy_toolkit.constants import G0
-from ssapy_toolkit.propulsion import (
+from ssapy_toolkit.engines import (
     ThrusterSpec,
     available_throttle_maps,
     available_thruster_families,
@@ -83,19 +83,18 @@ def test_solid_motor_constraints_and_rocket_equation_helpers():
     assert propellant_mass_for_delta_v(100.0, wet_mass_kg=1000.0, isp_s=300.0) > 0.0
 
 
-def test_propulsion_catalog_is_available_from_top_level_rockets_and_engines():
+def test_propulsion_catalog_is_available_from_top_level_engines_and_launch():
     import ssapy_toolkit as ssatk
-    from ssapy_toolkit.engines import thruster_specs, thrusters
-    from ssapy_toolkit.rockets import thruster_spec as rocket_thruster_spec
+    from ssapy_toolkit.engines import thruster_specs
+    from ssapy_toolkit.launch import launch_vehicles
 
     assert ssatk.thruster_spec("AEPS").family == "hall_effect"
     assert ssatk.available_throttle_maps is available_throttle_maps
     assert ssatk.load_throttle_map is load_throttle_map
-    assert rocket_thruster_spec("AEPS") is ssatk.thruster_spec("AEPS")
-    assert "Mira" in thrusters
-    assert "hall_effect_high_power" in thrusters
     assert "hall_effect_high_power" in thruster_specs
-    assert thruster_catalog_dict(legacy=True)["hall_effect_high_power"]["ISP"] == pytest.approx(2800.0)
+    assert thruster_specs["hall_effect_high_power"].nominal_isp_s == pytest.approx(2800.0)
+    assert "Atlas V" in launch_vehicles
+    assert thruster_catalog_dict()["hall_effect_high_power"].nominal_isp_s == pytest.approx(2800.0)
 
 
 def test_packaged_electric_throttle_maps_load_from_ssapy_data():

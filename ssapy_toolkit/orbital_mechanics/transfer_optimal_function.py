@@ -820,8 +820,7 @@ def transfer_optimal(
     ----------
     initial, target, orbit1, orbit2 : ssapy.orbit.Orbit or (r, v, t) tuple
         Departure and target orbits/states.  Epochs may be GPS seconds or
-        ``astropy.time.Time``.  The legacy positional form
-        ``transfer_optimal(initial, target, ...)`` is supported.
+        ``astropy.time.Time``.
     r1, v1, r2, v2 : array_like, optional
         Raw state-vector form.  Equivalent positional form
         ``transfer_optimal(r1, v1, r2, v2, ...)`` is accepted.  These vectors
@@ -965,19 +964,6 @@ def transfer_optimal(
             raise TypeError("Specify either orbit2 or target, not both")
         target = orbit2
 
-    if len(args) in (3, 4):
-        # Backward-compatible legacy positional objective/delta_v_mode form:
-        # transfer_optimal(initial, target, "time", "first", ...).  Four raw
-        # state vectors are handled by transfer_boundary_states below.
-        try:
-            raw_vector_call = len(args) == 4 and all(np.asarray(value, dtype=float).size == 3 for value in args)
-        except (TypeError, ValueError):
-            raw_vector_call = False
-        if not raw_vector_call:
-            objective = args[2]
-            if len(args) == 4:
-                delta_v_mode = args[3]
-            args = args[:2]
 
     structured_overrides, structured_used = _structured_problem_overrides(
         problem=problem,
@@ -1729,43 +1715,3 @@ def _transfer_optimal_staged(
             return direct_result
         best["diagnostics"]["selected_stage_mode"] = "staged"
     return best
-
-
-def _mode_wrapper(args, kwargs, *, arrival_mode, method_name):
-    kwargs = dict(kwargs)
-    supplied_mode = kwargs.pop("arrival_mode", None)
-    if supplied_mode is not None:
-        normalized = _normalize_keyword(supplied_mode, _ARRIVAL_MODE_ALIASES, "arrival_mode")
-        if normalized != arrival_mode:
-            raise ValueError(
-                f"{method_name} fixes arrival_mode={arrival_mode!r}; "
-                f"received arrival_mode={supplied_mode!r}. Use transfer_optimal "
-                "directly to select a different arrival mode."
-            )
-    result = transfer_optimal(*args, arrival_mode=arrival_mode, **kwargs)
-    result["method"] = method_name
-    result["assumptions"].append(f"standardized wrapper around transfer_optimal(arrival_mode={arrival_mode!r})")
-    return result
-
-
-def transfer_inject(*args, **kwargs):
-    """Search a free-phase, departure-burn-only transfer injection."""
-    return _mode_wrapper(args, kwargs, arrival_mode="inject", method_name="transfer_inject")
-
-
-def transfer_intercept(*args, **kwargs):
-    """Search a fixed-target-position intercept without arrival velocity match."""
-    return _mode_wrapper(args, kwargs, arrival_mode="intercept", method_name="transfer_intercept")
-
-
-def transfer_rendezvous(*args, **kwargs):
-    """Search a fixed-target-position transfer with arrival velocity match."""
-    return _mode_wrapper(args, kwargs, arrival_mode="rendezvous", method_name="transfer_rendezvous")
-
-
-def transfer_insertion(*args, **kwargs):
-    """Search a free-phase orbit-insertion transfer with arrival velocity match."""
-    return _mode_wrapper(args, kwargs, arrival_mode="insertion", method_name="transfer_insertion")
-
-
-transfer_insert = transfer_insertion

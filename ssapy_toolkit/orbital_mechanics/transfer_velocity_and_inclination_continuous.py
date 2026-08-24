@@ -2,7 +2,7 @@ import numpy as np
 from scipy.integrate import solve_ivp
 import warnings
 import matplotlib.pyplot as plt
-from ..orbit_accelerations import accel_velocity
+from ..accelerations_orbit import accel_velocity
 from ..plots.set_axes_equal import set_axes_equal
 from ..constants import EARTH_MU, EARTH_RADIUS
 from ._two_body import _keplerian_two_body_rhs

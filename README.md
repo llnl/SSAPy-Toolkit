@@ -5,8 +5,8 @@
 [SSAPy](https://github.com/llnl/SSAPy) orbital-modeling ecosystem. Where SSAPy
 provides the core high-fidelity propagation and modeling engine, the Toolkit
 adds astrodynamics utilities, orbital-transfer design, coordinate/time
-conversions, brightness and observables modeling, launch and rocket helpers,
-orbit and 6-DoF propagators, rich plotting, and data I/O to support day-to-day research and
+conversions, brightness and observables modeling, launch and propulsion
+helpers, orbit and 6-DoF propagators, rich plotting, and data I/O to support day-to-day research and
 engineering workflows.
 
 SSAPy itself is a fast, flexible, high-fidelity orbital modeling and analysis
@@ -54,9 +54,11 @@ GMAT, Orekit, STK, or FreeFlyer:
 - **6-DoF dynamics** — coupled translational and rigid-body attitude
   propagation with quaternion attitude states, optional user acceleration and
   torque models, gravity-gradient torque, fixed-facet drag/SRP, thrusters,
-  magnetic torquers, reaction wheels, and a basic quaternion PD controller.
-- **Launch & rockets** — launch-pad definitions, gravity-turn ascent, and
-  fuel/burn utilities.
+  articulated facet transforms, magnetic torquers, reaction wheels, dynamic
+  tank mass properties, dry-mass stopping events, and a basic quaternion PD
+  controller.
+- **Launch & propulsion** — launch-pad definitions, gravity-turn ascent,
+  engine catalogs, thrust profiles, and fuel/burn utilities.
 - **Data I/O** — HDF5 helpers (including dictionary/HDF5 conversion with array
   handling and selective key loading), plus CSV, JSON, XML, and pickle I/O, and
   TLE/3LE parsing.
@@ -133,12 +135,12 @@ from ssapy_toolkit.plots import orbit_plot
 ```
 
 For high-accuracy translational propagation, use the adaptive DOP853 wrapper in
-`propagators` instead of the older fixed-step helpers:
+`propagators_orbit` instead of the older fixed-step helpers:
 
 ```
 import numpy as np
 from ssapy_toolkit.constants import EARTH_MU
-from ssapy_toolkit.propagators import propagate_orbit_state
+from ssapy_toolkit.propagators_orbit import propagate_orbit_state
 
 radius = 7_000_000.0
 speed = np.sqrt(EARTH_MU / radius)
@@ -151,7 +153,9 @@ traj = propagate_orbit_state(
 
 For rigid-body spacecraft dynamics, use `Spacecraft` when you want an
 `Orbit`-like object with attitude, angular rate, inertia, and mass attached.
-Use `propagate_6dof` directly for lower-level numerical propagation.
+Use `Spacecraft.from_orbit(orbit, ...)` to attach 6-DoF state to an SSAPy
+`Orbit`, `spacecraft.to_orbit()` to return the translational state to SSAPy,
+and `propagate_6dof` directly for lower-level numerical propagation.
 
 ```
 import numpy as np
@@ -183,17 +187,36 @@ include SSAPy-like classes for Kepler gravity, J2, third-body gravity,
 cannonball drag, cannonball solar radiation pressure, constant inertial/NTW/body
 accelerations, summed acceleration/torque models, and attitude-dependent
 flat-plate drag/SRP models, facet drag/SRP models, thruster torque, and
-magnetic-dipole torque. Reaction wheels and ``SpacecraftAttitudePD`` provide a
-small actuator/control layer for attitude studies; wheel momentum states are
-described by the body model but are not yet propagated as separate states.
+magnetic-dipole and gravity-gradient torque. Reaction wheels and
+``SpacecraftAttitudePD`` provide a small actuator/control layer for attitude
+studies; reaction-wheel momentum is propagated as an optional state when the
+body defines wheels, and configured ``momentum_capacity`` values prevent
+commands from driving wheels beyond their stored angular-momentum limits.
+``SpaceEnvironment`` supplies epoch-aware Sun/Moon ephemerides, atmosphere
+density and velocity, magnetic field, and disk-overlap Earth/Moon eclipse
+fractions for environment-backed force models. Use ``third_bodies=True`` for
+Moon/Sun perturbations, ``third_bodies="planets"`` for Mercury through Neptune
+except Earth, or ``third_bodies="all"`` for a full Solar-System perturbation
+set. Optional gravity-gradient torque supports central Earth or Earth/Moon/Sun
+models. Common force-stack presets are available through
+``SpaceEnvironment.force_models(preset="leo"|"earth_orbit"|"cislunar"|"all")``
+and individual options can still override each preset. The default atmosphere
+velocity is rigid Earth co-rotation; pass ``atmosphere_velocity_model=...`` for
+wind or corotation overrides. The default magnetic field is a dependency-light
+centered Earth dipole; use ``magnetic_field_model="igrf"`` for optional
+``ppigrf``-backed IGRF field synthesis or pass a callable for mission-specific
+models.
 Thrusters report positive propellant mass flow from thrust and specific impulse;
-mass depletion is not yet part of the propagated state vector.
+``propagate_6dof`` can propagate mass when a mass-flow model is supplied.
+For bodies with tanks, propagated mass updates tank propellant proportionally so
+center of mass and inertia evolve during finite burns. Use
+`propellant_empty_event` or `mass_floor_event` to stop burns at dry mass.
 
 Finite maneuver accelerations use ``SpacecraftManeuverAccel``. Use
 ``frame="rtn"``/``"lvlh"``/``"ric"`` for common radial-transverse-normal
 operations, ``frame="vnb"`` for velocity-normal-binormal commands,
 ``frame="body"`` for body-mounted thrust, or ``frame="ntw"`` for exact SSAPy
-``[N, T, W]`` compatibility. Thrust can be constant, trapezoidal, smoothstep,
+``[N, T, W]`` convention. Thrust can be constant, trapezoidal, smoothstep,
 exponential, pulsed, callable, or loaded from CSV with ``ThrustCurve``; citable
 engine data belongs in SSAPy-Data rather than this source repository and can be
 loaded with ``load_thrust_curve_data(...)`` once packaged.
@@ -300,9 +323,9 @@ result = transfer_optimal(
 The result diagnostics include `problem_schema="ssatk.transfer_problem.v1"`
 when the structured interface is used.
 
-`orbit_plot` is the main entry point for in-space trajectory plots. It keeps the
-legacy four-panel orbit view by default, and also accepts compact selectors for
-common slices and cislunar views:
+`orbit_plot` is the main entry point for in-space trajectory plots. It uses a
+four-panel orbit view by default, and also accepts compact selectors for common
+slices and cislunar views:
 
 ```
 orbit_plot(r, t, frame="gcrf")                         # xy, xz, yz, and 3-D
@@ -326,14 +349,14 @@ are saved under `~/ssatk_figures`; absolute paths are used exactly as provided.
 Set `SSATK_FIGURES_DIR` to choose a different figure-output root explicitly.
 Use `ssatk_path` and `ssatk_fig` for direct path and figure-save helpers.
 
-For general data products, `ssatk_save` and `ssatk_load` choose the storage
+For general data products, `ssatk_save` and `ssatk_read` choose the storage
 format from the file extension. Bare and relative data filenames are rooted
 under `~/ssatk_data`; bare and relative figure filenames are rooted under
 `~/ssatk_figures`; absolute paths are honored.
 
 ```
 ssatk.ssatk_save({"r": r, "v": v, "t": t}, "runs/orbit.h5")
-state = ssatk.ssatk_load("runs/orbit.h5")
+state = ssatk.ssatk_read("runs/orbit.h5")
 
 ssatk.ssatk_save(r, "arrays/state.npy")
 ssatk.ssatk_save({"r": r, "v": v}, "arrays/state.npz")
@@ -373,6 +396,19 @@ pytest tests
 
 Code formatting and linting are handled via `flake8` (see `.flake8` for
 configuration).
+
+Optional local repo mapping with Graphify:
+
+```
+pipx install graphifyy  # or: python -m pip install graphifyy
+bash scripts/install_graphify_hook.sh
+```
+
+The installer writes a local `.git/hooks/post-commit` hook. After each commit,
+the hook runs `graphify . --update --wiki` in the background when the
+`graphify` CLI is available and writes ignored output under `graphify-out/`.
+Disable it for one commit with `SSATK_GRAPHIFY_HOOK=0 git commit ...`, or force
+foreground execution with `SSATK_GRAPHIFY_FOREGROUND=1 git commit ...`.
 
 ---
 

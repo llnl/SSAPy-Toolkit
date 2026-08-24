@@ -118,7 +118,7 @@ def ssatk_save(
     return save_path
 
 
-def ssatk_load(
+def ssatk_read(
     path: str | Path,
     *,
     key: str | None = None,
@@ -169,7 +169,7 @@ def ssatk_load(
     if suffix == ".feather":
         return _read_pandas().read_feather(load_path, **kwargs)
     if suffix in _FIGURE_EXTS:
-        raise TypeError("Figure/image loading is not supported by ssatk_load; use imageio/PIL/matplotlib directly.")
+        raise TypeError("Figure/image loading is not supported by ssatk_read; use imageio/PIL/matplotlib directly.")
     raise ValueError(f"Unsupported load extension '{suffix}'.")  # pragma: no cover
 
 
@@ -481,11 +481,11 @@ def _save_text(data: Any, path: Path, **kwargs) -> None:
 def _save_figure(figure: Any, path: Path, *, overwrite: bool, **kwargs) -> None:
     if path.exists() and not overwrite:
         raise FileExistsError(f"Refusing to overwrite existing file: {path}")
-    from ssapy_toolkit.plots.plotutils import save_plot
+    from ssapy_toolkit.plots.plotutils import figsave
 
-    result = save_plot(figure, save_path=path, **kwargs)
+    result = figsave(figure, save_path=path, **kwargs)
     if result is None:
         raise RuntimeError(f"Failed to save figure to {path}")
 
 
-__all__ = ["ssatk_save", "ssatk_load", "supported_save_formats"]
+__all__ = ["ssatk_save", "ssatk_read", "supported_save_formats"]

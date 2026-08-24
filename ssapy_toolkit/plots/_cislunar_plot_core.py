@@ -16,7 +16,7 @@ from ..constants import MOON_RADIUS as _MOON_RADIUS
 from ..constants import RGEO as _RGEO
 from ..coordinates import gcrf_to_lunar_fixed as _gcrf_to_lunar_fixed
 from ._legend_handlers import GradientLineHandler as _GradientLineHandler
-from .plotutils import save_plot as _save_plot
+from .plotutils import figsave as _figsave
 from .plotutils import valid_orbits as _valid_orbits
 
 
@@ -40,10 +40,8 @@ def _cislunar_plot_core(
     legend=True,
 ):
     mode = mode.lower()
-    if mode in {"dashboard", "cislunar_dashboard"}:
-        mode = "combined"
     if mode not in {"combined", "3d", "xy"}:
-        raise ValueError("mode must be one of: combined, dashboard, 3d, xy")
+        raise ValueError("mode must be one of: combined, 3d, xy")
 
     r, t = _valid_orbits(r, t)
     textcolor, plotcolor = _plot_colors(c)
@@ -106,7 +104,7 @@ def _cislunar_plot_core(
     _add_cislunar_legend(axes["lunar"], len(r), mode, legend, textcolor, plotcolor, fontsize)
 
     if save_path:
-        _save_plot(fig, save_path)
+        _figsave(fig, save_path)
     if show:
         _plt.show()
     _plt.close()

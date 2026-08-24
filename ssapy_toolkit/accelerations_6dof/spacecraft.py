@@ -1,7 +1,7 @@
 """Spacecraft acceleration models for 6-DoF propagation.
 
 These classes intentionally mirror SSAPy's acceleration-call style while also
-accepting a :class:`ssapy_toolkit.dynamics.Spacecraft`-like object.
+accepting a :class:`ssapy_toolkit.propagators_6dof.Spacecraft`-like object.
 """
 
 from __future__ import annotations
@@ -11,9 +11,74 @@ from collections.abc import Callable as _Callable
 import numpy as _np
 
 from ..constants import AU, EARTH_MU, EARTH_RADIUS, SOLAR_FLUX_1_AU, WGS84_EARTH_OMEGA, J2_wgs, c
+from ..coordinates.attitude import (
+    normalize_quaternion as _normalize_quaternion,
+    quaternion_conjugate as _quaternion_conjugate,
+    quaternion_multiply as _quaternion_multiply,
+    rotate_vector as _rotate_vector,
+)
 from ..coordinates.satellite_frames import frame_to_gcrf_matrix
 
 ArrayLike = _np.ndarray | list[float] | tuple[float, ...]
+
+__all__ = [
+    "SpacecraftAccel",
+    "SpacecraftAccelConstBody",
+    "SpacecraftAccelConstInertial",
+    "SpacecraftAccelConstNTW",
+    "SpacecraftAccelDrag",
+    "SpacecraftAccelJ2",
+    "SpacecraftAccelKepler",
+    "SpacecraftAccelSolRad",
+    "SpacecraftAccelSum",
+    "SpacecraftAccelThirdBody",
+    "SpacecraftAttitudePD",
+    "SpacecraftFacetDrag",
+    "SpacecraftFacetSolRad",
+    "SpacecraftFlatPlateDrag",
+    "SpacecraftFlatPlateSolRad",
+    "SpacecraftGravityGradientTorque",
+    "SpacecraftMagneticTorque",
+    "SpacecraftReactionWheelTorque",
+    "SpacecraftThrusterAccel",
+    "SpacecraftTorqueSum",
+    "attitude_error_quaternion",
+    "co_rotating_atmosphere_velocity",
+    "constant_body_thrust",
+    "constant_body_torque",
+    "constant_inertial_thrust",
+    "constant_ntw_thrust",
+    "drag_acceleration",
+    "exponential_density_model",
+    "facet_drag_acceleration_torque",
+    "facet_srp_acceleration_torque",
+    "flat_plate_drag_acceleration_torque",
+    "flat_plate_srp_acceleration_torque",
+    "gravity_gradient_torque",
+    "j2_acceleration",
+    "magnetic_dipole_torque",
+    "make_attitude_pd",
+    "make_drag_acceleration",
+    "make_facet_drag",
+    "make_facet_srp",
+    "make_flat_plate_drag",
+    "make_flat_plate_srp",
+    "make_gravity_gradient_torque",
+    "make_j2_acceleration",
+    "make_magnetic_torque",
+    "make_reaction_wheel_torque",
+    "make_srp_acceleration",
+    "make_third_body_acceleration",
+    "make_thruster_acceleration",
+    "reaction_wheel_torque_commands",
+    "reaction_wheel_torque",
+    "srp_acceleration",
+    "sum_accelerations",
+    "sum_torques",
+    "third_body_acceleration",
+    "thruster_force_torque",
+    "thruster_mass_flow_rate",
+]
 
 
 class SpacecraftAccel:
@@ -95,6 +160,7 @@ class SpacecraftAccelDrag(SpacecraftAccel):
         area: float | None = None,
         mass: float | None = None,
         cd: float = 2.2,
+        atmosphere_velocity=None,
         earth_radius: float = EARTH_RADIUS,
         earth_rotation_rate: float = WGS84_EARTH_OMEGA,
     ):
@@ -102,6 +168,7 @@ class SpacecraftAccelDrag(SpacecraftAccel):
         self.area = None if area is None else _validate_positive(area, "area")
         self.mass = None if mass is None else _validate_positive(mass, "mass")
         self.cd = _validate_positive(cd, "cd")
+        self.atmosphere_velocity = atmosphere_velocity
         self.earth_radius = float(earth_radius)
         self.earth_rotation_rate = float(earth_rotation_rate)
 
@@ -115,6 +182,16 @@ class SpacecraftAccelDrag(SpacecraftAccel):
             area=_value_or_spacecraft(self.area, spacecraft, "area"),
             mass=_value_or_spacecraft(self.mass, spacecraft, "mass"),
             cd=self.cd,
+            atmosphere_velocity=_optional_vector_model(
+                self.atmosphere_velocity,
+                t,
+                r,
+                v,
+                q,
+                omega,
+                spacecraft,
+                "atmosphere_velocity",
+            ),
             earth_radius=self.earth_radius,
             earth_rotation_rate=self.earth_rotation_rate,
         )
@@ -239,6 +316,7 @@ class SpacecraftFlatPlateDrag(SpacecraftAccel):
         cd: float | None = 2.2,
         normal_body: ArrayLike = (1.0, 0.0, 0.0),
         center_of_pressure: ArrayLike | None = None,
+        atmosphere_velocity=None,
         earth_radius: float = EARTH_RADIUS,
         earth_rotation_rate: float = WGS84_EARTH_OMEGA,
     ):
@@ -248,6 +326,7 @@ class SpacecraftFlatPlateDrag(SpacecraftAccel):
         self.cd = None if cd is None else _validate_positive(cd, "cd")
         self.normal_body = _unit_vector(normal_body, "normal_body")
         self.center_of_pressure = None if center_of_pressure is None else _as_vector3(center_of_pressure, "center_of_pressure")
+        self.atmosphere_velocity = atmosphere_velocity
         self.earth_radius = float(earth_radius)
         self.earth_rotation_rate = float(earth_rotation_rate)
 
@@ -271,6 +350,17 @@ class SpacecraftFlatPlateDrag(SpacecraftAccel):
             cd=_value_or_spacecraft(self.cd, spacecraft, "cd"),
             normal_body=self.normal_body,
             center_of_pressure=_center_of_pressure(self.center_of_pressure, spacecraft),
+            omega_body=omega,
+            atmosphere_velocity=_optional_vector_model(
+                self.atmosphere_velocity,
+                t,
+                r,
+                v,
+                q,
+                omega,
+                spacecraft,
+                "atmosphere_velocity",
+            ),
             earth_radius=self.earth_radius,
             earth_rotation_rate=self.earth_rotation_rate,
         )
@@ -347,12 +437,16 @@ class SpacecraftFacetDrag(SpacecraftAccel):
         density,
         body=None,
         mass: float | None = None,
+        facet_transform=None,
+        atmosphere_velocity=None,
         earth_radius: float = EARTH_RADIUS,
         earth_rotation_rate: float = WGS84_EARTH_OMEGA,
     ):
         self.density = density
         self.body = body
         self.mass = None if mass is None else _validate_positive(mass, "mass")
+        self.facet_transform = facet_transform
+        self.atmosphere_velocity = atmosphere_velocity
         self.earth_radius = float(earth_radius)
         self.earth_rotation_rate = float(earth_rotation_rate)
 
@@ -371,7 +465,7 @@ class SpacecraftFacetDrag(SpacecraftAccel):
             r,
             v,
             q,
-            _facets(body),
+            _state_facets(body, self.facet_transform, t, r, v, q, omega, spacecraft),
             density=_call_density(
                 self.density,
                 _np.linalg.norm(r) - self.earth_radius,
@@ -384,6 +478,17 @@ class SpacecraftFacetDrag(SpacecraftAccel):
             ),
             mass=_mass_from(self.mass, spacecraft, body),
             center_of_mass=_center_of_mass(body),
+            omega_body=omega,
+            atmosphere_velocity=_optional_vector_model(
+                self.atmosphere_velocity,
+                t,
+                r,
+                v,
+                q,
+                omega,
+                spacecraft,
+                "atmosphere_velocity",
+            ),
             earth_radius=self.earth_radius,
             earth_rotation_rate=self.earth_rotation_rate,
         )
@@ -403,6 +508,7 @@ class SpacecraftFacetSolRad(SpacecraftAccel):
         solar_flux_1au: float = SOLAR_FLUX_1_AU,
         eclipse=1.0,
         self_shadowing: bool = False,
+        facet_transform=None,
     ):
         self.sun_position = sun_position
         self.body = body
@@ -410,6 +516,7 @@ class SpacecraftFacetSolRad(SpacecraftAccel):
         self.solar_flux_1au = float(solar_flux_1au)
         self.eclipse = eclipse
         self.self_shadowing = bool(self_shadowing)
+        self.facet_transform = facet_transform
 
     def acceleration(self, *, t, r, v, q, omega, spacecraft=None) -> _np.ndarray:
         acceleration, _ = self._acceleration_torque(t, r, v, q, omega, spacecraft)
@@ -426,7 +533,7 @@ class SpacecraftFacetSolRad(SpacecraftAccel):
             r,
             q,
             _vector_or_model(self.sun_position, t, r, v, q, omega, spacecraft, "sun_position"),
-            _facets(body),
+            _state_facets(body, self.facet_transform, t, r, v, q, omega, spacecraft),
             mass=_mass_from(self.mass, spacecraft, body),
             center_of_mass=_center_of_mass(body),
             solar_flux_1au=self.solar_flux_1au,
@@ -497,6 +604,30 @@ class SpacecraftMagneticTorque:
         return magnetic_dipole_torque(_magnetic_dipoles(body, self.dipole_names), field_body)
 
 
+class SpacecraftGravityGradientTorque:
+    """Body-frame gravity-gradient torque from a central or third body."""
+
+    spacecraft_torque_model = True
+
+    def __init__(self, source_position=(0.0, 0.0, 0.0), *, mu: float = EARTH_MU, inertia=None):
+        self.source_position = source_position
+        self.mu = float(mu)
+        self.inertia = None if inertia is None else _inertia_matrix(inertia)
+
+    def __call__(self, *args, **kwargs) -> _np.ndarray:
+        return self.torque(*args, **kwargs)
+
+    def torque(self, *args, **kwargs) -> _np.ndarray:
+        spacecraft, t, r, v, q, omega = _parse_state_args(args, kwargs)
+        source = _vector_or_model(self.source_position, t, r, v, q, omega, spacecraft, "source_position")
+        return gravity_gradient_torque(
+            r - source,
+            q,
+            _inertia_from(self.inertia, spacecraft),
+            mu=self.mu,
+        )
+
+
 class SpacecraftReactionWheelTorque:
     """Body-frame torque from reaction wheels on a ``SpacecraftBody``.
 
@@ -507,6 +638,7 @@ class SpacecraftReactionWheelTorque:
     """
 
     spacecraft_torque_model = True
+    spacecraft_wheel_torque_model = True
 
     def __init__(self, command, *, body=None, wheel_names=None):
         self.command = command
@@ -521,6 +653,23 @@ class SpacecraftReactionWheelTorque:
         body = _body_or_spacecraft(self.body, spacecraft)
         command = _call_optional(self.command, t, r, v, q, omega, spacecraft)
         return reaction_wheel_torque(_reaction_wheels(body, self.wheel_names), command)
+
+    def wheel_torques(self, *args, **kwargs) -> _np.ndarray:
+        """Return saturated scalar torque commands in body wheel order."""
+
+        spacecraft, t, r, v, q, omega = _parse_state_args(args, kwargs)
+        body = _body_or_spacecraft(self.body, spacecraft)
+        wheels = tuple(getattr(body, "reaction_wheels", ()))
+        selected = _reaction_wheels(body, self.wheel_names)
+        command = _call_optional(self.command, t, r, v, q, omega, spacecraft)
+        selected_commands = reaction_wheel_torque_commands(selected, command)
+        if self.wheel_names is None:
+            return selected_commands
+        commands = _np.zeros(len(wheels))
+        by_name = {getattr(wheel, "name", ""): index for index, wheel in enumerate(wheels)}
+        for wheel, value in zip(selected, selected_commands):
+            commands[by_name[getattr(wheel, "name", "")]] = value
+        return commands
 
 
 class SpacecraftAttitudePD:
@@ -605,6 +754,24 @@ def third_body_acceleration(
     )
 
 
+def gravity_gradient_torque(
+    r_source_to_spacecraft_inertial: ArrayLike,
+    q: ArrayLike,
+    inertia: ArrayLike,
+    *,
+    mu: float = EARTH_MU,
+) -> _np.ndarray:
+    """Return rigid-body gravity-gradient torque in body-frame N m."""
+
+    r = _as_vector3(r_source_to_spacecraft_inertial, "r_source_to_spacecraft_inertial")
+    radius = _np.linalg.norm(r)
+    if radius == 0.0 or mu == 0.0:
+        return _np.zeros(3)
+    r_hat_body = _rotate_vector(_quaternion_conjugate(q), r / radius)
+    inertia = _inertia_matrix(inertia)
+    return 3.0 * float(mu) / radius**3 * _np.cross(r_hat_body, inertia @ r_hat_body)
+
+
 def drag_acceleration(
     r_inertial: ArrayLike,
     v_inertial: ArrayLike,
@@ -613,6 +780,7 @@ def drag_acceleration(
     area: float,
     mass: float,
     cd: float = 2.2,
+    atmosphere_velocity: ArrayLike | None = None,
     earth_radius: float = EARTH_RADIUS,
     earth_rotation_rate: float = WGS84_EARTH_OMEGA,
 ) -> _np.ndarray:
@@ -627,7 +795,10 @@ def drag_acceleration(
     if density == 0.0:
         return _np.zeros(3)
 
-    atmosphere_velocity = _np.cross([0.0, 0.0, earth_rotation_rate], r)
+    atmosphere_velocity = co_rotating_atmosphere_velocity(
+        r,
+        earth_rotation_rate=earth_rotation_rate,
+    ) if atmosphere_velocity is None else _as_vector3(atmosphere_velocity, "atmosphere_velocity")
     relative_velocity = v - atmosphere_velocity
     relative_speed = _np.linalg.norm(relative_velocity)
     if relative_speed == 0.0 or _np.linalg.norm(r) < earth_radius:
@@ -672,6 +843,8 @@ def flat_plate_drag_acceleration_torque(
     cd: float = 2.2,
     normal_body: ArrayLike = (1.0, 0.0, 0.0),
     center_of_pressure: ArrayLike = (0.0, 0.0, 0.0),
+    omega_body: ArrayLike = (0.0, 0.0, 0.0),
+    atmosphere_velocity: ArrayLike | None = None,
     earth_radius: float = EARTH_RADIUS,
     earth_rotation_rate: float = WGS84_EARTH_OMEGA,
 ) -> tuple[_np.ndarray, _np.ndarray]:
@@ -686,11 +859,15 @@ def flat_plate_drag_acceleration_torque(
     cd = _validate_positive(cd, "cd")
     normal_body = _unit_vector(normal_body, "normal_body")
     center_of_pressure = _as_vector3(center_of_pressure, "center_of_pressure")
+    omega_body = _as_vector3(omega_body, "omega_body")
     if density == 0.0 or _np.linalg.norm(r) < earth_radius:
         return _np.zeros(3), _np.zeros(3)
 
-    atmosphere_velocity = _np.cross([0.0, 0.0, earth_rotation_rate], r)
-    relative_velocity = v - atmosphere_velocity
+    atmosphere_velocity = co_rotating_atmosphere_velocity(
+        r,
+        earth_rotation_rate=earth_rotation_rate,
+    ) if atmosphere_velocity is None else _as_vector3(atmosphere_velocity, "atmosphere_velocity")
+    relative_velocity = _surface_relative_velocity(v, atmosphere_velocity, q, omega_body, center_of_pressure)
     relative_speed = _np.linalg.norm(relative_velocity)
     if relative_speed == 0.0:
         return _np.zeros(3), _np.zeros(3)
@@ -774,6 +951,8 @@ def facet_drag_acceleration_torque(
     density: float,
     mass: float,
     center_of_mass: ArrayLike = (0.0, 0.0, 0.0),
+    omega_body: ArrayLike = (0.0, 0.0, 0.0),
+    atmosphere_velocity: ArrayLike | None = None,
     earth_radius: float = EARTH_RADIUS,
     earth_rotation_rate: float = WGS84_EARTH_OMEGA,
 ) -> tuple[_np.ndarray, _np.ndarray]:
@@ -785,20 +964,25 @@ def facet_drag_acceleration_torque(
     density = max(float(density), 0.0)
     mass = _validate_positive(mass, "mass")
     center_of_mass = _as_vector3(center_of_mass, "center_of_mass")
+    omega_body = _as_vector3(omega_body, "omega_body")
     if density == 0.0 or _np.linalg.norm(r) < earth_radius:
         return _np.zeros(3), _np.zeros(3)
 
-    atmosphere_velocity = _np.cross([0.0, 0.0, earth_rotation_rate], r)
-    relative_velocity = v - atmosphere_velocity
-    relative_speed = _np.linalg.norm(relative_velocity)
-    if relative_speed == 0.0:
-        return _np.zeros(3), _np.zeros(3)
-
-    relative_hat = relative_velocity / relative_speed
+    atmosphere_velocity = co_rotating_atmosphere_velocity(
+        r,
+        earth_rotation_rate=earth_rotation_rate,
+    ) if atmosphere_velocity is None else _as_vector3(atmosphere_velocity, "atmosphere_velocity")
     total_force_inertial = _np.zeros(3)
     total_torque_body = _np.zeros(3)
     q_conj = _quaternion_conjugate(q)
     for facet in facets:
+        arm_body = _as_vector3(facet.center_of_pressure, "facet.center_of_pressure") - center_of_mass
+        relative_velocity = _surface_relative_velocity(v, atmosphere_velocity, q, omega_body, arm_body)
+        relative_speed = _np.linalg.norm(relative_velocity)
+        if relative_speed == 0.0:
+            continue
+
+        relative_hat = relative_velocity / relative_speed
         normal_body = _unit_vector(facet.normal_body, "facet.normal_body")
         normal_inertial = _rotate_vector(q, normal_body)
         projected = max(0.0, float(_np.dot(normal_inertial, relative_hat)))
@@ -815,7 +999,6 @@ def facet_drag_acceleration_torque(
         )
         total_force_inertial = total_force_inertial + force_inertial
         force_body = _rotate_vector(q_conj, force_inertial)
-        arm_body = _as_vector3(facet.center_of_pressure, "facet.center_of_pressure") - center_of_mass
         total_torque_body = total_torque_body + _np.cross(arm_body, force_body)
     return total_force_inertial / mass, total_torque_body
 
@@ -911,11 +1094,29 @@ def _srp_force_inertial(
     return -illumination * pressure * area * projected * ((1.0 - specular) * sun_unit + normal_term * normal_inertial)
 
 
+def co_rotating_atmosphere_velocity(
+    r_inertial: ArrayLike,
+    *,
+    earth_rotation_rate: float = WGS84_EARTH_OMEGA,
+) -> _np.ndarray:
+    """Return rigid co-rotating atmosphere velocity in GCRF m/s."""
+
+    return _np.cross([0.0, 0.0, float(earth_rotation_rate)], _as_vector3(r_inertial, "r_inertial"))
+
+
 def _validate_optical_coefficients(specular_reflectivity, diffuse_reflectivity) -> None:
     specular = 0.0 if specular_reflectivity is None else _unit_interval(specular_reflectivity, "specular_reflectivity")
     diffuse = 0.0 if diffuse_reflectivity is None else _unit_interval(diffuse_reflectivity, "diffuse_reflectivity")
     if specular + diffuse > 1.0:
         raise ValueError("specular_reflectivity + diffuse_reflectivity must be <= 1.")
+
+
+def _surface_relative_velocity(v_inertial, atmosphere_velocity, q, omega_body, arm_body):
+    return (
+        _as_vector3(v_inertial, "v_inertial")
+        - _as_vector3(atmosphere_velocity, "atmosphere_velocity")
+        + _rotate_vector(q, _np.cross(_as_vector3(omega_body, "omega_body"), _as_vector3(arm_body, "arm_body")))
+    )
 
 
 def _facet_is_shadowed(index: int, facet, facets: tuple, sun_unit_body: _np.ndarray, epsilon: float) -> bool:
@@ -1003,24 +1204,36 @@ def reaction_wheel_torque(wheels, command):
     """Return total saturated body-frame torque from reaction wheels."""
 
     wheels = tuple(wheels)
+    commands = reaction_wheel_torque_commands(wheels, command)
+    return sum((wheel.torque_body(value) for wheel, value in zip(wheels, commands)), start=_np.zeros(3))
+
+
+def reaction_wheel_torque_commands(wheels, command) -> _np.ndarray:
+    """Return saturated scalar wheel torques in the same order as ``wheels``."""
+
+    wheels = tuple(wheels)
     if not wheels:
-        return _np.zeros(3)
+        return _np.zeros(0)
     if isinstance(command, dict):
-        total = _np.zeros(3)
-        for wheel in wheels:
-            total = total + wheel.torque_body(command.get(getattr(wheel, "name", ""), 0.0))
-        return total
+        return _np.array([
+            _wheel_command_scalar(wheel, command.get(getattr(wheel, "name", ""), 0.0))
+            for wheel in wheels
+        ])
 
     command = _np.asarray(command, dtype=float)
     if command.shape == ():
-        return sum((wheel.torque_body(float(command)) for wheel in wheels), start=_np.zeros(3))
+        return _np.array([_wheel_command_scalar(wheel, float(command)) for wheel in wheels])
     if command.shape == (3,):
         axes = _np.column_stack([_as_vector3(wheel.axis_body, "wheel.axis_body") for wheel in wheels])
         wheel_commands = _np.linalg.lstsq(axes, command, rcond=None)[0]
-        return sum((wheel.torque_body(value) for wheel, value in zip(wheels, wheel_commands)), start=_np.zeros(3))
+        return _np.array([_wheel_command_scalar(wheel, value) for wheel, value in zip(wheels, wheel_commands)])
     if command.shape == (len(wheels),):
-        return sum((wheel.torque_body(value) for wheel, value in zip(wheels, command)), start=_np.zeros(3))
+        return _np.array([_wheel_command_scalar(wheel, value) for wheel, value in zip(wheels, command)])
     raise ValueError("reaction-wheel command must be a scalar, 3-vector, per-wheel vector, or name mapping.")
+
+
+def _wheel_command_scalar(wheel, command: float) -> float:
+    return float(_np.clip(float(command), -float(wheel.max_torque), float(wheel.max_torque)))
 
 
 def attitude_error_quaternion(q_current: ArrayLike, q_target: ArrayLike = (1.0, 0.0, 0.0, 0.0)) -> _np.ndarray:
@@ -1087,6 +1300,10 @@ def make_thruster_acceleration(**kwargs):
 
 def make_magnetic_torque(magnetic_field, **kwargs):
     return SpacecraftMagneticTorque(magnetic_field, **kwargs)
+
+
+def make_gravity_gradient_torque(**kwargs):
+    return SpacecraftGravityGradientTorque(**kwargs)
 
 
 def make_reaction_wheel_torque(command, **kwargs):
@@ -1169,40 +1386,15 @@ def _as_vector3(value: ArrayLike, name: str) -> _np.ndarray:
     return vector
 
 
-def _normalize_quaternion(q: ArrayLike) -> _np.ndarray:
-    q = _np.asarray(q, dtype=float)
-    if q.shape != (4,):
-        raise ValueError("q must be a 4-vector [w, x, y, z].")
-    norm = _np.linalg.norm(q)
-    if norm == 0.0:
-        raise ValueError("q must be non-zero.")
-    return q / norm
-
-
-def _quaternion_multiply(q1, q2) -> _np.ndarray:
-    w1, x1, y1, z1 = _np.asarray(q1, dtype=float)
-    w2, x2, y2, z2 = _np.asarray(q2, dtype=float)
-    return _np.array(
-        [
-            w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
-            w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
-            w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
-            w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
-        ],
-        dtype=float,
-    )
-
-
-def _quaternion_conjugate(q) -> _np.ndarray:
-    q = _normalize_quaternion(q)
-    return _np.array([q[0], -q[1], -q[2], -q[3]], dtype=float)
-
-
-def _rotate_vector(q, vector) -> _np.ndarray:
-    q = _normalize_quaternion(q)
-    q_conj = _np.array([q[0], -q[1], -q[2], -q[3]], dtype=float)
-    rotated = _quaternion_multiply(_quaternion_multiply(q, [0.0, *_as_vector3(vector, "vector")]), q_conj)
-    return rotated[1:]
+def _inertia_matrix(inertia: ArrayLike) -> _np.ndarray:
+    matrix = _np.asarray(inertia, dtype=float)
+    if matrix.shape != (3, 3):
+        raise ValueError("inertia must be a 3x3 matrix.")
+    if not _np.allclose(matrix, matrix.T):
+        raise ValueError("inertia must be symmetric.")
+    if _np.min(_np.linalg.eigvalsh(matrix)) <= 0.0:
+        raise ValueError("inertia must be positive definite.")
+    return matrix
 
 
 def _unit_vector(value: ArrayLike, name: str) -> _np.ndarray:
@@ -1258,6 +1450,25 @@ def _facets(body):
     return facets
 
 
+def _state_facets(body, transform, t, r, v, q, omega, spacecraft):
+    facets = _facets(body)
+    if transform is None:
+        return facets
+    transformed = transform(
+        facets=facets,
+        t=t,
+        r=r,
+        v=v,
+        q=q,
+        omega=omega,
+        spacecraft=spacecraft,
+    )
+    transformed = tuple(transformed)
+    if not transformed:
+        raise ValueError("facet_transform must return at least one facet.")
+    return transformed
+
+
 def _thrusters(body, names=None):
     thrusters = tuple(getattr(body, "thrusters", ()))
     if names is None:
@@ -1294,6 +1505,19 @@ def _mass_from(value, spacecraft, body) -> float:
     return _validate_positive(body.mass, "mass")
 
 
+def _inertia_from(value, spacecraft) -> _np.ndarray:
+    if value is not None:
+        return _inertia_matrix(value)
+    if spacecraft is not None and getattr(spacecraft, "inertia", None) is not None:
+        return _inertia_matrix(spacecraft.inertia)
+    body = None if spacecraft is None else getattr(spacecraft, "body", None)
+    if body is not None and hasattr(body, "current_inertia"):
+        return _inertia_matrix(body.current_inertia)
+    if body is not None and hasattr(body, "inertia"):
+        return _inertia_matrix(body.inertia)
+    raise ValueError("inertia must be provided by the model, Spacecraft, or SpacecraftBody.")
+
+
 def _call_optional(value, t, r, v, q, omega, spacecraft):
     if not callable(value):
         return value
@@ -1315,6 +1539,12 @@ def _call_density(value, altitude, t, r, v, q, omega, spacecraft) -> float:
 def _vector_or_model(value, t, r, v, q, omega, spacecraft, name: str) -> _np.ndarray:
     value = _call_optional(value, t, r, v, q, omega, spacecraft) if callable(value) else value
     return _as_vector3(value, name)
+
+
+def _optional_vector_model(value, t, r, v, q, omega, spacecraft, name: str):
+    if value is None:
+        return None
+    return _vector_or_model(value, t, r, v, q, omega, spacecraft, name)
 
 
 def _nonnegative_gain(value, name: str):

@@ -128,7 +128,7 @@ def sun_position_eci(t) -> tuple[np.ndarray, float]:
 
     This uses SSAPy's real solar ephemeris (JPL, via astropy's get_body),
     the same real API already used elsewhere in the toolkit -- see
-    ssapy_toolkit/orbit_accelerations/accel_sun.py's accel_point_sun, which this
+    ssapy_toolkit/accelerations_orbit/accel_sun.py's accel_point_sun, which this
     follows directly -- rather than a hand-rolled low-precision analytic
     series.
 
@@ -342,9 +342,8 @@ def _shadow_surface_color(
 def _find_texture(name):
     """Locate a real planetary texture (e.g. "earth", "moon") as a .png.
 
-    Same pattern already established elsewhere in this toolkit (see
-    groundtrack_enhanced.py, orbit_plot_xy.py): try the installed ssapy
-    package first via ssapy.utils.find_file, which is robust regardless of
+    Same pattern already established elsewhere in this toolkit: try the
+    installed ssapy package first via ssapy.utils.find_file, which is robust regardless of
     where SSAPy and SSAPy-Toolkit are checked out relative to each other.
     Returns None (not a fabricated path) if unavailable, so callers can
     fall back to a plain color gradient instead of crashing.
@@ -425,7 +424,7 @@ def _sample_texture_rgb(texture_path, phi, theta):
         # real, already-established texture-shading pattern (used
         # elsewhere in this toolkit), which doesn't discard resolution
         # unnecessarily. An earlier version of this function forced every
-        # texture down to a tiny 256x128, copied from orbit_plot_xy.py's
+        # texture down to a tiny 256x128, matching orbit_plot's
         # _textured_sphere helper without reconsidering whether that
         # choice (made for a different rendering technology, matplotlib's
         # plot_surface) was appropriate here -- it wasn't, and produced

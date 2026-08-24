@@ -21,15 +21,6 @@ def get_unique_id(rank, run_number, cpus_per_node):
     return unique_id
 
 
-def get_unique_id2(rank, run_number, cpus_per_node):
-    """Return a unique integer ID for a worker.
-
-    This compatibility alias preserves the historical helper name while using
-    the same direct formula as :func:`get_unique_id`.
-    """
-    return int(get_unique_id(rank, run_number, cpus_per_node))
-
-
 def distribute_array_no_mpi(unique_id, total_jobs, array_size):
     """Compute a contiguous slice of work for a given worker.
 

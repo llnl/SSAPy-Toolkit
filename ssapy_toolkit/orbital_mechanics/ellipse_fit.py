@@ -30,7 +30,7 @@ dict
     (same keys as before)
 """
 
-from ..plots import save_plot
+from ..plots import figsave
 from ..plots.plotutils import _pop_save_path_aliases, _raise_unrecognized_kwargs
 import numpy as np
 import warnings
@@ -781,7 +781,7 @@ def ellipse_fit(
         plt.tight_layout()
         plt.show()
         if save_path:
-            save_plot(fig, save_path)
+            figsave(fig, save_path)
 
     # ───────────────────────── output dict (keys unchanged) ───────────────
     result = {

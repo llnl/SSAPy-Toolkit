@@ -161,7 +161,7 @@ def body_to_gcrf_matrix(q) -> np.ndarray:
     """Return quaternion body-to-GCRF direction cosine matrix.
 
     The quaternion convention is ``[w, x, y, z]`` and matches
-    :mod:`ssapy_toolkit.dynamics`.
+    :mod:`ssapy_toolkit.propagators_6dof`.
     """
 
     w, x, y, z = _unit(_vector4(q, "q"), "q")

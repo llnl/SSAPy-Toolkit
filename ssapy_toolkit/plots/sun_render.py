@@ -270,8 +270,8 @@ def background_sun_radius(
     """Display radius for a background Sun.
 
     By default the radius preserves the Sun's real angular radius at the
-    background display distance.  Pass ``size_factor`` for legacy/stylized
-    scene-fraction sizing.
+    background display distance. Pass ``size_factor`` for deliberately
+    stylized scene-fraction sizing.
     """
     if size_factor is not None:
         return max(plot_range * size_factor, 1.0)

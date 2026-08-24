@@ -123,12 +123,12 @@ def test_figsave_save_plot_display_and_theme_helpers(tmp_path, monkeypatch, caps
 
     fig, ax = plt.subplots()
     ax.plot([0, 1], [1, 0])
-    saved_pdf = Path(plotutils.save_plot(fig, save_path=tmp_path / "plot.pdf"))
+    saved_pdf = Path(plotutils.figsave(fig, save_path=tmp_path / "plot.pdf"))
     assert saved_pdf.exists()
 
     fig, ax = plt.subplots()
     ax.plot([0, 1], [0, 1])
-    appended_pdf = Path(plotutils.save_plot(fig, save_path=tmp_path / "plot.pdf"))
+    appended_pdf = Path(plotutils.figsave(fig, save_path=tmp_path / "plot.pdf"))
     assert appended_pdf.exists()
 
     assert plotutils.figsave(plt.figure(), save_path=False) is None

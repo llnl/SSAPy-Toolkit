@@ -20,22 +20,43 @@ def test_set_axes_equal_balances_3d_ranges():
     plt.close(fig)
 
 
-def test_rocket_fuel_gravity_turn_and_finite_burn(monkeypatch):
-    fuel = importlib.import_module("ssapy_toolkit.rockets.fuel_usage")
-    gravity = importlib.import_module("ssapy_toolkit.rockets.gravity_turn")
+def test_engine_fuel_gravity_turn_and_finite_burn():
+    fuel = importlib.import_module("ssapy_toolkit.engines.fuel_usage")
+    gravity = importlib.import_module("ssapy_toolkit.launch.gravity_turn")
     finite = importlib.import_module("ssapy_toolkit.orbital_mechanics.calculate_finite_burn_acceleration")
 
-    monkeypatch.setitem(fuel.thrusters, "Test", {"ISP": 300.0})
     positions = np.array([[7_000_000.0, 0.0, 0.0], [7_100_000.0, 0.0, 0.0]])
-    used = fuel.estimate_fuel_usage(np.array([0.01, 0.02]), 10.0, positions, engine="Test")
-    assert used > 0.0
-    assert fuel.thrusters["Test"]["mass"] == 500
-    with pytest.raises(KeyError, match="not found"):
-        fuel.estimate_fuel_usage(np.array([0.01]), 1.0, positions[:1], engine="missing")
+    used = fuel.estimate_fuel_usage(
+        np.array([0.01, 0.02]),
+        10.0,
+        positions,
+        engine="hall_effect_small",
+        initial_mass_kg=500.0,
+    )
+    first_step = 500.0 * 0.01 / (1604.0 * fuel.G0) * 10.0
+    second_step = (500.0 - first_step) * 0.02 / (1604.0 * fuel.G0) * 10.0
+    assert used == pytest.approx(first_step + second_step)
+    assert fuel.estimate_fuel_usage(
+        np.array([0.01]),
+        10.0,
+        positions[:1],
+        engine="SPT-100",
+        initial_mass_kg=1000.0,
+    ) == pytest.approx(1000.0 * 0.01 / (1604.0 * fuel.G0) * 10.0)
+    with pytest.raises(KeyError, match="Unknown thruster spec"):
+        fuel.estimate_fuel_usage(np.array([0.01]), 1.0, positions[:1], engine="missing", initial_mass_kg=500.0)
+    with pytest.raises(ValueError, match="positive"):
+        fuel.estimate_fuel_usage(np.array([0.01]), 0.0, positions[:1], engine="hall_effect_small", initial_mass_kg=500.0)
+    with pytest.raises(TypeError, match="initial_mass_kg"):
+        fuel.estimate_fuel_usage(np.array([0.01]), 1.0, positions[:1], engine="hall_effect_small")
+    with pytest.raises(ValueError, match="initial_mass_kg"):
+        fuel.estimate_fuel_usage(np.array([0.01]), 1.0, positions[:1], engine="hall_effect_small", initial_mass_kg=0.0)
+    with pytest.raises(ValueError, match="non-negative"):
+        fuel.estimate_fuel_usage(np.array([-0.01]), 1.0, positions[:1], engine="hall_effect_small", initial_mass_kg=500.0)
     with pytest.raises(ValueError, match="must match"):
-        fuel.estimate_fuel_usage(np.array([0.01]), 1.0, positions, engine="Test")
+        fuel.estimate_fuel_usage(np.array([0.01]), 1.0, positions, engine="hall_effect_small", initial_mass_kg=500.0)
     with pytest.raises(ValueError, match="shape"):
-        fuel.estimate_fuel_usage(np.array([0.01]), 1.0, np.ones((1, 2)), engine="Test")
+        fuel.estimate_fuel_usage(np.array([0.01]), 1.0, np.ones((1, 2)), engine="hall_effect_small", initial_mass_kg=500.0)
 
     accel_start = gravity.accel_gravity_turn(np.array([7_000_000.0, 0.0, 0.0]), 0, np.array([0.0, 10.0]), np.array([1.0, 1.0]), turn_time=10.0)
     accel_end = gravity.accel_gravity_turn(np.array([7_000_000.0, 0.0, 0.0]), 1, np.array([0.0, 10.0]), np.array([1.0, 1.0]), turn_time=10.0, launch_az=np.pi / 2)
@@ -89,7 +110,7 @@ def test_gamma_heading_helpers_with_fake_transforms(monkeypatch):
 
 
 def test_sky_angle_helpers_with_fake_orbit_and_groundtrack(monkeypatch):
-    sky = importlib.import_module("ssapy_toolkit.coordinates.sky_angles")
+    sky = importlib.import_module("ssapy_toolkit.coordinates.sky")
 
     class FakeAngle:
         def __init__(self, value):
@@ -169,7 +190,7 @@ def test_break_plot_line_preserves_containers_and_inserts_nans():
 
 
 def test_leapfrog_extra_accel_signatures_and_impact(monkeypatch, capsys):
-    module = importlib.import_module("ssapy_toolkit.propagators.leap_frog")
+    module = importlib.import_module("ssapy_toolkit.propagators_orbit.leap_frog")
     monkeypatch.setattr(module, "to_gps", lambda t: np.asarray(t, dtype=float))
     monkeypatch.setattr(module, "build_profile", lambda spec, t: np.zeros_like(np.asarray(t, dtype=float)))
     monkeypatch.setattr(module, "accel_point_earth", lambda r: np.zeros(3))

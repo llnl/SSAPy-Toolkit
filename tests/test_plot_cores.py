@@ -26,57 +26,34 @@ class _FakeBody:
         return np.zeros((3, count))
 
 
-def test_orbit_plot_wrappers_delegate_to_core(monkeypatch):
-    cases = [
-        ("ssapy_toolkit.plots.orbit_plot", "orbit_plot", ("xy", "xz", "yz", "3d"), "standard", False, "auto"),
-        ("ssapy_toolkit.plots.orbit_plot_xy", "orbit_plot_xy", ("xy",), "fixed", True, None),
-        ("ssapy_toolkit.plots.orbit_plot_xyxz", "orbit_plot_xyxz", ("xy", "xz"), "fixed", False, "legacy"),
-    ]
-
-    for module_name, function_name, expected_views, expected_lunar_transform, expected_xy_title, expected_layout in cases:
-        module = importlib.import_module(module_name)
-        calls = []
-
-        def fake_core(r, **kwargs):
-            calls.append((r, kwargs))
-            return "fig", list(kwargs["views"])
-
-        monkeypatch.setattr(module, "_orbit_plot_core", fake_core)
-        result = getattr(module, function_name)(
-            _sample_track(),
-            t=np.arange(3.0),
-            title="demo",
-            save_path="plots/orbit.jpg",
-            frame="gcrf",
-            show=False,
-            c="black",
-            pad=2,
-        )
-
-        assert result == ("fig", list(expected_views))
-        assert calls[0][1]["views"] == expected_views
-        assert calls[0][1]["save_path"] == "plots/orbit.jpg"
-        assert calls[0][1]["lunar_transform"] == expected_lunar_transform
-        assert calls[0][1].get("xy_title_includes_title", False) is expected_xy_title
-        if expected_layout is not None:
-            assert calls[0][1]["layout"] == expected_layout
-
-
-def test_orbit_plot_wrappers_accept_save_aliases(monkeypatch):
-    module = importlib.import_module("ssapy_toolkit.plots.orbit_plot_xyxz")
+def test_orbit_plot_delegates_to_core(monkeypatch):
+    module = importlib.import_module("ssapy_toolkit.plots.orbit_plot")
     calls = []
 
     def fake_core(r, **kwargs):
-        calls.append(kwargs)
-        return "fig", kwargs["views"]
+        calls.append((r, kwargs))
+        return "fig", list(kwargs["views"])
 
     monkeypatch.setattr(module, "_orbit_plot_core", fake_core)
-
-    assert module.orbit_plot_xyxz(_sample_track(), t=np.arange(3.0), savefig="plots/alias.jpg") == (
-        "fig",
-        ("xy", "xz"),
+    result = module.orbit_plot(
+        _sample_track(),
+        t=np.arange(3.0),
+        title="demo",
+        view="xyxz",
+        savefig="plots/alias.jpg",
+        frame="gcrf",
+        show=False,
+        c="black",
+        pad=2,
     )
-    assert calls[-1]["save_path"] == "plots/alias.jpg"
+
+    assert result == (
+        "fig",
+        ["xy", "xz"],
+    )
+    assert calls[0][1]["views"] == ("xy", "xz")
+    assert calls[0][1]["save_path"] == "plots/alias.jpg"
+    assert calls[0][1]["lunar_transform"] == "standard"
 
 
 def test_orbit_plot_entry_point_accepts_save_aliases(monkeypatch):
@@ -136,7 +113,6 @@ def test_orbit_plot_routes_keyword_views_to_orbit_core(monkeypatch):
 
     assert module.orbit_plot(_sample_track(), t=np.arange(3.0), view="xz") == ("fig", ["xz"])
     assert calls[-1]["views"] == ("xz",)
-    assert calls[-1]["layout"] == "auto"
 
     assert module.orbit_plot(_sample_track(), t=np.arange(3.0), view="xyxz") == ("fig", ["xy", "xz"])
     assert calls[-1]["views"] == ("xy", "xz")
@@ -190,7 +166,6 @@ def test_orbit_plot_routes_dashboard_aliases_to_orbit_core(monkeypatch):
     assert calls[-1]["figsize"] == (16, 12)
 
     assert module.orbit_plot(_sample_track(), t=np.arange(3.0), view="orbit dashboard") == ("fig", expected_views)
-    assert calls[-1]["layout"] == "auto"
 
     module.orbit_plot(_sample_track(), t=np.arange(3.0), view="dashboard", figsize=(8, 8))
     assert calls[-1]["figsize"] == (8, 8)
@@ -280,7 +255,6 @@ def test_orbit_plot_routes_transfer_keywords(monkeypatch):
     transfer_trajectory = importlib.import_module("ssapy_toolkit.plots.transfer_trajectory_plot")
     transfer_burn = importlib.import_module("ssapy_toolkit.plots.transfer_burn_profile_plot")
     transfer_designer = importlib.import_module("ssapy_toolkit.plots.transfer_designer_curves_plot")
-    transfer_legacy = importlib.import_module("ssapy_toolkit.plots.transfer_plot")
     calls = []
 
     class FakeTransfer:
@@ -303,14 +277,9 @@ def test_orbit_plot_routes_transfer_keywords(monkeypatch):
         calls.append(("designer", result, kwargs))
         return "designer_fig"
 
-    def fake_legacy(*args, **kwargs):
-        calls.append(("legacy", args, kwargs))
-        return "legacy_fig"
-
     monkeypatch.setattr(transfer_trajectory, "transfer_trajectory_plot", fake_trajectory)
     monkeypatch.setattr(transfer_burn, "transfer_burn_profile_plot", fake_burn)
     monkeypatch.setattr(transfer_designer, "transfer_designer_curves_plot", fake_designer)
-    monkeypatch.setattr(transfer_legacy, "transfer_plot", fake_legacy)
 
     result = FakeOptimal()
     assert module.orbit_plot(result, view="transfer", save_path="transfer.png") == "trajectory_axes"
@@ -328,9 +297,8 @@ def test_orbit_plot_routes_transfer_keywords(monkeypatch):
     assert calls[-1] == ("designer", result, {"title": "Designer", "save_path": False})
 
     states = tuple(np.array([7_000_000.0, 0.0, 0.0]) for _ in range(6))
-    assert module.orbit_plot(states, view="transfer_plot") == "legacy_fig"
-    assert calls[-1][0] == "legacy"
-    assert len(calls[-1][1]) == 6
+    with pytest.raises(TypeError, match="transfer result"):
+        module.orbit_plot(states, view="transfer_plot")
 
 
 def test_orbit_plot_routes_divergence_keywords(monkeypatch):
@@ -360,8 +328,8 @@ def test_orbit_plot_routes_divergence_keywords(monkeypatch):
     assert calls[-1][2]["show"] is False
 
 
-def test_cislunar_dashboard_wrapper_delegates_to_core(monkeypatch):
-    module = importlib.import_module("ssapy_toolkit.plots.cislunar_dashboard")
+def test_orbit_plot_routes_cislunar_dashboard_to_core(monkeypatch):
+    module = importlib.import_module("ssapy_toolkit.plots.orbit_plot")
     calls = []
 
     def fake_core(r, **kwargs):
@@ -370,9 +338,10 @@ def test_cislunar_dashboard_wrapper_delegates_to_core(monkeypatch):
 
     monkeypatch.setattr(module, "_cislunar_plot_core", fake_core)
 
-    result = module.cislunar_dashboard(
+    result = module.orbit_plot(
         _sample_track(),
         t=np.arange(3.0),
+        view="cislunar_dashboard",
         title="demo",
         save="plots/cislunar_dashboard.jpg",
         legend=False,
@@ -397,46 +366,13 @@ def test_orbit_plot_rejects_unknown_view():
         module.orbit_plot(_sample_track(), view="xy", frame="gcrf", coordinate="itrf")
 
 
-def test_cislunar_plot_wrappers_delegate_to_core(monkeypatch):
-    cases = [
-        ("ssapy_toolkit.plots.cislunar_plot", "cislunar_plot", "combined", True),
-        ("ssapy_toolkit.plots.cislunar_plot_3d", "cislunar_plot_3d", "3d", False),
-        ("ssapy_toolkit.plots.cislunar_plot_xy", "cislunar_plot_xy", "xy", True),
-    ]
-
-    for module_name, function_name, expected_mode, legend_value in cases:
-        module = importlib.import_module(module_name)
-        calls = []
-
-        def fake_core(r, **kwargs):
-            calls.append((r, kwargs))
-            return "fig", kwargs["mode"]
-
-        monkeypatch.setattr(module, "_cislunar_plot_core", fake_core)
-        kwargs = {
-            "t": np.arange(3.0),
-            "title": "demo",
-            "save_path": "plots/cislunar.jpg",
-            "show": False,
-        }
-        if function_name == "cislunar_plot_3d":
-            kwargs["legend"] = legend_value
-
-        result = getattr(module, function_name)(_sample_track(), **kwargs)
-
-        assert result == ("fig", expected_mode)
-        assert calls[0][1]["mode"] == expected_mode
-        assert calls[0][1]["save_path"] == "plots/cislunar.jpg"
-        assert calls[0][1]["legend"] is legend_value
-
-
 def test_orbit_plot_core_forwards_save_path(monkeypatch, tmp_path):
     core = importlib.import_module("ssapy_toolkit.plots._orbit_plot_core")
     saved = {}
 
     monkeypatch.setattr(core, "_get_body", lambda name: _FakeBody())
     monkeypatch.setattr(core, "_lagrange_points_lunar_frame", lambda: {})
-    monkeypatch.setattr(core, "_save_plot", lambda fig, path: saved.update(fig=fig, path=Path(path)))
+    monkeypatch.setattr(core, "_figsave", lambda fig, path: saved.update(fig=fig, path=Path(path)))
 
     output_path = tmp_path / "orbit.png"
     fig, axes = core._orbit_plot_core(
@@ -595,7 +531,7 @@ def test_globe_plot_validation_labels_limits_and_save(monkeypatch, tmp_path):
     monkeypatch.setattr(module.PILImage, "open", lambda path: Image.fromarray(np.ones((6, 12, 3), dtype=np.uint8) * 255))
     monkeypatch.setattr(module, "make_white", lambda fig, ax: (fig, [ax]))
     saved = []
-    monkeypatch.setattr(module, "save_plot", lambda fig, save_path: saved.append(Path(save_path)))
+    monkeypatch.setattr(module, "figsave", lambda fig, save_path: saved.append(Path(save_path)))
 
     assert np.isfinite(module._earth_lon0_from_time(0.0))
     assert np.isfinite(module._earth_lon0_from_time(Time(0.0, format="gps", scale="utc")))
@@ -649,7 +585,7 @@ def test_cislunar_plot_core_forwards_save_path(monkeypatch, tmp_path):
     monkeypatch.setattr(core, "_gcrf_to_lunar_fixed", lambda xyz, t: xyz)
     monkeypatch.setattr(core, "_lagrange_points_lunar_fixed_frame", lambda: {})
     monkeypatch.setattr(core, "_sphere_mesh", lambda radius: tuple(np.zeros((2, 2)) for _ in range(3)))
-    monkeypatch.setattr(core, "_save_plot", lambda fig, path: saved.update(fig=fig, path=Path(path)))
+    monkeypatch.setattr(core, "_figsave", lambda fig, path: saved.update(fig=fig, path=Path(path)))
 
     output_path = tmp_path / "cislunar.png"
     fig, ax = core._cislunar_plot_core(
@@ -686,10 +622,6 @@ def test_cislunar_plot_core_combined_and_xy_modes(monkeypatch):
     fig, axes = core._cislunar_plot_core(_sample_track(), t=np.arange(3.0), mode="xy", c="white", legend=False)
     assert axes[0].name == "rectilinear"
     assert axes[1].name == "rectilinear"
-    fig.clear()
-
-    fig, axes = core._cislunar_plot_core(_sample_track(), t=np.arange(3.0), mode="cislunar_dashboard", legend=False)
-    assert len(axes) == 2
     fig.clear()
 
     with pytest.raises(ValueError, match="mode"):

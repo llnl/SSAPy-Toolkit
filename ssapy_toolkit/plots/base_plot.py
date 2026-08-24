@@ -60,7 +60,7 @@ except ImportError:
 
 from .layers import BaseLayer, create_layer
 from .orbit_state import OrbitalState, Trajectory
-from .frames import Frame, FrameTransform
+from ssapy_toolkit.coordinates.frames import Frame, FrameTransform
 
 # ── palette ───────────────────────────────────────────────────────────────────
 _ORBIT_COLOR   = "#00FF9C"

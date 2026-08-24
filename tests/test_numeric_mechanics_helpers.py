@@ -7,12 +7,10 @@ from ssapy_toolkit.compute.lyapunov_exponent import lyapunov_exponent_from_state
 from ssapy_toolkit.compute.proper_motions import proper_motion, proper_motion_ra_dec
 from ssapy_toolkit.compute.segment_intersection import segment_intersects_sphere
 from ssapy_toolkit.constants import EARTH_MU
-from ssapy_toolkit.coordinates import equatorial_and_ecliptic
-from ssapy_toolkit.coordinates.cartesian_to_cylindrical import cart_to_cyl
-from ssapy_toolkit.coordinates.cartesian_to_spherical import cart2sph_deg
-from ssapy_toolkit.coordinates.gcrf_to_ntw import gcrf_to_ntw
-from ssapy_toolkit.coordinates.ntw_to_gcrf import ntw_to_gcrf, ntw_to_gcrf_matrix
-from ssapy_toolkit.coordinates.unit_conversions import (
+from ssapy_toolkit.coordinates import equatorial_ecliptic
+from ssapy_toolkit.coordinates.cartesian import cart2sph_deg, cart_to_cyl
+from ssapy_toolkit.coordinates.satellite_frames import gcrf_to_ntw, ntw_to_gcrf, ntw_to_gcrf_matrix
+from ssapy_toolkit.coordinates.angle_units import (
     deg0to360,
     deg0to360array,
     deg90to90,
@@ -21,12 +19,12 @@ from ssapy_toolkit.coordinates.unit_conversions import (
     dms_to_rad,
     rad0to2pi,
 )
-from ssapy_toolkit.propagators import int_utils
+from ssapy_toolkit.propagators_orbit import int_utils
 from ssapy_toolkit.orbital_mechanics import misc
 
-rk4_module = importlib.import_module("ssapy_toolkit.propagators.rk4")
-leapfrog_module = importlib.import_module("ssapy_toolkit.propagators.leap_frog")
-eqecl = equatorial_and_ecliptic
+rk4_module = importlib.import_module("ssapy_toolkit.propagators_orbit.rk4")
+leapfrog_module = importlib.import_module("ssapy_toolkit.propagators_orbit.leap_frog")
+eqecl = equatorial_ecliptic
 
 
 def test_orbital_misc_formula_helpers():
@@ -86,7 +84,7 @@ def test_coordinate_conversion_helpers():
     np.testing.assert_allclose(ntw_to_gcrf([1, 2, 3], r_vec, v_vec), [1, 2, 3], atol=1e-12)
     np.testing.assert_allclose(gcrf_to_ntw([1, 2, 3], r_vec, v_vec), [1, 2, 3], atol=1e-12)
 
-    assert equatorial_and_ecliptic.equatorial_to_ecliptic is eqecl.equatorial_to_ecliptic
+    assert equatorial_ecliptic.equatorial_to_ecliptic is eqecl.equatorial_to_ecliptic
 
     xq, yq, zq = eqecl.ecliptic_xyz_to_equatorial_xyz(1.0, 2.0, 3.0)
     xc, yc, zc = eqecl.equatorial_xyz_to_ecliptic_xyz(xq, yq, zq)

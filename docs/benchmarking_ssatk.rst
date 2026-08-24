@@ -804,7 +804,7 @@ Limitations relative to SSATK
 SSATK benchmark implication
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-These tools are useful if SSATK's ``rockets`` helpers grow into a serious
+These tools are useful if SSATK's ``launch`` helpers grow into a serious
 launch/ascent module. They are secondary references for spacecraft 6-DoF.
 
 Benchmark Cases SSATK Should Run

@@ -36,7 +36,7 @@ def test_transfer_plot_and_intersection_helpers(monkeypatch, tmp_path):
     monkeypatch.setattr(module, "Orbit", FakeOrbit)
     monkeypatch.setattr(module, "leapfrog", _fake_leapfrog)
     saved = []
-    monkeypatch.setattr(module, "save_plot", lambda fig, path: saved.append(Path(path)))
+    monkeypatch.setattr(module, "figsave", lambda fig, path: saved.append(Path(path)))
 
     idx = module.find_intersection_time(np.zeros(3), np.array([1.0, 0.0, 0.0]), np.array([0.002, 0.0, 0.0]), 4)
     assert idx == 2
@@ -63,7 +63,7 @@ def test_orbit_plot_rv_branches(monkeypatch, tmp_path):
     monkeypatch.setattr(module, "Orbit", FakeOrbit)
     monkeypatch.setattr(module, "leapfrog", _fake_leapfrog)
     saved = []
-    monkeypatch.setattr(module, "save_plot", lambda fig, path: saved.append(Path(path)))
+    monkeypatch.setattr(module, "figsave", lambda fig, path: saved.append(Path(path)))
 
     r0 = np.array([7000e3, 0.0, 0.0])
     v0 = np.array([0.0, 7500.0, 0.0])
@@ -82,7 +82,7 @@ def test_tracking_plot_with_fake_groundtrack_and_image(monkeypatch, tmp_path):
     image = Image.new("RGB", (16, 8), "blue")
     monkeypatch.setattr(module.PILImage, "open", lambda path: image.copy())
     monkeypatch.setattr(module, "find_file", lambda *args, **kwargs: "earth.png")
-    monkeypatch.setattr(module, "save_plot", lambda fig, path: Path(path).write_text("saved"))
+    monkeypatch.setattr(module, "figsave", lambda fig, path: Path(path).write_text("saved"))
 
     def fake_groundtrack(r, t):
         n = len(r)

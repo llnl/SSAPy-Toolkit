@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import numpy as np
 from ssapy import Orbit
+from astropy.time import Time
 
 from ..constants import EARTH_MU
-from ..time_functions import Time, to_gps
+from ..time_functions import to_gps
 from ..plots.plotutils import _pop_save_path_aliases, _raise_unrecognized_kwargs
 from ._transfer_result import maneuver_burn, trajectory_dict, transfer_result, transfer_state
 from .misc import bi_elliptic_transfer_delta_v, circular_velocity, vis_viva
@@ -384,6 +385,3 @@ def transfer_bielliptic(
         result["figure"] = fig
 
     return result
-
-
-transfer_bi_elliptic = transfer_bielliptic

@@ -2,7 +2,7 @@
 core/sun_mpl.py
 ----------------
 Sun model for SSAPy-Toolkit's matplotlib-based 3D plots
-(globe_plot.py, moon_plot_3d.py, cislunar_plot_3d.py).
+(globe_plot.py, moon_plot_3d.py, and orbit_plot.py).
 
 Unlike the earlier Plotly-based core/sun.py, this module works directly
 with the textured-sphere pattern already used throughout the toolkit

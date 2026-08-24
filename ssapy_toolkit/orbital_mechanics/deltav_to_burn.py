@@ -3,7 +3,7 @@
 import numpy as np
 from ssapy import Orbit
 from ssapy_toolkit.coordinates import ntw_to_gcrf
-from ssapy_toolkit.propagators import leapfrog
+from ssapy_toolkit.propagators_orbit import leapfrog
 
 def deltav_to_burn(orbit, times, delta_v_ntw):
     """

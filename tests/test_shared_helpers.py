@@ -10,20 +10,19 @@ import pytest
 from ssapy_toolkit._paths import ensure_file_parent, safe_relative_parts
 from ssapy_toolkit._namespace import import_public_modules
 from ssapy_toolkit._sorting import natural_key
-from ssapy_toolkit.io.datapath import datapath, dpath
+from ssapy_toolkit.io.datapath import datapath
 from ssapy_toolkit.io.h5cache import h5cache, h5load
 from ssapy_toolkit.io.ssatk_cache import ssatk_load_cache, ssatk_save_cache
 from ssapy_toolkit.io.ssatk_data import ssatk_data
 from ssapy_toolkit.orbital_mechanics._two_body import _keplerian_two_body_rhs
-from ssapy_toolkit.plots.figpath import figpath, fpath, ssatk_path
-from ssapy_toolkit.plots.plotutils import figsave, fsave, ssatk_fig
+from ssapy_toolkit.plots.figpath import figpath, ssatk_path
+from ssapy_toolkit.plots.plotutils import figsave, ssatk_fig
 
 data_path_module = importlib.import_module("ssapy_toolkit.io.datapath")
 fig_path_module = importlib.import_module("ssapy_toolkit.plots.figpath")
 ssatk_cache_module = importlib.import_module("ssapy_toolkit.io.ssatk_cache")
 ssatk_data_module = importlib.import_module("ssapy_toolkit.io.ssatk_data")
-top_level_launch_pads = importlib.import_module("ssapy_toolkit.launch_pads")
-orbital_launch_pads = importlib.import_module("ssapy_toolkit.orbital_mechanics.launch_pads")
+launch = importlib.import_module("ssapy_toolkit.launch")
 
 
 def test_natural_key_sorts_embedded_numbers():
@@ -58,16 +57,16 @@ def test_import_public_modules_populates_namespace_deterministically(tmp_path, m
     init_file = package / "__init__.py"
     init_file.write_text("", encoding="utf-8")
     (package / "a.py").write_text("VALUE = 'a'\n_hidden = 'no'\n", encoding="utf-8")
-    (package / "b.py").write_text("VALUE = 'b'\nOTHER = 2\n", encoding="utf-8")
+    (package / "b.py").write_text("__all__ = ['OTHER']\nVALUE = 'b'\nOTHER = 2\n", encoding="utf-8")
     (package / "_private.py").write_text("EXPOSED = 3\n", encoding="utf-8")
     monkeypatch.syspath_prepend(str(tmp_path))
 
     namespace = {}
     import_public_modules("demo_package", str(init_file), namespace)
 
-    assert namespace["VALUE"] == "b"
+    assert namespace["VALUE"] == "a"
     assert namespace["OTHER"] == 2
-    assert namespace["EXPOSED"] == 3
+    assert "EXPOSED" not in namespace
     assert "_hidden" not in namespace
     for module_name in list(sys.modules):
         if module_name == "demo_package" or module_name.startswith("demo_package."):
@@ -85,10 +84,7 @@ def test_keplerian_two_body_rhs_returns_velocity_and_gravity():
 
 def test_ssatk_short_helper_aliases_are_primary_exports():
     assert ssatk_path is figpath
-    assert fpath is figpath
     assert ssatk_fig is figsave
-    assert fsave is figsave
-    assert dpath is datapath
     assert callable(ssatk_data)
     assert callable(h5cache)
     assert callable(h5load)
@@ -97,8 +93,8 @@ def test_ssatk_short_helper_aliases_are_primary_exports():
 
 
 def test_launch_pad_metadata_uses_one_canonical_dataset():
-    assert orbital_launch_pads.launch_pads is top_level_launch_pads.launch_pads
-    assert orbital_launch_pads.landing_pads is top_level_launch_pads.landing_pads
+    assert launch.launch_pads["Kennedy Space Center LC-39A"]["latitude"] == pytest.approx(28.6082)
+    assert "NASA Stennis Space Center" in launch.landing_pads
 
 
 def test_figpath_roots_relative_paths_under_home_output_dir(tmp_path, monkeypatch):
@@ -124,14 +120,10 @@ def test_figpath_can_use_explicit_env_root(tmp_path, monkeypatch):
 def test_figpath_does_not_fall_back_to_cwd(tmp_path, monkeypatch):
     blocked_home = tmp_path / "blocked_home"
     blocked_home.write_text("not a directory", encoding="utf-8")
-    fallback = tmp_path / "fallback_figs"
     monkeypatch.setattr(fig_path_module, "HOME_FIG_DIR", blocked_home)
-    monkeypatch.setattr(fig_path_module, "FALLBACK_DIR", fallback)
 
     with pytest.raises(RuntimeError, match="SSATK_FIGURES_DIR"):
         fig_path_module.figpath("plots/example")
-
-    assert not fallback.exists()
 
 
 def test_figsave_defaults_to_figpath_and_adds_jpg_extension(tmp_path, monkeypatch):
@@ -226,14 +218,10 @@ def test_datapath_can_use_explicit_env_root(tmp_path, monkeypatch):
 def test_datapath_does_not_fall_back_to_cwd(tmp_path, monkeypatch):
     blocked_home = tmp_path / "blocked_home"
     blocked_home.write_text("not a directory", encoding="utf-8")
-    fallback = tmp_path / "fallback_data"
     monkeypatch.setattr(data_path_module, "HOME_DATA_DIR", blocked_home)
-    monkeypatch.setattr(data_path_module, "FALLBACK_DATA_DIR", fallback)
 
     with pytest.raises(RuntimeError, match="SSATK_DATA_DIR"):
         data_path_module.datapath("catalogs/sample.txt")
-
-    assert not fallback.exists()
 
 
 def test_ssatk_data_and_cache_wrappers_forward_arguments(monkeypatch, tmp_path):

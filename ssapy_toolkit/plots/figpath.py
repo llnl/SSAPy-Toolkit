@@ -6,9 +6,8 @@ from ssapy_toolkit._paths import safe_relative_parts
 DEFAULT_FIG_DIR_NAME = "ssatk_figures"
 SSATK_FIGURES_ENV = "SSATK_FIGURES_DIR"
 HOME_FIG_DIR = Path.home() / DEFAULT_FIG_DIR_NAME
-FALLBACK_DIR = None  # Deprecated compatibility name; CWD fallback is intentionally disabled.
 
-__all__ = ["ssatk_path", "figpath", "fpath"]
+__all__ = ["ssatk_path", "figpath"]
 
 # You can keep this around if you like, but it's no longer used for extension logic.
 _KNOWN_EXTS = {
@@ -80,4 +79,3 @@ def _figure_root():
 
 
 figpath = ssatk_path
-fpath = ssatk_path

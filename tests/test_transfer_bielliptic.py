@@ -5,10 +5,7 @@ from ssapy import Orbit
 import ssapy_toolkit.orbital_mechanics as orbital_mechanics
 from ssapy_toolkit.constants import EARTH_MU
 from ssapy_toolkit.orbital_mechanics.misc import bi_elliptic_transfer_delta_v
-from ssapy_toolkit.orbital_mechanics.transfer_bielliptic import (
-    transfer_bi_elliptic,
-    transfer_bielliptic,
-)
+from ssapy_toolkit.orbital_mechanics.transfer_bielliptic import transfer_bielliptic
 
 
 def test_transfer_bielliptic_matches_scalar_delta_v_helper():
@@ -34,7 +31,6 @@ def test_transfer_bielliptic_matches_scalar_delta_v_helper():
     np.testing.assert_allclose(result["diagnostics"]["intermediate_state"]["r"], [-intermediate_radius, 0.0, 0.0])
     assert "target phasing is not solved" in " ".join(result["assumptions"])
     assert orbital_mechanics.transfer_bielliptic is transfer_bielliptic
-    assert orbital_mechanics.transfer_bi_elliptic is transfer_bielliptic
 
 
 def test_transfer_bielliptic_accepts_orbits_alias_and_hardware():
@@ -52,7 +48,7 @@ def test_transfer_bielliptic_accepts_orbits_alias_and_hardware():
         t=100.0,
     )
 
-    result = transfer_bi_elliptic(
+    result = transfer_bielliptic(
         initial=orbit1,
         target=orbit2,
         intermediate_radius=intermediate_radius,

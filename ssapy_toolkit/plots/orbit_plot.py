@@ -105,11 +105,6 @@ _TRANSFER_VIEW_ALIASES = {
     "transfer": "auto",
     "transfer_plot": "auto",
     "transferplot": "auto",
-    "transfer_orbit": "legacy",
-    "transfer_orbits": "legacy",
-    "transfer_states": "legacy",
-    "transfer_legacy": "legacy",
-    "transfer_3d": "legacy",
     "transfer_trajectory": "trajectory",
     "transfertrajectory": "trajectory",
     "trajectory_transfer": "trajectory",
@@ -234,10 +229,8 @@ def orbit_plot(
             target,
             r,
             title=title,
-            figsize=figsize,
             save_path=save_path,
             show=show,
-            c=c,
             plot_kwargs=plot_kwargs,
         )
 
@@ -271,7 +264,6 @@ def orbit_plot(
             pad=pad,
             views=target,
             lunar_transform=_resolve_lunar_transform(coordinate_frame, lunar_transform),
-            layout="auto",
             **plot_kwargs,
         )
 
@@ -287,7 +279,6 @@ def orbit_plot(
         pad=pad,
         views=target,
         lunar_transform=_resolve_lunar_transform(coordinate_frame, lunar_transform),
-        layout="auto",
         special_plot_kwargs={"fontsize": fontsize, "show_legend": legend, **plot_kwargs},
     )
 
@@ -345,23 +336,11 @@ def _is_animation_save_path(save_path):
     return Path(str(save_path)).suffix.lower() in {".gif", ".mp4"}
 
 
-def _dispatch_transfer_view(target, r, *, title, figsize, save_path, show, c, plot_kwargs):
+def _dispatch_transfer_view(target, r, *, title, save_path, show, plot_kwargs):
     if target == "auto":
-        target = "trajectory" if _looks_like_transfer_result(r) else "legacy"
-
-    if target == "legacy":
-        from .transfer_plot import transfer_plot
-
-        args = _legacy_transfer_args(r, plot_kwargs)
-        return transfer_plot(
-            *args,
-            show=show,
-            c=c,
-            figsize=figsize,
-            save_path=save_path,
-            title=title,
-            **plot_kwargs,
-        )
+        if not _looks_like_transfer_result(r):
+            raise TypeError("view='transfer' requires a transfer result with burns or trajectory data.")
+        target = "trajectory"
 
     if target in {"trajectory", "trajectory_3d"}:
         from .transfer_trajectory_plot import transfer_trajectory_plot
@@ -433,28 +412,6 @@ def _dispatch_divergence_view(target, r, *, t, title, save_path, show, plot_kwar
 def _looks_like_transfer_result(value):
     transfer = getattr(value, "transfer", value)
     return hasattr(transfer, "burns") or hasattr(transfer, "trajectory") or hasattr(transfer, "transfer_orbit")
-
-
-def _legacy_transfer_args(r, plot_kwargs):
-    if isinstance(r, dict):
-        names = ("r0", "v0", "rtransfer", "vtransfer", "rf", "vf")
-        missing = [name for name in names if name not in r]
-        if missing:
-            raise TypeError("view='transfer' dictionary input requires keys: " + ", ".join(names))
-        return tuple(r[name] for name in names)
-
-    if isinstance(r, (list, tuple)) and len(r) == 6:
-        return tuple(r)
-
-    names = ("v0", "rtransfer", "vtransfer", "rf", "vf")
-    missing = [name for name in names if name not in plot_kwargs]
-    if missing:
-        raise TypeError(
-            "view='transfer' requires either a canonical transfer dict, a six-item "
-            "(r0, v0, rtransfer, vtransfer, rf, vf) input, or keyword(s): "
-            + ", ".join(names)
-        )
-    return (r, *(plot_kwargs.pop(name) for name in names))
 
 
 def _show_if_requested(show, artist):

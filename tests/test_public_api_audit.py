@@ -14,7 +14,7 @@ from astropy.time import Time
 
 
 def test_equatorial_ecliptic_round_trips_radians_and_degrees():
-    from ssapy_toolkit.coordinates import equatorial_and_ecliptic as eqecl
+    from ssapy_toolkit.coordinates import equatorial_ecliptic as eqecl
 
     ra_rad = np.deg2rad(132.5)
     dec_rad = np.deg2rad(-18.25)
@@ -38,7 +38,7 @@ def test_equatorial_ecliptic_round_trips_radians_and_degrees():
 
 
 def test_gcrf_to_itrf_astropy_is_geocentric_and_norm_preserving():
-    from ssapy_toolkit.coordinates.gcrf_to_itrf import gcrf_to_itrf_astropy
+    from ssapy_toolkit.coordinates.earth_fixed import gcrf_to_itrf_astropy
 
     times = Time(["2025-01-01T00:00:00", "2025-01-01T00:10:00"], scale="utc")
     positions = np.array([[0.0, 0.0, 0.0], [6_378_137.0, 0.0, 0.0]])
@@ -53,8 +53,8 @@ def test_gcrf_to_itrf_astropy_is_geocentric_and_norm_preserving():
 
 
 def test_frame_transform_conventions_match_ssapy_ntw_order():
-    from ssapy_toolkit.coordinates.ntw_to_gcrf import ntw_to_gcrf_matrix
-    from ssapy_toolkit.plots.frames import (
+    from ssapy_toolkit.coordinates.satellite_frames import ntw_to_gcrf_matrix
+    from ssapy_toolkit.coordinates.frames import (
         Frame,
         FrameTransform,
         eci_to_ecf_matrix,
@@ -227,9 +227,9 @@ def test_orbital_state_public_quantities_have_physical_oracles():
     assert not stop.is_set()
     assert done and done[0].ok
 
-    with pytest.warns(UserWarning, match="legacy alias"):
-        alias = OrbitalState.from_preset("Cislunar L1 Halo")
-    assert alias.name == "Orbit"
+    with pytest.warns(UserWarning, match="two-body Keplerian"):
+        cislunar = OrbitalState.from_preset("Cislunar Test Orbit")
+    assert cislunar.name == "Orbit"
     with pytest.raises(KeyError):
         OrbitalState.from_preset("not a preset")
 
@@ -720,8 +720,8 @@ def test_continuous_transfer_plot_helpers_execute_with_small_cases(monkeypatch):
 
     monkeypatch.setattr(tic_module.plt, "show", lambda: None)
     monkeypatch.setattr(tvc_module.plt, "show", lambda: None)
-    monkeypatch.setattr(tic_module, "save_plot", lambda fig, path: path)
-    monkeypatch.setattr(tvc_module, "save_plot", lambda fig, path: path)
+    monkeypatch.setattr(tic_module, "figsave", lambda fig, path: path)
+    monkeypatch.setattr(tvc_module, "figsave", lambda fig, path: path)
 
     r0 = np.array([7000e3, 0.0, 0.0])
     v0 = np.array([0.0, 7546.0, 0.0])

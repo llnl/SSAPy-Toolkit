@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
-from ..plots import set_axes_equal, save_plot
+from ..plots import set_axes_equal, figsave
 from ..plots.plotutils import _pop_save_path_aliases, _raise_unrecognized_kwargs
 from ..constants import EARTH_MU, EARTH_RADIUS
 from ._two_body import _keplerian_two_body_rhs
@@ -198,4 +198,4 @@ def _plot_transfer(
     plt.show()
 
     if save_path:
-        save_plot(fig, save_path)
+        figsave(fig, save_path)

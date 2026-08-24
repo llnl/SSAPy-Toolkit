@@ -265,8 +265,6 @@ def sun_position_and_radius(
         mode = str(radius_mode or distance_mode or "angular").strip().lower()
         if mode in {"real", "physical", "true"}:
             radius = SUN_RADIUS_KM
-        elif mode in {"legacy", "fraction", "scene_fraction"}:
-            radius = float(scene_radius_km) * float(radius_scale)
         elif mode in {"match", "match_moon", "moon", "apparent_moon"} and match_radius_km and match_distance_km:
             radius = distance * float(match_radius_km) / float(match_distance_km) * float(radius_scale)
         else:
@@ -277,14 +275,10 @@ def sun_position_and_radius(
 def sun_traces(*, scene_radius_km, sun_hat=None, position_km=None,
                distance_mode="angular", distance_km=None, distance_factor=2.5,
                radius_mode="angular", radius_km=None, radius_scale=1.0,
-               match_radius_km=None, match_distance_km=None,
-               radius_factor=None, seed=11):
+               match_radius_km=None, match_distance_km=None, seed=11):
     """Return Sun body/glow traces with physical or angular-correct sizing."""
     from .globe_orbit_daynight_plotly import _sun_sphere_traces
 
-    if radius_factor is not None and radius_km is None and radius_mode == "angular":
-        radius_mode = "legacy"
-        radius_scale = float(radius_factor)
     position, radius = sun_position_and_radius(
         scene_radius_km=scene_radius_km,
         sun_hat=sun_hat,

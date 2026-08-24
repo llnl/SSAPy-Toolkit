@@ -2,9 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401; required for 3D projection
 from matplotlib.lines import Line2D
-from .plotutils import save_plot, _pop_save_path_aliases, _raise_unrecognized_kwargs
+from .plotutils import figsave, _pop_save_path_aliases, _raise_unrecognized_kwargs
 from ..constants import EARTH_MU, EARTH_RADIUS
-from ..propagators import leapfrog
+from ..propagators_orbit import leapfrog
 from ssapy import Orbit
 
 
@@ -132,7 +132,7 @@ def transfer_plot(r0, v0, rtransfer, vtransfer, rf, vf, show=False, c='black',
     plt.axis('equal')
 
     if save_path:
-        save_plot(fig, save_path)
+        figsave(fig, save_path)
     if show:
         plt.show()
     return fig

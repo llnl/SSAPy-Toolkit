@@ -75,7 +75,7 @@ def test_rotation_helpers_preserve_lengths_and_align_vectors():
 
 def test_rotate_vector_save_path_and_alternate_perpendicular_branch(monkeypatch, tmp_path):
     saved = []
-    monkeypatch.setattr(plots, "save_plot", lambda fig, save_path=None, **kwargs: saved.append(save_path))
+    monkeypatch.setattr(plots, "figsave", lambda fig, save_path=None, **kwargs: saved.append(save_path))
 
     rotated = rotate_vector(np.array([1.0, 1.0, 0.0]), theta=20.0, phi=30.0, save_path=tmp_path / "vector.png")
 

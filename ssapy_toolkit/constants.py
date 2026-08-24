@@ -1,8 +1,8 @@
 """Physical and astronomical constants exposed through SSAPy Toolkit.
 
 Shared astrodynamics constants are sourced from :mod:`ssapy.constants` so the
-Toolkit and base SSAPy cannot drift.  Toolkit-specific convenience constants
-remain defined here for backwards compatibility.
+Toolkit and base SSAPy cannot drift. Toolkit-specific convenience constants
+remain defined here for plotting, demos, and engineering calculations.
 """
 
 import numpy as np
@@ -56,6 +56,8 @@ EARTH_MEAN_RADIUS_KM = 6371.0
 EARTH_MEAN_RADIUS = EARTH_MEAN_RADIUS_KM * km_to_m
 EARTH_GEOMAGNETIC_REFERENCE_RADIUS_KM = 6371.2
 EARTH_GEOMAGNETIC_REFERENCE_RADIUS = EARTH_GEOMAGNETIC_REFERENCE_RADIUS_KM * km_to_m
+EARTH_DIPOLE_EQUATOR_FIELD = 3.12e-5  # tesla, approximate surface equatorial field
+EARTH_DIPOLE_POLE_FIELD = 2.0 * EARTH_DIPOLE_EQUATOR_FIELD
 WGS84_A_KM = _ssapy_constants.WGS84_EARTH_RADIUS / km_to_m
 WGS84_B_KM = _ssapy_constants.WGS84_EARTH_POLAR_RADIUS / km_to_m
 MOON_RADIUS_KM = _ssapy_constants.MOON_RADIUS / km_to_m
@@ -218,6 +220,8 @@ _TOOLKIT_CONSTANT_NAMES = (
     "EARTH_MEAN_RADIUS",
     "EARTH_GEOMAGNETIC_REFERENCE_RADIUS_KM",
     "EARTH_GEOMAGNETIC_REFERENCE_RADIUS",
+    "EARTH_DIPOLE_EQUATOR_FIELD",
+    "EARTH_DIPOLE_POLE_FIELD",
     "WGS84_A_KM",
     "WGS84_B_KM",
     "MOON_RADIUS_KM",

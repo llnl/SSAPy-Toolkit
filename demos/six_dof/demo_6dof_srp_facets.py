@@ -7,7 +7,7 @@ import numpy as np
 from demos.six_dof._common import demo_flags, hours, save_demo_figure
 from ssapy_toolkit.accelerations_6dof import SpacecraftFacetSolRad
 from ssapy_toolkit.constants import AU
-from ssapy_toolkit.dynamics import Spacecraft
+from ssapy_toolkit.propagators_6dof import Spacecraft
 from ssapy_toolkit.satellites import Facet, SpacecraftBody
 
 TITLE = "6-DoF Facet Solar-Radiation Pressure"

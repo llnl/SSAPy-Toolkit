@@ -15,7 +15,7 @@ from ..coordinates import gcrf_to_lunar_fixed as _gcrf_to_lunar_fixed
 from ._frames import normalize_orbit_frame as _normalize_orbit_frame
 from .globe_plot import globe_plot as _globe_plot
 from .groundtrack_plot import groundtrack_plot as _groundtrack_plot
-from .plotutils import save_plot as _save_plot
+from .plotutils import figsave as _figsave
 from .plotutils import valid_orbits as _valid_orbits
 
 
@@ -50,7 +50,6 @@ def _orbit_plot_core(
     views=("xy", "xz", "yz", "3d"),
     xy_title_includes_title=False,
     lunar_transform="standard",
-    layout="auto",
     special_plot_kwargs=None,
 ):
     views = tuple(views)
@@ -69,7 +68,7 @@ def _orbit_plot_core(
         plotcolor = "black"
 
     fig = _plt.figure(dpi=100, figsize=figsize, facecolor=plotcolor)
-    axes = _create_orbit_axes(fig, views, layout=layout)
+    axes = _create_orbit_axes(fig, views)
 
     bounds = {
         "lower": _np.array([_np.inf, _np.inf, _np.inf]),
@@ -153,30 +152,16 @@ def _orbit_plot_core(
     _plot_special_views(axes, views, r, t, title, c, special_plot_kwargs)
 
     if save_path:
-        _save_plot(fig, save_path)
+        _figsave(fig, save_path)
     if show:
         _plt.show()
     _plt.close()
     return fig, [axes[view] for view in views]
 
 
-def _create_orbit_axes(fig, views, *, layout="auto"):
+def _create_orbit_axes(fig, views):
     if views == ("xy",):
         return {"xy": fig.add_subplot(1, 1, 1)}
-
-    if layout == "legacy" and views == ("xy", "xz"):
-        return {
-            "xy": fig.add_subplot(1, 2, 1),
-            "xz": fig.add_subplot(1, 2, 2),
-        }
-
-    if layout == "legacy" and views == ("xy", "xz", "yz", "3d"):
-        return {
-            "xy": fig.add_subplot(2, 2, 1),
-            "xz": fig.add_subplot(2, 2, 2),
-            "yz": fig.add_subplot(2, 2, 3),
-            "3d": fig.add_subplot(2, 2, 4, projection="3d"),
-        }
 
     nrows, ncols = _auto_grid_shape_for_views(views)
     grid = fig.add_gridspec(nrows, ncols)

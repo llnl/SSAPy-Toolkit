@@ -64,9 +64,8 @@ class ReactionWheel:
     """Single-axis reaction wheel actuator.
 
     ``axis_body`` is the body-frame torque axis. ``max_torque`` is the wheel
-    torque limit in N m. Optional momentum fields describe hardware capability
-    but are not propagated as separate wheel-speed states in the current rigid
-    spacecraft model.
+    torque limit in N m. ``wheel_inertia`` and ``speed`` initialize optional
+    propagated wheel angular-momentum states in the 6-DoF propagator.
     """
 
     axis_body: ArrayLike
@@ -101,9 +100,9 @@ class ReactionWheel:
 class Facet:
     """Fixed body-frame surface used by facet drag and SRP models.
 
-    ``cr`` preserves the legacy cannonball-style SRP coefficient. Set
-    ``specular_reflectivity`` or ``diffuse_reflectivity`` to use the optical
-    flat-plate SRP model instead. ``vertices_body`` enables mesh-derived
+    ``cr`` is the effective cannonball-style solar radiation pressure
+    coefficient. Set ``specular_reflectivity`` or ``diffuse_reflectivity`` to
+    use the optical flat-plate SRP model instead. ``vertices_body`` enables mesh-derived
     facets and optional self-shadowing in the SRP force model.
     """
 
@@ -165,7 +164,7 @@ class Thruster:
     def force_body(self, throttle: float = 1.0) -> np.ndarray:
         """Return body-frame force in newtons."""
 
-        return self.direction_body * self.thrust * float(throttle)
+        return self.direction_body * self.thrust * _throttle(throttle)
 
     def torque_body(self, throttle: float = 1.0) -> np.ndarray:
         """Return body-frame torque about the body origin."""
@@ -177,7 +176,7 @@ class Thruster:
 
         if self.isp is None:
             return 0.0
-        return self.thrust * float(throttle) / (self.isp * G0)
+        return self.thrust * _throttle(throttle) / (self.isp * G0)
 
     def with_updates(self, **kwargs) -> Thruster:
         """Return a modified copy."""
@@ -218,6 +217,11 @@ class Tank:
         """Return a modified copy."""
 
         return replace(self, **kwargs)
+
+    def with_propellant_mass(self, propellant_mass: float) -> Tank:
+        """Return a copy with updated propellant mass."""
+
+        return self.with_updates(propellant_mass=_nonnegative(propellant_mass, "propellant_mass"))
 
 
 @dataclass(frozen=True)
@@ -359,6 +363,18 @@ class SpacecraftBody:
         return self.mass + sum(component.mass for component in self.components) + sum(tank.mass for tank in self.tanks)
 
     @property
+    def dry_mass_total(self) -> float:
+        """Bus, component, and tank dry mass without propellant."""
+
+        return self.mass + sum(component.mass for component in self.components) + sum(tank.dry_mass for tank in self.tanks)
+
+    @property
+    def propellant_mass(self) -> float:
+        """Total propellant mass currently assigned to tanks."""
+
+        return sum(tank.propellant_mass for tank in self.tanks)
+
+    @property
     def current_center_of_mass(self) -> np.ndarray:
         """Mass-weighted body-frame center of mass."""
 
@@ -389,6 +405,36 @@ class SpacecraftBody:
         """Return a modified copy."""
 
         return replace(self, **kwargs)
+
+    def with_propellant_mass(self, propellant_mass: float) -> SpacecraftBody:
+        """Return a body with total tank propellant set proportionally."""
+
+        propellant_mass = _nonnegative(propellant_mass, "propellant_mass")
+        current_propellant = self.propellant_mass
+        if not self.tanks:
+            if propellant_mass == 0.0:
+                return self
+            raise ValueError("cannot assign propellant mass without tanks.")
+        if current_propellant == 0.0:
+            if propellant_mass == 0.0:
+                return self
+            raise ValueError("cannot distribute propellant across empty tanks.")
+        scale = propellant_mass / current_propellant
+        return self.with_tanks(
+            *(tank.with_propellant_mass(tank.propellant_mass * scale) for tank in self.tanks),
+            append=False,
+        )
+
+    def with_current_mass(self, mass: float) -> SpacecraftBody:
+        """Return a body whose tanks match the requested total current mass."""
+
+        mass = _positive(mass, "mass")
+        propellant_mass = mass - self.dry_mass_total
+        if propellant_mass < -1e-9:
+            raise ValueError("mass is below dry mass.")
+        if propellant_mass > self.propellant_mass + 1e-9:
+            raise ValueError("mass exceeds current tank propellant capacity.")
+        return self.with_propellant_mass(max(0.0, propellant_mass))
 
     def with_facets(self, *facets: Facet, append: bool = True) -> SpacecraftBody:
         """Return a copy with added or replaced facets."""
@@ -518,6 +564,21 @@ def box_facets(size: ArrayLike, *, cd: float = 2.2, cr: float = 1.3) -> tuple[Fa
         Facet(name=name, area=area, normal_body=normal, center_of_pressure=center, cd=cd, cr=cr, vertices_body=vertices)
         for name, area, normal, center, vertices in specs
     )
+
+
+def rotate_facets(
+    facets,
+    *,
+    axis_body: ArrayLike,
+    angle_rad: float,
+    origin_body: ArrayLike = (0.0, 0.0, 0.0),
+) -> tuple[Facet, ...]:
+    """Return facets rotated about a body-frame axis and origin."""
+
+    axis = _unit(axis_body, "axis_body")
+    origin = _vector3(origin_body, "origin_body")
+    angle = float(angle_rad)
+    return tuple(_rotate_facet(facet, axis, angle, origin) for facet in facets)
 
 
 def mesh_facets(
@@ -776,9 +837,13 @@ def _positive(value: float, name: str) -> float:
 
 def _nonnegative(value: float, name: str) -> float:
     value = float(value)
-    if value < 0.0:
+    if not np.isfinite(value) or value < 0.0:
         raise ValueError(f"{name} must be non-negative.")
     return value
+
+
+def _throttle(value: float) -> float:
+    return _nonnegative(value, "throttle")
 
 
 def _unit_interval(value: float, name: str) -> float:
@@ -820,6 +885,27 @@ def _square_vertices(center: ArrayLike, normal: ArrayLike, area: float) -> tuple
     half2 = 0.5 * side * axis2
     vertices = (center - half1 - half2, center + half1 - half2, center + half1 + half2, center - half1 + half2)
     return tuple(tuple(vertex) for vertex in vertices)
+
+
+def _rotate_facet(facet: Facet, axis: np.ndarray, angle: float, origin: np.ndarray) -> Facet:
+    vertices = getattr(facet, "vertices_body", None)
+    return facet.with_updates(
+        normal_body=_rotate_axis_angle(facet.normal_body, axis, angle),
+        center_of_pressure=origin + _rotate_axis_angle(facet.center_of_pressure - origin, axis, angle),
+        vertices_body=None if vertices is None else tuple(
+            tuple(origin + _rotate_axis_angle(np.asarray(vertex, dtype=float) - origin, axis, angle))
+            for vertex in vertices
+        ),
+    )
+
+
+def _rotate_axis_angle(vector: ArrayLike, axis: np.ndarray, angle: float) -> np.ndarray:
+    vector = _vector3(vector, "vector")
+    return (
+        vector * np.cos(angle)
+        + np.cross(axis, vector) * np.sin(angle)
+        + axis * np.dot(axis, vector) * (1.0 - np.cos(angle))
+    )
 
 
 def _inertia(value: ArrayLike) -> np.ndarray:
@@ -865,6 +951,7 @@ __all__ = [
     "point_mass_inertia",
     "reaction_wheel_triplet",
     "rectangular_prism_inertia",
+    "rotate_facets",
     "satellite_design",
     "smallsat",
 ]

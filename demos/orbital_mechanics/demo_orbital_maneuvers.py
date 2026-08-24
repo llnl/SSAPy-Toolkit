@@ -2,7 +2,7 @@
 
 This gallery demo consolidates the previous small transfer, burn-conversion,
 and rendezvous maneuver demos into one user-facing workflow.  It compares
-analytic impulsive transfers, fixed-time Lambert wrappers, optimized searches,
+analytic impulsive transfers, fixed-time Lambert solves, optimized searches,
 explicit staged optimal transfers, continuous low-thrust burns, and
 finite-burn/impulse conversions, then renders summary figures under
 ``~/ssatk_figures/demo_gallery/figures``.
@@ -22,13 +22,9 @@ from ssapy_toolkit.constants import EARTH_MU, EARTH_RADIUS
 from ssapy_toolkit.orbital_mechanics.burn_to_deltav import burn_to_deltav
 from ssapy_toolkit.orbital_mechanics.deltav_to_burn import deltav_to_burn
 from ssapy_toolkit.orbital_mechanics.transfer_bielliptic import transfer_bielliptic
-from ssapy_toolkit.orbital_mechanics.transfer_coplanar import transfer_coplanar
 from ssapy_toolkit.orbital_mechanics.transfer_hohmann import transfer_hohmann
 from ssapy_toolkit.orbital_mechanics.transfer_inclination_continuous import transfer_inclination_continuous
-from ssapy_toolkit.orbital_mechanics.transfer_lambertian import transfer_lambertian
 from ssapy_toolkit.orbital_mechanics.transfer_optimal_function import transfer_optimal
-from ssapy_toolkit.orbital_mechanics.transfer_optimal_function import transfer_rendezvous
-from ssapy_toolkit.orbital_mechanics.transfer_shooter import transfer_shooter
 from ssapy_toolkit.orbital_mechanics.transfer_ssapy_function import transfer_ssapy
 from ssapy_toolkit.orbital_mechanics.transfer_velocity_and_inclination_continuous import (
     transfer_velocity_and_inclination_continuous,
@@ -516,31 +512,9 @@ def _build_maneuver_results(fast):
     departure = (r0, v0, 0.0)
     arrival = (r_target, v_target, tof)
     fixed_time = {
-        "transfer_ssapy": transfer_ssapy(
+        "Fixed-time Lambert": transfer_ssapy(
             departure,
             arrival,
-            propagate=False,
-            refine=False,
-            burn_duration=1.0,
-        ),
-        "Lambert wrapper": transfer_lambertian(
-            departure,
-            arrival,
-            propagate=False,
-            refine=False,
-            burn_duration=1.0,
-        ),
-        "Shooter wrapper": transfer_shooter(
-            departure,
-            arrival,
-            propagate=False,
-            refine=False,
-            burn_duration=1.0,
-        ),
-        "Coplanar wrapper": transfer_coplanar(
-            departure,
-            arrival,
-            coplanar_tol=1e-9,
             propagate=False,
             refine=False,
             burn_duration=1.0,
@@ -622,9 +596,10 @@ def _build_maneuver_results(fast):
             refine=False,
             burn_duration=1.0,
         ),
-        "Rendezvous wrapper": transfer_rendezvous(
+        "Rendezvous mode": transfer_optimal(
             (r0, v0, 0.0),
             (r_short, v_short, 0.0),
+            arrival_mode="rendezvous",
             t_window=(0.0, 1000.0),
             tof_range=(1000.0, 6000.0),
             n_grid=(2, 2) if fast else (8, 8),

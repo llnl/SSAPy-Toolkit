@@ -830,13 +830,6 @@ def figsave(figure, save_path=None, dpi=200, default_name="figure", **save_kwarg
 
 
 ssatk_fig = figsave
-fsave = figsave
-
-
-def save_plot(figure, save_path=None, dpi=200, default_name="figure", **save_kwargs):
-    """Compatibility wrapper for :func:`figsave`."""
-    save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
-    return figsave(figure, save_path=save_path, dpi=dpi, default_name=default_name, **save_kwargs)
 
 
 def save_plotly_figure(

@@ -54,6 +54,21 @@ def test_benchmark_json_output(tmp_path):
     assert "unit_test" in text
 
 
+def test_benchmark_registry_includes_6dof_propagation_speed_cases():
+    cases = build_benchmark_cases(include_io=False, include_plots=False, include_slow=False)
+    selected = filter_cases(cases, groups={"propagators_6dof"})
+    names = {case.name for case in selected}
+
+    assert names == {
+        "propagators_6dof.point_mass_32_steps",
+        "propagators_6dof.thruster_mass_32_steps",
+        "propagators_6dof.reaction_wheel_32_steps",
+        "propagators_6dof.environment_facet_32_steps",
+        "propagators_6dof.articulated_facet_32_steps",
+    }
+    assert all("6dof" in case.tags for case in selected)
+
+
 def test_benchmark_cli_quick_no_dashboard(tmp_path):
     exit_code = main([
         "--profile",
@@ -109,6 +124,30 @@ def test_benchmark_private_wrappers_have_expected_outputs(monkeypatch, tmp_path)
     rk_r, rk_v = benchmark._propagator_rk4(r0, v0, times)
     assert lf_r.shape == lf_v.shape == rk_r.shape == rk_v.shape == (3, 3)
     assert np.all(np.isfinite(lf_r)) and np.all(np.isfinite(rk_r))
+
+    sixdof = benchmark._propagator_6dof_point_mass(r0, v0, times)
+    assert sixdof.r.shape == sixdof.v.shape == (3, 3)
+    assert sixdof.q.shape == (3, 4)
+    assert sixdof.mass is None
+
+    thruster = benchmark._propagator_6dof_thruster_mass(times)
+    assert thruster.r.shape == thruster.v.shape == (3, 3)
+    assert thruster.mass is not None
+    assert thruster.mass[-1] < thruster.mass[0]
+
+    wheel = benchmark._propagator_6dof_reaction_wheel(times)
+    assert wheel.r.shape == wheel.v.shape == (3, 3)
+    assert wheel.wheel_momentum.shape == (3, 3)
+    assert wheel.wheel_momentum[-1, 2] < 0.0
+
+    environment = benchmark._propagator_6dof_environment(times)
+    assert environment.r.shape == environment.v.shape == (3, 3)
+    assert np.all(np.isfinite(environment.r))
+
+    articulated = benchmark._propagator_6dof_articulated_facet(times)
+    assert articulated.r.shape == articulated.v.shape == (3, 3)
+    assert articulated.q.shape == (3, 4)
+    assert np.all(np.isfinite(articulated.r))
 
     r2 = np.array([9000e3, 0.0, 0.0])
     v2 = np.array([0.0, np.sqrt(EARTH_MU / np.linalg.norm(r2)), 0.0])

@@ -8,7 +8,7 @@ import ssapy_toolkit.time_functions as time_functions
 from ssapy_toolkit.time_functions.absolute_times_to_relative import time_abs_to_rel
 from ssapy_toolkit.time_functions._gps import _to_gps_seconds
 from ssapy_toolkit.time_functions.relative_times_to_absolute import time_rel_to_abs
-from ssapy_toolkit.coordinates.llh_to_gcrf import llh_to_gcrf
+from ssapy_toolkit.coordinates.geodetic import llh_to_gcrf
 from ssapy_toolkit.yastropy.astropy_gcrf_to_llh import astropy_gcrf_to_llh
 from ssapy_toolkit.yastropy.astropy_llh_to_gcrf import astropy_llh_to_gcrf
 from ssapy_toolkit.yastropy.astropy_surface_rv import astropy_surface_rv

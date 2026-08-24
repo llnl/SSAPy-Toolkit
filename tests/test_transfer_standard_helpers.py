@@ -3,10 +3,8 @@ import pytest
 
 from ssapy_toolkit.constants import EARTH_MU
 from ssapy_toolkit.orbital_mechanics.misc import hohmann_transfer_delta_v
-from ssapy_toolkit.orbital_mechanics.transfer_coplanar import transfer_coplanar
 from ssapy_toolkit.orbital_mechanics.transfer_hohmann import transfer_hohmann
-from ssapy_toolkit.orbital_mechanics.transfer_lambertian import transfer_lambertian
-from ssapy_toolkit.orbital_mechanics.transfer_shooter import transfer_shooter
+from ssapy_toolkit.orbital_mechanics.transfer_ssapy_function import transfer_ssapy
 
 
 def _circular_state(radius, theta=0.0):
@@ -65,29 +63,25 @@ def test_hohmann_rejects_non_circular_state_and_bad_samples():
         transfer_hohmann(radius1, radius2, samples=1)
 
 
-def test_lambert_wrappers_return_standard_schema():
+def test_transfer_ssapy_fixed_time_returns_standard_schema():
     radius = 7000e3
     r1, v1 = _circular_state(radius, 0.0)
     r2, v2 = _circular_state(radius, np.deg2rad(60.0))
     initial = (r1, v1, 0.0)
     target = (r2, v2, 1000.0)
 
-    lambert = transfer_lambertian(initial, target, propagate=False, refine=False, burn_duration=1.0)
-    shooter = transfer_shooter(initial, target, propagate=False, refine=False, burn_duration=1.0)
-    coplanar = transfer_coplanar(initial, target, propagate=False, refine=False, burn_duration=1.0, coplanar_tol=1e-9)
+    result = transfer_ssapy(initial, target, propagate=False, refine=False, burn_duration=1.0)
 
-    _assert_standard_transfer(lambert, "transfer_lambertian")
-    _assert_standard_transfer(shooter, "transfer_shooter")
-    _assert_standard_transfer(coplanar, "transfer_coplanar")
-    assert lambert["delta_v_total"] == pytest.approx(shooter["delta_v_total"])
-    assert coplanar["diagnostics"]["max_out_of_plane_delta_v"] == pytest.approx(0.0, abs=1e-9)
+    _assert_standard_transfer(result, "transfer_ssapy")
+    w_components = [burn["delta_v_ntw"][2] for burn in result["burns"]]
+    assert max(abs(float(value)) for value in w_components) == pytest.approx(0.0, abs=1e-9)
 
 
-def test_lambert_wrapper_requires_epoch_or_tof():
+def test_transfer_ssapy_requires_epoch_or_tof():
     radius = 7000e3
     r1, v1 = _circular_state(radius, 0.0)
     r2, v2 = _circular_state(radius, np.deg2rad(60.0))
     with pytest.raises(ValueError, match="tof"):
-        transfer_lambertian((r1, v1), (r2, v2), propagate=False)
-    result = transfer_lambertian((r1, v1), (r2, v2), tof=1000.0, propagate=False, refine=False)
+        transfer_ssapy((r1, v1), (r2, v2), propagate=False)
+    result = transfer_ssapy((r1, v1), (r2, v2), tof=1000.0, propagate=False, refine=False)
     assert result["tof"] == pytest.approx(1000.0)

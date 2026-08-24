@@ -12,7 +12,7 @@ from demos.six_dof._common import (
     save_demo_figure,
 )
 from ssapy_toolkit.accelerations_6dof import SpacecraftAttitudePD
-from ssapy_toolkit.dynamics import Spacecraft, normalize_quaternion
+from ssapy_toolkit.propagators_6dof import Spacecraft, normalize_quaternion
 from ssapy_toolkit.satellites import SpacecraftBody
 
 TITLE = "6-DoF Attitude Control"

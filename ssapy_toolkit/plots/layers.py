@@ -711,7 +711,7 @@ class GroundTrackLayer(BaseLayer):
 
     def _compute(self, traj, orbit_state) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Return (x, y, z) on Earth surface along ground track."""
-        from .frames import eci_to_lon_lat
+        from ssapy_toolkit.coordinates.frames import eci_to_lon_lat
         if traj is None:
             traj = orbit_state.propagate(n_orbits=1, dt_s=60)
         # sub-sample
