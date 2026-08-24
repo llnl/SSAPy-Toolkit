@@ -394,6 +394,10 @@ numerical backbone:
   SSATK satellite-operation frame definitions, such as ``ntw``, ``vnb``, and
   ``nadir_velocity``, into body-to-GCRF target quaternions for attitude-control
   studies.
+* ``tests/test_propagators_6dof_truth.py`` contains a fixed GPS-epoch,
+  two-orbit comparison against SSAPy's ``Orbit.at`` Keplerian reference. The
+  case currently constrains position to 1 cm and velocity to 10 µm/s using the
+  analyst-facing DOP853 wrapper.
 
 The package boundary for new 6-DoF work is:
 
@@ -429,11 +433,13 @@ articulated-facet SRP case. Optimization work should preserve the public API,
 avoid duplicated solver logic, and move shared math into reusable helpers rather
 than copying code between force models, propagators, demos, and tests.
 
-The remaining major gaps are higher-fidelity body/component state propagation:
+The remaining major gaps are higher-fidelity body/component state propagation
+and independent external-tool validation:
 dynamically propagated appendage angles, flexible bodies, propellant slosh,
 maneuver targeting/optimization over multiple segments, high-fidelity atmosphere
-models, and validation benchmarks against SSAPy, GMAT, Orekit, Basilisk, or
-Tudat reference cases.
+models, and validation benchmarks against GMAT, STK/Astrogator, FreeFlyer,
+Orekit, Basilisk, or Tudat reference cases with recorded force models, frames,
+time scales, constants, and export precision.
 
 Recommended Direction
 ---------------------
