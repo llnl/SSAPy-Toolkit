@@ -12,7 +12,10 @@ from ssapy_toolkit.accelerations_6dof import (
 from ssapy_toolkit.constants import AU, EARTH_MU, STANDARD_GRAVITY
 from ssapy_toolkit.propagators_6dof import Spacecraft
 from ssapy_toolkit.environment import SpaceEnvironment
-from ssapy_toolkit.propagators_orbit import propagate_orbit_state
+from ssapy_toolkit.propagators_orbit import (
+    propagate_orbit_state,
+    propagate_orbit_state_with_stm,
+)
 from ssapy_toolkit.propagators_6dof import (
     propagate_6dof_high_accuracy,
     propagate_spacecraft_high_accuracy,
@@ -36,6 +39,31 @@ def test_high_accuracy_orbit_propagator_returns_near_circular_state_after_period
     assert trajectory.nfev > 0
     np.testing.assert_allclose(trajectory.r[-1], trajectory.r[0], atol=30.0)
     np.testing.assert_allclose(trajectory.v[-1], trajectory.v[0], atol=0.05)
+
+
+def test_orbit_stm_matches_finite_difference_of_propagated_state():
+    radius = 7_000_000.0
+    speed = np.sqrt(EARTH_MU / radius)
+    times = np.linspace(0.0, 900.0, 5)
+    state = propagate_orbit_state_with_stm(
+        r0=[radius, 0.0, 0.0],
+        v0=[0.0, speed, 0.0],
+        times=times,
+    )
+    delta = np.array([0.2, -0.1, 0.05, 1.0e-4, -2.0e-4, 3.0e-4])
+    plus = propagate_orbit_state(
+        r0=np.array([radius, 0.0, 0.0]) + delta[:3],
+        v0=np.array([0.0, speed, 0.0]) + delta[3:],
+        times=times,
+    )
+    minus = propagate_orbit_state(
+        r0=np.array([radius, 0.0, 0.0]) - delta[:3],
+        v0=np.array([0.0, speed, 0.0]) - delta[3:],
+        times=times,
+    )
+    predicted = np.einsum("tij,j->ti", state.stm, delta)
+    actual = 0.5 * np.column_stack((plus.r - minus.r, plus.v - minus.v))
+    np.testing.assert_allclose(actual, predicted, rtol=2.0e-4, atol=2.0e-7)
 
 
 def test_high_accuracy_orbit_propagator_accepts_orbit_like_and_accel_models():

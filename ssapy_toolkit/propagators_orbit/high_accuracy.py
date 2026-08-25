@@ -26,6 +26,18 @@ class OrbitPropagation:
     message: str
 
 
+@dataclass(frozen=True)
+class OrbitPropagationWithSTM:
+    """Integrated translational state history and state transition matrices."""
+
+    t: np.ndarray
+    r: np.ndarray
+    v: np.ndarray
+    stm: np.ndarray
+    nfev: int
+    message: str
+
+
 def propagate_orbit_state(
     *,
     times: ArrayLike,
@@ -83,6 +95,76 @@ def propagate_orbit_state(
     )
 
 
+def propagate_orbit_state_with_stm(
+    *,
+    times: ArrayLike,
+    orbit0=None,
+    r0: ArrayLike | None = None,
+    v0: ArrayLike | None = None,
+    t0: float | None = None,
+    mu: float = EARTH_MU,
+    acceleration: AccelerationModel | Iterable[AccelerationModel] | None = None,
+    stm0: ArrayLike | None = None,
+    fd_step: float = 1.0e-6,
+    method: str = "DOP853",
+    rtol: float = 1.0e-10,
+    atol: float = 1.0e-9,
+    max_step: float = np.inf,
+) -> OrbitPropagationWithSTM:
+    """Propagate an inertial state and its 6x6 state transition matrix.
+
+    The matrix maps perturbations in the initial ``[r, v]`` state to first
+    order perturbations at each output time. The Jacobian is evaluated with
+    centered finite differences so arbitrary SSATK acceleration models work
+    without a second derivative API.
+    """
+
+    times = _times(times)
+    r0, v0, t0 = _initial_orbit_state(orbit0=orbit0, r0=r0, v0=v0, t0=t0)
+    if times[0] < t0 or times[-1] < t0:
+        raise ValueError("times must be at or after the initial epoch t0.")
+    if fd_step <= 0.0:
+        raise ValueError("fd_step must be positive.")
+    initial_stm = np.eye(6) if stm0 is None else np.asarray(stm0, dtype=float)
+    if initial_stm.shape != (6, 6):
+        raise ValueError("stm0 must have shape (6, 6).")
+
+    models = _models(acceleration)
+    y0 = np.concatenate([r0, v0, initial_stm.ravel()])
+
+    def rhs(t, y):
+        state = y[:6]
+        matrix = y[6:].reshape(6, 6)
+        derivative = _rhs(t, state, mu=mu, models=models)
+        jacobian = _finite_difference_jacobian(
+            t, state, mu=mu, models=models, relative_step=fd_step
+        )
+        return np.concatenate([derivative, (jacobian @ matrix).ravel()])
+
+    sol = solve_ivp(
+        rhs,
+        (t0, float(times[-1])),
+        y0,
+        t_eval=times,
+        method=method,
+        rtol=rtol,
+        atol=atol,
+        max_step=max_step,
+    )
+    if not sol.success:
+        raise RuntimeError(f"orbit STM propagation failed: {sol.message}")
+
+    state = sol.y[:6].T
+    return OrbitPropagationWithSTM(
+        t=sol.t,
+        r=state[:, :3],
+        v=state[:, 3:],
+        stm=sol.y[6:].T.reshape(-1, 6, 6),
+        nfev=int(sol.nfev),
+        message=str(sol.message),
+    )
+
+
 def _rhs(t: float, y: np.ndarray, *, mu: float, models: tuple[AccelerationModel, ...]) -> np.ndarray:
     r = y[:3]
     v = y[3:]
@@ -91,6 +173,29 @@ def _rhs(t: float, y: np.ndarray, *, mu: float, models: tuple[AccelerationModel,
     for model in models:
         a = a + _call_acceleration(model, t, r, v)
     return np.concatenate([v, a])
+
+
+def _finite_difference_jacobian(
+    t: float,
+    y: np.ndarray,
+    *,
+    mu: float,
+    models: tuple[AccelerationModel, ...],
+    relative_step: float,
+) -> np.ndarray:
+    # ponytail: finite differences keep arbitrary force models supported; add analytic/complex-step
+    # Jacobians only when profiling shows this optional covariance path needs them.
+    jacobian = np.empty((6, 6), dtype=float)
+    for column in range(6):
+        step = relative_step * max(1.0, abs(float(y[column])))
+        plus = y.copy()
+        minus = y.copy()
+        plus[column] += step
+        minus[column] -= step
+        jacobian[:, column] = (
+            _rhs(t, plus, mu=mu, models=models) - _rhs(t, minus, mu=mu, models=models)
+        ) / (2.0 * step)
+    return jacobian
 
 
 def _call_acceleration(model: AccelerationModel, t: float, r: np.ndarray, v: np.ndarray) -> np.ndarray:

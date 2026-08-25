@@ -129,6 +129,7 @@ _TOOLKIT_DUPLICATE_ALIASES = {
     "normed": ".vectors",
     "periapsis": ".orbital_mechanics.keplerian",
     "propagate_orbit_state": ".propagators_orbit",
+    "propagate_orbit_state_with_stm": ".propagators_orbit",
     "propagate_6dof": ".propagators_6dof",
     "propagate_6dof_high_accuracy": ".propagators_6dof",
     "propagate_spacecraft_high_accuracy": ".propagators_6dof",

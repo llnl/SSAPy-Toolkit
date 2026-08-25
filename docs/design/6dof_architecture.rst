@@ -420,7 +420,10 @@ The package boundary for new 6-DoF work is:
   and segmented propagation.
 * ``ssapy_toolkit.accelerations_orbit`` and
   ``ssapy_toolkit.propagators_orbit`` are the canonical names for translational
-  orbit-only acceleration callbacks and propagators.
+  orbit-only acceleration callbacks and propagators. The optional
+  ``propagate_orbit_state_with_stm`` path integrates a 6x6 state transition
+  matrix for covariance and sensitivity workflows while reusing those force
+  callbacks.
 * ``ssapy_toolkit.engines`` owns propulsion catalogs, thrust profiles,
   propellant estimates, and stationkeeping/maneuver engine helpers.
 * ``ssapy_toolkit.launch`` owns launch-vehicle and launch-to-orbit utilities.

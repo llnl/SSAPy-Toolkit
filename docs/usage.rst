@@ -132,6 +132,11 @@ high-accuracy translational propagation. It defaults to SciPy's eighth-order
        times=np.linspace(0.0, 3600.0, 121),
    )
 
+For covariance or sensitivity propagation, use
+:func:`ssapy_toolkit.propagators_orbit.propagate_orbit_state_with_stm`; its
+``stm`` output has shape ``(N, 6, 6)`` and maps initial Cartesian perturbations
+to each sampled state.
+
 6-DoF dynamics
 --------------
 
