@@ -85,19 +85,23 @@ jobs:
             status=${PIPESTATUS[0]}
             set -e
             if [ "$status" -ne 0 ]; then
-              while IFS= read -r line; do
-                line=${line//%/%25}
-                line=${line//$'\r'/}
-                line=${line//$'\n'/%0A}
-                echo "::error title=API coverage::$line"
-              done < "$log_path"
+              reported_detail=0
               for detail_path in /tmp/public-unhit.tsv /tmp/all-unhit.tsv; do
                 if [ -s "$detail_path" ]; then
                   detail=$(tr '\n' ';' < "$detail_path")
                   detail=${detail//%/%25}
                   echo "::error title=Unhit functions::$detail"
+                  reported_detail=1
                 fi
               done
+              if [ "$reported_detail" -eq 0 ]; then
+                while IFS= read -r line; do
+                  line=${line//%/%25}
+                  line=${line//$'\r'/}
+                  line=${line//$'\n'/%0A}
+                  echo "::error title=API coverage::$line"
+                done < "$log_path"
+              fi
               return "$status"
             fi
           }
