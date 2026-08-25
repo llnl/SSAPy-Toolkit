@@ -188,6 +188,25 @@ segment supplies its own ``times`` and can override models, burn frame, bounds,
 and control scaling. ``constraints`` and ``residual_hook`` append normalized
 residuals to the bounded least-squares solve.
 
+For an exact impulsive maneuver between arcs, add an
+:class:`ssapy_toolkit.propagators_6dof.ImpulseManeuver` to a segment's
+``impulses``. ``dv`` accepts inertial, body, NTW, RTN, or VNB components;
+``mass_change``, ``q_reset``, and ``omega_reset`` optionally update the
+spacecraft state at that epoch. The combined trajectory retains both samples
+at the maneuver epoch so the state jump remains observable.
+
+.. code-block:: python
+
+   trajectory = ssatk.propagate_spacecraft_segments(sat, [
+       {"times": [0.0, 600.0]},
+       {
+           "times": [600.0, 3600.0],
+           "impulses": ssatk.ImpulseManeuver(
+               dv=[0.0, 25.0, 0.0], frame="ntw", mass_change=-0.5
+           ),
+       },
+   ])
+
 For coupled sensitivity and uncertainty workflows,
 :func:`ssapy_toolkit.propagators_6dof.propagate_6dof_variational` returns the
 nominal trajectory and state-transition matrices. Pass that result to

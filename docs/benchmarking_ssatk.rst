@@ -545,7 +545,8 @@ Orekit is the clearest reference for:
 * force-model interfaces,
 * mass-aware propagation states,
 * separating attitude laws from attitude dynamics,
-* future state-reset workflows for impulsive maneuvers.
+* state-reset workflows for impulsive maneuvers, now provided by
+  ``ImpulseManeuver`` and ``propagate_spacecraft_segments``.
 
 FreeFlyer
 ---------

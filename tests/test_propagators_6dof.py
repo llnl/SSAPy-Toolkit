@@ -84,6 +84,10 @@ from ssapy_toolkit.propagators_6dof import (
     rotate_vector,
     sixdof_rhs,
 )
+from ssapy_toolkit.propagators_6dof.high_accuracy import (
+    ImpulseManeuver,
+    propagate_spacecraft_segments,
+)
 from ssapy_toolkit.satellites import (
     Component,
     Facet,
@@ -452,6 +456,55 @@ def test_attitude_quaternion_helpers_use_satellite_frame_matrices():
 
     with pytest.raises(ValueError, match="orthonormal"):
         quaternion_from_matrix(np.diag([1.0, 2.0, 1.0]))
+
+
+def test_segment_impulse_applies_body_frame_delta_v_at_exact_epoch():
+    import ssapy_toolkit as ssatk
+
+    assert ssatk.ImpulseManeuver is ImpulseManeuver
+    spacecraft = Spacecraft(
+        r=[1.0, 0.0, 0.0], v=[0.0, 0.0, 0.0], inertia=np.eye(3),
+        q=[np.sqrt(0.5), 0.0, 0.0, np.sqrt(0.5)],
+        mass=10.0,
+    )
+    trajectory = propagate_spacecraft_segments(spacecraft, [
+        {"times": [0.0, 1.0], "mu": 0.0},
+        {"times": [1.0, 2.0], "mu": 0.0,
+         "impulses": ImpulseManeuver(
+             [1.0, 0.0, 0.0], frame="body", mass_change=-2.0,
+             q_reset=[1.0, 0.0, 0.0, 0.0], omega_reset=[0.0, 0.0, 0.25]),},
+    ])
+    boundary = np.flatnonzero(np.isclose(trajectory.t, 1.0))
+    assert boundary.size == 2
+    np.testing.assert_allclose(trajectory.r[boundary[0]], trajectory.r[boundary[1]], atol=1e-12)
+    np.testing.assert_allclose(trajectory.v[boundary[0]], [0.0, 0.0, 0.0], atol=1e-12)
+    np.testing.assert_allclose(trajectory.v[boundary[1]], [0.0, 1.0, 0.0], atol=1e-12)
+    np.testing.assert_allclose(trajectory.mass[boundary], [10.0, 8.0], atol=1e-12)
+    np.testing.assert_allclose(trajectory.q[boundary[1]], [1.0, 0.0, 0.0, 0.0])
+    np.testing.assert_allclose(trajectory.omega[boundary[1]], [0.0, 0.0, 0.25])
+    np.testing.assert_allclose(trajectory.r[-1], [1.0, 1.0, 0.0], atol=1e-10)
+    np.testing.assert_allclose(trajectory.v[-1], [0.0, 1.0, 0.0], atol=1e-10)
+    with pytest.raises(ValueError, match="unsupported satellite frame"):
+        ImpulseManeuver([1.0, 0.0, 0.0], frame="bad").apply(spacecraft)
+
+
+def test_mass_only_impulse_updates_tank_body_and_preserves_mass_jump():
+    body = SpacecraftBody.box(name="bus", mass=10.0, size=(1.0, 1.0, 1.0)).with_tanks(
+        Tank(propellant_mass=2.0, dry_mass=1.0, name="main")
+    )
+    spacecraft = Spacecraft(r=[1.0, 0.0, 0.0], v=[0.0, 0.0, 0.0], body=body)
+    trajectory = propagate_spacecraft_segments(spacecraft, [
+        {"times": [0.0, 1.0], "mu": 0.0},
+        {"times": [1.0, 2.0], "mu": 0.0,
+         "impulses": ImpulseManeuver([0.0, 0.0, 0.0], mass_change=-1.0)},
+    ])
+    boundary = np.flatnonzero(np.isclose(trajectory.t, 1.0))
+    assert boundary.size == 2
+    np.testing.assert_allclose(trajectory.mass[boundary], [13.0, 12.0])
+    assert trajectory.spacecraft(boundary[1], body=body).body.current_mass == pytest.approx(12.0)
+    assert trajectory.spacecraft(boundary[1], body=body).inertia is not None
+    with pytest.raises(ValueError, match="mass_change must be finite"):
+        ImpulseManeuver([0.0, 0.0, 0.0], mass_change=np.nan).apply(spacecraft)
 
 
 def test_torque_free_principal_axis_spin_preserves_rate_and_norm():

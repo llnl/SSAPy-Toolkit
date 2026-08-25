@@ -135,6 +135,7 @@ _TOOLKIT_DUPLICATE_ALIASES = {
     "propagate_6dof_high_accuracy": ".propagators_6dof",
     "propagate_spacecraft_high_accuracy": ".propagators_6dof",
     "propagate_spacecraft_segments": ".propagators_6dof",
+    "ImpulseManeuver": ".propagators_6dof",
     "SixDOFTargetResult": ".propagators_6dof",
     "SixDOFMultiSegmentTargetResult": ".propagators_6dof",
     "solve_6dof_target": ".propagators_6dof",

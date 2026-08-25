@@ -382,7 +382,9 @@ numerical backbone:
   body/torque/thrust models with optional SSAPy translational perturbations.
 * ``ssapy_toolkit.propagators_6dof.propagate_spacecraft_segments`` chains
   consecutive coast/burn/environment segments while preserving state, propagated
-  mass, event diagnostics, and solver evaluation counts.
+  mass, event diagnostics, and solver evaluation counts. Its
+  ``ImpulseManeuver`` state reset supports inertial, body, NTW, RTN, and VNB
+  delta-v components plus optional mass, quaternion, and angular-rate updates.
 * ``ssapy_toolkit.propagators_6dof.solve_6dof_multi_segment_target`` performs
   bounded single shooting over those segments and accepts normalized constraint
   and residual hooks.

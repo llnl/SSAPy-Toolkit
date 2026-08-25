@@ -1,15 +1,63 @@
 """High-accuracy 6-DoF propagation helpers."""
 
+from dataclasses import dataclass
+
 import numpy as np
 
-from .sixdof import SixDOFTrajectory
+from ..coordinates.satellite_frames import frame_to_gcrf_matrix
+from .sixdof import SixDOFTrajectory, Spacecraft
 from .sixdof import propagate_6dof as _propagate_6dof
 
 __all__ = [
+    "ImpulseManeuver",
     "propagate_6dof_high_accuracy",
     "propagate_spacecraft_high_accuracy",
     "propagate_spacecraft_segments",
 ]
+
+
+@dataclass(frozen=True)
+class ImpulseManeuver:
+    """Instantaneous velocity change applied at a segment start epoch."""
+
+    dv: tuple[float, float, float]
+    frame: str = "inertial"
+    mass_change: float | None = None
+    q_reset: tuple[float, float, float, float] | None = None
+    omega_reset: tuple[float, float, float] | None = None
+
+    def apply(self, spacecraft: Spacecraft) -> Spacecraft:
+        delta_v = np.asarray(self.dv, dtype=float)
+        if delta_v.shape != (3,) or not np.all(np.isfinite(delta_v)):
+            raise ValueError("dv must be a finite 3-vector.")
+        velocity = spacecraft.v + frame_to_gcrf_matrix(
+            self.frame, r=spacecraft.r, v=spacecraft.v, q=spacecraft.q
+        ) @ delta_v
+        mass = spacecraft.mass
+        body = spacecraft.body
+        if self.mass_change is not None:
+            if not np.isfinite(self.mass_change):
+                raise ValueError("mass_change must be finite.")
+            if mass is None:
+                raise ValueError("mass_change requires spacecraft mass.")
+            mass = float(mass) + float(self.mass_change)
+            if mass <= 0.0:
+                raise ValueError("impulse would produce non-positive mass.")
+            if body is not None and hasattr(body, "with_current_mass"):
+                body = body.with_current_mass(mass)
+        inertia = spacecraft.inertia
+        if body is not spacecraft.body and hasattr(body, "current_inertia"):
+            inertia = None
+        return Spacecraft(
+            r=spacecraft.r, v=velocity, t=spacecraft.t,
+            q=spacecraft.q if self.q_reset is None else self.q_reset,
+            omega=spacecraft.omega if self.omega_reset is None else self.omega_reset,
+            wheel_momentum=spacecraft.wheel_momentum,
+            inertia=inertia, mass=mass, area=spacecraft.area,
+            cd=spacecraft.cd, cr=spacecraft.cr,
+            center_of_pressure=spacecraft.center_of_pressure,
+            body=body, orbit=spacecraft.orbit,
+        )
 
 
 def propagate_6dof_high_accuracy(**kwargs):
@@ -80,16 +128,22 @@ def propagate_spacecraft_segments(spacecraft, segments, **defaults):
     Each segment is a mapping with ``times`` plus any
     :func:`propagate_spacecraft_high_accuracy` keyword. Segment values override
     ``defaults``. The first time in each segment must equal the current
-    spacecraft epoch so gaps are explicit.
+    spacecraft epoch so gaps are explicit. ``impulses`` optionally contains
+    :class:`ImpulseManeuver` objects applied at that exact first epoch.
     """
 
     segments = [dict(defaults, **dict(segment)) for segment in segments]
     tracks_mass = spacecraft.mass is not None and any(
         "mass_flow_rate" in segment
+        or any(getattr(impulse, "mass_change", None) is not None
+               for impulse in ((segment.get("impulses"),)
+                               if isinstance(segment.get("impulses"), ImpulseManeuver)
+                               else (segment.get("impulses") or ())))
         or any(hasattr(model, "mass_flow_rate") for model in (segment.get("models") or ()))
         for segment in segments
     )
     trajectories = []
+    preserve_boundaries = []
     current = spacecraft
     for segment in segments:
         options = dict(segment)
@@ -100,6 +154,14 @@ def propagate_spacecraft_segments(spacecraft, segments, **defaults):
             raise ValueError("each segment times must be a 1-D array with at least two entries.")
         if not np.isclose(times[0], current.t):
             raise ValueError("each segment must start at the current spacecraft epoch.")
+        impulses = options.pop("impulses", ())
+        if isinstance(impulses, ImpulseManeuver):
+            impulses = (impulses,)
+        for impulse in impulses:
+            if not isinstance(impulse, ImpulseManeuver):
+                raise TypeError("impulses must contain ImpulseManeuver objects.")
+            current = impulse.apply(current)
+        preserve_boundaries.append(bool(impulses))
         if tracks_mass:
             options.setdefault("mass0", current.mass)
         trajectory = propagate_spacecraft_high_accuracy(current, **options)
@@ -117,7 +179,7 @@ def propagate_spacecraft_segments(spacecraft, segments, **defaults):
             break
     if not trajectories:
         raise ValueError("segments must contain at least one segment.")
-    return _combine_trajectories(trajectories)
+    return _combine_trajectories(trajectories, preserve_boundaries)
 
 
 def _spacecraft_physical_kwargs(spacecraft) -> dict:
@@ -151,9 +213,13 @@ def _environment_model_flags(models) -> dict[str, bool]:
     }
 
 
-def _combine_trajectories(trajectories) -> SixDOFTrajectory:
+def _combine_trajectories(trajectories, preserve_boundaries=None) -> SixDOFTrajectory:
+    preserve_boundaries = tuple(preserve_boundaries or ())
     slices = [slice(None)]
-    slices.extend(slice(1, None) for _ in trajectories[1:])
+    slices.extend(
+        slice(None) if index < len(preserve_boundaries) and preserve_boundaries[index] else slice(1, None)
+        for index in range(1, len(trajectories))
+    )
     t = np.concatenate([trajectory.t[index] for trajectory, index in zip(trajectories, slices)])
     r = np.vstack([trajectory.r[index] for trajectory, index in zip(trajectories, slices)])
     v = np.vstack([trajectory.v[index] for trajectory, index in zip(trajectories, slices)])
