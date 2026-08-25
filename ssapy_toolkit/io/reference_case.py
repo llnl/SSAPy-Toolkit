@@ -11,7 +11,13 @@ from pathlib import Path
 
 import numpy as np
 
-__all__ = ["ReferenceCase", "ReferenceCaseFiles", "read_reference_case", "write_reference_case"]
+__all__ = [
+    "ReferenceCase",
+    "ReferenceCaseFiles",
+    "compare_reference_case",
+    "read_reference_case",
+    "write_reference_case",
+]
 
 
 @dataclass(frozen=True)
@@ -71,6 +77,41 @@ def read_reference_case(source) -> ReferenceCase:
         v=values[:, 3:] * 1.0e3,
         metadata=metadata,
     )
+
+
+def compare_reference_case(trajectory, reference, *, time_tolerance=1e-9):
+    """Compare a trajectory with reference states at the reference epochs."""
+    actual_t, actual_r, actual_v = _trajectory_arrays(trajectory)
+    reference = read_reference_case(reference) if isinstance(reference, (str, Path)) else reference
+    if not all(hasattr(reference, name) for name in ("t", "r", "v")):
+        raise TypeError("reference must be a ReferenceCase or .json/.oem path.")
+    reference_t, reference_r, reference_v = _trajectory_arrays(reference)
+    time_tolerance = float(time_tolerance)
+    if not np.isfinite(time_tolerance) or time_tolerance < 0.0:
+        raise ValueError("time_tolerance must be non-negative.")
+    for name in ("reference_frame", "center_name"):
+        actual_metadata = getattr(trajectory, "metadata", {})
+        reference_metadata = getattr(reference, "metadata", {})
+        actual_value = actual_metadata.get(name) if isinstance(actual_metadata, Mapping) else None
+        reference_value = reference_metadata.get(name) if isinstance(reference_metadata, Mapping) else None
+        if actual_value is not None and reference_value is not None and actual_value != reference_value:
+            raise ValueError(f"trajectory and reference {name} metadata do not match.")
+    if reference_t[0] < actual_t[0] - time_tolerance or reference_t[-1] > actual_t[-1] + time_tolerance:
+        raise ValueError("reference epochs must overlap the trajectory time span.")
+    sample_t = np.clip(reference_t, actual_t[0], actual_t[-1])
+    positions = np.array([np.interp(sample_t, actual_t, actual_r[:, i]) for i in range(3)]).T
+    velocities = np.array([np.interp(sample_t, actual_t, actual_v[:, i]) for i in range(3)]).T
+    position_residual = np.linalg.norm(positions - reference_r, axis=1)
+    velocity_residual = np.linalg.norm(velocities - reference_v, axis=1)
+    return {
+        "max_position_m": float(position_residual.max()),
+        "rms_position_m": float(np.sqrt(np.mean(position_residual**2))),
+        "final_position_m": float(position_residual[-1]),
+        "max_velocity_m_s": float(velocity_residual.max()),
+        "rms_velocity_m_s": float(np.sqrt(np.mean(velocity_residual**2))),
+        "final_velocity_m_s": float(velocity_residual[-1]),
+        "sample_count": int(reference_t.size),
+    }
 
 
 def write_reference_case(

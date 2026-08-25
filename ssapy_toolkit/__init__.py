@@ -149,6 +149,7 @@ _TOOLKIT_DUPLICATE_ALIASES = {
     "SloshMode": ".propagators_6dof",
     "propagate_6dof_extended": ".propagators_6dof",
     "ReferenceCase": ".io",
+    "compare_reference_case": ".io",
     "read_reference_case": ".io",
     "altitude_crossing_event": ".propagators_6dof",
     "attitude_quaternion_from_frame": ".coordinates.attitude",

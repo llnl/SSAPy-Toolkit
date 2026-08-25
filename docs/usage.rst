@@ -158,6 +158,17 @@ guessing the SSATK conventions.
        integrator={"method": "DOP853", "rtol": 1e-10, "atol": 1e-9},
    )
 
+Compare a trajectory against an OEM or JSON reference with
+:func:`ssapy_toolkit.io.compare_reference_case`. It evaluates the candidate at
+the reference epochs and returns maximum, root-mean-square, and final position
+and velocity residuals in SI units.
+
+.. code-block:: python
+
+   from ssapy_toolkit.io import compare_reference_case
+
+   residuals = compare_reference_case(traj, "reference_cases/leo/ssatk_reference_case.json")
+
 For terminal maneuver targeting, use
 :func:`ssapy_toolkit.propagators_6dof.solve_6dof_target`. This performs bounded
 single shooting around the same ``Spacecraft.propagate`` force and attitude

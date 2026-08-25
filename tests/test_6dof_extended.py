@@ -31,3 +31,13 @@ def test_extended_modes_reject_invalid_coupling():
     with pytest.raises(ValueError):
         propagate_6dof_extended(times=[0, 1], inertia=np.eye(3), r0=[1, 0, 0], v0=[0, 1, 0],
                                  flexible=FlexibleMode([1, 0, 0], 1, 1), slosh=SloshMode([1, 0, 0], 1, 1))
+
+
+def test_slosh_force_follows_attitude():
+    result = propagate_6dof_extended(
+        times=[0, 1e-3], inertia=np.eye(3), mu=0,
+        r0=[1, 0, 0], v0=[0, 0, 0], q0=[np.sqrt(0.5), 0, 0, np.sqrt(0.5)],
+        slosh=SloshMode([1, 0, 0], 1, 1, displacement0=1), bus_mass=1,
+    )
+
+    np.testing.assert_allclose(result.trajectory.v[-1], [0, 1e-3, 0], atol=1e-9)

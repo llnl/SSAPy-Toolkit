@@ -19,6 +19,7 @@ from .sixdof import (
     _initial_state,
     _times,
     _validate_time_direction,
+    rotate_vector,
     sixdof_rhs,
 )
 
@@ -155,7 +156,7 @@ def propagate_6dof_extended(*, times, inertia, hinge=None, flexible=None, slosh=
                 slosh.mass * slosh.natural_frequency**2 * disp
                 + 2 * slosh.damping_ratio * slosh.natural_frequency * slosh.mass * rate
             )
-            loads_a = force / bus_mass
+            loads_a = rotate_vector(rigid[6:10], force) / bus_mass
             loads_t = loads_t + np.cross(slosh.lever_arm_body, force)
         a = lambda tt, r, v, q, om: np.asarray(acceleration(tt, r, v, q, om) if acceleration else 0.0) + loads_a
         trq = lambda tt, r, v, q, om: np.asarray(torque(tt, r, v, q, om) if torque else 0.0) + loads_t

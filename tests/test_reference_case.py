@@ -6,9 +6,36 @@ import pytest
 
 from ssapy_toolkit.io import (
     ReferenceCaseFiles,
+    ReferenceCase,
+    compare_reference_case,
     read_reference_case,
     write_reference_case,
 )
+
+
+def test_compare_reference_case_exact_match():
+    trajectory = SimpleNamespace(t=np.array([0.0, 1.0]), r=np.array([[1., 2., 3.], [2., 3., 4.]]), v=np.ones((2, 3)))
+    result = compare_reference_case(trajectory, ReferenceCase(trajectory.t, trajectory.r, trajectory.v, {}))
+    assert result["sample_count"] == 2
+    assert result["max_position_m"] == result["max_velocity_m_s"] == 0.0
+
+
+def test_compare_reference_case_interpolates():
+    actual = SimpleNamespace(t=np.array([0.0, 2.0]), r=np.array([[0., 0., 0.], [2., 4., 6.]]), v=np.array([[1., 2., 3.], [3., 4., 5.]]))
+    reference = ReferenceCase(np.array([1.0]), np.array([[1., 2., 3.]]), np.array([[2., 3., 4.]]), {})
+    result = compare_reference_case(actual, reference)
+    assert result["sample_count"] == 1
+    assert result["max_position_m"] == result["max_velocity_m_s"] == 0.0
+
+
+def test_compare_reference_case_rejects_span_and_metadata_mismatch():
+    actual = SimpleNamespace(t=np.array([0., 1.]), r=np.zeros((2, 3)), v=np.zeros((2, 3)), metadata={"reference_frame": "GCRF"})
+    outside = ReferenceCase(np.array([2.]), np.zeros((1, 3)), np.zeros((1, 3)), {})
+    with pytest.raises(ValueError, match="time span"):
+        compare_reference_case(actual, outside)
+    mismatch = ReferenceCase(actual.t, actual.r, actual.v, {"reference_frame": "ITRF"})
+    with pytest.raises(ValueError, match="reference_frame"):
+        compare_reference_case(actual, mismatch)
 
 
 def test_write_reference_case_emits_reproducible_oem_and_metadata(tmp_path):
