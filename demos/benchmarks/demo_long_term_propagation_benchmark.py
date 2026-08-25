@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from demos.benchmarks import demo_gmat_benchmark, demo_orekit_benchmark
+from demos.benchmarks.benchmark_report import write_benchmark_report
 from ssapy_toolkit.constants import EARTH_MU
 from ssapy_toolkit.io.ssatk_data import ssatk_data
 from ssapy_toolkit.plots.figpath import figpath
@@ -195,6 +196,9 @@ def main(make_figures=None, fast=None, verbose=None, allow_install=None):
     result_path = Path(ssatk_data("benchmarks/long_term_propagation_results.json"))
     result_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     summary["results_path"] = str(result_path)
+    if make_figures:
+        summary["report_path"] = write_benchmark_report()
+        result_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     if verbose:
         print(json.dumps(summary, indent=2, sort_keys=True))
     return summary

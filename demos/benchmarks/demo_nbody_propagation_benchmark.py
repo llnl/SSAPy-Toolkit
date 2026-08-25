@@ -17,6 +17,7 @@ from ssapy.body import get_body
 from ssapy.gravity import AccelThirdBody
 
 from demos.benchmarks import demo_gmat_benchmark, demo_orekit_benchmark
+from demos.benchmarks.benchmark_report import write_benchmark_report
 from ssapy_toolkit.io.ssatk_data import ssatk_data
 from ssapy_toolkit.plots.figpath import figpath
 from ssapy_toolkit.propagators_orbit import propagate_orbit_state
@@ -354,6 +355,9 @@ def main(make_figures=None, fast=None, verbose=None, allow_install=None):
     result_path = Path(ssatk_data("benchmarks/nbody_propagation_results.json"))
     result_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     summary["results_path"] = str(result_path)
+    if make_figures:
+        summary["report_path"] = write_benchmark_report()
+        result_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     if verbose:
         print(json.dumps(summary, indent=2, sort_keys=True))
     return summary
