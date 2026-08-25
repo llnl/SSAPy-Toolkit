@@ -115,6 +115,7 @@ packages = { find = { where = ["."], include = ["ssapy_toolkit*", "demos*"] } }
 
 [tool.setuptools.package-data]
 demos = ["README.md"]
+"demos.benchmarks" = ["README.md", "orekit/*.java", "orekit/*.xml"]
 "ssapy_toolkit.plots" = ["*.js"]
 
 [tool.pytest.ini_options]

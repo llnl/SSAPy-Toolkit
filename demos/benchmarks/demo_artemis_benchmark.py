@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import json
 import os
 import sys
 from pathlib import Path
@@ -10,11 +11,13 @@ import matplotlib.pyplot as plt
 from astropy.time import Time
 from ssapy import Orbit, rv, SciPyPropagator, AccelKepler
 
+from ssapy_toolkit.io.ssatk_data import ssatk_data
 from ssapy_toolkit.plots.figpath import figpath
 from ssapy_toolkit.io.demo_data import ensure_demo_data_file
 from ssapy_toolkit.plots.orbit_plot import orbit_plot
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
+GALLERY_CATEGORY = "benchmarks"
 
 
 def _find_csv(allow_download=True):
@@ -140,6 +143,32 @@ def main(make_figures=None, fast=None, verbose=None, sync_threshold_km=50.0, all
         "sync_threshold_km": float(sync_threshold_km),
     }
 
+    if make_figures:
+        result_path = Path(ssatk_data("benchmarks/artemis_benchmark_results.json"))
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        result_path.write_text(
+            json.dumps(
+                {
+                    "benchmark": "Artemis II / Orion",
+                    "source": str(csv_path),
+                    "model": "SSAPy SciPyPropagator(AccelKepler) with auto-sync",
+                    "time_scale": "TDB",
+                    "sample_count": int(n),
+                    "rms_position_error_m": result["rms_position_error_m"],
+                    "max_position_error_m": result["max_position_error_m"],
+                    "rms_velocity_error_m_s": result["rms_velocity_error_m_s"],
+                    "max_velocity_error_m_s": result["max_velocity_error_m_s"],
+                    "n_syncs": result["n_syncs"],
+                    "sync_threshold_km": result["sync_threshold_km"],
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        result["results_path"] = str(result_path)
+
     if verbose:
         print("Artemis / Orion benchmark")
         print(f"CSV: {csv_path}")
@@ -155,7 +184,7 @@ def main(make_figures=None, fast=None, verbose=None, sync_threshold_km=50.0, all
     if make_figures:
         hours = (t_ref.gps - t_ref[0].gps) / 3600.0
 
-        out1 = Path(figpath("demo_gallery/figures/artemis_benchmark_position_error"))
+        out1 = Path(figpath("demo_gallery/figures/benchmarks/artemis_benchmark_position_error"))
         if out1.suffix == "":
             out1 = out1.with_suffix(".png")
         out1.parent.mkdir(parents=True, exist_ok=True)
@@ -172,7 +201,7 @@ def main(make_figures=None, fast=None, verbose=None, sync_threshold_km=50.0, all
         fig.savefig(out1, dpi=200, bbox_inches="tight")
         plt.close(fig)
 
-        out2 = Path(figpath("demo_gallery/figures/artemis_benchmark_velocity_error"))
+        out2 = Path(figpath("demo_gallery/figures/benchmarks/artemis_benchmark_velocity_error"))
         if out2.suffix == "":
             out2 = out2.with_suffix(".png")
         out2.parent.mkdir(parents=True, exist_ok=True)
@@ -189,7 +218,7 @@ def main(make_figures=None, fast=None, verbose=None, sync_threshold_km=50.0, all
         fig.savefig(out2, dpi=200, bbox_inches="tight")
         plt.close(fig)
 
-        out3 = Path(figpath("demo_gallery/figures/artemis_benchmark_cislunar_context"))
+        out3 = Path(figpath("demo_gallery/figures/benchmarks/artemis_benchmark_cislunar_context"))
         if out3.suffix == "":
             out3 = out3.with_suffix(".png")
         out3.parent.mkdir(parents=True, exist_ok=True)

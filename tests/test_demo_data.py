@@ -201,7 +201,7 @@ def test_demo_parsing_3le_skips_when_optional_data_unavailable(monkeypatch):
 
 
 def test_demo_artemis_benchmark_skips_when_optional_data_unavailable(monkeypatch):
-    from demos.orbital_mechanics import demo_artemis_benchmark
+    from demos.benchmarks import demo_artemis_benchmark
 
     monkeypatch.setattr(demo_artemis_benchmark, "_find_csv", lambda allow_download=True: None)
 
@@ -210,3 +210,13 @@ def test_demo_artemis_benchmark_skips_when_optional_data_unavailable(monkeypatch
     assert out["skipped"] is True
     assert out["reason"] == "missing_data_file"
     assert out["csv_path"] is None
+
+
+def test_demo_orekit_benchmark_skips_without_external_runtime(monkeypatch):
+    from demos.benchmarks import demo_orekit_benchmark
+
+    monkeypatch.setattr(demo_orekit_benchmark, "_run_orekit", lambda **kwargs: None)
+    out = demo_orekit_benchmark.main(make_figures=False, fast=True, verbose=False, allow_install=False)
+
+    assert out["skipped"] is True
+    assert "unavailable" in out["reason"]

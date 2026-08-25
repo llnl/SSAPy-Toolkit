@@ -44,6 +44,7 @@ The `demos/` package is organized by workflow area:
 | `analysis_dashboards/` | dashboards, divergence plots, and population summary visualizations |
 | `video_animation/` | GIF and video generation workflows |
 | `photometry/` | Lambertian brightness, thermal/reflection models, ground-observer examples |
+| `benchmarks/` | Reproducible Artemis/JPL and external-propagator comparison cases |
 
 The gallery runner searches these subfolders recursively, so adding a new
 `demo_*.py` file under the right category is enough for it to appear unless the
