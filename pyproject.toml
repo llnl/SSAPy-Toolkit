@@ -46,7 +46,7 @@ dependencies = [
   "ipytree",
   "ipyvolume",
   "jplephem",
-  "llnl-ssapy-data>=0.1.3",
+  "llnl-ssapy-data>=0.1.5",
   "llnl-ssapy",
   "lmfit",
   "matplotlib",
@@ -78,6 +78,10 @@ dependencies = [
 geomagnetics = [
   "ppigrf",
   "geopack",
+]
+
+atmosphere = [
+  "pymsis>=0.12",
 ]
 
 validation = [

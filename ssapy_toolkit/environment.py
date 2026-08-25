@@ -87,9 +87,13 @@ class SpaceEnvironment:
 
     epoch: object | None = None
     earth_orientation_model: object | None = None
+    earth_orientation_allow_predicted: bool = False
+    space_weather_model: object | None = None
+    space_weather_allow_predicted: bool = False
+    nrlmsise_version: float | str = 2.1
     sun_position_model: Callable | ArrayLike | None = None
     moon_position_model: Callable | ArrayLike | None = None
-    atmosphere_density_model: Callable | float | None = 0.0
+    atmosphere_density_model: Callable | float | str | None = 0.0
     atmosphere_velocity_model: Callable | ArrayLike | None = None
     magnetic_field_model: Callable | ArrayLike | str | None = "earth_dipole"
     eclipse_model: Callable | str | None = "conical"
@@ -119,6 +123,20 @@ class SpaceEnvironment:
         model_time = self.absolute_time(time)
         if hasattr(model, "at"):
             return model.at(model_time, allow_predicted=allow_predicted)
+        return model(model_time)
+
+    def space_weather(self, time, *, allow_predicted: bool | None = None):
+        """Return the configured daily space-weather record for ``time``."""
+
+        model = self.space_weather_model
+        if model is None:
+            from .environment_space_weather import load_packaged_space_weather
+
+            model = load_packaged_space_weather()
+        model_time = self.absolute_time(time)
+        allow = self.space_weather_allow_predicted if allow_predicted is None else allow_predicted
+        if hasattr(model, "at"):
+            return model.at(model_time, allow_predicted=allow)
         return model(model_time)
 
     def sun_position(self, time, r_inertial=None, v_inertial=None, q_body_to_inertial=None, omega_body=None, spacecraft=None):
@@ -165,12 +183,89 @@ class SpaceEnvironment:
         model = self.atmosphere_density_model
         if model is None:
             return 0.0
+        if isinstance(model, str):
+            if _body_key(model) not in {"nrlmsise", "nrlmsise00", "msis"}:
+                raise ValueError("atmosphere_density_model string must be 'nrlmsise00'.")
+            if len(args) < 2:
+                raise ValueError("NRLMSISE-00 density requires time and inertial position inputs.")
+            return self.nrlmsise00_density(args[0], args[1])
         if callable(model):
             try:
                 return float(model(altitude_m, *args))
             except TypeError:
                 return float(model(altitude_m))
         return float(model)
+
+    def nrlmsise00_density(
+        self,
+        time,
+        r_inertial,
+        *,
+        allow_predicted: bool | None = None,
+        version: float | str | None = None,
+    ) -> float:
+        """Return NRLMSISE-00 total mass density at a GCRF position.
+
+        This method requires the optional ``pymsis`` dependency. Geographic
+        coordinates use the packaged EOP table and WGS84 geodetic conversion;
+        solar and geomagnetic drivers come from ``SpaceWeatherTable``.
+        """
+
+        try:
+            from pymsis import msis
+        except ImportError as exc:
+            raise ImportError(
+                "NRLMSISE-00 support requires the optional 'atmosphere' dependency; "
+                "install with 'pip install ssapy-toolkit[atmosphere]'."
+            ) from exc
+
+        model_time = self.absolute_time(time)
+        from .coordinates.earth_fixed import gcrf_to_itrf_eop
+
+        eop = self.earth_orientation_model
+        if eop is None:
+            from .environment_eop import load_packaged_eop
+
+            eop = load_packaged_eop()
+        r_itrf = gcrf_to_itrf_eop(
+            np.asarray(r_inertial, dtype=float).reshape(1, 3),
+            [model_time],
+            eop=eop,
+            allow_predicted=self.earth_orientation_allow_predicted,
+        )[0]
+        longitude, latitude, altitude = _itrf_to_geodetic(r_itrf)
+
+        weather = self.space_weather_model
+        if weather is None:
+            from .environment_space_weather import load_packaged_space_weather
+
+            weather = load_packaged_space_weather()
+        allow = self.space_weather_allow_predicted if allow_predicted is None else allow_predicted
+        if hasattr(weather, "msis_inputs"):
+            f107, f107a, aps = weather.msis_inputs(model_time, allow_predicted=allow)
+        else:
+            values = weather(model_time)
+            if len(values) != 3:
+                raise TypeError("space_weather_model must provide msis_inputs(time) or return (f107, f107a, ap).")
+            f107, f107a, aps = values
+
+        from astropy.time import Time
+
+        date = Time(model_time, format="gps", scale="utc").to_datetime()
+        output = msis.run(
+            [date],
+            [longitude],
+            [latitude],
+            [altitude / 1000.0],
+            [f107],
+            [f107a],
+            np.asarray([aps], dtype=float),
+            version=self.nrlmsise_version if version is None else version,
+        )
+        density = float(np.asarray(output).reshape(-1, 11)[0, 0])
+        if not np.isfinite(density) or density < 0.0:
+            raise RuntimeError("NRLMSISE-00 returned a non-finite or negative density.")
+        return density
 
     def atmosphere_velocity(
         self,
@@ -735,6 +830,33 @@ def _positive(value: float, name: str) -> float:
     if value <= 0.0:
         raise ValueError(f"{name} must be positive.")
     return value
+
+
+def _itrf_to_geodetic(r_itrf: ArrayLike) -> tuple[float, float, float]:
+    """Convert one ITRF Cartesian position to WGS84 longitude/latitude/height."""
+
+    x, y, z = _vector3(r_itrf, "r_itrf")
+    semi_major = 6_378_137.0
+    flattening = 1.0 / 298.257223563
+    semi_minor = semi_major * (1.0 - flattening)
+    first_eccentricity_squared = flattening * (2.0 - flattening)
+    second_eccentricity_squared = (semi_major**2 - semi_minor**2) / semi_minor**2
+    p = float(np.hypot(x, y))
+    if p == 0.0:
+        latitude = np.copysign(np.pi / 2.0, z)
+        return 0.0, float(np.degrees(latitude)), abs(float(z)) - semi_minor
+
+    theta = np.arctan2(semi_major * z, semi_minor * p)
+    latitude = np.arctan2(
+        z + second_eccentricity_squared * semi_minor * np.sin(theta) ** 3,
+        p - first_eccentricity_squared * semi_major * np.cos(theta) ** 3,
+    )
+    longitude = np.arctan2(y, x)
+    radius_of_curvature = semi_major / np.sqrt(
+        1.0 - first_eccentricity_squared * np.sin(latitude) ** 2
+    )
+    height = p / np.cos(latitude) - radius_of_curvature
+    return float(np.degrees(longitude)), float(np.degrees(latitude)), float(height)
 
 
 def _unit_vector(value: ArrayLike, name: str) -> np.ndarray:

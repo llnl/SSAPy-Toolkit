@@ -137,6 +137,11 @@ For covariance or sensitivity propagation, use
 ``stm`` output has shape ``(N, 6, 6)`` and maps initial Cartesian perturbations
 to each sampled state.
 
+For an optional NRLMSISE-00 atmosphere driven by packaged solar and
+geomagnetic indices, install ``ssapy-toolkit[atmosphere]`` and configure
+``SpaceEnvironment(atmosphere_density_model="nrlmsise00")``. The adapter
+rejects predicted space-weather and Earth-orientation records by default.
+
 6-DoF dynamics
 --------------
 
