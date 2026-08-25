@@ -11,7 +11,7 @@ from ssapy_toolkit.plots.orbit_plot import orbit_plot
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 GALLERY_CATEGORY = "orbit_visualization"
-FIGDIR = "demo_gallery/figures"
+FIGDIR = "figures"
 
 
 def main(make_figures=None, make_video=None, fast=None):

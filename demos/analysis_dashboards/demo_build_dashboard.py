@@ -56,7 +56,7 @@ def main(make_figures=None, fast=None):
     )
 
     if make_figures:
-        figsave(fig, "demo_gallery/figures/build_dashboard_overview.jpg")
+        figsave(fig, "figures/build_dashboard_overview.jpg")
     else:
         plt.close(fig)
 

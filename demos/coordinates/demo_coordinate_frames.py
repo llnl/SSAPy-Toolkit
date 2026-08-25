@@ -15,7 +15,7 @@ from ssapy_toolkit.coordinates.satellite_frames import gcrf_to_ntw, ntw_to_gcrf
 from ssapy_toolkit.plots.plotutils import figsave
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
-FIGDIR = "demo_gallery/figures"
+FIGDIR = "figures"
 
 
 def main(make_figures=None, fast=None):

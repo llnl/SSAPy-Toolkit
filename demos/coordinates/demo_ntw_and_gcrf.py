@@ -92,7 +92,7 @@ def main(make_figures=None):
         ax.legend()
         ax.set_box_aspect([1, 1, 1])
 
-        figsave(fig, "demo_gallery/figures/ntw_to_gcrf_delta_v.jpg")
+        figsave(fig, "figures/ntw_to_gcrf_delta_v.jpg")
         plt.close(fig)
 
     return {

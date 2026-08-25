@@ -38,7 +38,7 @@ def main(make_figures=None, fast=None):
         plt.ylabel("y")
         plt.title("Single site trajectory (lat=0, lon=0)")
         plt.tight_layout()
-        figsave(fig, "demo_gallery/figures/surface_rv_xy.jpg")
+        figsave(fig, "figures/surface_rv_xy.jpg")
         plt.close(fig)
 
     return {"rs": rs, "times": times, "t0": t0}

@@ -10,7 +10,7 @@ import ssapy_toolkit as ssatk
 from ssapy_toolkit.plots.orbit_plot import orbit_plot
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
-FIGDIR = "demo_gallery/figures"
+FIGDIR = "figures"
 
 
 def main(make_figures=None, fast=None):

@@ -112,9 +112,9 @@ def test_figpath_can_use_explicit_env_root(tmp_path, monkeypatch):
     env_output = tmp_path / "env_output"
     monkeypatch.setenv("SSATK_OUTPUT_DIR", str(env_output))
 
-    path = Path(fig_path_module.figpath("demo_gallery/index.html"))
+    path = Path(fig_path_module.figpath("index.html"))
 
-    assert path == env_output / "figures" / "demo_gallery" / "index.html"
+    assert path == env_output / "figures" / "index.html"
     assert path.parent.exists()
 
 

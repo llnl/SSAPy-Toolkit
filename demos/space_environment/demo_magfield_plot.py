@@ -36,7 +36,7 @@ def main(make_figures=True):
             azim            = -15,
             max_r_re        = 15.0,
             show_van_allen  = True,
-            save_path       = figpath("demo_gallery/figures/demo_magfield_plot"),
+            save_path       = figpath("figures/demo_magfield_plot"),
         )
     except ImportError as exc:
         print(f"Skipped: {exc}")

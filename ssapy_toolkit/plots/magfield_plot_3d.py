@@ -1168,7 +1168,7 @@ def plot_magfield_3d(
 
 # -- Entry point -------------------------------------------------------------
 if __name__ == "__main__":
-    output_dir = Path(os.environ.get("OUTPUT_DIR", str(output_root() / "figures" / "demo_gallery" / "figures")))
+    output_dir = Path(os.environ.get("OUTPUT_DIR", str(output_root() / "figures")))
     cfg = {}
     gui_cfg_path = os.environ.get("GUI_CONFIG", "")
     if gui_cfg_path and Path(gui_cfg_path).exists():

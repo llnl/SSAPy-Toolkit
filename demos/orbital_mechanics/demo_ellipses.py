@@ -45,7 +45,7 @@ def main(make_figures=None, fast=None):
         orbit_plot(
             rs,
             view="xy",
-            save_path=figpath("demo_gallery/figures/testing_ellipses.jpg"),
+            save_path=figpath("figures/testing_ellipses.jpg"),
             pad=500,
             title="Point source Earth",
         )

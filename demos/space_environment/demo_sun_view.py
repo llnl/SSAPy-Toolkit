@@ -138,7 +138,7 @@ def main(make_figures=None, fast=None):
     outputs["n_traces"] = len(fig.data)
 
     if make_figures:
-        out_html = Path(figpath("demo_gallery/figures/demo_sun_view"))
+        out_html = Path(figpath("figures/demo_sun_view"))
         if out_html.suffix == "":
             out_html = out_html.with_suffix(".html")
         out_html.parent.mkdir(parents=True, exist_ok=True)

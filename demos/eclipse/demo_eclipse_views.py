@@ -49,7 +49,7 @@ def main(make_figures=None, fast=None):
     search_days = 730.0 if make_figures else 120.0
     lunar_event = "2014-04-15-total-lunar-wisconsin"
 
-    solar_strip_path = figpath("demo_gallery/figures/eclipse/demo_eclipse_2024_solar_strip.png") if make_figures else None
+    solar_strip_path = figpath("figures/eclipse/demo_eclipse_2024_solar_strip.png") if make_figures else None
     solar_strip_fig = make_strip(kind="solar", n_panels=5 if fast else 11, save_path=solar_strip_path)
     outputs["strip_fig"] = solar_strip_fig
     outputs["solar_strip_fig"] = solar_strip_fig
@@ -57,7 +57,7 @@ def main(make_figures=None, fast=None):
         outputs["files"].append(solar_strip_path)
         print(f"Saved: {solar_strip_path}")
 
-    lunar_search_path = figpath("demo_gallery/figures/eclipse/demo_eclipse_2014_lunar_wisconsin.png") if make_figures else None
+    lunar_search_path = figpath("figures/eclipse/demo_eclipse_2014_lunar_wisconsin.png") if make_figures else None
     lunar_search_fig, lunar_stats = find_and_plot_eclipse(
         mode="lunar",
         search_days=search_days,
@@ -75,7 +75,7 @@ def main(make_figures=None, fast=None):
         print(f"Saved: {lunar_search_path}")
 
     if make_figures:
-        lunar_space_path = figpath("demo_gallery/figures/eclipse/demo_eclipse_space_2014_lunar_wisconsin.html")
+        lunar_space_path = figpath("figures/eclipse/demo_eclipse_space_2014_lunar_wisconsin.html")
         lunar_space_fig = plot_space_view_plotly(
             mode="lunar",
             search_days=search_days,
@@ -87,7 +87,7 @@ def main(make_figures=None, fast=None):
         outputs["lunar_space_fig"] = lunar_space_fig
         outputs["files"].append(lunar_space_path)
 
-        lunar_anim_path = figpath("demo_gallery/figures/eclipse/demo_eclipse_space_2014_lunar_wisconsin_animated.html")
+        lunar_anim_path = figpath("figures/eclipse/demo_eclipse_space_2014_lunar_wisconsin_animated.html")
         lunar_space_anim_fig = plot_space_view_animated(
             mode="lunar",
             search_days=search_days,
@@ -102,7 +102,7 @@ def main(make_figures=None, fast=None):
         outputs["lunar_space_anim_fig"] = lunar_space_anim_fig
         outputs["files"].append(lunar_anim_path)
 
-        solar_2024_path = figpath("demo_gallery/figures/eclipse/demo_eclipse_space_2024_solar_animated.html")
+        solar_2024_path = figpath("figures/eclipse/demo_eclipse_space_2024_solar_animated.html")
         solar_2024_fig, solar_2024_stats = plot_2024_solar_eclipse_animated(
             save_path=solar_2024_path,
             n_frames=8 if fast else 26,

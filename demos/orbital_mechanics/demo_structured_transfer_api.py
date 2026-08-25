@@ -16,7 +16,7 @@ The examples cover:
    searches.
 
 Each run saves one three-panel overview image under
-``~/ssatk_output/figures/demo_gallery/figures`` when figures are enabled.
+``~/ssatk_output/figures/figures`` when figures are enabled.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ DESCRIPTION = (
     "objective, constraint, route, and solver controls."
 )
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
-FIGDIR = "demo_gallery/figures"
+FIGDIR = "figures"
 
 COMPARISON_TOF = 3600.0
 STAGED_LEG_TOF = COMPARISON_TOF / 2.0

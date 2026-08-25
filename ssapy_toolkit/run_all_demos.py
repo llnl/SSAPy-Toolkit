@@ -8,7 +8,7 @@ from .demo_gallery import run_all_demos
 
 
 def default_output_dir() -> Path:
-    return Path(figpath("demo_gallery/index.html")).expanduser().resolve().parent
+    return Path(figpath("index.html")).expanduser().resolve().parent
 
 
 def _looks_like_demos_dir(path: Path) -> bool:
@@ -52,7 +52,7 @@ def main(argv: list[str] | None = None) -> int:
         "--output",
         default=str(default_output_dir()),
         help="Output directory for generated demo artifacts and report "
-             "(default: ~/ssatk_output/figures/demo_gallery)",
+             "(default: ~/ssatk_output/figures)",
     )
     parser.add_argument(
         "--open",

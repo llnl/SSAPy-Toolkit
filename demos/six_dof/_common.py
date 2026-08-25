@@ -17,7 +17,7 @@ from ssapy_toolkit.propagators_6dof import rotate_vector
 from ssapy_toolkit.plots.plotutils import figsave
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
-FIGDIR = "demo_gallery/figures/six_dof"
+FIGDIR = "figures/six_dof"
 
 
 def demo_flags(make_figures, fast):

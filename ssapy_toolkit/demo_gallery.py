@@ -52,7 +52,7 @@ NOISE_REGEXES = [re.compile(p) for p in NOISE_PATTERNS]
 
 
 def get_figsave_root() -> Path:
-    probe = Path(figpath("demo_gallery_probe.tmp")).expanduser().resolve()
+    probe = Path(figpath("probe.tmp")).expanduser().resolve()
     return probe.parent
 
 
@@ -258,7 +258,7 @@ def _organized_figure_dir(output_root: Path, category: str, name: str) -> Path:
 def _organize_demo_files(paths: list[Path], output_root: Path, category: str, name: str) -> list[Path]:
     """Move flat gallery figure outputs into ``figures/<category>/``.
 
-    Demos historically saved everything under ``demo_gallery/figures``.  Category
+    Demos historically saved everything under ``figures``.  Category
     folders keep the gallery browsable without burying files under a second
     per-demo directory.  Files already in subfolders, logs, and outputs outside
     ``output_root`` are left untouched.

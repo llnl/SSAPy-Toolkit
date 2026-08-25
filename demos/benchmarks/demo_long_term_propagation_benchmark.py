@@ -129,7 +129,7 @@ def main(make_figures=None, fast=None, verbose=None, allow_install=None):
 
     gmat = demo_gmat_benchmark._find_gmat()
     gmat_ready = gmat is not None and demo_gmat_benchmark._ensure_container_image(allow_install=allow_install)
-    figure_dir = Path(figpath("demo_gallery/figures/benchmarks"))
+    figure_dir = Path(figpath("figures/benchmarks"))
     results = []
     for case_template in CASES:
         case = dict(case_template)

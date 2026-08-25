@@ -5,7 +5,7 @@ and rendezvous maneuver demos into one user-facing workflow.  It compares
 analytic impulsive transfers, fixed-time Lambert solves, optimized searches,
 explicit staged optimal transfers, continuous low-thrust burns, and
 finite-burn/impulse conversions, then renders summary figures under
-``~/ssatk_output/figures/demo_gallery/figures``.
+``~/ssatk_output/figures/figures``.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ from ssapy_toolkit.plots.plotutils import figsave
 
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
-FIGDIR = "demo_gallery/figures"
+FIGDIR = "figures"
 INITIAL_ORBIT_COLOR = "#1f77b4"
 FINAL_ORBIT_COLOR = "#2ca02c"
 MANEUVER_COLOR = "#d62728"

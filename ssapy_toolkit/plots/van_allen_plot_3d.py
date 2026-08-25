@@ -480,7 +480,7 @@ if __name__ == "__main__":
     import inspect as _inspect
 
     output_dir = Path(os.environ.get(
-        "OUTPUT_DIR", str(output_root() / "figures" / "demo_gallery" / "figures")))
+        "OUTPUT_DIR", str(output_root() / "figures")))
     output_dir.mkdir(parents=True, exist_ok=True)
 
     cfg = {}

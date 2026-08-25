@@ -9,7 +9,7 @@
 # source repository. Persist reusable data in SSAPy-Data instead.
 data/
 outputs/
-demo_gallery_output/
+gallery_output/
 site/
 graphify-out/
 

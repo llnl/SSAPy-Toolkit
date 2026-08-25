@@ -47,7 +47,7 @@ def test_coordinate_transforms(make_figures=False):
         ax.set_zlabel("Z (m)")
         ax.set_title("GCRF and ITRF Coordinate Transformations")
         ax.legend()
-        figsave(fig, "demo_gallery/figures/itrf_to_gcrf_roundtrip.jpg")
+        figsave(fig, "figures/itrf_to_gcrf_roundtrip.jpg")
         plt.close(fig)
 
     return {"difference": difference, "tolerance": tolerance}

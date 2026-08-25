@@ -21,7 +21,7 @@ ssapy-demo-gallery
 Example with explicit paths:
 
 ```bash
-python -m ssapy_toolkit.run_all_demos --demos-dir demos --output ./demo_gallery_output
+python -m ssapy_toolkit.run_all_demos --demos-dir demos --output ./gallery_output
 ```
 
 ---
@@ -75,7 +75,7 @@ python -m ssapy_toolkit.run_all_demos
 |------|-------------|
 | `--open` | Open the generated report after it is written |
 | `--no-clean` | Don't clean the output directory before running |
-| `--output ./demo_gallery_output` | Write results to a custom output directory |
+| `--output ./gallery_output` | Write results to a custom output directory |
 | `--demos-dir demos` | Specify the demos directory explicitly |
 
 ---
@@ -83,7 +83,7 @@ python -m ssapy_toolkit.run_all_demos
 ## Output
 
 The gallery runner creates an **HTML report** at
-`~/ssatk_output/figures/demo_gallery/index.html` by default and saves generated demo
+`~/ssatk_output/figures/index.html` by default and saves generated demo
 artifacts beside it in the selected output directory. The default output root is
 the user's home directory, not the source checkout; set `SSATK_OUTPUT_DIR` or
 pass `--output` for an explicit alternate location.

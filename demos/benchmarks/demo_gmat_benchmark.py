@@ -260,7 +260,7 @@ def main(make_figures=None, fast=None, verbose=None, allow_install=None):
     }
 
     if make_figures:
-        out_dir = Path(figpath("demo_gallery/figures/benchmarks"))
+        out_dir = Path(figpath("figures/benchmarks"))
         out_dir.mkdir(parents=True, exist_ok=True)
         hours = times / 3_600.0
 

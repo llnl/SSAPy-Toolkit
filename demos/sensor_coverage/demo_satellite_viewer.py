@@ -26,7 +26,7 @@ def main(make_figures=None, fast=None):
     if not make_figures:
         return {"html": None, "skipped": True, "reason": "figures_disabled"}
 
-    html_path = Path(figpath("demo_gallery/figures/demo_satellite_viewer.html"))
+    html_path = Path(figpath("figures/demo_satellite_viewer.html"))
     written = build(out_path=str(html_path), verbose=True)
     return {"html": str(written), "skipped": False}
 

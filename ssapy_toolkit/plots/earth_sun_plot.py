@@ -454,7 +454,7 @@ DEFAULT_CFG = dict(
     show_radius_line=True,
     show_moon_trail=True,
     bg_color="#060810",
-    output_dir=str(output_root() / "figures" / "demo_gallery" / "figures"),
+    output_dir=str(output_root() / "figures"),
 )
 
 if __name__ == "__main__":

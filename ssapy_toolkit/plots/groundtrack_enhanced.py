@@ -442,5 +442,5 @@ if __name__ == "__main__":
                         epoch_iso="2025-06-15 12:00:00")
     plot_enhanced_groundtrack(
         r_eci, t, site_lat=28.5, site_lon=-80.6, site_name="Cape Canaveral",
-        sat_name="ISS (self-test)", save_path=figpath("demo_gallery/figures/groundtrack_enhanced_selftest.png"),
+        sat_name="ISS (self-test)", save_path=figpath("figures/groundtrack_enhanced_selftest.png"),
     )

@@ -35,8 +35,8 @@ def ssatk_path(filename="figure"):
     Examples
     --------
     ssatk_path("plot")                          -> ~/ssatk_output/figures/plot
-    ssatk_path("demo_gallery/figures/burn_to_dv") -> ~/ssatk_output/figures/demo_gallery/figures/burn_to_dv
-    ssatk_path("demo_gallery/figures/burn_to_dv.png") -> ~/ssatk_output/figures/demo_gallery/figures/burn_to_dv.png
+    ssatk_path("burn_to_dv")                  -> ~/ssatk_output/figures/burn_to_dv
+    ssatk_path("burn_to_dv.png")              -> ~/ssatk_output/figures/burn_to_dv.png
     ssatk_path("/abs/path/ignored/name.svg")    -> ~/ssatk_output/figures/abs/path/ignored/name.svg
     ssatk_path("weird/name.foo")                -> ~/ssatk_output/figures/weird/name.foo
     """

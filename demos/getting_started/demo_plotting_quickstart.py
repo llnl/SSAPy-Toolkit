@@ -10,7 +10,7 @@ Run from a cloned repo with:
 
     python -m demos.getting_started.demo_plotting_quickstart
 
-Outputs are saved under ``~/ssatk_output/figures/demo_gallery/figures`` by default.
+Outputs are saved under ``~/ssatk_output/figures/figures`` by default.
 """
 
 GALLERY_CATEGORY = "getting_started"
@@ -40,7 +40,7 @@ from ssapy_toolkit.plots.solar_view_plot import build_figure as build_solar_view
 from ssapy_toolkit.plots.van_allen_plot_3d import plot_van_allen_3d
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
-FIGDIR = "demo_gallery/figures"
+FIGDIR = "figures"
 
 
 def _make_demo_orbit(fast=False):

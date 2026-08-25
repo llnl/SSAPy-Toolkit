@@ -233,7 +233,7 @@ def main(
     if make_figures:
         hours = (t_ref.gps - t_ref[0].gps) / 3600.0
 
-        out1 = Path(figpath("demo_gallery/figures/benchmarks/artemis_benchmark_position_error"))
+        out1 = Path(figpath("figures/benchmarks/artemis_benchmark_position_error"))
         if out1.suffix == "":
             out1 = out1.with_suffix(".png")
         out1.parent.mkdir(parents=True, exist_ok=True)
@@ -250,7 +250,7 @@ def main(
         fig.savefig(out1, dpi=200, bbox_inches="tight")
         plt.close(fig)
 
-        out2 = Path(figpath("demo_gallery/figures/benchmarks/artemis_benchmark_velocity_error"))
+        out2 = Path(figpath("figures/benchmarks/artemis_benchmark_velocity_error"))
         if out2.suffix == "":
             out2 = out2.with_suffix(".png")
         out2.parent.mkdir(parents=True, exist_ok=True)
@@ -267,7 +267,7 @@ def main(
         fig.savefig(out2, dpi=200, bbox_inches="tight")
         plt.close(fig)
 
-        out3 = Path(figpath("demo_gallery/figures/benchmarks/artemis_benchmark_cislunar_context"))
+        out3 = Path(figpath("figures/benchmarks/artemis_benchmark_cislunar_context"))
         if out3.suffix == "":
             out3 = out3.with_suffix(".png")
         out3.parent.mkdir(parents=True, exist_ok=True)

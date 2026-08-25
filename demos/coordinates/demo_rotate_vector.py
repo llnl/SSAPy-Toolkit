@@ -3,7 +3,7 @@
 Generate a dense set of rotated unit-vector plots and optionally stitch them
 into a GIF.
 
-The final GIF is saved under figpath("demo_gallery/figures/") within the
+The final GIF is saved under figpath("figures/") within the
 shared ``~/ssatk_output/figures`` output root.
 Intermediate frame images are created in a temporary directory and removed
 after the GIF is written, so they do not remain on disk or appear in the
@@ -106,7 +106,7 @@ def main(make_figures=None, make_gif=None, fast=None):
 
             if make_gif and frames:
                 gif_base_jpg_like = figpath(
-                    f"demo_gallery/figures/rotate_vectors_{v_unit[0]:.0f}_{v_unit[1]:.0f}_{v_unit[2]:.0f}"
+                    f"figures/rotate_vectors_{v_unit[0]:.0f}_{v_unit[1]:.0f}_{v_unit[2]:.0f}"
                 )
                 if gif_base_jpg_like.lower().endswith(".jpg"):
                     gif_path = gif_base_jpg_like[:-4] + ".gif"

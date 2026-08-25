@@ -26,7 +26,7 @@ from ssapy_toolkit.plots.figpath import ssatk_path
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 GALLERY_CATEGORY = "analysis_dashboards"
-FIGDIR = "demo_gallery/figures"
+FIGDIR = "figures"
 GIF_FRAME_DURATION_S = 1.0
 
 

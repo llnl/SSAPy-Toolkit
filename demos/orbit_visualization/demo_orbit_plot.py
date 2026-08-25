@@ -11,7 +11,7 @@ from ssapy_toolkit.coordinates.lunar import get_lunar_rv
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 GALLERY_CATEGORY = "orbit_visualization"
-FIGDIR = "demo_gallery/figures"
+FIGDIR = "figures"
 
 
 def main(make_figures=None, fast=None):

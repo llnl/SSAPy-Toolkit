@@ -2,10 +2,10 @@
 
 These demos compare SSATK with reproducible reference sources and optional
 external propagators. Generated figures belong under
-`~/ssatk_output/figures/demo_gallery/figures/benchmarks/`.
+`~/ssatk_output/figures/figures/benchmarks/`.
 Benchmark summaries belong under `~/ssatk_output/benchmarks/`.
 When figures are enabled, the demos also generate the captioned PDF report
-`~/ssatk_output/figures/demo_gallery/figures/benchmarks/ssatk_propagation_benchmark_report.pdf`.
+`~/ssatk_output/figures/figures/benchmarks/ssatk_propagation_benchmark_report.pdf`.
 
 - `demo_artemis_benchmark.py` uses JPL Horizons Artemis II/Orion state vectors
   and reports SSAPy Kepler propagation residuals. With SSAPy-Data installed, it

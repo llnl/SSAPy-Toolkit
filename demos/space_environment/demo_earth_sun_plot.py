@@ -52,7 +52,7 @@ def main(make_figures=None, fast=None):
     }
 
     if make_figures:
-        html_path = Path(figpath("demo_gallery/figures/demo_earth_sun_plot.html"))
+        html_path = Path(figpath("figures/demo_earth_sun_plot.html"))
         _shrink_floats(animated_fig).write_html(str(html_path))
         outputs["html"] = str(html_path)
         print(f"Saved: {html_path}")
