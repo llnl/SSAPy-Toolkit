@@ -33,6 +33,7 @@ from ssapy_toolkit import __version__
 from ssapy_toolkit.plots.figpath import figpath
 
 CallFactory = Callable[["BenchmarkContext"], Callable[[], Any]]
+Validator = Callable[[Any], dict[str, int | float]]
 
 
 @dataclass(frozen=True)
@@ -57,6 +58,7 @@ class BenchmarkCase:
     tags: tuple[str, ...] = field(default_factory=tuple)
     default_repeats: int | None = None
     default_min_sample_time: float | None = None
+    validator: Validator | None = None
 
 
 @dataclass
@@ -88,6 +90,7 @@ class BenchmarkResult:
     peak_memory_bytes: int | None = None
     error: str | None = None
     traceback: str | None = None
+    validation: dict[str, int | float] | None = None
 
     def as_dict(self) -> dict[str, Any]:
         data = dict(self.__dict__)
@@ -277,6 +280,7 @@ def build_benchmark_cases(
             group="propagators_6dof",
             description="6-DoF high-accuracy point-mass propagation over 32 short time steps.",
             factory=lambda _ctx: _call(lambda: _propagator_6dof_point_mass(r0, v0, times)),
+            validator=_validate_6dof_trajectory,
             tags=("propagators_6dof", "propagation", "6dof"),
             default_repeats=3,
             default_min_sample_time=0.0,
@@ -286,6 +290,7 @@ def build_benchmark_cases(
             group="propagators_6dof",
             description="6-DoF spacecraft propagation with body thruster torque and mass depletion.",
             factory=lambda _ctx: _call(lambda: _propagator_6dof_thruster_mass(times)),
+            validator=_validate_6dof_trajectory,
             tags=("propagators_6dof", "propulsion", "6dof"),
             default_repeats=3,
             default_min_sample_time=0.0,
@@ -295,6 +300,7 @@ def build_benchmark_cases(
             group="propagators_6dof",
             description="6-DoF attitude propagation with reaction-wheel momentum states.",
             factory=lambda _ctx: _call(lambda: _propagator_6dof_reaction_wheel(times)),
+            validator=_validate_6dof_trajectory,
             tags=("propagators_6dof", "attitude", "6dof"),
             default_repeats=3,
             default_min_sample_time=0.0,
@@ -304,6 +310,7 @@ def build_benchmark_cases(
             group="propagators_6dof",
             description="6-DoF spacecraft propagation with environment-backed facet SRP and drag.",
             factory=lambda _ctx: _call(lambda: _propagator_6dof_environment(times)),
+            validator=_validate_6dof_trajectory,
             tags=("propagators_6dof", "environment", "6dof"),
             default_repeats=3,
             default_min_sample_time=0.0,
@@ -313,6 +320,7 @@ def build_benchmark_cases(
             group="propagators_6dof",
             description="6-DoF spacecraft propagation with prescribed rotating SRP facets.",
             factory=lambda _ctx: _call(lambda: _propagator_6dof_articulated_facet(times)),
+            validator=_validate_6dof_trajectory,
             tags=("propagators_6dof", "environment", "articulated", "6dof"),
             default_repeats=3,
             default_min_sample_time=0.0,
@@ -685,6 +693,22 @@ def _propagator_6dof_articulated_facet(times):
     )
 
 
+def _validate_6dof_trajectory(trajectory) -> dict[str, int | float]:
+    """Return stable physical checks for machine-readable 6-DoF results."""
+    state = np.concatenate(
+        (trajectory.r.ravel(), trajectory.v.ravel(), trajectory.q.ravel(), trajectory.omega.ravel())
+    )
+    quaternion_residual = float(np.max(np.abs(np.linalg.norm(trajectory.q, axis=1) - 1.0)))
+    mass = getattr(trajectory, "mass", None)
+    mass_residual = 0.0 if mass is None else float(max(0.0, -np.min(mass)))
+    return {
+        "nfev": int(trajectory.nfev),
+        "finite_state_residual": 1.0 if np.any(~np.isfinite(state)) else 0.0,
+        "quaternion_norm_residual": quaternion_residual,
+        "negative_mass_residual": mass_residual,
+    }
+
+
 def _orbital_kepler_to_state(**kwargs):
     from ssapy_toolkit.orbital_mechanics.keplerian import kepler_to_state
 
@@ -867,6 +891,9 @@ def run_benchmark_case(
         ]
         peak_memory = _measure_peak_memory(call, quiet=quiet) if trace_memory else None
         values = _stats(samples)
+        validation = None
+        if case.validator is not None:
+            validation = case.validator(_run_once(call, quiet=quiet))
         return BenchmarkResult(
             name=case.name,
             group=case.group,
@@ -878,6 +905,7 @@ def run_benchmark_case(
             loops_per_repeat=loops,
             total_sample_time_s=float(sum(samples) * loops),
             peak_memory_bytes=peak_memory,
+            validation=validation,
             **values,
         )
     except Exception as exc:

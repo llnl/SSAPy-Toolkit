@@ -1,3 +1,5 @@
+import json
+
 import numpy as np
 import pytest
 
@@ -67,6 +69,30 @@ def test_benchmark_registry_includes_6dof_propagation_speed_cases():
         "propagators_6dof.articulated_facet_32_steps",
     }
     assert all("6dof" in case.tags for case in selected)
+
+
+def test_6dof_benchmark_json_contains_validation_metrics(tmp_path):
+    cases = filter_cases(
+        build_benchmark_cases(include_io=False, include_plots=False, include_slow=False),
+        pattern="point_mass_32_steps",
+    )
+    results = run_benchmarks(
+        cases,
+        BenchmarkContext(output_dir=tmp_path),
+        repeats=1,
+        warmups=0,
+        min_sample_time=0.0,
+        max_loops=1,
+    )
+    path = write_json(results, {}, tmp_path / "benchmark_results.json")
+    result = json.loads(path.read_text(encoding="utf-8"))["results"][0]
+
+    assert result["success"]
+    assert result["median_s"] >= 0.0
+    validation = result["validation"]
+    assert validation["nfev"] > 0
+    assert validation["finite_state_residual"] == 0.0
+    assert np.isfinite(validation["quaternion_norm_residual"])
 
 
 def test_benchmark_cli_quick_no_dashboard(tmp_path):
