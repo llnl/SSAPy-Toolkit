@@ -8,12 +8,13 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from astropy.time import Time
+from astropy.time import Time, TimeDelta
 from ssapy import Orbit, rv, SciPyPropagator, AccelKepler
 
 from ssapy_toolkit.io.ssatk_data import ssatk_data
 from ssapy_toolkit.plots.figpath import figpath
 from ssapy_toolkit.io.demo_data import ensure_demo_data_file
+from ssapy_toolkit.data import DataResourceNotFoundError, read_data_text
 from ssapy_toolkit.plots.orbit_plot import orbit_plot
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
@@ -54,6 +55,37 @@ def _make_high_fidelity_propagator():
     return SciPyPropagator(AccelKepler())
 
 
+def _load_maneuvers():
+    try:
+        return json.loads(read_data_text("benchmarks/artemis_ii_maneuvers.json"))
+    except (DataResourceNotFoundError, ModuleNotFoundError):
+        return None
+
+
+def _match_executed_maneuvers(t_ref, metadata):
+    if not metadata:
+        return [], []
+    launch = Time(metadata["launch_utc"], scale="utc")
+    matched = []
+    indices = []
+    for event in metadata["events"]:
+        if event["status"] != "executed":
+            continue
+        event_time = launch + TimeDelta(event["met_s"], format="sec")
+        index = int(np.argmin(np.abs(t_ref.tdb.gps - event_time.tdb.gps)))
+        indices.append(index)
+        matched.append(
+            {
+                **event,
+                "utc": event_time.utc.isot,
+                "matched_index": index,
+                "sample_utc": t_ref[index].utc.isot,
+                "sample_offset_s": float(t_ref[index].tdb.gps - event_time.tdb.gps),
+            }
+        )
+    return sorted(set(indices)), matched
+
+
 def _propagate_segment(r0, v0, t0, t_eval, propagator):
     orb = Orbit(r=np.asarray(r0, float), v=np.asarray(v0, float), t=t0.gps)
     r_prop, v_prop = rv(orb, time=t_eval, propagator=propagator)
@@ -62,7 +94,14 @@ def _propagate_segment(r0, v0, t0, t_eval, propagator):
     return r_prop, v_prop
 
 
-def main(make_figures=None, fast=None, verbose=None, sync_threshold_km=50.0, allow_download=None):
+def main(
+    make_figures=None,
+    fast=None,
+    verbose=None,
+    sync_threshold_km=50.0,
+    allow_download=None,
+    match_burns=True,
+):
     if make_figures is None:
         make_figures = not UNDER_PYTEST
     if fast is None:
@@ -90,6 +129,10 @@ def main(make_figures=None, fast=None, verbose=None, sync_threshold_km=50.0, all
 
     propagator = _make_high_fidelity_propagator()
     sync_threshold_m = float(sync_threshold_km) * 1e3
+    maneuver_metadata = _load_maneuvers() if match_burns else None
+    match_burns = bool(match_burns and maneuver_metadata)
+    maneuver_indices, matched_maneuvers = _match_executed_maneuvers(t_ref, maneuver_metadata)
+    maneuver_index_set = set(maneuver_indices)
 
     n = len(t_ref)
     r_model = np.zeros_like(r_ref)
@@ -113,7 +156,9 @@ def main(make_figures=None, fast=None, verbose=None, sync_threshold_km=50.0, all
 
         dr = np.linalg.norm(r_model[i + 1] - r_ref[i + 1])
 
-        if dr > sync_threshold_m:
+        if (match_burns and i + 1 in maneuver_index_set) or (
+            not match_burns and dr > sync_threshold_m
+        ):
             r_model[i + 1] = r_ref[i + 1]
             v_model[i + 1] = v_ref[i + 1]
             sync_indices.append(i + 1)
@@ -141,6 +186,8 @@ def main(make_figures=None, fast=None, verbose=None, sync_threshold_km=50.0, all
         "max_velocity_error_m_s": float(np.max(dv_norm_m_s)),
         "n_syncs": int(len(sync_indices) - 1),
         "sync_threshold_km": float(sync_threshold_km),
+        "sync_mode": "executed_maneuvers" if match_burns else "position_threshold",
+        "maneuvers": matched_maneuvers,
     }
 
     if make_figures:
@@ -160,6 +207,8 @@ def main(make_figures=None, fast=None, verbose=None, sync_threshold_km=50.0, all
                     "max_velocity_error_m_s": result["max_velocity_error_m_s"],
                     "n_syncs": result["n_syncs"],
                     "sync_threshold_km": result["sync_threshold_km"],
+                    "sync_mode": result["sync_mode"],
+                    "maneuvers": result["maneuvers"],
                 },
                 indent=2,
                 sort_keys=True,

@@ -8,7 +8,9 @@ When figures are enabled, the demos also generate the captioned PDF report
 `~/ssatk_output/figures/demo_gallery/figures/benchmarks/ssatk_propagation_benchmark_report.pdf`.
 
 - `demo_artemis_benchmark.py` uses JPL Horizons Artemis II/Orion state vectors
-  and reports SSAPy Kepler propagation residuals.
+  and reports SSAPy Kepler propagation residuals. With SSAPy-Data installed, it
+  matches executed NASA maneuver events at the nearest hourly sample; pass
+  `match_burns=False` to retain the legacy position-threshold auto-sync.
 - `demo_orekit_benchmark.py` runs Orekit's Java `KeplerianPropagator` and
   compares its Cartesian states with SSATK. It downloads Orekit 10.3.1 through
   Maven only when the demo is run outside pytest and Maven is available.
