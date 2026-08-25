@@ -48,7 +48,28 @@ jobs:
 
       - name: Run tests
         if: matrix.python-version != '3.13'
-        run: pytest tests
+        run: pytest tests --junitxml=pytest-${{ matrix.python-version }}.xml
+
+      - name: Report test failures
+        if: failure() && matrix.python-version != '3.13'
+        run: |
+          python - <<'PY'
+          import glob
+          import xml.etree.ElementTree as ET
+
+          for path in glob.glob("pytest-*.xml"):
+              root = ET.parse(path).getroot()
+              for case in root.iter("testcase"):
+                  failure = case.find("failure")
+                  if failure is None:
+                      failure = case.find("error")
+                  if failure is None:
+                      continue
+                  file_path = case.get("file", "tests")
+                  message = (failure.get("message") or failure.text or "test failure").strip()
+                  message = message.replace("%", "%25").replace("\r", "").replace("\n", "%0A")
+                  print(f"::error file={file_path},title={case.get('name', 'pytest failure')}::{message}")
+          PY
 
       - name: Run tests with API coverage audit
         if: matrix.python-version == '3.13'
