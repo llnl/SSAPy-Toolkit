@@ -41,24 +41,32 @@ def _vec(value, name):
 
 @dataclass(frozen=True)
 class HingedAppendage:
+    """Reduced-order hinged appendage with linear and optional cubic stiffness."""
+
     axis_body: np.ndarray
     inertia: float
     stiffness: float = 0.0
     damping: float = 0.0
     angle0: float = 0.0
     rate0: float = 0.0
+    cubic_stiffness: float = 0.0
 
     def __post_init__(self):
         axis = _vec(self.axis_body, "axis_body")
         inertia = float(self.inertia)
         stiffness = float(self.stiffness)
         damping = float(self.damping)
-        if np.linalg.norm(axis) == 0 or not np.isfinite(inertia) or inertia <= 0 or not np.isfinite(stiffness) or stiffness < 0 or not np.isfinite(damping) or damping < 0:
-            raise ValueError("hinge axis must be nonzero; inertia must be positive; stiffness/damping nonnegative.")
+        cubic_stiffness = float(self.cubic_stiffness)
+        if (np.linalg.norm(axis) == 0 or not np.isfinite(inertia) or inertia <= 0
+                or not np.isfinite(stiffness) or stiffness < 0
+                or not np.isfinite(damping) or damping < 0
+                or not np.isfinite(cubic_stiffness) or cubic_stiffness < 0):
+            raise ValueError("hinge axis must be nonzero; inertia must be positive; stiffness/damping/cubic_stiffness nonnegative.")
         object.__setattr__(self, "axis_body", axis / np.linalg.norm(axis))
         object.__setattr__(self, "inertia", inertia)
         object.__setattr__(self, "stiffness", stiffness)
         object.__setattr__(self, "damping", damping)
+        object.__setattr__(self, "cubic_stiffness", cubic_stiffness)
 
 
 @dataclass(frozen=True)
@@ -124,6 +132,8 @@ def propagate_6dof_extended(*, times, inertia, hinge=None, flexible=None, slosh=
 
     Extended arrays have columns ``[coordinate, rate]`` and are optional. Slosh
     coupling is the linear restoring force ``m*w²*x`` at ``lever_arm_body``.
+    ``HingedAppendage.cubic_stiffness`` adds the restoring torque
+    ``cubic_stiffness * angle**3`` in N m, and defaults to zero.
     """
     times = _times(times)
     if sum(x is not None for x in (hinge, flexible, slosh)) == 0:
@@ -146,7 +156,7 @@ def propagate_6dof_extended(*, times, inertia, hinge=None, flexible=None, slosh=
         i = 0; loads_t = np.zeros(3); loads_a = np.zeros(3)
         if hinge is not None:
             angle, rate = z[i:i+2]; i += 2
-            loads_t += hinge.axis_body * (hinge.stiffness * angle + hinge.damping * rate)
+            loads_t += hinge.axis_body * (hinge.stiffness * angle + hinge.cubic_stiffness * angle**3 + hinge.damping * rate)
         if flexible is not None:
             disp, rate = z[i:i+2]; i += 2
             loads_t += flexible.axis_body * (flexible.effective_mass * flexible.natural_frequency**2 * disp + 2 * flexible.damping_ratio * flexible.natural_frequency * flexible.effective_mass * rate)
@@ -162,7 +172,7 @@ def propagate_6dof_extended(*, times, inertia, hinge=None, flexible=None, slosh=
         trq = lambda tt, r, v, q, om: np.asarray(torque(tt, r, v, q, om) if torque else 0.0) + loads_t
         base = sixdof_rhs(t, rigid, inertia=inertia, mu=mu, acceleration=a, torque=trq, gravity_gradient=gravity_gradient, mass_state=mass0 is not None)
         dz = []
-        if hinge is not None: dz += [rate, -(hinge.stiffness * angle + hinge.damping * rate) / hinge.inertia]
+        if hinge is not None: dz += [rate, -(hinge.stiffness * angle + hinge.cubic_stiffness * angle**3 + hinge.damping * rate) / hinge.inertia]
         if flexible is not None: dz += [rate, -flexible.natural_frequency**2 * disp - 2 * flexible.damping_ratio * flexible.natural_frequency * rate]
         if slosh is not None: dz += [rate, -slosh.natural_frequency**2 * disp - 2 * slosh.damping_ratio * slosh.natural_frequency * rate]
         return np.concatenate((base, dz))

@@ -41,3 +41,14 @@ def test_slosh_force_follows_attitude():
     )
 
     np.testing.assert_allclose(result.trajectory.v[-1], [0, 1e-3, 0], atol=1e-9)
+
+
+def test_hinge_cubic_stiffness_changes_final_hinge_and_rigid_response():
+    kwargs = dict(times=np.linspace(0, 1, 20), inertia=np.eye(3), mu=0,
+                  r0=[1, 0, 0], v0=[0, 0, 0], q0=[1, 0, 0, 0])
+    linear = propagate_6dof_extended(hinge=HingedAppendage([0, 0, 1], 1, angle0=0.5), **kwargs)
+    nonlinear = propagate_6dof_extended(
+        hinge=HingedAppendage([0, 0, 1], 1, angle0=0.5, cubic_stiffness=10), **kwargs)
+
+    assert nonlinear.hinge[-1, 0] != pytest.approx(linear.hinge[-1, 0])
+    assert nonlinear.trajectory.omega[-1, 2] != pytest.approx(linear.trajectory.omega[-1, 2])
