@@ -34,6 +34,7 @@ from pathlib import Path
 import numpy as np
 import plotly.graph_objects as go
 
+from ssapy_toolkit._paths import output_root
 from ssapy_toolkit.constants import EARTH_MEAN_RADIUS_KM
 
 try:
@@ -64,8 +65,8 @@ from .scene_primitives import (
 # SSAPy imports (confirmed working API from checkpoint)
 # ---------------------------------------------------------------------------
 try:
-    import ssapy
     import astropy.time
+    import ssapy
     _SSAPY_OK = True
 except ImportError as _e:
     _SSAPY_OK = False
@@ -75,7 +76,7 @@ except ImportError as _e:
 # Core layer imports
 # ---------------------------------------------------------------------------
 try:
-    from .layers import SensorFOVLayer          # added this session
+    from .layers import SensorFOVLayer  # added this session
     _LAYER_OK = True
 except ImportError:
     # Inline fallback — copy of the geometry helpers so the script is self-contained
@@ -774,7 +775,7 @@ DEFAULT_CFG = dict(
     show_axes=True,
     show_axis_ticks=False,
     # Output
-    output_dir=str(Path.home() / "ssatk_figures" / "demo_gallery" / "figures"),
+    output_dir=str(output_root() / "figures" / "demo_gallery" / "figures"),
 )
 
 

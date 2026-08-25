@@ -345,14 +345,14 @@ orbit_plot(r, t, view="xy", save="quicklooks/orbit.gif")  # animated GIF
 
 All plotting helpers accept `save`, `savefig`, `save_fig`, `save_figure`,
 `savepath`, and `save_path` as equivalent save-path keywords. Relative names
-are saved under `~/ssatk_figures`; absolute paths are used exactly as provided.
-Set `SSATK_FIGURES_DIR` to choose a different figure-output root explicitly.
+are saved under `~/ssatk_output/figures`; absolute paths are used exactly as
+provided. Set `SSATK_OUTPUT_DIR` to choose a different output root explicitly.
 Use `ssatk_path` and `ssatk_fig` for direct path and figure-save helpers.
 
 For general data products, `ssatk_save` and `ssatk_read` choose the storage
 format from the file extension. Bare and relative data filenames are rooted
-under `~/ssatk_data`; bare and relative figure filenames are rooted under
-`~/ssatk_figures`; absolute paths are honored.
+under `~/ssatk_output`; bare and relative figure filenames are rooted under
+`~/ssatk_output/figures`; absolute paths are honored.
 
 ```
 ssatk.ssatk_save({"r": r, "v": v, "t": t}, "runs/orbit.h5")
@@ -377,11 +377,11 @@ ssapy-demo-gallery
 ```
 
 The command can be run from any directory after installation. It writes the
-HTML report to `~/ssatk_figures/demo_gallery/index.html` by default and prints
+HTML report to `~/ssatk_output/figures/demo_gallery/index.html` by default and prints
 the exact output path when it finishes. Use `--open` to open the report in a
 browser, `--output PATH` to choose a different output directory, or
 `--demos-dir PATH` to run demos from a source checkout explicitly. The default
-does not fall back to the clone directory; set `SSATK_FIGURES_DIR` if you want
+does not fall back to the clone directory; set `SSATK_OUTPUT_DIR` if you want
 a non-home output root.
 
 ---

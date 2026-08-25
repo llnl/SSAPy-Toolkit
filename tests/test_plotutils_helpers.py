@@ -1,6 +1,6 @@
-from pathlib import Path
 import importlib
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import matplotlib.pyplot as plt
@@ -12,6 +12,7 @@ from ssapy_toolkit.plots import plotutils
 from ssapy_toolkit.plots.plotutils import VarType
 
 figpath_module = importlib.import_module("ssapy_toolkit.plots.figpath")
+paths_module = importlib.import_module("ssapy_toolkit._paths")
 
 
 def test_check_type_classifies_plot_inputs():
@@ -93,10 +94,10 @@ def test_valid_orbits_rejects_shape_and_time_mismatches():
 
 
 def test_save_alias_resolution_and_figure_paths(tmp_path, monkeypatch):
-    monkeypatch.setattr(figpath_module, "HOME_FIG_DIR", tmp_path / "figs")
+    monkeypatch.setattr(paths_module, "HOME_OUTPUT_DIR", tmp_path / "output")
 
     assert plotutils._figure_save_path(False) is None
-    assert Path(plotutils._figure_save_path(None, default_name="default_name")) == tmp_path / "figs" / "default_name"
+    assert Path(plotutils._figure_save_path(None, default_name="default_name")) == tmp_path / "output" / "figures" / "default_name"
 
     absolute = tmp_path / "explicit" / "plot.png"
     assert Path(plotutils._figure_save_path(absolute)) == absolute
@@ -113,12 +114,12 @@ def test_save_alias_resolution_and_figure_paths(tmp_path, monkeypatch):
 
 
 def test_figsave_save_plot_display_and_theme_helpers(tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr(figpath_module, "HOME_FIG_DIR", tmp_path / "figs")
+    monkeypatch.setattr(paths_module, "HOME_OUTPUT_DIR", tmp_path / "output")
 
     fig, ax = plt.subplots()
     ax.plot([0, 1], [0, 1])
     saved = Path(plotutils.figsave(fig, save=True, default_name="quicklook"))
-    assert saved == tmp_path / "figs" / "quicklook.jpg"
+    assert saved == tmp_path / "output" / "figures" / "quicklook.jpg"
     assert saved.exists()
 
     fig, ax = plt.subplots()

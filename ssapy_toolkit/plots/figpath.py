@@ -1,11 +1,6 @@
-import os
 from pathlib import Path
 
-from ssapy_toolkit._paths import safe_relative_parts
-
-DEFAULT_FIG_DIR_NAME = "ssatk_figures"
-SSATK_FIGURES_ENV = "SSATK_FIGURES_DIR"
-HOME_FIG_DIR = Path.home() / DEFAULT_FIG_DIR_NAME
+from ssapy_toolkit._paths import SSATK_OUTPUT_ENV, output_root, safe_relative_parts
 
 __all__ = ["ssatk_path", "figpath"]
 
@@ -28,22 +23,22 @@ _KNOWN_EXTS = {
 
 def ssatk_path(filename="figure"):
     """
-    Build a path under the SSATK figure directory.
+    Build a path under the shared SSATK figure output directory.
 
     Rules:
-      - The path is rooted under ~/ssatk_figures by default.
-      - Set SSATK_FIGURES_DIR to choose an explicit alternate root.
+      - The path is rooted under ~/ssatk_output/figures by default.
+      - Set SSATK_OUTPUT_DIR to choose an explicit alternate output root.
       - Subfolders in `filename` are preserved and created as needed.
       - The basename is used exactly as given (no automatic extension added).
       - Absolute paths and '..' are normalized to stay under the output root.
 
     Examples
     --------
-    ssatk_path("plot")                          -> ~/ssatk_figures/plot
-    ssatk_path("demo_gallery/figures/burn_to_dv")              -> ~/ssatk_figures/demo_gallery/figures/burn_to_dv
-    ssatk_path("demo_gallery/figures/burn_to_dv.png")          -> ~/ssatk_figures/demo_gallery/figures/burn_to_dv.png
-    ssatk_path("/abs/path/ignored/name.svg")    -> ~/ssatk_figures/abs/path/ignored/name.svg
-    ssatk_path("weird/name.foo")                -> ~/ssatk_figures/weird/name.foo
+    ssatk_path("plot")                          -> ~/ssatk_output/figures/plot
+    ssatk_path("demo_gallery/figures/burn_to_dv") -> ~/ssatk_output/figures/demo_gallery/figures/burn_to_dv
+    ssatk_path("demo_gallery/figures/burn_to_dv.png") -> ~/ssatk_output/figures/demo_gallery/figures/burn_to_dv.png
+    ssatk_path("/abs/path/ignored/name.svg")    -> ~/ssatk_output/figures/abs/path/ignored/name.svg
+    ssatk_path("weird/name.foo")                -> ~/ssatk_output/figures/weird/name.foo
     """
     if not isinstance(filename, (str, Path)):
         raise TypeError("ssatk_path(filename): filename must be str or pathlib.Path")
@@ -66,16 +61,13 @@ def ssatk_path(filename="figure"):
         return str(target_dir / final_name)
     except (OSError, PermissionError) as exc:
         raise RuntimeError(
-            f"Could not create or access {base}. Set {SSATK_FIGURES_ENV} "
+            f"Could not create or access {base}. Set {SSATK_OUTPUT_ENV} "
             "to an explicit writable output directory."
         ) from exc
 
 
 def _figure_root():
-    override = os.environ.get(SSATK_FIGURES_ENV)
-    if override:
-        return Path(override).expanduser()
-    return HOME_FIG_DIR
+    return output_root() / "figures"
 
 
 figpath = ssatk_path

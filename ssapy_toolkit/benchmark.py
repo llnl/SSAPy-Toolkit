@@ -1296,7 +1296,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Target seconds per repeat; cheap functions get inner loops calibrated to this duration.",
     )
     parser.add_argument("--max-loops", type=int, default=100_000, help="Maximum calibrated inner loops per repeat.")
-    parser.add_argument("--output-dir", type=Path, help="Output directory. Defaults to ~/ssatk_figures/benchmarks/<timestamp>.")
+    parser.add_argument("--output-dir", type=Path, help="Output directory. Defaults to ~/ssatk_output/figures/benchmarks/<timestamp>.")
     parser.add_argument("--list", action="store_true", help="List selected benchmark cases and exit.")
     parser.add_argument("--quiet", action="store_true", default=True, help="Suppress benchmark function stdout/stderr during timing.")
     parser.add_argument("--no-quiet", action="store_false", dest="quiet", help="Allow benchmark function stdout/stderr.")

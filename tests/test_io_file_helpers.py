@@ -11,7 +11,16 @@ import pandas as pd
 import pytest
 from astropy.time import Time
 
-from ssapy_toolkit.io import csv_utils, dict_to_from_hdf5, get_memory, hdf5_to_csv, hdf5_utils, io_utils, json_utils, pickle_utils
+from ssapy_toolkit.io import (
+    csv_utils,
+    dict_to_from_hdf5,
+    get_memory,
+    hdf5_to_csv,
+    hdf5_utils,
+    io_utils,
+    json_utils,
+    pickle_utils,
+)
 from ssapy_toolkit.io.guess_delimiter import guess_csv_delimiter
 
 h5cache_module = importlib.import_module("ssapy_toolkit.io.h5cache")
@@ -329,7 +338,7 @@ def test_io_utils_directory_branches_and_numbered_image_sort(tmp_path, monkeypat
 
 
 def test_h5cache_roundtrip_and_filtering(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("SSATK_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("SSATK_OUTPUT_DIR", str(tmp_path))
     out = h5cache_module.h5cache(
         data={
             "plain": 1,
@@ -360,7 +369,7 @@ def test_h5cache_roundtrip_and_filtering(tmp_path, monkeypatch, capsys):
 
 
 def test_h5cache_caller_frame_timestamp_and_legacy_files(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("SSATK_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("SSATK_OUTPUT_DIR", str(tmp_path))
     assert h5cache_module._enc_key("a/b%c") == "a%2Fb%25c"
     assert h5cache_module._dec_key("a%2Fb%25c") == "a/b%c"
     assert h5cache_module._is_nonsaved_symbol(types)

@@ -1,13 +1,8 @@
 """Local user data output paths for SSATK workflows."""
 
-import os
 from pathlib import Path
 
-from ssapy_toolkit._paths import safe_relative_parts
-
-DEFAULT_DATA_DIR_NAME = "ssatk_data"
-SSATK_DATA_ENV = "SSATK_DATA_DIR"
-HOME_DATA_DIR = Path.home() / DEFAULT_DATA_DIR_NAME
+from ssapy_toolkit._paths import SSATK_OUTPUT_ENV, output_root, safe_relative_parts
 
 __all__ = ["datapath"]
 
@@ -29,8 +24,8 @@ def datapath(filename="data", dirs=None):
     """
     Construct a safe local data path under an SSATK output directory.
 
-    Defaults to ``~/ssatk_data``. Set ``SSATK_DATA_DIR`` or pass ``dirs`` to
-    choose an explicit alternate root.
+    Defaults to ``~/ssatk_output``. Set ``SSATK_OUTPUT_DIR`` or pass ``dirs``
+    to choose an explicit alternate root.
 
     Returns a string path. Creates parent directories if needed.
     """
@@ -49,7 +44,7 @@ def datapath(filename="data", dirs=None):
     subdir = Path(*relative_parts[:-1]) if len(relative_parts) > 1 else Path()
 
     if dirs is None:
-        base_dirs = [_data_root()]
+        base_dirs = [output_root()]
     else:
         base_dirs = [Path(base).expanduser() for base in dirs]
     for base_dir in base_dirs:
@@ -61,13 +56,6 @@ def datapath(filename="data", dirs=None):
             continue
 
     raise RuntimeError(
-        f"Could not create or access {base_dirs[0]}. Set {SSATK_DATA_ENV} "
+        f"Could not create or access {base_dirs[0]}. Set {SSATK_OUTPUT_ENV} "
         "or pass dirs=[...] to an explicit writable data directory."
     )
-
-
-def _data_root():
-    override = os.environ.get(SSATK_DATA_ENV)
-    if override:
-        return Path(override).expanduser()
-    return HOME_DATA_DIR

@@ -1,16 +1,18 @@
-"""Fetch optional demo datasets into the local SSATK data cache."""
+"""Fetch optional demo datasets into the local SSATK output cache."""
 
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import tempfile
+import warnings
+from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
-import warnings
 
-from .datapath import DEFAULT_DATA_DIR_NAME, datapath
+from ssapy_toolkit._paths import DEFAULT_OUTPUT_DIR_NAME
+
+from .datapath import datapath
 
 _USER_AGENT = "ssapy-toolkit-demo-data/1.0"
 _CELESTRAK_ACTIVE_3LE_URL = "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=3le"
@@ -33,8 +35,8 @@ def ensure_demo_data_file(
     """Return a local optional-demo data file, fetching it when available.
 
     The lookup order is:
-    1. ``datapath(filename)`` (normally ``~/ssatk_data`` or ``SSATK_DATA_DIR``).
-    2. Nearby ``ssatk_data`` folders, including the current directory and its
+    1. ``datapath(filename)`` (normally ``~/ssatk_output`` or ``SSATK_OUTPUT_DIR``).
+    2. Nearby ``ssatk_output`` folders, including the current directory and its
        parent, for local development checkouts.
     3. A known public source for the requested demo file, when
        ``allow_download`` is true.
@@ -85,14 +87,14 @@ def _local_data_candidates(filename, *, local_dirs=None):
     cwd = Path.cwd()
     bases.extend(
         [
-            cwd / DEFAULT_DATA_DIR_NAME,
-            cwd.parent / DEFAULT_DATA_DIR_NAME,
+            cwd / DEFAULT_OUTPUT_DIR_NAME,
+            cwd.parent / DEFAULT_OUTPUT_DIR_NAME,
         ]
     )
 
     module_path = Path(__file__).resolve()
     for parent in module_path.parents:
-        bases.append(parent / DEFAULT_DATA_DIR_NAME)
+        bases.append(parent / DEFAULT_OUTPUT_DIR_NAME)
         if parent.name == "workdir":
             break
 

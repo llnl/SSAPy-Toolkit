@@ -23,6 +23,7 @@ Output
 """
 
 from __future__ import annotations
+
 import datetime as _dt
 import json
 import math
@@ -32,27 +33,30 @@ from pathlib import Path
 import numpy as np
 import plotly.graph_objects as go
 
+from ssapy_toolkit._paths import output_root
+from ssapy_toolkit.plots.solar_bodies import (
+    _AU_KM,
+    _R_AU,
+    make_moon_traces,
+    make_planet_traces,
+    make_sun_traces,
+    moon_geocentric_ecliptic,
+)
+
 # ── Project imports ───────────────────────────────────────────────────────────
 # Earth's Keplerian elements and orbit math are already correct and validated
 # in solar_view_plot.py — reused here rather than re-derived, so both scenes
 # stay in sync if the elements are ever updated.
 from ssapy_toolkit.plots.solar_view_plot import (
     _PLANETS,
-    _planet_pos_au,
     _orbit_trail_au,
+    _planet_pos_au,
 )
+
 # Real catalog + IAU 1976 precession (see _static_backdrop for why this calls
 # starfield.py's private loader directly rather than its public add_starfield,
 # which is matplotlib-only).
 from ssapy_toolkit.plots.starfield import _load_stars as _sf_load_stars
-from ssapy_toolkit.plots.solar_bodies import (
-    make_planet_traces,
-    make_sun_traces,
-    make_moon_traces,
-    moon_geocentric_ecliptic,
-    _R_AU,
-    _AU_KM,
-)
 
 _EARTH = _PLANETS["Earth"]
 _YEAR_DAYS = 365.25 * math.sqrt(_EARTH["a"] ** 3)   # ≈ 365.256 days
@@ -450,7 +454,7 @@ DEFAULT_CFG = dict(
     show_radius_line=True,
     show_moon_trail=True,
     bg_color="#060810",
-    output_dir=str(Path.home() / "ssatk_figures" / "demo_gallery" / "figures"),
+    output_dir=str(output_root() / "figures" / "demo_gallery" / "figures"),
 )
 
 if __name__ == "__main__":

@@ -59,9 +59,9 @@ def ssatk_save(
 ) -> Path:
     """Save data using the file extension in ``path`` to select the format.
 
-    Bare and relative filenames are rooted under ``~/ssatk_data`` for data
-    formats and ``~/ssatk_figures`` for figure formats. Absolute paths are
-    honored. Use ``root="cwd"`` to write a relative path below the current
+    Bare and relative filenames are rooted under ``~/ssatk_output`` for data
+    formats and ``~/ssatk_output/figures`` for figure formats. Absolute paths
+    are honored. Use ``root="cwd"`` to write a relative path below the current
     working directory, or pass a path-like ``root`` as a custom output base.
 
     HDF5/NPZ keys are deterministic: mappings use their own keys, while a

@@ -10,12 +10,12 @@ from ssapy_toolkit.io.ssatk_save import ssatk_read, ssatk_save, supported_save_f
 
 
 def test_ssatk_save_read_hdf5_defaults_keys_and_roots(tmp_path, monkeypatch):
-    data_root = tmp_path / "data"
-    monkeypatch.setenv("SSATK_DATA_DIR", str(data_root))
+    output_root = tmp_path / "output"
+    monkeypatch.setenv("SSATK_OUTPUT_DIR", str(output_root))
 
     h5_path = ssatk_save({"orbit": {"r": np.arange(3.0), "name": "demo"}}, "runs/orbit.h5")
 
-    assert h5_path == data_root / "runs" / "orbit.h5"
+    assert h5_path == output_root / "runs" / "orbit.h5"
     loaded = ssatk_read("runs/orbit.h5")
     np.testing.assert_array_equal(loaded["orbit"]["r"], np.arange(3.0))
     assert loaded["orbit"]["name"] == "demo"
@@ -32,12 +32,12 @@ def test_ssatk_save_read_hdf5_defaults_keys_and_roots(tmp_path, monkeypatch):
 
 
 def test_ssatk_save_read_numpy_json_csv_text_and_pickle(tmp_path, monkeypatch):
-    data_root = tmp_path / "data"
-    monkeypatch.setenv("SSATK_DATA_DIR", str(data_root))
+    output_root = tmp_path / "output"
+    monkeypatch.setenv("SSATK_OUTPUT_DIR", str(output_root))
 
     npy_path = ssatk_save(np.arange(3), "array.npy")
     np.testing.assert_array_equal(ssatk_read("array.npy"), np.arange(3))
-    assert npy_path == data_root / "array.npy"
+    assert npy_path == output_root / "array.npy"
 
     npz_path = ssatk_save({"orbit": {"r": [1, 2], "v": [3, 4]}}, "arrays.npz")
     loaded_npz = ssatk_read(npz_path)
@@ -61,7 +61,7 @@ def test_ssatk_save_read_numpy_json_csv_text_and_pickle(tmp_path, monkeypatch):
 
 
 def test_ssatk_save_read_jsonl_npz_pickle_safety_and_top_level_aliases(tmp_path, monkeypatch):
-    monkeypatch.setenv("SSATK_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("SSATK_OUTPUT_DIR", str(tmp_path / "output"))
 
     jsonl_path = ssatk_save(pd.DataFrame({"x": [1, 2]}), "records.jsonl")
     assert ssatk_read(jsonl_path) == [{"x": 1}, {"x": 2}]
@@ -79,12 +79,12 @@ def test_ssatk_save_read_jsonl_npz_pickle_safety_and_top_level_aliases(tmp_path,
 
 
 def test_ssatk_save_figure_uses_figure_root(tmp_path, monkeypatch):
-    fig_root = tmp_path / "figures"
-    monkeypatch.setenv("SSATK_FIGURES_DIR", str(fig_root))
+    output_root = tmp_path / "output"
+    monkeypatch.setenv("SSATK_OUTPUT_DIR", str(output_root))
 
     fig, ax = plt.subplots()
     ax.plot([0, 1], [0, 1])
     out = ssatk_save(fig, "quicklook.png")
 
-    assert out == fig_root / "quicklook.png"
+    assert out == output_root / "figures" / "quicklook.png"
     assert out.exists()

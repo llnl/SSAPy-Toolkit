@@ -52,7 +52,7 @@ def main(argv: list[str] | None = None) -> int:
         "--output",
         default=str(default_output_dir()),
         help="Output directory for generated demo artifacts and report "
-             "(default: ~/ssatk_figures/demo_gallery)",
+             "(default: ~/ssatk_output/figures/demo_gallery)",
     )
     parser.add_argument(
         "--open",

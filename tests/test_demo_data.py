@@ -28,7 +28,7 @@ def test_ensure_demo_data_file_returns_cached_datapath_file(tmp_path, monkeypatc
 
 def test_ensure_demo_data_file_finds_explicit_local_data_dir(tmp_path, monkeypatch):
     _patch_demo_datapath(monkeypatch, tmp_path / "empty_cache")
-    local_dir = tmp_path / "local_ssatk_data"
+    local_dir = tmp_path / "local_ssatk_output"
     local_file = local_dir / "artemis2_orion_state_vectors.csv"
     local_file.parent.mkdir(parents=True)
     local_file.write_text("JDTDB,Calendar_Date_TDB\n", encoding="utf-8")
@@ -177,7 +177,7 @@ def test_download_text_and_local_candidate_deduplication(tmp_path, monkeypatch):
     assert demo_data._download_text("https://example.test/data", timeout=7) == "payload"
     assert captured == {"agent": demo_data._USER_AGENT, "timeout": 7}
 
-    cache = tmp_path / demo_data.DEFAULT_DATA_DIR_NAME
+    cache = tmp_path / demo_data.DEFAULT_OUTPUT_DIR_NAME
     _patch_demo_datapath(monkeypatch, cache)
     candidates = list(demo_data._local_data_candidates("demo.txt", local_dirs=[cache, tmp_path]))
     assert all(path != cache / "demo.txt" for path in candidates)

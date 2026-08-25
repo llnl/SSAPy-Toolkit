@@ -437,7 +437,7 @@ def build(out_path=None, verbose=True):
     ----------
     out_path : str or None
         Destination HTML file. Defaults to the standard SSATK output directory
-        under ``~/ssatk_figures``.
+        under ``~/ssatk_output/figures``.
     verbose : bool
         Print the written path and size, as the old module-level code did.
 

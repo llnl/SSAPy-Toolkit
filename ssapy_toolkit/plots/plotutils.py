@@ -792,7 +792,7 @@ def figsave(figure, save_path=None, dpi=200, default_name="figure", **save_kwarg
     Behavior:
       * If save_path is None or True -> save under figpath(default_name).
       * If save_path is False -> do not save and return None.
-      * Relative paths are rooted under ~/ssatk_figures via figpath().
+      * Relative paths are rooted under ~/ssatk_output/figures via figpath().
       * Absolute paths are treated as explicit user requests and used directly.
       * If save_path has no extension -> save as JPG ('.jpg' is appended).
       * If save_path ends with '.pdf' (case-insensitive) -> append/write to PDF

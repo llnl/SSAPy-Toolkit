@@ -10,7 +10,7 @@ Run from a cloned repo with:
 
     python -m demos.getting_started.demo_plotting_quickstart
 
-Outputs are saved under ``~/ssatk_figures/demo_gallery/figures`` by default.
+Outputs are saved under ``~/ssatk_output/figures/demo_gallery/figures`` by default.
 """
 
 GALLERY_CATEGORY = "getting_started"

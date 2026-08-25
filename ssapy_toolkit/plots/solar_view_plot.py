@@ -17,6 +17,7 @@ Output
 """
 
 from __future__ import annotations
+
 import json
 import math
 import os
@@ -25,13 +26,15 @@ from pathlib import Path
 import numpy as np
 import plotly.graph_objects as go
 
+from ssapy_toolkit._paths import output_root
+
 # ── Project imports ───────────────────────────────────────────────────────────
 from ssapy_toolkit.plots.solar_bodies import (
+    _R_AU,
+    make_moon_traces,
     make_planet_traces,
     make_saturn_ring_traces,
     make_sun_traces,
-    make_moon_traces,
-    _R_AU,
 )
 from ssapy_toolkit.plots.starfield import starfield_traces
 
@@ -388,7 +391,7 @@ DEFAULT_CFG = dict(
     sun_scale=1.0,
     sphere_resolution=50,
     bg_color="#060810",
-    output_dir=str(Path.home() / "ssatk_figures" / "demo_gallery" / "figures"),
+    output_dir=str(output_root() / "figures" / "demo_gallery" / "figures"),
 )
 
 if __name__ == "__main__":

@@ -1021,7 +1021,7 @@ Recommended Next Development Steps
 5. Add benchmark tests for every case listed above that can be validated
    analytically.
 6. Add a benchmark runner that writes JSON/CSV summaries into the user's
-   ``ssatk_figures`` or ``ssatk_data`` area, not the source repository.
+   ``ssatk_output`` area, not the source repository.
 7. Add optional cross-tool comparison notebooks or scripts only when the
    external tool can be installed cleanly in CI or documented as optional.
 

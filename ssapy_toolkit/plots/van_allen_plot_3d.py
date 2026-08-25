@@ -33,6 +33,8 @@ from pathlib import Path
 
 import numpy as np
 
+from ssapy_toolkit._paths import output_root
+
 try:
     from .plotutils import normalize_orbit_trajectory, plotly_orbit_trace
 except ImportError:
@@ -478,7 +480,7 @@ if __name__ == "__main__":
     import inspect as _inspect
 
     output_dir = Path(os.environ.get(
-        "OUTPUT_DIR", str(Path.home() / "ssatk_figures" / "demo_gallery" / "figures")))
+        "OUTPUT_DIR", str(output_root() / "figures" / "demo_gallery" / "figures")))
     output_dir.mkdir(parents=True, exist_ok=True)
 
     cfg = {}

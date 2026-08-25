@@ -37,6 +37,8 @@ import calendar
 
 import numpy as np
 
+from ssapy_toolkit._paths import output_root
+
 try:
     from .plotutils import normalize_orbit_trajectory, plotly_orbit_trace
 except ImportError:
@@ -1166,8 +1168,7 @@ def plot_magfield_3d(
 
 # -- Entry point -------------------------------------------------------------
 if __name__ == "__main__":
-    output_dir = Path(os.environ.get("OUTPUT_DIR",
-                       str(Path.home() / "ssatk_figures" / "demo_gallery" / "figures")))
+    output_dir = Path(os.environ.get("OUTPUT_DIR", str(output_root() / "figures" / "demo_gallery" / "figures")))
     cfg = {}
     gui_cfg_path = os.environ.get("GUI_CONFIG", "")
     if gui_cfg_path and Path(gui_cfg_path).exists():

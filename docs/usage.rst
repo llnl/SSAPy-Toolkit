@@ -53,8 +53,8 @@ Plot saving
 
 All plotting helpers accept ``save``, ``savefig``, ``save_fig``,
 ``save_figure``, ``savepath``, and ``save_path`` as equivalent save-path
-keywords. Relative filenames are saved under ``~/ssatk_figures`` and absolute
-paths are honored exactly as provided:
+keywords. Relative filenames are saved under ``~/ssatk_output/figures`` and
+absolute paths are honored exactly as provided:
 
 .. code-block:: python
 
@@ -459,7 +459,7 @@ Optional demo data
 
 Demo-only files should also stay out of the repository. Demos that need public
 sample data can call :func:`ssapy_toolkit.io.demo_data.ensure_demo_data_file`,
-which first checks the local ``ssatk_data`` cache, then downloads from a known
+which first checks the local ``ssatk_output`` cache, then downloads from a known
 public source when internet access is available. When the file cannot be found
 or fetched, the helper emits ``DemoDataUnavailableWarning`` and returns
 ``None`` so demos and tests can skip gracefully instead of failing hard.
