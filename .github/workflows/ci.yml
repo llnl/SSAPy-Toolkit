@@ -48,75 +48,21 @@ jobs:
 
       - name: Run tests
         if: matrix.python-version != '3.13'
-        run: pytest tests --junitxml=pytest-${{ matrix.python-version }}.xml
-
-      - name: Report test failures
-        if: failure()
-        run: |
-          python - <<'PY'
-          import glob
-          import xml.etree.ElementTree as ET
-
-          for path in glob.glob("pytest-*.xml"):
-              root = ET.parse(path).getroot()
-              for case in root.iter("testcase"):
-                  failure = case.find("failure")
-                  if failure is None:
-                      failure = case.find("error")
-                  if failure is None:
-                      continue
-                  file_path = case.get("file", "tests")
-                  message = (failure.get("message") or failure.text or "test failure").strip()
-                  message = message.replace("%", "%25").replace("\r", "").replace("\n", "%0A")
-                  print(f"::error file={file_path},title={case.get('name', 'pytest failure')}::{message}")
-          PY
+        run: pytest tests
 
       - name: Run tests with API coverage audit
         if: matrix.python-version == '3.13'
         run: |
-          set -o pipefail
-          python -m coverage run --branch -m pytest tests --junitxml=pytest-3.13.xml
+          python -m coverage run --branch -m pytest tests
           python -m coverage json -i -o coverage.json
-          audit_coverage() {
-            log_path="$1"
-            shift
-            set +e
-            "$@" 2>&1 | tee "$log_path"
-            status=${PIPESTATUS[0]}
-            set -e
-            if [ "$status" -ne 0 ]; then
-              reported_detail=0
-              for detail_path in /tmp/public-unhit.tsv /tmp/all-unhit.tsv; do
-                if [ -s "$detail_path" ]; then
-                  detail=$(tr '\n' ';' < "$detail_path")
-                  detail=${detail//%/%25}
-                  echo "::error title=Unhit functions::$detail"
-                  reported_detail=1
-                fi
-              done
-              if [ "$reported_detail" -eq 0 ]; then
-                while IFS= read -r line; do
-                  line=${line//%/%25}
-                  line=${line//$'\r'/}
-                  line=${line//$'\n'/%0A}
-                  echo "::error title=API coverage::$line"
-                done < "$log_path"
-              fi
-              return "$status"
-            fi
-          }
-          audit_coverage /tmp/public-api.log \
-            python scripts/audit_public_api_coverage.py \
-              --coverage-json coverage.json \
-              --min-hit-pct 95 \
-              --write-unhit /tmp/public-unhit.tsv \
-              --require-branch-data
-          audit_coverage /tmp/all-api.log \
-            python scripts/audit_public_api_coverage.py \
-              --coverage-json coverage.json \
-              --include-private \
-              --include-nested \
-              --min-hit-pct 90 \
-              --min-branch-pct 65 \
-              --write-unhit /tmp/all-unhit.tsv \
-              --require-branch-data
+          python scripts/audit_public_api_coverage.py \
+            --coverage-json coverage.json \
+            --min-hit-pct 95 \
+            --require-branch-data
+          python scripts/audit_public_api_coverage.py \
+            --coverage-json coverage.json \
+            --include-private \
+            --include-nested \
+            --min-hit-pct 90 \
+            --min-branch-pct 65 \
+            --require-branch-data
