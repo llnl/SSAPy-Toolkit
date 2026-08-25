@@ -280,7 +280,7 @@ def build_benchmark_cases(
             group="propagators_6dof",
             description="6-DoF high-accuracy point-mass propagation over 32 short time steps.",
             factory=lambda _ctx: _call(lambda: _propagator_6dof_point_mass(r0, v0, times)),
-            validator=_validate_6dof_trajectory,
+            validator=_validate_6dof_point_mass,
             tags=("propagators_6dof", "propagation", "6dof"),
             default_repeats=3,
             default_min_sample_time=0.0,
@@ -707,6 +707,35 @@ def _validate_6dof_trajectory(trajectory) -> dict[str, int | float]:
         "quaternion_norm_residual": quaternion_residual,
         "negative_mass_residual": mass_residual,
     }
+
+
+def _validate_6dof_point_mass(trajectory) -> dict[str, int | float]:
+    """Add an independent two-body residual to the point-mass benchmark."""
+    import rebound
+
+    from ssapy_toolkit.constants import EARTH_MU
+
+    simulation = rebound.Simulation()
+    simulation.G = EARTH_MU
+    simulation.add(m=1.0)
+    simulation.add(
+        x=float(trajectory.r[0, 0]),
+        y=float(trajectory.r[0, 1]),
+        z=float(trajectory.r[0, 2]),
+        vx=float(trajectory.v[0, 0]),
+        vy=float(trajectory.v[0, 1]),
+        vz=float(trajectory.v[0, 2]),
+    )
+    simulation.integrator = "ias15"
+    for time in trajectory.t:
+        simulation.integrate(float(time - trajectory.t[0]), exact_finish_time=1)
+    particle = simulation.particles[1]
+    reference_r = np.array([particle.x, particle.y, particle.z])
+    reference_v = np.array([particle.vx, particle.vy, particle.vz])
+    metrics = _validate_6dof_trajectory(trajectory)
+    metrics["final_position_residual_m"] = float(np.linalg.norm(trajectory.r[-1] - reference_r))
+    metrics["final_velocity_residual_mps"] = float(np.linalg.norm(trajectory.v[-1] - reference_v))
+    return metrics
 
 
 def _orbital_kepler_to_state(**kwargs):
