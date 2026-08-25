@@ -55,6 +55,8 @@ class SpacecraftAccelSSAPy(SpacecraftAccel):
         self.kwarg_map = dict(_DEFAULT_SPACECRAFT_KWARG_MAP)
         if kwarg_map is not None:
             self.kwarg_map.update(kwarg_map)
+        if hasattr(accel, "time_breakpoints"):
+            self.time_breakpoints = np.asarray(accel.time_breakpoints, dtype=float).copy()
 
     def acceleration(self, *, t, r, v, q, omega, spacecraft=None) -> np.ndarray:
         kwargs = dict(self.kwargs)

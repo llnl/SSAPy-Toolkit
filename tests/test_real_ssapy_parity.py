@@ -29,6 +29,7 @@ def test_real_ssapy_accel_const_ntw_matches_ssatk_adapter():
     adapter = wrap_ssapy_acceleration(ssapy_accel)
 
     np.testing.assert_allclose(adapter(r, v, 123.0), ssapy_accel(r, v, 123.0))
+    np.testing.assert_array_equal(adapter.time_breakpoints, ssapy_accel.time_breakpoints)
 
 
 def test_real_ssapy_scipy_propagator_matches_ssatk_two_body():
