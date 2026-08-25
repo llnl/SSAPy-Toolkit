@@ -4,7 +4,11 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from ssapy_toolkit.io import ReferenceCaseFiles, write_reference_case
+from ssapy_toolkit.io import (
+    ReferenceCaseFiles,
+    read_reference_case,
+    write_reference_case,
+)
 
 
 def test_write_reference_case_emits_reproducible_oem_and_metadata(tmp_path):
@@ -44,3 +48,19 @@ def test_write_reference_case_rejects_ambiguous_epochs_and_repeated_outputs(tmp_
     write_reference_case(trajectory, tmp_path, epoch="2025-01-01T00:00:00Z")
     with pytest.raises(FileExistsError):
         write_reference_case(trajectory, tmp_path, epoch="2025-01-01T00:00:00Z")
+
+
+def test_reference_case_oem_round_trip_reads_si_states(tmp_path):
+    trajectory = SimpleNamespace(
+        t=np.array([10.0, 12.5]),
+        r=np.array([[7_000_000.0, 0.0, 0.0], [7_000_001.0, 10.0, 20.0]]),
+        v=np.array([[0.0, 7_500.0, 0.0], [-1.0, 7_500.5, 2.0]]),
+    )
+    files = write_reference_case(trajectory, tmp_path, epoch="2025-01-01T00:00:00Z", case_name="round_trip")
+
+    loaded = read_reference_case(files.metadata_path)
+    assert loaded.metadata["case_name"] == "round_trip"
+    np.testing.assert_allclose(loaded.t, trajectory.t, atol=1e-12)
+    np.testing.assert_allclose(loaded.r, trajectory.r, atol=1e-9)
+    np.testing.assert_allclose(loaded.v, trajectory.v, atol=1e-9)
+    np.testing.assert_allclose(read_reference_case(files.ephemeris_path).r, trajectory.r, atol=1e-9)

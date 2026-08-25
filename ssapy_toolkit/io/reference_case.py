@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
-__all__ = ["ReferenceCaseFiles", "write_reference_case"]
+__all__ = ["ReferenceCase", "ReferenceCaseFiles", "read_reference_case", "write_reference_case"]
 
 
 @dataclass(frozen=True)
@@ -20,6 +20,57 @@ class ReferenceCaseFiles:
 
     metadata_path: Path
     ephemeris_path: Path
+
+
+@dataclass(frozen=True)
+class ReferenceCase:
+    """Trajectory and metadata read from an SSATK reference case."""
+
+    t: np.ndarray
+    r: np.ndarray
+    v: np.ndarray
+    metadata: Mapping[str, object]
+
+
+def read_reference_case(source) -> ReferenceCase:
+    """Read an SSATK JSON/OEM reference case into SI Cartesian arrays.
+
+    ``source`` may be either the sidecar JSON or the CCSDS OEM file. If only
+    the OEM is available, ``t`` starts at zero because its original time
+    origin is stored only in the JSON sidecar.
+    """
+
+    source = Path(source)
+    if source.suffix.lower() == ".json":
+        metadata_path = source
+        metadata = json.loads(source.read_text(encoding="utf-8"))
+        ephemeris_path = source.parent / metadata["files"]["ephemeris"]
+    elif source.suffix.lower() == ".oem":
+        ephemeris_path = source
+        metadata_path = source.with_suffix(".json")
+        metadata = (
+            json.loads(metadata_path.read_text(encoding="utf-8"))
+            if metadata_path.exists()
+            else {}
+        )
+    else:
+        raise ValueError("source must be an SSATK .json or CCSDS .oem file.")
+    if not ephemeris_path.exists():
+        raise FileNotFoundError(ephemeris_path)
+    epochs, values = _read_oem_records(ephemeris_path)
+    epoch = _epoch_utc(metadata["epoch"]) if metadata.get("epoch") else epochs[0]
+    time_origin = float(metadata.get("time_origin_s", 0.0))
+    times = time_origin + np.array([(item - epoch).total_seconds() for item in epochs])
+    if metadata.get("sample_count") not in (None, len(values)):
+        raise ValueError("OEM sample count does not match reference-case metadata.")
+    if not np.all(np.diff(times) > 0.0) and len(times) > 1:
+        raise ValueError("OEM epochs must be strictly increasing.")
+    return ReferenceCase(
+        t=times,
+        r=values[:, :3] * 1.0e3,
+        v=values[:, 3:] * 1.0e3,
+        metadata=metadata,
+    )
 
 
 def write_reference_case(
@@ -103,6 +154,35 @@ def write_reference_case(
         encoding="utf-8",
     )
     return ReferenceCaseFiles(metadata_path, ephemeris_path)
+
+
+def _read_oem_records(path):
+    records = []
+    in_data = False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        text = line.strip()
+        if text == "DATA_START":
+            in_data = True
+            continue
+        if text == "DATA_STOP":
+            in_data = False
+            continue
+        if not in_data or not text or text.startswith("#"):
+            continue
+        fields = text.split()
+        if len(fields) != 7:
+            raise ValueError(f"invalid CCSDS OEM state record: {text!r}")
+        try:
+            epoch = _epoch_utc(fields[0])
+            state = np.asarray(fields[1:], dtype=float)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"invalid CCSDS OEM state record: {text!r}") from exc
+        if not np.all(np.isfinite(state)):
+            raise ValueError("CCSDS OEM state records must be finite.")
+        records.append((epoch, state))
+    if not records:
+        raise ValueError("CCSDS OEM contains no state records.")
+    return [item[0] for item in records], np.vstack([item[1] for item in records])
 
 
 def _trajectory_arrays(trajectory):
