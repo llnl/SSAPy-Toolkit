@@ -137,6 +137,27 @@ For covariance or sensitivity propagation, use
 ``stm`` output has shape ``(N, 6, 6)`` and maps initial Cartesian perturbations
 to each sampled state.
 
+Export an independent-tool reference case with
+:func:`ssapy_toolkit.io.write_reference_case`. It writes a CCSDS Orbit
+Ephemeris Message (OEM) in km and km/s plus a JSON sidecar in SI units with the
+epoch, frame, force-model labels, constants, integration settings, and numeric
+precision. GMAT, STK, Orekit, and similar tools can consume the OEM without
+guessing the SSATK conventions.
+
+.. code-block:: python
+
+   from ssapy_toolkit.constants import EARTH_MU
+   from ssapy_toolkit.io import write_reference_case
+
+   write_reference_case(
+       traj,
+       "reference_cases/leo",
+       epoch="2025-01-01T00:00:00Z",
+       force_models=["point_mass_earth", "J2"],
+       constants={"mu_m3_s2": EARTH_MU},
+       integrator={"method": "DOP853", "rtol": 1e-10, "atol": 1e-9},
+   )
+
 For an optional NRLMSISE-00 atmosphere driven by packaged solar and
 geomagnetic indices, install ``ssapy-toolkit[atmosphere]`` and configure
 ``SpaceEnvironment(atmosphere_density_model="nrlmsise00")``. The adapter
