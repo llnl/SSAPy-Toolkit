@@ -90,4 +90,7 @@ def test_reference_case_oem_round_trip_reads_si_states(tmp_path):
     np.testing.assert_allclose(loaded.t, trajectory.t, atol=1e-12)
     np.testing.assert_allclose(loaded.r, trajectory.r, atol=1e-9)
     np.testing.assert_allclose(loaded.v, trajectory.v, atol=1e-9)
+    residuals = compare_reference_case(trajectory, files.ephemeris_path)
+    assert residuals["max_position_m"] < 1e-8
+    assert residuals["max_velocity_m_s"] < 1e-8
     np.testing.assert_allclose(read_reference_case(files.ephemeris_path).r, trajectory.r, atol=1e-9)
