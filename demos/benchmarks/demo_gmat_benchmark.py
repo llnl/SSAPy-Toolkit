@@ -63,7 +63,19 @@ def _ensure_container_image(*, allow_install: bool) -> bool:
 
 
 def _script(*, radius_m: float, velocity_m_s: float, duration_s: float, step_s: float) -> str:
-    guard = float(duration_s) - float(step_s)
+    steps = round(float(duration_s) / float(step_s))
+    if steps < 1 or not np.isclose(steps * float(step_s), float(duration_s)):
+        raise ValueError("duration_s must be a positive integer multiple of step_s")
+    reports = [
+        "Report StateReport Sat.ElapsedSecs Sat.X Sat.Y Sat.Z Sat.VX Sat.VY Sat.VZ;"
+    ]
+    for _ in range(steps):
+        reports.extend(
+            (
+                f"Propagate TwoBodyProp(Sat) {{Sat.ElapsedSecs = {float(step_s):.17g}}};",
+                "Report StateReport Sat.ElapsedSecs Sat.X Sat.Y Sat.Z Sat.VX Sat.VY Sat.VZ;",
+            )
+        )
     return f"""% SSATK/GMAT two-body comparison case.
 Create Spacecraft Sat;
 Sat.DateFormat = A1ModJulian;
@@ -101,11 +113,7 @@ StateReport.Delimiter = ',';
 StateReport.Precision = 17;
 
 BeginMissionSequence;
-Report StateReport Sat.ElapsedSecs Sat.X Sat.Y Sat.Z Sat.VX Sat.VY Sat.VZ;
-While Sat.ElapsedSecs < {guard:.17g}
-   Propagate TwoBodyProp(Sat) {{Sat.ElapsedSecs = {float(step_s):.17g}}};
-   Report StateReport Sat.ElapsedSecs Sat.X Sat.Y Sat.Z Sat.VX Sat.VY Sat.VZ;
-EndWhile;
+{os.linesep.join(reports)}
 """
 
 
@@ -170,6 +178,11 @@ def _run_gmat(
     rows = np.asarray(rows, dtype=float).reshape((-1, 7))
     if rows.shape[0] < 2 or not np.all(np.diff(rows[:, 0]) > 0.0):
         raise RuntimeError(f"GMAT state report is invalid: shape={rows.shape}")
+    expected_samples = round(float(duration_s) / float(step_s)) + 1
+    if rows.shape[0] != expected_samples:
+        raise RuntimeError(
+            f"GMAT state report has {rows.shape[0]} samples; expected {expected_samples}"
+        )
     return rows
 
 

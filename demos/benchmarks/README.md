@@ -12,6 +12,11 @@ Benchmark summaries belong under `~/ssatk_data/benchmarks/`.
   Maven only when the demo is run outside pytest and Maven is available.
 - `demo_gmat_benchmark.py` runs GMAT R2026a's `RungeKutta89` console propagator
   in Ubuntu 24.04 Podman and compares its point-mass Cartesian states with SSATK.
+- `demo_long_term_propagation_benchmark.py` compares matched Earth-centered
+  degree/order-0 cases over 7 days at low Earth orbit (LEO), 30 days at
+  geostationary orbit (GEO), and 30 days at cislunar radius against GMAT and
+  Orekit. The cislunar case is a two-body regional comparison, not an
+  Earth-Moon-Sun model.
 
 STK and FreeFlyer require separate licensed/native installations and are not
 silently substituted by this benchmark suite. GMAT is optional; when its
