@@ -158,6 +158,30 @@ guessing the SSATK conventions.
        integrator={"method": "DOP853", "rtol": 1e-10, "atol": 1e-9},
    )
 
+For terminal maneuver targeting, use
+:func:`ssapy_toolkit.propagators_6dof.solve_6dof_target`. This performs bounded
+single shooting around the same ``Spacecraft.propagate`` force and attitude
+models used for the final trajectory.
+
+.. code-block:: python
+
+   import numpy as np
+   import ssapy_toolkit as ssatk
+
+   sat = ssatk.Spacecraft(
+       r=[0.0, 0.0, 0.0],
+       v=[0.0, 0.0, 0.0],
+       inertia=np.eye(3),
+   )
+   target = ssatk.solve_6dof_target(
+       sat,
+       times=np.linspace(0.0, 10.0, 11),
+       target_v=[2.0, 0.0, 0.0],
+       control_scale=[1.0, 1.0, 1.0],
+       propagation_kwargs={"mu": 0.0},
+   )
+   assert target.success
+
 For an optional NRLMSISE-00 atmosphere driven by packaged solar and
 geomagnetic indices, install ``ssapy-toolkit[atmosphere]`` and configure
 ``SpaceEnvironment(atmosphere_density_model="nrlmsise00")``. The adapter

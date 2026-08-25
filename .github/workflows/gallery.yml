@@ -17,6 +17,8 @@ concurrency:
 jobs:
   build-gallery:
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}/SSAPy-Data/src
 
     steps:
       - name: Checkout repository

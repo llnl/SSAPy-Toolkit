@@ -1,10 +1,11 @@
 import numpy as np
 import pytest
 
-from ssapy_toolkit.coordinates.satellite_frames import ntw_to_gcrf_matrix
 from ssapy_toolkit.coordinates.satellite_frames import (
     body_to_gcrf_matrix,
     ecef_to_enu_matrix,
+    ecef_to_ned_matrix,
+    ecef_to_sez_matrix,
     enu_to_ecef_matrix,
     frame_to_gcrf_matrix,
     gcrf_to_body_matrix,
@@ -12,6 +13,7 @@ from ssapy_toolkit.coordinates.satellite_frames import (
     los_to_gcrf_matrix,
     nadir_velocity_to_gcrf_matrix,
     ned_to_ecef_matrix,
+    ntw_to_gcrf_matrix,
     rtn_to_gcrf_matrix,
     sez_to_ecef_matrix,
     transform_from_gcrf,
@@ -89,11 +91,13 @@ def test_local_tangent_frames_at_greenwich_equator():
     np.testing.assert_allclose(ned[:, 0], [0.0, 0.0, 1.0])
     np.testing.assert_allclose(ned[:, 1], [0.0, 1.0, 0.0])
     np.testing.assert_allclose(ned[:, 2], [-1.0, 0.0, 0.0])
+    np.testing.assert_allclose(ecef_to_ned_matrix(0.0, 0.0), ned.T)
 
     sez = sez_to_ecef_matrix(0.0, 0.0)
     np.testing.assert_allclose(sez[:, 0], [0.0, 0.0, -1.0])
     np.testing.assert_allclose(sez[:, 1], [0.0, 1.0, 0.0])
     np.testing.assert_allclose(sez[:, 2], [1.0, 0.0, 0.0])
+    np.testing.assert_allclose(ecef_to_sez_matrix(0.0, 0.0), sez.T)
 
 
 def test_line_of_sight_frame_and_validation():

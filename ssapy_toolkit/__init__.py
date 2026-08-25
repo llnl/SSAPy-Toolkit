@@ -135,6 +135,8 @@ _TOOLKIT_DUPLICATE_ALIASES = {
     "propagate_6dof_high_accuracy": ".propagators_6dof",
     "propagate_spacecraft_high_accuracy": ".propagators_6dof",
     "propagate_spacecraft_segments": ".propagators_6dof",
+    "SixDOFTargetResult": ".propagators_6dof",
+    "solve_6dof_target": ".propagators_6dof",
     "altitude_crossing_event": ".propagators_6dof",
     "attitude_quaternion_from_frame": ".coordinates.attitude",
     "constant_body_thrust": ".accelerations_6dof",
