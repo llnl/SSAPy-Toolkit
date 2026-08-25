@@ -17,6 +17,11 @@ Benchmark summaries belong under `~/ssatk_data/benchmarks/`.
   geostationary orbit (GEO), and 30 days at cislunar radius against GMAT and
   Orekit. The cislunar case is a two-body regional comparison, not an
   Earth-Moon-Sun model.
+- `demo_nbody_propagation_benchmark.py` repeats those regimes with Earth–Moon–Sun
+  and full planetary point-mass ladders. It records the ephemeris split used by
+  each tool: SSAPy DE430, GMAT DE421, and Orekit DE440. Set `OREKIT_DATA_DIR`
+  to an Orekit-data checkout when the sibling `~/workdir/orekit-data` directory
+  is not available.
 
 STK and FreeFlyer require separate licensed/native installations and are not
 silently substituted by this benchmark suite. GMAT is optional; when its

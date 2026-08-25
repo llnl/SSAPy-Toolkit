@@ -21,6 +21,8 @@ from ssapy_toolkit.propagators_orbit import propagate_orbit_state
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 GALLERY_CATEGORY = "benchmarks"
 GMAT_IMAGE = "ubuntu:24.04"
+# POTFIELD value in GMAT's data/gravity/earth/JGM2.cof.
+GMAT_JGM2_MU_M3_S2 = 3.986004415e14
 
 
 def _find_gmat() -> tuple[Path, str] | None:
@@ -127,17 +129,32 @@ def _run_gmat(
     duration_s: float,
     step_s: float,
 ) -> np.ndarray:
+    return _run_gmat_script(
+        root=root,
+        executable=executable,
+        state_path=state_path,
+        script=_script(
+            radius_m=radius_m,
+            velocity_m_s=velocity_m_s,
+            duration_s=duration_s,
+            step_s=step_s,
+        ),
+        expected_samples=round(float(duration_s) / float(step_s)) + 1,
+    )
+
+
+def _run_gmat_script(
+    *,
+    root: Path,
+    executable: str,
+    state_path: Path,
+    script: str,
+    expected_samples: int,
+) -> np.ndarray:
+    state_path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="gmat-benchmark-", dir=state_path.parent) as temp_name:
         temp = Path(temp_name)
-        (temp / "case.script").write_text(
-            _script(
-                radius_m=radius_m,
-                velocity_m_s=velocity_m_s,
-                duration_s=duration_s,
-                step_s=step_s,
-            ),
-            encoding="utf-8",
-        )
+        (temp / "case.script").write_text(script, encoding="utf-8")
         command = [
             "podman",
             "run",
@@ -178,7 +195,6 @@ def _run_gmat(
     rows = np.asarray(rows, dtype=float).reshape((-1, 7))
     if rows.shape[0] < 2 or not np.all(np.diff(rows[:, 0]) > 0.0):
         raise RuntimeError(f"GMAT state report is invalid: shape={rows.shape}")
-    expected_samples = round(float(duration_s) / float(step_s)) + 1
     if rows.shape[0] != expected_samples:
         raise RuntimeError(
             f"GMAT state report has {rows.shape[0]} samples; expected {expected_samples}"

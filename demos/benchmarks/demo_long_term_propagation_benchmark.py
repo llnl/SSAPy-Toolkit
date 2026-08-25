@@ -18,6 +18,16 @@ from ssapy_toolkit.propagators_orbit import propagate_orbit_state
 
 UNDER_PYTEST = "pytest" in sys.modules or "PYTEST_CURRENT_TEST" in os.environ
 GALLERY_CATEGORY = "benchmarks"
+GMAT_MU = demo_gmat_benchmark.GMAT_JGM2_MU_M3_S2
+MU_DELTA = GMAT_MU - EARTH_MU
+MU_RELATIVE_DELTA = MU_DELTA / EARTH_MU
+
+
+def _mu_note() -> str:
+    return (
+        f"Δμ (GMAT JGM2 − SSATK) = {MU_DELTA:.3e} m³/s² "
+        f"({MU_RELATIVE_DELTA:.3e} relative)"
+    )
 
 CASES = (
     {"name": "leo", "label": "LEO", "radius_m": 7_000_000.0, "duration_s": 7 * 86_400.0, "step_s": 300.0},
@@ -67,7 +77,7 @@ def _write_case_plot(case: dict, residuals: dict[str, np.ndarray], out_dir: Path
     axes[0].set_ylabel("Position residual [m]")
     axes[1].set_ylabel("Velocity residual [m/s]")
     axes[1].set_xlabel("Elapsed time [hr]")
-    axes[0].set_title(f"SSATK long-term residuals: {case['label']}")
+    axes[0].set_title(f"SSATK long-term residuals: {case['label']}\n{_mu_note()}")
     for axis in axes:
         axis.grid(True, alpha=0.3)
         axis.legend()
@@ -98,6 +108,8 @@ def _write_summary_plot(cases: list[dict], out_dir: Path) -> str:
         axis.set_yscale("log")
         axis.grid(True, axis="y", alpha=0.3)
         axis.legend()
+    fig.text(0.5, 0.01, _mu_note(), ha="center", fontsize=9)
+    fig.subplots_adjust(bottom=0.14)
     path = out_dir / "long_term_summary.png"
     fig.savefig(path, dpi=200, bbox_inches="tight")
     plt.close(fig)
@@ -168,6 +180,12 @@ def main(make_figures=None, fast=None, verbose=None, allow_install=None):
     summary = {
         "benchmark": "SSATK long-term propagation comparison",
         "force_model": "Earth-centered degree/order-0 point mass",
+        "mu_m3_s2": {
+            "ssatk": float(EARTH_MU),
+            "gmat_jgm2": float(GMAT_MU),
+            "gmat_minus_ssatk": float(MU_DELTA),
+            "relative_difference": float(MU_RELATIVE_DELTA),
+        },
         "cislunar_definition": "Earth-centered two-body case at lunar orbital radius; not an Earth-Moon-Sun model",
         "ssatk_method": "DOP853, rtol=1e-12, atol=1e-9",
         "cases": results,
