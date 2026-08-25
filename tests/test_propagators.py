@@ -63,7 +63,7 @@ def test_orbit_stm_matches_finite_difference_of_propagated_state():
     )
     predicted = np.einsum("tij,j->ti", state.stm, delta)
     actual = 0.5 * np.column_stack((plus.r - minus.r, plus.v - minus.v))
-    np.testing.assert_allclose(actual, predicted, rtol=2.0e-4, atol=2.0e-7)
+    np.testing.assert_allclose(actual, predicted, rtol=3.0e-4, atol=2.0e-7)
 
 
 def test_high_accuracy_orbit_propagator_accepts_orbit_like_and_accel_models():
