@@ -390,6 +390,12 @@ numerical backbone:
   default atmosphere velocity is rigid Earth co-rotation; the default magnetic
   field is a dependency-light centered Earth dipole; ``magnetic_field_model="igrf"``
   uses optional ``ppigrf`` for epoch-dependent internal-field synthesis.
+* ``ssapy_toolkit.environment_eop.load_packaged_eop`` loads the frozen IERS
+  Finals2000A daily Earth-orientation snapshot from SSAPy-Data. Its
+  ``EarthOrientationTable`` preserves observed/predicted status and refuses
+  predicted records unless the caller opts in. The explicit
+  ``gcrf_to_itrf_eop`` and ``itrf_to_gcrf_eop`` transforms use UT1 and polar
+  motion without depending on a live network table.
 * ``ssapy_toolkit.coordinates.attitude_quaternion_from_frame`` converts existing
   SSATK satellite-operation frame definitions, such as ``ntw``, ``vnb``, and
   ``nadir_velocity``, into body-to-GCRF target quaternions for attitude-control
@@ -437,7 +443,7 @@ The remaining major gaps are higher-fidelity body/component state propagation
 and independent external-tool validation:
 dynamically propagated appendage angles, flexible bodies, propellant slosh,
 maneuver targeting/optimization over multiple segments, high-fidelity atmosphere
-models, and validation benchmarks against GMAT, STK/Astrogator, FreeFlyer,
+models, space-weather-driven atmosphere inputs, and validation benchmarks against GMAT, STK/Astrogator, FreeFlyer,
 Orekit, Basilisk, or Tudat reference cases with recorded force models, frames,
 time scales, constants, and export precision.
 

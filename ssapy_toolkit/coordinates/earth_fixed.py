@@ -53,6 +53,88 @@ def gcrf_to_itrf_astropy(state_vectors, t):
     ]).T
 
 
+def gcrf_to_itrf_eop(state_vectors, t, *, eop=None, allow_predicted=False):
+    """Convert GCRF positions to ITRF using an explicit EOP data source.
+
+    The rotation follows the SSAPy ``EarthOrientation`` convention: IAU 1976
+    precession/nutation, UT1-dependent Greenwich sidereal time, and IERS polar
+    motion. ``eop`` may be an ``EarthOrientationTable`` or any callable with
+    the same ``at(time, allow_predicted=...)`` interface.
+    """
+
+    rotation = _eop_rotation(state_vectors, t, eop=eop, allow_predicted=allow_predicted)
+    return np.einsum("nij,nj->ni", rotation, _state_matrix(state_vectors, "state_vectors"))
+
+
+def itrf_to_gcrf_eop(state_vectors, t, *, eop=None, allow_predicted=False):
+    """Convert ITRF positions to GCRF using an explicit EOP data source."""
+
+    rotation = _eop_rotation(state_vectors, t, eop=eop, allow_predicted=allow_predicted)
+    return np.einsum("nji,nj->ni", rotation, _state_matrix(state_vectors, "state_vectors"))
+
+
+def _eop_rotation(state_vectors, t, *, eop, allow_predicted):
+    import erfa
+    from astropy.time import Time
+
+    state_vectors = _state_matrix(state_vectors, "state_vectors")
+    gps = _time_array(t, len(state_vectors))
+    if eop is None:
+        from ..environment_eop import load_packaged_eop
+
+        eop = load_packaged_eop()
+    records = [eop.at(value, allow_predicted=allow_predicted) for value in gps]
+    time = Time(gps, format="gps", scale="utc")
+    pn = np.asarray([erfa.pnm80(2400000.5, value) for value in time.tt.mjd])
+    gst = np.asarray(
+        [
+            erfa.gst94(2400000.5, utc_mjd + record.ut1_minus_utc_s / 86400.0)
+            for utc_mjd, record in zip(time.utc.mjd, records)
+        ]
+    )
+    cosine, sine = np.cos(gst), np.sin(gst)
+    gst_matrix = np.zeros((len(records), 3, 3), dtype=float)
+    gst_matrix[:, 0, 0] = cosine
+    gst_matrix[:, 0, 1] = sine
+    gst_matrix[:, 1, 0] = -sine
+    gst_matrix[:, 1, 1] = cosine
+    gst_matrix[:, 2, 2] = 1.0
+
+    arcsec_to_rad = np.pi / (180.0 * 3600.0)
+    polar = np.eye(3, dtype=float)[None, :, :].repeat(len(records), axis=0)
+    polar_motion_x = np.asarray([record.polar_motion_x_arcsec for record in records]) * arcsec_to_rad
+    polar_motion_y = np.asarray([record.polar_motion_y_arcsec for record in records]) * arcsec_to_rad
+    polar[:, 0, 2] = polar_motion_x
+    polar[:, 1, 2] = -polar_motion_y
+    polar[:, 2, 0] = -polar_motion_x
+    polar[:, 2, 1] = polar_motion_y
+    return np.einsum("nij,njk->nik", polar, np.einsum("nij,njk->nik", gst_matrix, pn))
+
+
+def _state_matrix(values, name):
+    values = np.asarray(values, dtype=float)
+    if values.ndim != 2 or values.shape[1] != 3:
+        raise ValueError(f"{name} must have shape (N, 3).")
+    return values
+
+
+def _time_array(values, count):
+    from astropy.time import Time
+
+    if isinstance(values, Time):
+        gps = np.atleast_1d(np.asarray(values.gps, dtype=float))
+    else:
+        try:
+            gps = np.atleast_1d(np.asarray(values, dtype=float))
+        except (TypeError, ValueError):
+            gps = np.atleast_1d(np.asarray(Time(values, scale="utc").gps, dtype=float))
+    if gps.size == 1:
+        gps = np.repeat(gps, count)
+    if gps.ndim != 1 or gps.size != count:
+        raise ValueError("t must be scalar or contain one time per state vector.")
+    return gps
+
+
 def itrf_to_gcrf(r_itrf: np.ndarray, time: np.ndarray) -> np.ndarray:
     """Convert ITRF positions to GCRF, undoing the SSAPy ``groundTrack`` transform."""
     time = to_gps(time)

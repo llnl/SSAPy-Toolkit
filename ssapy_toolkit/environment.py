@@ -86,6 +86,7 @@ class SpaceEnvironment:
     """
 
     epoch: object | None = None
+    earth_orientation_model: object | None = None
     sun_position_model: Callable | ArrayLike | None = None
     moon_position_model: Callable | ArrayLike | None = None
     atmosphere_density_model: Callable | float | None = 0.0
@@ -106,6 +107,19 @@ class SpaceEnvironment:
         """Return GPS seconds for ``time``, applying ``epoch`` as an offset when set."""
 
         return _absolute_time(time, self.epoch)
+
+    def earth_orientation(self, time, *, allow_predicted: bool = False):
+        """Return reproducible EOP for ``time`` from the configured data table."""
+
+        model = self.earth_orientation_model
+        if model is None:
+            from .environment_eop import load_packaged_eop
+
+            model = load_packaged_eop()
+        model_time = self.absolute_time(time)
+        if hasattr(model, "at"):
+            return model.at(model_time, allow_predicted=allow_predicted)
+        return model(model_time)
 
     def sun_position(self, time, r_inertial=None, v_inertial=None, q_body_to_inertial=None, omega_body=None, spacecraft=None):
         """Return Earth-to-Sun GCRF position in meters."""
