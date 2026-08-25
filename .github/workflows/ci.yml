@@ -16,6 +16,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Checkout SSAPy data
+        uses: actions/checkout@v4
+        with:
+          repository: llnl/SSAPy-Data
+          ref: 981aa894b4767103220722fe4a6d449e4077a292
+          path: SSAPy-Data
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -29,6 +36,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -e SSAPy-Data
           pip install -e .[dev]
 
       - name: Validate JavaScript plot assets

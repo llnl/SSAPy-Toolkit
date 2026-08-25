@@ -12,6 +12,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/checkout@v4
+        with:
+          repository: llnl/SSAPy-Data
+          ref: 981aa894b4767103220722fe4a6d449e4077a292
+          path: SSAPy-Data
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -20,6 +26,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r docs/requirements.txt
+          pip install -e SSAPy-Data
           pip install .
 
       - name: Build docs
