@@ -182,6 +182,18 @@ models used for the final trajectory.
    )
    assert target.success
 
+For a sequence of coast and burn arcs, use
+:func:`ssapy_toolkit.propagators_6dof.solve_6dof_multi_segment_target`. Each
+segment supplies its own ``times`` and can override models, burn frame, bounds,
+and control scaling. ``constraints`` and ``residual_hook`` append normalized
+residuals to the bounded least-squares solve.
+
+For coupled sensitivity and uncertainty workflows,
+:func:`ssapy_toolkit.propagators_6dof.propagate_6dof_variational` returns the
+nominal trajectory and state-transition matrices. Pass that result to
+:func:`ssapy_toolkit.propagators_6dof.propagate_6dof_covariance` to map an
+initial covariance and optional per-epoch process-noise contributions.
+
 For an optional NRLMSISE-00 atmosphere driven by packaged solar and
 geomagnetic indices, install ``ssapy-toolkit[atmosphere]`` and configure
 ``SpaceEnvironment(atmosphere_density_model="nrlmsise00")``. The adapter
@@ -268,6 +280,8 @@ propulsive acceleration, torque, and mass flow set to zero. Set
 ``stop_at_dry_mass=True`` for terminal depletion, or use
 ``propellant_empty_event``/``mass_floor_event`` directly for lower-level
 ``propagate_6dof`` calls.
+Set ``tank_name`` on ``SpacecraftManeuverAccel`` to draw from one named tank;
+that tank alone is depleted and the maneuver stops when it is empty.
 If the body defines reaction wheels, ``Spacecraft`` initializes wheel momentum
 from ``wheel_inertia * speed`` when available, ``propagate_6dof`` appends those
 momenta to the numerical state, and ``SixDOFTrajectory.wheel_momentum`` returns
@@ -283,6 +297,11 @@ force and torque. Pass ``atmosphere_velocity=...`` to drag models for explicit
 GCRF wind/corotation velocity, or set
 ``SpaceEnvironment(atmosphere_velocity_model=...)`` when assembling
 environment-backed drag models.
+For linearized appendage and propellant-slosh states, use
+:func:`ssapy_toolkit.propagators_6dof.propagate_6dof_extended` with
+``HingedAppendage``, ``FlexibleMode``, and ``SloshMode``. These models are
+linear reduced-order couplings, not finite-element or computational-fluid-
+dynamics replacements.
 ``SpaceEnvironment.force_models(...)`` can assemble environment-backed drag,
 solar-radiation pressure, magnetic torque, and named third-body perturbations
 such as ``third_bodies=("moon", "sun")``. Use ``third_bodies=True`` for

@@ -308,8 +308,11 @@ class Spacecraft:
             if mass_models:
                 kwargs["mass_flow_rate"] = _sum_model_mass_flow_rates(mass_models)
         mass_is_propagated = "mass_flow_rate" in kwargs
+        tank_name = _tank_name_for_models(
+            kwargs.get("acceleration"), kwargs.get("torque"), kwargs.get("mass_flow_rate")
+        )
         inertia = (
-            _body_inertia_model(spacecraft)
+            _body_inertia_model(spacecraft, tank_name=tank_name)
             if inertia is None and mass_is_propagated and _supports_body_mass_update(spacecraft.body)
             else spacecraft.inertia if inertia is None else inertia
         )
@@ -1055,7 +1058,7 @@ def _nonnegative_float(value: float, name: str) -> float:
 def _bind_spacecraft_acceleration(model, spacecraft, *, suppress_depleted=True):
     if getattr(model, "spacecraft_acceleration_model", False):
         def acceleration(t, r, v, q, omega, *, mass=None, wheel_momentum=None):
-            state = _spacecraft_at_state(spacecraft, t, r, v, q, omega, mass, wheel_momentum)
+            state = _spacecraft_at_state(spacecraft, t, r, v, q, omega, mass, wheel_momentum, getattr(model, "tank_name", None))
             if (
                 suppress_depleted
                 and _is_propulsive_model(model)
@@ -1083,7 +1086,7 @@ def _bind_spacecraft_torque(model, spacecraft, *, suppress_depleted=True):
     if getattr(model, "spacecraft_torque_model", False):
         evaluator = model.torque if hasattr(model, "torque") else model
         def torque(t, r, v, q, omega, *, mass=None, wheel_momentum=None):
-            state = _spacecraft_at_state(spacecraft, t, r, v, q, omega, mass, wheel_momentum)
+            state = _spacecraft_at_state(spacecraft, t, r, v, q, omega, mass, wheel_momentum, getattr(model, "tank_name", None))
             if (
                 suppress_depleted
                 and _is_propulsive_model(model)
@@ -1132,7 +1135,7 @@ def _bind_spacecraft_mass_flow_rate(model, spacecraft):
         evaluator = model.mass_flow_rate if hasattr(model, "mass_flow_rate") else model
 
         def mass_flow_rate(t, r, v, q, omega, *, mass=None, wheel_momentum=None):
-            state = _spacecraft_at_state(spacecraft, t, r, v, q, omega, mass, wheel_momentum)
+            state = _spacecraft_at_state(spacecraft, t, r, v, q, omega, mass, wheel_momentum, getattr(model, "tank_name", None))
             return evaluator(
                 spacecraft=state,
                 t=t,
@@ -1215,10 +1218,10 @@ def _body_value(body, *names: str, default=None):
     return default
 
 
-def _spacecraft_at_state(spacecraft, t, r, v, q, omega, mass=None, wheel_momentum=None):
+def _spacecraft_at_state(spacecraft, t, r, v, q, omega, mass=None, wheel_momentum=None, tank_name=None):
     if spacecraft is None:
         return None
-    body = _body_at_state(spacecraft.body, mass, wheel_momentum)
+    body = _body_at_state(spacecraft.body, mass, wheel_momentum, tank_name)
     inertia = (
         _body_value(body, "current_inertia", "inertia", default=spacecraft.inertia)
         if body is not None
@@ -1242,16 +1245,23 @@ def _spacecraft_at_state(spacecraft, t, r, v, q, omega, mass=None, wheel_momentu
     )
 
 
-def _body_at_state(body, mass=None, wheel_momentum=None):
-    body = _body_at_mass(body, mass)
+def _body_at_state(body, mass=None, wheel_momentum=None, tank_name=None):
+    body = _body_at_mass(body, mass, tank_name)
     return _body_at_wheel_momentum(body, wheel_momentum)
 
 
-def _body_at_mass(body, mass):
+def _body_at_mass(body, mass, tank_name=None):
     if body is None or mass is None or not _supports_body_mass_update(body):
         return body
     try:
-        return body.with_current_mass(float(mass))
+        if tank_name is None:
+            return body.with_current_mass(float(mass))
+        matches = [tank for tank in body.tanks if tank.name == tank_name]
+        if len(matches) != 1:
+            raise ValueError(f"expected exactly one tank named {tank_name!r}.")
+        tank = matches[0]
+        consumed = body.current_mass - float(mass)
+        return body.with_tank_propellant_mass(tank_name, max(0.0, tank.propellant_mass - consumed))
     except ValueError as exc:
         if "below dry mass" in str(exc):
             return body.with_propellant_mass(0.0)
@@ -1279,9 +1289,9 @@ def _body_at_wheel_momentum(body, wheel_momentum):
     return body.with_reaction_wheels(*updated, append=False)
 
 
-def _body_inertia_model(spacecraft):
+def _body_inertia_model(spacecraft, *, tank_name=None):
     def inertia(t, r, v, q, omega, *, mass=None):
-        state_body = _body_at_mass(spacecraft.body, mass)
+        state_body = _body_at_mass(spacecraft.body, mass, tank_name)
         return _body_value(state_body, "current_inertia", "inertia", default=spacecraft.inertia)
 
     inertia.accepts_mass = True
@@ -1321,6 +1331,7 @@ def _sum_model_accelerations(models, *, suppress_depleted=True):
     acceleration.spacecraft_acceleration_model = True
     acceleration.spacecraft_propulsive_model = propulsive
     acceleration._models = models
+    acceleration.tank_name = _tank_name_for_models(*models)
     acceleration._depletion_handled = True
     return acceleration
 
@@ -1348,6 +1359,7 @@ def _sum_model_torques(models, *, suppress_depleted=True):
     torque.torque = torque
     torque._models = models
     torque._depletion_handled = True
+    torque.tank_name = _tank_name_for_models(*models)
     return torque
 
 
@@ -1389,7 +1401,29 @@ def _sum_model_mass_flow_rates(models):
         return total
 
     mass_flow_rate.spacecraft_mass_flow_model = True
+    mass_flow_rate.tank_name = _tank_name_for_models(*models)
     return mass_flow_rate
+
+
+def _tank_name_for_models(*models):
+    names = set()
+    for model in models:
+        if model is None:
+            continue
+        name = getattr(model, "tank_name", None)
+        if name is not None:
+            names.add(name)
+            continue
+        nested = getattr(model, "_models", None)
+        if nested is not None:
+            names.update(
+                name
+                for name in (_tank_name_for_models(*nested),)
+                if name is not None
+            )
+    if len(names) > 1:
+        raise ValueError("a propagation may select at most one named propellant tank.")
+    return next(iter(names), None)
 
 
 def _allow_depleted_model(model, spacecraft, kind):

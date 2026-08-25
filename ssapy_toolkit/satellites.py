@@ -425,6 +425,18 @@ class SpacecraftBody:
             append=False,
         )
 
+    def with_tank_propellant_mass(self, name: str, propellant_mass: float) -> SpacecraftBody:
+        """Return a copy with only the named tank's propellant changed."""
+
+        propellant_mass = _nonnegative(propellant_mass, "propellant_mass")
+        matches = [tank for tank in self.tanks if tank.name == name]
+        if len(matches) != 1:
+            raise ValueError(f"expected exactly one tank named {name!r}.")
+        return self.with_tanks(
+            *(tank.with_propellant_mass(propellant_mass) if tank.name == name else tank for tank in self.tanks),
+            append=False,
+        )
+
     def with_current_mass(self, mass: float) -> SpacecraftBody:
         """Return a body whose tanks match the requested total current mass."""
 

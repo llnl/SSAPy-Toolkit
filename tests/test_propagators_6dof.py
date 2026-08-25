@@ -342,6 +342,41 @@ def test_spacecraft_body_components_update_mass_center_and_inertia():
         body.with_current_mass(body.current_mass + 1.0)
 
 
+def test_named_tank_burn_depletes_only_selected_tank_and_updates_body_properties():
+    body = SpacecraftBody.box(name="bus", mass=10.0, size=(1.0, 1.0, 1.0)).with_tanks(
+        Tank(propellant_mass=2.0, dry_mass=1.0, position_body=[2.0, 0.0, 0.0], name="main"),
+        Tank(propellant_mass=3.0, dry_mass=1.0, position_body=[0.0, 2.0, 0.0], name="aux"),
+    )
+    spacecraft = Spacecraft(r=[7.0e6, 0.0, 0.0], v=[0.0, 7500.0, 0.0], body=body)
+    burn = SpacecraftManeuverAccel(10.0, frame="gcrf", direction=[1.0, 0.0, 0.0], isp=100.0, tank_name="aux")
+    trajectory = spacecraft.propagate(times=[0.0, 1.0], acceleration=burn, mu=0.0)
+    final_body = body.with_tank_propellant_mass(
+        "aux", 3.0 - (body.current_mass - trajectory.mass[-1])
+    )
+    assert final_body.tanks[0].propellant_mass == pytest.approx(2.0)
+    assert final_body.tanks[1].propellant_mass < 3.0
+    assert final_body.current_mass < body.current_mass
+    assert final_body.current_center_of_mass[0] > body.current_center_of_mass[0]
+    assert np.min(final_body.current_inertia.diagonal()) > 0.0
+
+
+def test_named_tank_burn_stops_thrust_when_selected_tank_is_empty():
+    body = SpacecraftBody.box(name="bus", mass=10.0, size=(1.0, 1.0, 1.0)).with_tanks(
+        Tank(propellant_mass=0.02, dry_mass=1.0, name="main", position_body=[2.0, 0.0, 0.0]),
+        Tank(propellant_mass=0.5, dry_mass=1.0, name="aux", position_body=[0.0, 2.0, 0.0]),
+    )
+    spacecraft = Spacecraft(r=[7.0e6, 0.0, 0.0], v=[0.0, 0.0, 0.0], body=body)
+    burn = SpacecraftManeuverAccel(
+        10.0, frame="gcrf", direction=[1.0, 0.0, 0.0], isp=100.0, tank_name="main"
+    )
+    trajectory = spacecraft.propagate(
+        times=np.linspace(0.0, 4.0, 9), models=[burn], mu=0.0
+    )
+
+    assert trajectory.mass[-1] == pytest.approx(body.current_mass - 0.02, abs=1e-8)
+    np.testing.assert_allclose(trajectory.v[5:, 0], trajectory.v[4, 0], atol=1e-8)
+
+
 def test_satellite_design_library_supports_common_presets_and_overrides():
     designs = available_satellite_designs()
     assert "earth_observation_sat" in designs

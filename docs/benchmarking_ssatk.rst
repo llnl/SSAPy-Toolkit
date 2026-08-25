@@ -296,14 +296,12 @@ Current strengths
 Current limitations
 ^^^^^^^^^^^^^^^^^^^
 
-* The 6-DoF implementation does not yet have a complete body/component model.
-* Mass depletion and inertia updates are not yet a first-class integrated state
-  throughout all 6-DoF workflows.
-* Faceted drag and solar-radiation-pressure modeling should be generalized
-  beyond single-flat-plate helpers.
-* Reaction wheels, tanks, canted thrusters, articulated panels, and spacecraft
-  hardware should be modeled as components instead of loose arguments.
-* Numerical benchmarks are not yet formalized in a versioned benchmark suite.
+* The extended appendage and slosh models are linear reduced-order models.
+* External GMAT, STK/Astrogator, FreeFlyer, Orekit, Basilisk, and Tudat
+  reference runs are not executable in the current development environment.
+* The 6-DoF STM uses local quaternion coordinates and finite-difference
+  Jacobians; analytic Jacobians and a nonsingular attitude-error STM remain
+  future work.
 
 Target benchmark identity
 ^^^^^^^^^^^^^^^^^^^^^^^^^

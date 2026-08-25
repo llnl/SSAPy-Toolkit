@@ -102,6 +102,7 @@ class SpacecraftManeuverAccel(SpacecraftAccel):
         frame: str = "rtn",
         mass: float | None = None,
         isp: float | None = None,
+        tank_name: str | None = None,
         start: float = -_np.inf,
         stop: float = _np.inf,
     ):
@@ -110,6 +111,7 @@ class SpacecraftManeuverAccel(SpacecraftAccel):
         self.direction = _default_maneuver_direction(frame) if direction is None else _unit_vector(direction, "direction")
         self.mass = None if mass is None else _validate_positive(mass, "mass")
         self.isp = None if isp is None else _validate_positive(isp, "isp")
+        self.tank_name = None if tank_name is None else str(tank_name)
         self.start = float(start)
         self.stop = float(stop)
         if self.stop < self.start:
@@ -126,6 +128,13 @@ class SpacecraftManeuverAccel(SpacecraftAccel):
 
         if not (self.start <= float(t) <= self.stop):
             return _np.zeros(3)
+        if self.tank_name is not None and spacecraft is not None:
+            tanks = tuple(getattr(getattr(spacecraft, "body", None), "tanks", ()))
+            selected = [tank for tank in tanks if tank.name == self.tank_name]
+            if len(selected) != 1:
+                raise ValueError(f"expected exactly one tank named {self.tank_name!r}.")
+            if selected[0].propellant_mass <= 0.0:
+                return _np.zeros(3)
         value = _call_optional(self.thrust, t, r, v, q, omega, spacecraft) if callable(self.thrust) else self.thrust
         value = _np.asarray(value, dtype=float)
         if value.shape == ():
@@ -143,6 +152,13 @@ class SpacecraftManeuverAccel(SpacecraftAccel):
         if self.isp is None:
             return 0.0
         spacecraft, t, r, v, q, omega = _parse_state_args(args, kwargs)
+        if self.tank_name is not None and spacecraft is not None:
+            tanks = tuple(getattr(getattr(spacecraft, "body", None), "tanks", ()))
+            selected = [tank for tank in tanks if tank.name == self.tank_name]
+            if len(selected) != 1:
+                raise ValueError(f"expected exactly one tank named {self.tank_name!r}.")
+            if selected[0].propellant_mass <= 0.0:
+                return 0.0
         return float(_np.linalg.norm(self.thrust_vector(t, r, v, q, omega, spacecraft)) / (self.isp * STANDARD_GRAVITY))
 
 

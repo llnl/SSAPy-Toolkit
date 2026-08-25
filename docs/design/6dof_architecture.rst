@@ -375,12 +375,24 @@ numerical backbone:
   ``stop_at_dry_mass=True`` for a terminal dry-mass event; lower-level
   ``propagate_6dof`` calls should pass ``propellant_empty_event`` or
   ``mass_floor_event`` explicitly.
+  ``SpacecraftManeuverAccel(tank_name=...)`` can instead feed one named tank
+  and stops that maneuver when the selected tank is empty.
 * ``ssapy_toolkit.propagators_6dof.propagate_spacecraft_high_accuracy`` provides
   the current analyst-facing high-accuracy entry point for combining SSATK
   body/torque/thrust models with optional SSAPy translational perturbations.
 * ``ssapy_toolkit.propagators_6dof.propagate_spacecraft_segments`` chains
   consecutive coast/burn/environment segments while preserving state, propagated
   mass, event diagnostics, and solver evaluation counts.
+* ``ssapy_toolkit.propagators_6dof.solve_6dof_multi_segment_target`` performs
+  bounded single shooting over those segments and accepts normalized constraint
+  and residual hooks.
+* ``ssapy_toolkit.propagators_6dof.propagate_6dof_variational`` propagates a
+  coupled local-coordinate STM through the same rigid-body RHS, while
+  ``propagate_6dof_covariance`` maps initial covariance and process-noise
+  contributions through it.
+* ``ssapy_toolkit.propagators_6dof.propagate_6dof_extended`` propagates
+  linearized hinged-appendage, flexible-mode, and propellant-slosh coordinates
+  with reduced-order body force/torque coupling.
 * ``ssapy_toolkit.environment.SpaceEnvironment`` centralizes epoch-aware
   Sun/Moon position, atmosphere density/velocity, magnetic-field,
   eclipse-fraction, and environment-backed SSATK force-model construction,
@@ -410,6 +422,9 @@ numerical backbone:
   two-orbit comparison against SSAPy's ``Orbit.at`` Keplerian reference. The
   case currently constrains position to 1 cm and velocity to 10 µm/s using the
   analyst-facing DOP853 wrapper.
+* ``tests/test_j2_reference.py`` checks integrated secular nodal precession
+  against first-order J2 theory and max-step convergence; real SSAPy adapter
+  parity and SciPyPropagator comparisons are in ``tests/test_real_ssapy_parity.py``.
 
 The package boundary for new 6-DoF work is:
 
@@ -448,13 +463,13 @@ articulated-facet SRP case. Optimization work should preserve the public API,
 avoid duplicated solver logic, and move shared math into reusable helpers rather
 than copying code between force models, propagators, demos, and tests.
 
-The remaining major gaps are higher-fidelity body/component state propagation
-and independent external-tool validation:
-dynamically propagated appendage angles, flexible bodies, propellant slosh,
-maneuver targeting/optimization over multiple segments, and validation
-benchmarks against GMAT, STK/Astrogator, FreeFlyer,
-Orekit, Basilisk, or Tudat reference cases with recorded force models, frames,
-time scales, constants, and export precision.
+The remaining major gaps are higher-fidelity reduced-order body modeling and
+independent external-tool validation. SSATK now provides linear propagated
+hinge, flexible-mode, and propellant-slosh states, bounded multi-segment
+targeting, and coupled STM/covariance utilities. The extended models do not
+replace nonlinear multibody, finite-element, or computational-fluid-dynamics
+solvers. GMAT, STK/Astrogator, FreeFlyer, Orekit, Basilisk, and Tudat reference
+runs still require an environment with those tools and their force-model data.
 
 Recommended Direction
 ---------------------
