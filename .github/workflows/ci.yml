@@ -47,11 +47,11 @@ jobs:
           node --check ssapy_toolkit/plots/satellite_viewer_smoketest.js
 
       - name: Run tests
-        if: matrix.python-version != '3.10'
+        if: matrix.python-version != '3.13'
         run: pytest tests
 
       - name: Run tests with API coverage audit
-        if: matrix.python-version == '3.10'
+        if: matrix.python-version == '3.13'
         run: |
           python -m coverage run --branch -m pytest tests
           python -m coverage json -i -o coverage.json
