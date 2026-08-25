@@ -2,6 +2,8 @@
 
 import numpy as np
 from ssapy.accel import AccelDrag, AccelSolRad
+from ssapy.body import get_body
+from ssapy.gravity import AccelHarmonic, AccelThirdBody
 
 from ssapy_toolkit.accelerations_6dof import SpacecraftAccelSSAPy
 from ssapy_toolkit.propagators_6dof.sixdof import Spacecraft
@@ -47,3 +49,16 @@ def test_real_ssapy_adapter_forwards_spacecraft_mass_area_cd_cr():
     expected = solrad(R, V, T, mass=spacecraft.mass, area=spacecraft.area, CD=spacecraft.cd, CR=spacecraft.cr)
 
     np.testing.assert_allclose(actual, expected, rtol=0.0, atol=0.0)
+
+
+def test_real_ssapy_gravity_adapters_match_harmonic_and_third_body_models():
+    models = (
+        AccelHarmonic(get_body("Earth", model="EGM2008"), 4, 4),
+        AccelThirdBody(get_body("moon")),
+        AccelThirdBody(get_body("Sun")),
+    )
+
+    for model in models:
+        np.testing.assert_allclose(
+            SpacecraftAccelSSAPy(model)(R, V, T), model(R, V, T), rtol=0.0, atol=0.0
+        )
