@@ -51,7 +51,7 @@ jobs:
         run: pytest tests --junitxml=pytest-${{ matrix.python-version }}.xml
 
       - name: Report test failures
-        if: failure() && matrix.python-version != '3.13'
+        if: failure()
         run: |
           python - <<'PY'
           import glob
@@ -75,7 +75,7 @@ jobs:
         if: matrix.python-version == '3.13'
         run: |
           set -o pipefail
-          python -m coverage run --branch -m pytest tests
+          python -m coverage run --branch -m pytest tests --junitxml=pytest-3.13.xml
           python -m coverage json -i -o coverage.json
           audit_coverage() {
             log_path="$1"
