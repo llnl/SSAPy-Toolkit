@@ -11,8 +11,8 @@ from ssapy_toolkit.accelerations_6dof import (
     SpacecraftAccelJ2,
     SpacecraftAccelKepler,
     SpacecraftAccelSolRad,
-    SpacecraftAccelSum,
     SpacecraftAccelSSAPy,
+    SpacecraftAccelSum,
     SpacecraftAccelThirdBody,
     SpacecraftAttitudePD,
     SpacecraftFacetDrag,
@@ -35,16 +35,18 @@ from ssapy_toolkit.accelerations_6dof import (
     facet_srp_acceleration_torque,
     flat_plate_drag_acceleration_torque,
     flat_plate_srp_acceleration_torque,
-    make_gravity_gradient_torque,
     integrated_thrust_impulse,
+    j2_acceleration,
     load_digitized_thrust_curve,
     load_packaged_thrust_curve,
     load_packaged_thrust_curve_metadata,
-    j2_acceleration,
     load_thrust_curve_csv,
     load_thrust_curve_data,
-    packaged_thrust_curve_index,
     magnetic_dipole_torque,
+    make_finite_burn_acceleration,
+    make_gravity_gradient_torque,
+    make_maneuver_acceleration,
+    packaged_thrust_curve_index,
     reaction_wheel_torque,
     reaction_wheel_torque_commands,
     srp_acceleration,
@@ -78,8 +80,8 @@ from ssapy_toolkit.propagators_6dof import (
     propagate_6dof,
     propellant_empty_event,
     quaternion_from_matrix,
-    rotate_vector,
     radius_crossing_event,
+    rotate_vector,
     sixdof_rhs,
 )
 from ssapy_toolkit.satellites import (
@@ -1230,6 +1232,21 @@ def test_spacecraft_maneuver_accel_supports_operational_frames():
     assert SpacecraftManeuverAccel(10.0, frame="rtn", isp=200.0).mass_flow_rate(spacecraft) == pytest.approx(
         10.0 / (200.0 * STANDARD_GRAVITY)
     )
+
+
+def test_maneuver_acceleration_factories_return_physical_acceleration_models():
+    for factory in (make_maneuver_acceleration, make_finite_burn_acceleration):
+        burn = factory(2.0, frame="gcrf", direction=[1.0, 0.0, 0.0], mass=10.0)
+        np.testing.assert_allclose(
+            burn.acceleration(
+                t=0.0,
+                r=np.zeros(3),
+                v=np.zeros(3),
+                q=[1.0, 0.0, 0.0, 0.0],
+                omega=np.zeros(3),
+            ),
+            [0.2, 0.0, 0.0],
+        )
 
 
 def test_spacecraft_maneuver_accel_propagates_variable_finite_burn():
