@@ -98,6 +98,8 @@ from ssapy_toolkit.satellites import (
     Thruster,
     available_satellite_designs,
     cislunar_probe,
+    cubesat_1u,
+    cubesat_6u,
     debris_panel,
     earth_observation_sat,
     gnss_sat,
@@ -486,6 +488,15 @@ def test_segment_impulse_applies_body_frame_delta_v_at_exact_epoch():
     np.testing.assert_allclose(trajectory.v[-1], [0.0, 1.0, 0.0], atol=1e-10)
     with pytest.raises(ValueError, match="unsupported satellite frame"):
         ImpulseManeuver([1.0, 0.0, 0.0], frame="bad").apply(spacecraft)
+
+
+def test_cubesat_preset_bodies_expose_valid_mass_properties():
+    for make_body in (cubesat_1u, cubesat_6u):
+        body = make_body()
+        assert body.current_mass == pytest.approx(body.mass)
+        assert body.inertia.shape == (3, 3)
+        assert np.all(np.linalg.eigvalsh(body.inertia) > 0.0)
+        assert body.area > 0.0
 
 
 def test_mass_only_impulse_updates_tank_body_and_preserves_mass_jump():
