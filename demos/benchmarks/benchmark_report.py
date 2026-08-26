@@ -8,6 +8,7 @@ from pathlib import Path
 
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 
 from ssapy_toolkit.io.ssatk_data import ssatk_data
@@ -34,6 +35,7 @@ PLOT_ORDER = (
     "nbody_solar_system_leo_residuals.png",
     "nbody_solar_system_geo_residuals.png",
     "nbody_solar_system_cislunar_radius_residuals.png",
+    "benchmark_regime_matrix.png",
 )
 
 CAPTIONS = {
@@ -56,6 +58,7 @@ CAPTIONS = {
     "nbody_solar_system_leo_residuals.png": "Seven-day LEO residuals with Earth, Moon, Sun, and the seven additional planetary point masses.",
     "nbody_solar_system_geo_residuals.png": "Thirty-day GEO residuals with Earth, Moon, Sun, and the seven additional planetary point masses.",
     "nbody_solar_system_cislunar_radius_residuals.png": "Thirty-day cislunar-radius residuals with Earth, Moon, Sun, and the seven additional planetary point masses.",
+    "benchmark_regime_matrix.png": "Combined RMS residual matrix for two-body, Earth-Moon-Sun, and full planetary point-mass models across LEO, GEO, and cislunar-radius cases.",
 }
 
 
@@ -104,6 +107,55 @@ def _summary_lines(summaries: dict[str, dict]) -> list[str]:
             f"Orekit {ephemerides.get('orekit', 'unknown')}."
         )
     return lines
+
+
+def _write_regime_matrix(summaries: dict[str, dict], output_dir: Path) -> Path | None:
+    """Write one directly comparable RMS residual figure for all regimes."""
+    long_term = summaries.get("long_term_propagation_results.json", {})
+    nbody = summaries.get("nbody_propagation_results.json", {})
+    cases = {case["name"]: case for case in long_term.get("cases", [])}
+    nbody_cases = {}
+    for case in nbody.get("cases", []):
+        nbody_cases[(case["mode"], case["name"])] = case
+    labels = ("2-body", "Earth-Moon-Sun", "Full n-body")
+    modes = ((None, "long_term"), ("earth_moon_sun", "earth_moon_sun"), ("solar_system", "solar_system"))
+    regimes = ("leo", "geo", "cislunar_radius")
+    orbit_labels = ("LEO", "GEO", "Cislunar")
+    tools = ("GMAT", "Orekit")
+    position = np.full((len(regimes), len(labels), len(tools)), np.nan)
+    velocity = np.full_like(position, np.nan)
+    for i, regime in enumerate(regimes):
+        for j, (mode, source) in enumerate(modes):
+            case = cases.get(regime) if mode is None else nbody_cases.get((mode, regime))
+            for k, tool in enumerate(tools):
+                result = (case or {}).get("tools", {}).get(tool, {})
+                position[i, j, k] = result.get("rms_position_error_m", np.nan)
+                velocity[i, j, k] = result.get("rms_velocity_error_m_s", np.nan)
+    if not np.isfinite(position).any():
+        return None
+    output_dir.mkdir(parents=True, exist_ok=True)
+    fig, axes = plt.subplots(2, 3, figsize=(15, 8), sharex=False)
+    x = np.arange(len(labels))
+    width = 0.34
+    for i, orbit_label in enumerate(orbit_labels):
+        for axis, values, ylabel in (
+            (axes[0, i], position[i], "RMS position [m]"),
+            (axes[1, i], velocity[i], "RMS velocity [m/s]"),
+        ):
+            axis.bar(x - width / 2, values[:, 0], width, label="GMAT")
+            axis.bar(x + width / 2, values[:, 1], width, label="Orekit")
+            axis.set_xticks(x, labels, rotation=25, ha="right")
+            axis.set_yscale("log")
+            axis.set_ylabel(ylabel)
+            axis.set_title(orbit_label)
+            axis.grid(True, axis="y", alpha=0.3)
+    axes[0, 0].legend()
+    fig.suptitle("SSATK external residuals by orbit regime and force model")
+    fig.tight_layout()
+    path = output_dir / "benchmark_regime_matrix.png"
+    fig.savefig(path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    return path
 
 
 def _write_cover(pdf: PdfPages, figure_count: int, summaries: dict[str, dict]) -> None:
@@ -165,9 +217,10 @@ def write_benchmark_report(*, output_dir: Path | None = None, summaries: dict[st
     """Write a captioned PDF from figures in the shared benchmark figure directory."""
     output_dir = Path(output_dir or document_path("benchmarks/report.pdf")).parent
     output_dir.mkdir(parents=True, exist_ok=True)
-    paths = _figure_paths(output_root() / "figures" / "benchmarks")
     report_path = output_dir / "ssatk_propagation_benchmark_report.pdf"
     loaded = _load_summaries(summaries)
+    _write_regime_matrix(loaded, output_root() / "figures" / "benchmarks")
+    paths = _figure_paths(output_root() / "figures" / "benchmarks")
     with PdfPages(report_path) as pdf:
         _write_cover(pdf, len(paths), loaded)
         _write_summary_page(pdf, loaded)
