@@ -86,6 +86,7 @@ _TOOLKIT_SUBMODULE_NAMES = frozenset(
         "hpc",
         "io",
         "launch",
+        "navigation",
         "orbital_mechanics",
         "plots",
         "propagators_orbit",
