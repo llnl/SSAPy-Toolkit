@@ -11,12 +11,14 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
 from ssapy_toolkit.io.ssatk_data import ssatk_data
+from ssapy_toolkit._paths import output_root
 from ssapy_toolkit.plots.figpath import document_path
 
 PLOT_ORDER = (
     "artemis_benchmark_cislunar_context.png",
     "artemis_benchmark_position_error.png",
     "artemis_benchmark_velocity_error.png",
+    "artemis_benchmark_burn_events.png",
     "gmat_two_body_position_error.png",
     "gmat_two_body_velocity_error.png",
     "orekit_two_body_position_error.png",
@@ -38,6 +40,7 @@ CAPTIONS = {
     "artemis_benchmark_cislunar_context.png": "Cislunar context for the Artemis II/Orion benchmark; the trajectory is compared with JPL Horizons state-vector data.",
     "artemis_benchmark_position_error.png": "Artemis II/Orion position residuals for the SSAPy Kepler propagation against the JPL Horizons reference states.",
     "artemis_benchmark_velocity_error.png": "Artemis II/Orion velocity residuals for the SSAPy Kepler propagation against the JPL Horizons reference states.",
+    "artemis_benchmark_burn_events.png": "Executed Artemis II/Orion burn matches from the NASA mission timeline overlaid on position and velocity residuals. Vertical lines mark the nearest Horizons sample used for each burn synchronization.",
     "gmat_two_body_position_error.png": "Short two-body position residuals: SSATK DOP853 versus GMAT R2026a RungeKutta89 using an Earth degree/order-0 point mass.",
     "gmat_two_body_velocity_error.png": "Short two-body velocity residuals: SSATK DOP853 versus GMAT R2026a RungeKutta89 using an Earth degree/order-0 point mass.",
     "orekit_two_body_position_error.png": "Short two-body position residuals: SSATK DOP853 versus Orekit 10.3.1 KeplerianPropagator.",
@@ -159,10 +162,10 @@ def _write_plot_page(pdf: PdfPages, path: Path) -> None:
 
 
 def write_benchmark_report(*, output_dir: Path | None = None, summaries: dict[str, dict] | None = None) -> str:
-    """Write a captioned PDF containing every benchmark PNG in ``output_dir``."""
+    """Write a captioned PDF from figures in the shared benchmark figure directory."""
     output_dir = Path(output_dir or document_path("benchmarks/report.pdf")).parent
     output_dir.mkdir(parents=True, exist_ok=True)
-    paths = _figure_paths(output_dir)
+    paths = _figure_paths(output_root() / "figures" / "benchmarks")
     report_path = output_dir / "ssatk_propagation_benchmark_report.pdf"
     loaded = _load_summaries(summaries)
     with PdfPages(report_path) as pdf:

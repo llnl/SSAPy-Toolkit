@@ -267,6 +267,31 @@ def main(
         fig.savefig(out2, dpi=200, bbox_inches="tight")
         plt.close(fig)
 
+        out4 = Path(figpath("benchmarks/artemis_benchmark_burn_events"))
+        if out4.suffix == "":
+            out4 = out4.with_suffix(".png")
+        out4.parent.mkdir(parents=True, exist_ok=True)
+
+        fig4, (ax_pos, ax_vel) = plt.subplots(2, 1, figsize=(11, 7), sharex=True)
+        ax_pos.plot(hours, dr_norm_m / 1e3, color="#16324f", label="Position error")
+        ax_vel.plot(hours, dv_norm_m_s, color="#b24c3a", label="Velocity error")
+        for event in matched_maneuvers:
+            index = int(event["matched_index"])
+            event_hour = float(hours[index])
+            label = event["name"].replace("_", " ")
+            ax_pos.axvline(event_hour, color="#4c956c", alpha=0.65, lw=1.2)
+            ax_vel.axvline(event_hour, color="#4c956c", alpha=0.65, lw=1.2)
+            ax_pos.text(event_hour, ax_pos.get_ylim()[1], label, rotation=90, va="top", ha="right", fontsize=8)
+        ax_pos.set_ylabel("Position error [km]")
+        ax_vel.set_ylabel("Velocity error [m/s]")
+        ax_vel.set_xlabel("Time since launch [hr]")
+        ax_pos.set_title("Artemis benchmark: executed burn matches and propagation residuals")
+        for axis in (ax_pos, ax_vel):
+            axis.grid(True, alpha=0.3)
+        fig4.tight_layout()
+        fig4.savefig(out4, dpi=200, bbox_inches="tight")
+        plt.close(fig4)
+
         out3 = Path(figpath("benchmarks/artemis_benchmark_cislunar_context"))
         if out3.suffix == "":
             out3 = out3.with_suffix(".png")
@@ -293,6 +318,7 @@ def main(
 
         result["position_error_plot"] = str(out1)
         result["velocity_error_plot"] = str(out2)
+        result["burn_events_plot"] = str(out4)
         result["cislunar_context_plot"] = str(out3)
 
     return result
