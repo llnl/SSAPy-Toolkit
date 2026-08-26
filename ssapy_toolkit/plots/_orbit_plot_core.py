@@ -36,6 +36,12 @@ def _lagrange_points_lunar_frame():
     return lagrange_points_lunar_frame()
 
 
+def _lagrange_points_lunar_fixed_frame():
+    from ..orbital_mechanics import lagrange_points_lunar_fixed_frame
+
+    return lagrange_points_lunar_fixed_frame()
+
+
 def _orbit_plot_core(
     r,
     t=None,
@@ -128,6 +134,7 @@ def _orbit_plot_core(
                         scatter_dot_colors,
                         textcolor,
                         frame_key,
+                        lunar_transform,
                     )
                 else:
                     _plot_orbit_view(
@@ -141,6 +148,7 @@ def _orbit_plot_core(
                         scatter_dot_colors,
                         textcolor,
                         frame_key,
+                        lunar_transform,
                         title,
                         title2,
                         xy_title_includes_title,
@@ -337,6 +345,7 @@ def _plot_orbit_view(
     scatter_dot_colors,
     textcolor,
     frame_key,
+    lunar_transform,
     title,
     title2,
     xy_title_includes_title,
@@ -371,14 +380,15 @@ def _plot_orbit_view(
         ax.set_title(f"{title}", color=textcolor)
 
     if "lunar" in frame_key:
-        for point, pos in _lagrange_points_lunar_frame().items():
+        lagrange_points = _lagrange_points_lunar_fixed_frame() if lunar_transform == "fixed" else _lagrange_points_lunar_frame()
+        for point, pos in lagrange_points.items():
             pos = pos / unit_conversion
             if bounds["lower"][x_idx] <= pos[x_idx] <= bounds["upper"][x_idx] and bounds["lower"][y_idx] <= pos[y_idx] <= bounds["upper"][y_idx]:
                 ax.scatter(pos[x_idx], pos[y_idx], color=textcolor, label=point, s=10)
                 ax.text(pos[x_idx], pos[y_idx], point, color=textcolor)
 
 
-def _plot_orbit_3d(ax, xyz, stn, bounds, unit_label, unit_conversion, scatter_dot_colors, textcolor, frame_key):
+def _plot_orbit_3d(ax, xyz, stn, bounds, unit_label, unit_conversion, scatter_dot_colors, textcolor, frame_key, lunar_transform):
     u = _np.linspace(0, 2 * _np.pi, 180)
     v = _np.linspace(-_np.pi / 2, _np.pi / 2, 180)
 
@@ -393,7 +403,8 @@ def _plot_orbit_3d(ax, xyz, stn, bounds, unit_label, unit_conversion, scatter_do
     ax.set_zlabel(f"z [{unit_label}]", color=textcolor)
 
     if "lunar" in frame_key:
-        for point, pos in _lagrange_points_lunar_frame().items():
+        lagrange_points = _lagrange_points_lunar_fixed_frame() if lunar_transform == "fixed" else _lagrange_points_lunar_frame()
+        for point, pos in lagrange_points.items():
             pos = pos / unit_conversion
             if all(bounds["lower"][idx] <= pos[idx] <= bounds["upper"][idx] for idx in range(3)):
                 ax.scatter(pos[0], pos[1], pos[2], color=textcolor, label=point, s=10)

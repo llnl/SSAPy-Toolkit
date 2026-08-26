@@ -20,6 +20,27 @@ def _sample_track():
     )
 
 
+def test_lunar_fixed_views_use_moon_centered_lagrange_points(monkeypatch):
+    core = importlib.import_module("ssapy_toolkit.plots._orbit_plot_core")
+    monkeypatch.setattr(core, "_lagrange_points_lunar_frame", lambda: {"L1": np.array([10.0, 0.0, 0.0])})
+    monkeypatch.setattr(core, "_lagrange_points_lunar_fixed_frame", lambda: {"L1": np.array([1.0, 0.0, 0.0])})
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots()
+    settings = {
+        "primary_size": 0.1, "primary_color": "grey",
+        "secondary_x": np.array([0.0]), "secondary_y": np.array([0.0]),
+        "secondary_size": 0.1, "secondary_color": "blue",
+    }
+    bounds = {"lower": np.array([-20.0, -20.0, -20.0]), "upper": np.array([20.0, 20.0, 20.0])}
+    core._plot_orbit_view(
+        ax, "xy", np.zeros((2, 3)), settings, bounds, "GEO", 1.0,
+        "red", "white", "lunar", "fixed", "", "Lunar Frame", False,
+    )
+    assert ax.texts[-1].get_position() == (1.0, 0.0)
+    plt.close(fig)
+
+
 class _FakeBody:
     def position(self, t):
         count = 1 if getattr(t, "isscalar", False) else len(t)
