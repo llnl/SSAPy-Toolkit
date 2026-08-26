@@ -7,6 +7,9 @@ from typing import Callable
 
 import numpy as np
 
+from ..constants import EARTH_MU
+from ..propagators_orbit import propagate_orbit_state_with_stm
+
 Array = np.ndarray
 
 
@@ -97,14 +100,61 @@ class ExtendedKalmanFilter:
         updated = self.state.x + gain @ innovation
         identity = np.eye(n)
         residual = identity - gain @ jacobian
-        covariance = (
-            residual @ self.state.covariance @ residual.T
-            + gain @ noise @ gain.T
-        )
+        covariance = residual @ self.state.covariance @ residual.T + gain @ noise @ gain.T
         covariance = 0.5 * (covariance + covariance.T)
         self.state = EKFState(updated, covariance, self.state.time if time is None else time)
         return self.state
 
+
+class CartesianOrbitEKF(ExtendedKalmanFilter):
+    """EKF adapter for SSATK Cartesian orbit propagation.
+
+    The prediction uses SSATK's translational propagator and its integrated
+    state-transition matrix, so arbitrary SSATK acceleration models can be
+    used without duplicating filter dynamics.
+    """
+
+    def predict_orbit(
+        self,
+        *,
+        time: float,
+        mu: float = EARTH_MU,
+        acceleration=None,
+        process_noise=None,
+        fd_step: float = 1.0e-6,
+        method: str = "DOP853",
+        rtol: float = 1.0e-10,
+        atol: float = 1.0e-9,
+        max_step: float = np.inf,
+    ) -> EKFState:
+        """Propagate a six-component Cartesian state to ``time``."""
+
+        if self.state.x.size != 6:
+            raise ValueError("CartesianOrbitEKF requires a six-component state.")
+        time = float(time)
+        if time <= self.state.time:
+            raise ValueError("time must be later than the current filter epoch.")
+        propagation = propagate_orbit_state_with_stm(
+            r0=self.state.x[:3],
+            v0=self.state.x[3:],
+            t0=self.state.time,
+            times=[self.state.time, time],
+            mu=mu,
+            acceleration=acceleration,
+            fd_step=fd_step,
+            method=method,
+            rtol=rtol,
+            atol=atol,
+            max_step=max_step,
+        )
+        predicted = np.concatenate((propagation.r[-1], propagation.v[-1]))
+        noise = np.zeros((6, 6)) if process_noise is None else process_noise
+        return self.predict(
+            lambda _state, _time: predicted,
+            propagation.stm[-1],
+            noise,
+            time=time,
+        )
 
 class CartesianMeasurement:
     """Direct Cartesian position/velocity measurement model."""
@@ -121,4 +171,4 @@ class CartesianMeasurement:
         return state[list(self.indices)], jacobian
 
 
-__all__ = ["CartesianMeasurement", "EKFState", "ExtendedKalmanFilter"]
+__all__ = ["CartesianMeasurement", "CartesianOrbitEKF", "EKFState", "ExtendedKalmanFilter"]

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from ssapy_toolkit.navigation import CartesianMeasurement, EKFState, ExtendedKalmanFilter
+from ssapy_toolkit.navigation import CartesianMeasurement, CartesianOrbitEKF, EKFState, ExtendedKalmanFilter
 
 
 def test_ekf_predict_update_reduces_position_error():
@@ -24,3 +24,24 @@ def test_cartesian_measurement_builds_selection_matrix():
 def test_ekf_rejects_invalid_covariance():
     with pytest.raises(ValueError, match="positive semidefinite"):
         EKFState([0.0], [[-1.0]])
+
+
+def test_cartesian_orbit_ekf_predicts_and_updates():
+    mu = 3.986004418e14
+    state = EKFState(
+        [7.0e6, 0.0, 0.0, 0.0, np.sqrt(mu / 7.0e6), 0.0],
+        np.eye(6),
+    )
+    ekf = CartesianOrbitEKF(state)
+    predicted = ekf.predict_orbit(time=60.0, mu=mu, max_step=10.0)
+    assert predicted.time == pytest.approx(60.0)
+    assert predicted.covariance.shape == (6, 6)
+    measurement = predicted.x[:3] + [10.0, 0.0, 0.0]
+    updated = ekf.update(
+        measurement,
+        CartesianMeasurement((0, 1, 2)),
+        np.eye(3) * 1.0e-4,
+        time=60.0,
+    )
+    assert abs(updated.x[0] - measurement[0]) < 1.0
+    assert updated.covariance[0, 0] < predicted.covariance[0, 0]
