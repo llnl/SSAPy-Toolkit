@@ -14,7 +14,7 @@ from ssapy_toolkit.propagators_6dof import propagate_6dof
 
 GALLERY_INCLUDE = False
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
-OUTPUT_DIR = Path.home() / "ssatk_output" / "benchmarks"
+OUTPUT_DIR = Path.home() / "ssatk_output" / "data" / "benchmarks"
 
 
 def _basilisk_available() -> bool:

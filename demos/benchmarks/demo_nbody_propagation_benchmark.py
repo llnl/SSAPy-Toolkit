@@ -352,7 +352,7 @@ def main(make_figures=None, fast=None, verbose=None, allow_install=None):
     }
     if make_figures:
         summary["summary_plot"] = _write_summary_plot(results, figure_dir)
-    result_path = Path(ssatk_data("benchmarks/nbody_propagation_results.json"))
+    result_path = Path(ssatk_data("data/benchmarks/nbody_propagation_results.json"))
     result_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     summary["results_path"] = str(result_path)
     if make_figures:

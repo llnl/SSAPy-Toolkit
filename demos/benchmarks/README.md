@@ -3,8 +3,8 @@
 These demos compare SSATK with reproducible reference sources and optional
 external propagators. Generated figures belong under
 `~/ssatk_output/figures/benchmarks/`.
-Benchmark summaries belong under `~/ssatk_output/benchmarks/`; generated
-reference state data belongs under `~/ssatk_output/data/benchmarks/`.
+Benchmark summaries and generated reference state data belong under
+`~/ssatk_output/data/benchmarks/`.
 When figures are enabled, the demos also generate the captioned PDF report
 `~/ssatk_output/documents/benchmarks/ssatk_propagation_benchmark_report.pdf`.
 

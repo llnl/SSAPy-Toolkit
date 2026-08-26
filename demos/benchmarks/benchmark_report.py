@@ -78,7 +78,7 @@ def _load_summaries(summaries: dict[str, dict] | None) -> dict[str, dict]:
         "long_term_propagation_results.json",
         "nbody_propagation_results.json",
     ):
-        path = Path(ssatk_data(f"benchmarks/{name}"))
+        path = Path(ssatk_data(f"data/benchmarks/{name}"))
         if path.is_file():
             loaded[name] = json.loads(path.read_text(encoding="utf-8"))
     return loaded

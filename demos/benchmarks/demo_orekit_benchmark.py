@@ -133,7 +133,7 @@ def main(make_figures=None, fast=None, verbose=None, allow_install=None):
 
         result["position_error_plot"] = str(position_path)
         result["velocity_error_plot"] = str(velocity_path)
-        result_path = Path(ssatk_data("benchmarks/orekit_two_body_results.json"))
+        result_path = Path(ssatk_data("data/benchmarks/orekit_two_body_results.json"))
         result_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return result
 

@@ -197,7 +197,7 @@ def main(
     }
 
     if make_figures:
-        result_path = Path(ssatk_data("benchmarks/artemis_benchmark_results.json"))
+        result_path = Path(ssatk_data("data/benchmarks/artemis_benchmark_results.json"))
         result_path.parent.mkdir(parents=True, exist_ok=True)
         result_path.write_text(
             json.dumps(
