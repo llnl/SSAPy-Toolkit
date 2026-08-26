@@ -1325,7 +1325,12 @@ def constant_ntw_thrust(thrust: ArrayLike, mass: float):
 
 def constant_body_thrust(thrust: ArrayLike, mass: float):
     acceleration = _as_vector3(thrust, "thrust") / _validate_positive(mass, "mass")
-    return lambda t, r, v, q, omega: acceleration
+
+    def body_acceleration(t, r, v, q, omega):
+        return acceleration
+
+    body_acceleration.attitude_jacobian = lambda q: _np.zeros((3, 4))
+    return body_acceleration
 
 
 def constant_body_torque(torque: ArrayLike):

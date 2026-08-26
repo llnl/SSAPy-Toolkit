@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-import inspect
 
 import numpy as np
 from scipy.integrate import solve_ivp
@@ -114,9 +114,9 @@ def propagate_orbit_state_with_stm(
     """Propagate an inertial state and its 6x6 state transition matrix.
 
     The matrix maps perturbations in the initial ``[r, v]`` state to first
-    order perturbations at each output time. The Jacobian is evaluated with
-    centered finite differences so arbitrary SSATK acceleration models work
-    without a second derivative API.
+    order perturbations at each output time. The unperturbed central-gravity
+    Jacobian is analytic; arbitrary SSATK acceleration models use centered
+    finite differences so they require no derivative API.
     """
 
     times = _times(times)
@@ -136,7 +136,7 @@ def propagate_orbit_state_with_stm(
         state = y[:6]
         matrix = y[6:].reshape(6, 6)
         derivative = _rhs(t, state, mu=mu, models=models)
-        jacobian = _finite_difference_jacobian(
+        jacobian = _state_jacobian(
             t, state, mu=mu, models=models, relative_step=fd_step
         )
         return np.concatenate([derivative, (jacobian @ matrix).ravel()])
@@ -198,6 +198,34 @@ def _finite_difference_jacobian(
     return jacobian
 
 
+def _state_jacobian(
+    t: float,
+    y: np.ndarray,
+    *,
+    mu: float,
+    models: tuple[AccelerationModel, ...],
+    relative_step: float,
+) -> np.ndarray:
+    if models:
+        return _finite_difference_jacobian(
+            t, y, mu=mu, models=models, relative_step=relative_step
+        )
+    return _kepler_jacobian(y[:3], mu)
+
+
+def _kepler_jacobian(r: np.ndarray, mu: float) -> np.ndarray:
+    jacobian = np.zeros((6, 6), dtype=float)
+    jacobian[:3, 3:] = np.eye(3)
+    radius = np.linalg.norm(r)
+    if mu == 0.0 or radius == 0.0:
+        return jacobian
+    radius3 = radius**3
+    jacobian[3:, :3] = -mu * (
+        np.eye(3) / radius3 - 3.0 * np.outer(r, r) / radius**5
+    )
+    return jacobian
+
+
 def _call_acceleration(model: AccelerationModel, t: float, r: np.ndarray, v: np.ndarray) -> np.ndarray:
     if getattr(model, "spacecraft_acceleration_model", False):
         return _vector3(model(t, r, v, [1.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0]), "acceleration")
@@ -207,7 +235,20 @@ def _call_acceleration(model: AccelerationModel, t: float, r: np.ndarray, v: np.
         if _expects_time_first(model)
         else ((r, v, t), (t, r, v))
     )
-    for args in (*three_arg_orders, (r, t), (r, v), (r,)):
+    candidates = (*three_arg_orders, (r, t), (r, v), (r,))
+    try:
+        signature = inspect.signature(model)
+    except (TypeError, ValueError):
+        signature = None
+    if signature is not None:
+        for args in candidates:
+            try:
+                signature.bind(*args)
+            except TypeError:
+                continue
+            return _vector3(model(*args), "acceleration")
+        raise TypeError("acceleration model does not accept a supported signature")
+    for args in candidates:
         try:
             return _vector3(model(*args), "acceleration")
         except TypeError:

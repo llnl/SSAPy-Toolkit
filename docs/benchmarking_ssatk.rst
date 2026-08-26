@@ -290,18 +290,58 @@ Current strengths
   states.
 * Data-access strategy that keeps reusable datasets in ``ssapy-data`` rather
   than embedding large files in the Toolkit repository.
-* Early 6-DoF propagation with quaternion attitude, body angular rate, gravity
-  gradient torque, and user-provided acceleration/torque models.
+* Coupled 6-DoF propagation with quaternion attitude, body angular rate,
+  gravity-gradient torque, user-provided acceleration/torque models, attached
+  body components, finite burns, mass properties, reaction wheels, and
+  environment-backed forces.
 
 Current limitations
 ^^^^^^^^^^^^^^^^^^^
 
 * The extended appendage and slosh models are linear reduced-order models.
 * External GMAT, STK/Astrogator, FreeFlyer, Orekit, Basilisk, and Tudat
-  reference runs are not executable in the current development environment.
-* The 6-DoF STM uses local quaternion coordinates and finite-difference
-  Jacobians; analytic Jacobians and a nonsingular attitude-error STM remain
-  future work.
+  reference runs remain optional because their runtimes and force-model data
+  are not consistently available in CI.
+* The orbit-only STM uses the analytic central-gravity Jacobian for the
+  unperturbed Kepler problem and finite-difference Jacobians when arbitrary
+  perturbation callbacks are present. The coupled 6-DoF STM uses analytic
+  central-gravity and fixed-inertia rigid-body Jacobians, including
+  gravity-gradient torque partials, with finite-difference fallback for
+  additional forces, torques, wheels, and mass flow. A multiplicative
+  three-parameter body-frame attitude-error STM is available alongside the
+  original quaternion-coordinate STM.
+
+Measured baseline
+^^^^^^^^^^^^^^^^^
+
+On 2026-08-26, the SSATK Python 3.12 environment completed ``611 passed, 18
+skipped`` in 273 seconds. The focused orbit and 6-DoF variational checks
+completed ``20 passed`` after the analytic and attitude-error STM updates. The
+full suite is the regression gate; optional external-tool comparisons are
+evidence for individual capability claims and do not silently substitute for
+analytical checks.
+
+The optional Basilisk coupled 6-DoF case also ran on the same date using
+Basilisk's ``Spacecraft`` and ``ExtForceTorque`` models for a 20 s, 41-sample
+zero-gravity case with constant body-frame force and torque. The maximum
+SSATK-minus-Basilisk residuals were ``4.0e-16 m`` in position, ``7.1e-17 m/s``
+in velocity, ``3.4e-12`` in quaternion distance, and ``9.2e-17 rad/s`` in body
+rate.
+
+Orekit 10.3.1 also ran for the matched two-body case using its
+``KeplerianPropagator`` over 3600 s with 60 s output spacing. Relative to the
+SSATK DOP853 trajectory, the maximum position and velocity residuals were
+``1.22e-3 m`` and ``1.03e-6 m/s``; the RMS residuals were ``5.81e-4 m`` and
+``5.37e-7 m/s``. These residuals establish a numerical baseline for the
+propagator pair, not a general claim about all Orekit or SSATK force models.
+
+GMAT R2026a also ran through the configured Ubuntu 24.04 Podman container for
+the matched Earth degree/order-0 JGM2 point-mass case over 600 s with 60 s
+output spacing. The maximum position and velocity residuals were
+``2.89e-3 m`` and ``3.11e-6 m/s``; the RMS residuals were ``2.11e-3 m`` and
+``2.28e-6 m/s``. The GMAT case uses GMAT's JGM2 Earth gravitational parameter,
+so its residuals include the documented ``mu`` convention difference from
+SSATK's default Earth constant.
 
 Target benchmark identity
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1012,18 +1052,17 @@ SSATK should be described as:
 Recommended Next Development Steps
 ----------------------------------
 
-1. Add a ``SpacecraftBody`` or ``RigidBody`` model with mass, inertia, center of
-   mass, facets, and component attachment points.
-2. Add ``Facet`` and ``BoxWing`` helpers.
-3. Rewrite flat-plate drag/SRP as one-facet special cases of the facet model.
-4. Add ``Thruster`` and ``Tank`` components with force, torque, and mass-flow
-   outputs.
-5. Add benchmark tests for every case listed above that can be validated
-   analytically.
-6. Add a benchmark runner that writes JSON/CSV summaries into the user's
-   ``ssatk_output`` area, not the source repository.
-7. Add optional cross-tool comparison notebooks or scripts only when the
-   external tool can be installed cleanly in CI or documented as optional.
+1. Extend analytic Jacobians to additional built-in attitude-dependent force
+   models, wheel states, and variable mass properties.
+2. Convert each benchmark case in this document into a machine-readable
+   acceptance result with explicit units, tolerances, solver settings, and
+   reference provenance.
+3. Extend the existing optional GMAT, Orekit, and Basilisk comparisons to
+   matched force-model cases when their runtimes are available; report residuals
+   rather than capability labels alone.
+4. Profile representative propagation cases on fixed hardware and optimize
+   only measured bottlenecks. Preserve the current direct Python composition
+   API and avoid adding a simulation executive.
 
 References
 ----------

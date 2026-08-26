@@ -10,17 +10,18 @@ from ssapy_toolkit.accelerations_6dof import (
     SpacecraftThrusterAccel,
 )
 from ssapy_toolkit.constants import AU, EARTH_MU, STANDARD_GRAVITY
-from ssapy_toolkit.propagators_6dof import Spacecraft
 from ssapy_toolkit.environment import SpaceEnvironment
-from ssapy_toolkit.propagators_orbit import (
-    propagate_orbit_state,
-    propagate_orbit_state_with_stm,
-)
 from ssapy_toolkit.propagators_6dof import (
+    Spacecraft,
     propagate_6dof_high_accuracy,
     propagate_spacecraft_high_accuracy,
     propagate_spacecraft_segments,
 )
+from ssapy_toolkit.propagators_orbit import (
+    propagate_orbit_state,
+    propagate_orbit_state_with_stm,
+)
+from ssapy_toolkit.propagators_orbit.high_accuracy import _kepler_jacobian
 from ssapy_toolkit.satellites import SpacecraftBody, Thruster, reaction_wheel_triplet
 
 
@@ -66,6 +67,18 @@ def test_orbit_stm_matches_finite_difference_of_propagated_state():
     np.testing.assert_allclose(actual, predicted, rtol=3.0e-4, atol=2.0e-7)
 
 
+def test_kepler_stm_jacobian_matches_central_gravity_derivative():
+    r = np.array([7_000_000.0, -1_200_000.0, 800_000.0])
+    radius = np.linalg.norm(r)
+    expected = np.zeros((6, 6))
+    expected[:3, 3:] = np.eye(3)
+    expected[3:, :3] = -EARTH_MU * (
+        np.eye(3) / radius**3 - 3.0 * np.outer(r, r) / radius**5
+    )
+
+    np.testing.assert_allclose(_kepler_jacobian(r, EARTH_MU), expected)
+
+
 def test_high_accuracy_orbit_propagator_accepts_orbit_like_and_accel_models():
     orbit = SimpleNamespace(
         r=np.array([0.0, 0.0, 0.0]),
@@ -102,6 +115,19 @@ def test_high_accuracy_orbit_propagator_validates_inputs():
             r0=[1, 0, 0],
             v0=[0, 1, 0],
             times=[0.0, 1.0],
+        )
+
+
+def test_orbit_acceleration_callback_errors_are_not_masked():
+    def broken_acceleration(r, v, t):
+        raise TypeError("callback failed")
+
+    with pytest.raises(TypeError, match="callback failed"):
+        propagate_orbit_state(
+            r0=[7_000_000.0, 0.0, 0.0],
+            v0=[0.0, 7_500.0, 0.0],
+            times=[0.0, 1.0],
+            acceleration=broken_acceleration,
         )
 
 

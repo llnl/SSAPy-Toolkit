@@ -1,10 +1,18 @@
 import numpy as np
 
 import ssapy_toolkit as ssatk
+from ssapy_toolkit.coordinates.attitude import rotate_vector
 from ssapy_toolkit.propagators_6dof import (
+    attitude_error_stm,
     propagate_6dof,
     propagate_6dof_covariance,
     propagate_6dof_variational,
+)
+from ssapy_toolkit.propagators_6dof.sixdof import sixdof_rhs
+from ssapy_toolkit.propagators_6dof.variational import (
+    _body_acceleration_jacobian,
+    _free_rigid_body_jacobian,
+    _gravity_gradient_jacobian,
 )
 
 
@@ -38,6 +46,22 @@ def test_variational_stm_matches_terminal_finite_difference_response():
     np.testing.assert_allclose(predicted, finite_difference, rtol=2e-4, atol=1e-12)
 
 
+def test_attitude_error_stm_has_nonsingular_three_parameter_attitude_state():
+    result = propagate_6dof_variational(
+        times=[0.0, 0.01],
+        inertia=np.diag([2.0, 3.0, 4.0]),
+        r0=[7.0e6, 0.0, 0.0],
+        v0=[0.0, 7_500.0, 0.0],
+        q0=[0.9, 0.1, -0.2, 0.3],
+        omega0=[0.01, -0.02, 0.03],
+    )
+    error_stm = attitude_error_stm(result)
+
+    assert result.attitude_error_stm is not None
+    assert error_stm.shape == (2, 12, 12)
+    np.testing.assert_allclose(error_stm[0], np.eye(12), atol=1e-12)
+
+
 def test_variational_mass_state_is_included_and_custom_stm_is_honored():
     stm0 = np.eye(14) * 2.0
     result = propagate_6dof_variational(
@@ -68,3 +92,110 @@ def test_covariance_transform_uses_stm_and_process_noise():
     assert ssatk.propagate_6dof_covariance is propagate_6dof_covariance
     np.testing.assert_allclose(covariance[-1], expected, atol=1e-12)
     np.testing.assert_allclose(covariance, np.swapaxes(covariance, -1, -2), atol=1e-12)
+
+
+def test_free_rigid_body_jacobian_matches_rhs_finite_difference():
+    inertia = np.diag([2.0, 3.0, 4.0])
+    state = np.array([
+        7.0e6, -1.2e6, 0.8e6, 1.2e3, 7.3e3, -0.5e3,
+        0.9, 0.1, -0.2, 0.3, 0.01, -0.02, 0.03,
+    ])
+    jacobian = _free_rigid_body_jacobian(state, mu=ssatk.EARTH_MU, inertia=inertia)
+    finite_difference = np.empty_like(jacobian)
+    for column in range(state.size):
+        step = 1.0e-7 * max(1.0, abs(state[column]))
+        delta = np.zeros(state.size)
+        delta[column] = step
+        plus = sixdof_rhs(0.0, state + delta, inertia=inertia)
+        minus = sixdof_rhs(0.0, state - delta, inertia=inertia)
+        finite_difference[:, column] = (plus - minus) / (2.0 * step)
+
+    np.testing.assert_allclose(jacobian, finite_difference, rtol=1.0e-6, atol=1.0e-10)
+
+
+def test_free_rigid_body_jacobian_matches_passive_wheel_coupling():
+    inertia = np.diag([2.0, 3.0, 4.0])
+    wheel_axes = np.array([[1.0, 0.0], [0.0, 1.0], [0.0, 0.0]])
+    state = np.array([
+        7.0e6, -1.2e6, 0.8e6, 1.2e3, 7.3e3, -0.5e3,
+        0.9, 0.1, -0.2, 0.3, 0.01, -0.02, 0.03, 0.4, -0.5,
+    ])
+    jacobian = _free_rigid_body_jacobian(
+        state, mu=ssatk.EARTH_MU, inertia=inertia, wheel_axes=wheel_axes
+    )
+    finite_difference = np.empty_like(jacobian)
+    for column in range(state.size):
+        step = 1.0e-7 * max(1.0, abs(state[column]))
+        delta = np.zeros(state.size)
+        delta[column] = step
+        plus = sixdof_rhs(0.0, state + delta, inertia=inertia, wheel_axes_body=wheel_axes)
+        minus = sixdof_rhs(0.0, state - delta, inertia=inertia, wheel_axes_body=wheel_axes)
+        finite_difference[:, column] = (plus - minus) / (2.0 * step)
+
+    np.testing.assert_allclose(jacobian, finite_difference, rtol=1.0e-6, atol=1.0e-10)
+
+
+def test_gravity_gradient_jacobian_matches_torque_finite_difference():
+    inertia = np.diag([2.0, 3.0, 4.0])
+    position = np.array([7.0e6, -1.2e6, 0.8e6])
+    quaternion = np.array([0.9, 0.1, -0.2, 0.3])
+    torque_dr, torque_dq = _gravity_gradient_jacobian(
+        position, quaternion, inertia, ssatk.EARTH_MU
+    )
+
+    from ssapy_toolkit.propagators_6dof.sixdof import _gravity_gradient_torque_prepared
+
+    finite_dr = np.empty((3, 3))
+    finite_dq = np.empty((3, 4))
+    for column in range(3):
+        step = 1.0e-6 * max(1.0, abs(position[column]))
+        delta = np.zeros(3)
+        delta[column] = step
+        finite_dr[:, column] = (
+            _gravity_gradient_torque_prepared(
+                position + delta, quaternion, inertia, ssatk.EARTH_MU
+            )
+            - _gravity_gradient_torque_prepared(
+                position - delta, quaternion, inertia, ssatk.EARTH_MU
+            )
+        ) / (2.0 * step)
+    for column in range(4):
+        step = 1.0e-7
+        delta = np.zeros(4)
+        delta[column] = step
+        finite_dq[:, column] = (
+            _gravity_gradient_torque_prepared(
+                position, quaternion + delta, inertia, ssatk.EARTH_MU
+            )
+            - _gravity_gradient_torque_prepared(
+                position, quaternion - delta, inertia, ssatk.EARTH_MU
+            )
+        ) / (2.0 * step)
+
+    np.testing.assert_allclose(torque_dr, finite_dr, rtol=1.0e-6, atol=1.0e-18)
+    np.testing.assert_allclose(torque_dq, finite_dq, rtol=1.0e-6, atol=1.0e-12)
+
+
+def test_variational_jacobian_includes_analytic_body_force_attitude_partial():
+    body_acceleration = lambda t, r, v, q, omega: [0.0, 1.0e-3, 0.0]
+    body_acceleration.attitude_jacobian = lambda q: np.zeros((3, 4))
+    state = np.array([
+        7.0e6, -1.2e6, 0.8e6, 1.2e3, 7.3e3, -0.5e3,
+        0.9, 0.1, -0.2, 0.3, 0.01, -0.02, 0.03,
+    ])
+    jacobian = _free_rigid_body_jacobian(
+        state, mu=ssatk.EARTH_MU, inertia=np.diag([2.0, 3.0, 4.0])
+    )
+    jacobian[3:6, 6:10] = _body_acceleration_jacobian(
+        body_acceleration, 0.0, state, q_raw=state[6:10]
+    )
+    finite = np.empty((3, 4))
+    for column in range(4):
+        step = 1.0e-7
+        delta = np.zeros(4)
+        delta[column] = step
+        plus = rotate_vector(state[6:10] + delta, body_acceleration(0.0, state[:3], state[3:6], state[6:10] + delta, state[10:13]))
+        minus = rotate_vector(state[6:10] - delta, body_acceleration(0.0, state[:3], state[3:6], state[6:10] - delta, state[10:13]))
+        finite[:, column] = (plus - minus) / (2.0 * step)
+
+    np.testing.assert_allclose(jacobian[3:6, 6:10], finite, rtol=1.0e-6, atol=1.0e-12)

@@ -1,8 +1,10 @@
 """Coupled 6-DoF state-transition propagation.
 
 The state-transition matrix is integrated with the same ``sixdof_rhs`` used
-by the nominal propagator.  Its Jacobian is computed by central differences,
-which keeps every existing force, torque, mass, and wheel model in the loop.
+by the nominal propagator. The central-gravity, fixed-inertia rigid-body case
+uses analytic Jacobians, including gravity-gradient torque partials; all other
+model combinations retain central differences so every existing force, torque,
+mass, and wheel model stays in the loop.
 """
 
 from __future__ import annotations
@@ -13,7 +15,12 @@ import numpy as np
 from scipy.integrate import solve_ivp
 
 from ..constants import EARTH_MU
-from ..coordinates.attitude import normalize_quaternion
+from ..coordinates.attitude import (
+    normalize_quaternion,
+    quaternion_conjugate,
+    rotate_vector,
+)
+from ..propagators_orbit.high_accuracy import _kepler_jacobian
 from .sixdof import (
     ArrayLike,
     SixDOFTrajectory,
@@ -30,6 +37,7 @@ from .sixdof import (
 
 __all__ = [
     "SixDOFVariationalTrajectory",
+    "attitude_error_stm",
     "propagate_6dof_covariance",
     "propagate_6dof_variational",
 ]
@@ -50,6 +58,55 @@ class SixDOFVariationalTrajectory:
     @property
     def t(self):
         return self.trajectory.t
+
+    @property
+    def attitude_error_stm(self):
+        """Return the STM in ``[r, v, δθ_body, omega, ...]`` coordinates."""
+
+        return attitude_error_stm(self)
+
+
+def attitude_error_stm(variational) -> np.ndarray:
+    """Convert a quaternion-coordinate STM to a multiplicative attitude-error STM.
+
+    The returned state ordering is ``[r, v, δθ_body, omega, [mass],
+    [wheel_momentum]]``.  ``δθ_body`` is the three-parameter local error in the
+    body frame, defined by ``q_perturbed = q_nominal ⊗ δq_body``.  This removes
+    the redundant quaternion scalar direction while retaining the original
+    quaternion STM for workflows that need it.
+    """
+    trajectory = getattr(variational, "trajectory", None)
+    stm = np.asarray(getattr(variational, "stm", variational), dtype=float)
+    if trajectory is None or stm.ndim != 3 or stm.shape[1] != stm.shape[2]:
+        raise ValueError("variational must contain a trajectory and square STM array.")
+    n = stm.shape[1]
+    if n < 13 or trajectory.q.shape[0] != stm.shape[0]:
+        raise ValueError("variational must contain a quaternion STM matching its trajectory.")
+
+    initial_q = normalize_quaternion(trajectory.q[0])
+    input_map = np.zeros((n, n - 1))
+    input_map[:6, :6] = np.eye(6)
+    input_map[6:10, 6:9] = _quaternion_error_input_map(initial_q)
+    input_map[10:13, 9:12] = np.eye(3)
+    input_map[13:, 12:] = np.eye(n - 13)
+
+    result = np.empty((stm.shape[0], n - 1, n - 1))
+    for index, quaternion in enumerate(trajectory.q):
+        output_map = np.zeros((n - 1, n))
+        output_map[:6, :6] = np.eye(6)
+        output_map[6:9, 6:10] = _quaternion_error_output_map(normalize_quaternion(quaternion))
+        output_map[9:12, 10:13] = np.eye(3)
+        output_map[12:, 13:] = np.eye(n - 13)
+        result[index] = output_map @ stm[index] @ input_map
+    return result
+
+
+def _quaternion_error_input_map(q: np.ndarray) -> np.ndarray:
+    return 0.5 * np.vstack((-q[1:], q[0] * np.eye(3) + _skew(q[1:])))
+
+
+def _quaternion_error_output_map(q: np.ndarray) -> np.ndarray:
+    return 2.0 * np.hstack((-q[1:].reshape(3, 1), q[0] * np.eye(3) - _skew(q[1:])))
 
 
 def propagate_6dof_covariance(variational, covariance0, process_noise=None):
@@ -170,6 +227,15 @@ def propagate_6dof_variational(
         "wheel_torque": wheel_torque, "wheel_momentum_capacity": wheel_capacity,
         "inv_inertia": inv_inertia, "mass_state": state.mass is not None,
     }
+    analytic_jacobian = (
+        acceleration is None
+        and ntw_acceleration is None
+        and (body_acceleration is None or hasattr(body_acceleration, "attitude_jacobian"))
+        and torque is None
+        and mass_flow_rate is None
+        and wheel_torque is None
+        and not callable(inertia)
+    )
 
     def nominal_rhs(t, y):
         return sixdof_rhs(t, y, **rhs_kwargs)
@@ -178,12 +244,26 @@ def propagate_6dof_variational(
         y = combined[:n]
         phi = combined[n:].reshape(n, n)
         f = nominal_rhs(t, y)
-        jac = np.empty((n, n))
-        for column in range(n):
-            step = jacobian_step * max(1.0, abs(y[column]))
-            delta = np.zeros(n)
-            delta[column] = step
-            jac[:, column] = (nominal_rhs(t, y + delta) - nominal_rhs(t, y - delta)) / (2.0 * step)
+        if analytic_jacobian:
+            jac = _free_rigid_body_jacobian(
+                y,
+                mu=mu,
+                inertia=inertia_arg,
+                gravity_gradient=gravity_gradient,
+                wheel_axes=wheel_axes,
+                wheel_start=14 if state.mass is not None else 13,
+            )
+            if body_acceleration is not None:
+                jac[3:6, 6:10] = _body_acceleration_jacobian(
+                    body_acceleration, t, y, q_raw=y[6:10]
+                )
+        else:
+            jac = np.empty((n, n))
+            for column in range(n):
+                step = jacobian_step * max(1.0, abs(y[column]))
+                delta = np.zeros(n)
+                delta[column] = step
+                jac[:, column] = (nominal_rhs(t, y + delta) - nominal_rhs(t, y - delta)) / (2.0 * step)
         return np.concatenate((f, (jac @ phi).ravel()))
 
     sol = solve_ivp(
@@ -201,3 +281,117 @@ def propagate_6dof_variational(
     wheels = None if wheel_momentum is None else y[:, wheel_start:]
     trajectory = SixDOFTrajectory(sol.t, y[:, :3], y[:, 3:6], q, y[:, 10:13], mass, wheels, int(sol.nfev), str(sol.message), int(sol.status), solution=sol.sol)
     return SixDOFVariationalTrajectory(trajectory, sol.y[n:].T.reshape((-1, n, n)))
+
+
+def _free_rigid_body_jacobian(
+    y,
+    *,
+    mu: float,
+    inertia: np.ndarray,
+    gravity_gradient: bool = False,
+    wheel_axes: np.ndarray | None = None,
+    wheel_start: int = 13,
+) -> np.ndarray:
+    n = y.size
+    jacobian = np.zeros((n, n), dtype=float)
+    jacobian[:6, :6] = _kepler_jacobian(y[:3], mu)
+
+    q_raw = y[6:10]
+    q = normalize_quaternion(q_raw)
+    q_norm = np.linalg.norm(q_raw)
+    omega = y[10:13]
+    omega_skew = _skew(omega)
+    q_vector = q[1:]
+    jacobian[6:10, 10:13] = 0.5 * np.vstack((-q_vector, q[0] * np.eye(3) + _skew(q_vector)))
+    q_jacobian = 0.5 * np.block(
+        [
+            [np.zeros((1, 1)), -omega.reshape(1, 3)],
+            [omega.reshape(3, 1), -omega_skew],
+        ]
+    )
+    jacobian[6:10, 6:10] = q_jacobian @ (np.eye(4) - np.outer(q, q)) / q_norm
+
+    angular_momentum = inertia @ omega
+    wheel_momentum = None if wheel_axes is None else y[wheel_start:]
+    if wheel_momentum is not None:
+        angular_momentum = angular_momentum + wheel_axes @ wheel_momentum
+    jacobian[10:13, 10:13] = np.linalg.solve(
+        inertia,
+        _skew(angular_momentum) - omega_skew @ inertia,
+    )
+    if wheel_momentum is not None:
+        jacobian[10:13, wheel_start:] = -np.linalg.solve(
+            inertia, omega_skew @ wheel_axes
+        )
+    if gravity_gradient:
+        torque_dr, torque_dq = _gravity_gradient_jacobian(
+            y[:3], q_raw, inertia, mu
+        )
+        jacobian[10:13, :3] = np.linalg.solve(inertia, torque_dr)
+        jacobian[10:13, 6:10] = np.linalg.solve(inertia, torque_dq)
+    return jacobian
+
+
+def _gravity_gradient_jacobian(
+    r: np.ndarray, q_raw: np.ndarray, inertia: np.ndarray, mu: float
+) -> tuple[np.ndarray, np.ndarray]:
+    radius = np.linalg.norm(r)
+    if radius == 0.0 or mu == 0.0:
+        return np.zeros((3, 3)), np.zeros((3, 4))
+    q = normalize_quaternion(q_raw)
+    q_norm = np.linalg.norm(q_raw)
+    radial = r / radius
+    body_axes = np.column_stack(
+        [rotate_vector(quaternion_conjugate(q), np.eye(3)[:, index]) for index in range(3)]
+    )
+    body_radial = body_axes @ radial
+    angular_momentum = inertia @ body_radial
+    force_jacobian = _skew(body_radial) @ inertia - _skew(angular_momentum)
+    scale = 3.0 * mu / radius**3
+    radial_jacobian = body_axes @ (np.eye(3) - np.outer(radial, radial)) / radius
+    dscale_dr = -9.0 * mu * r / radius**5
+    torque_direction = np.cross(body_radial, angular_momentum)
+    torque_dr = np.outer(torque_direction, dscale_dr) + scale * force_jacobian @ radial_jacobian
+    body_error = _quaternion_error_output_map(q) / q_norm
+    torque_dq = scale * force_jacobian @ _skew(body_radial) @ body_error
+    return torque_dr, torque_dq
+
+
+def _body_acceleration_jacobian(model, t, y, *, q_raw):
+    q = normalize_quaternion(q_raw)
+    body_acceleration = np.asarray(model(t, y[:3], y[3:6], q, y[10:13]), dtype=float)
+    if body_acceleration.shape != (3,):
+        raise ValueError("body_acceleration must return a 3-vector.")
+    body_jacobian = np.asarray(model.attitude_jacobian(q), dtype=float)
+    if body_jacobian.shape != (3, 4):
+        raise ValueError("attitude_jacobian must return a (3, 4) array.")
+    return _rotate_vector_jacobian(q, body_acceleration) + rotate_vector_matrix(q) @ body_jacobian
+
+
+def rotate_vector_matrix(q: np.ndarray) -> np.ndarray:
+    w = q[0]
+    vector = q[1:]
+    return (w * w - vector @ vector) * np.eye(3) + 2.0 * np.outer(vector, vector) + 2.0 * w * _skew(vector)
+
+
+def _rotate_vector_jacobian(q_raw: np.ndarray, vector: np.ndarray) -> np.ndarray:
+    q_raw = np.asarray(q_raw, dtype=float)
+    q = normalize_quaternion(q_raw)
+    w = q[0]
+    u = q[1:]
+    derivative = np.empty((3, 4))
+    derivative[:, 0] = 2.0 * (w * np.eye(3) + _skew(u)) @ vector
+    for index in range(3):
+        basis = np.eye(3)[:, index]
+        derivative[:, index + 1] = (
+            -2.0 * u[index] * np.eye(3)
+            + 2.0 * np.outer(basis, u)
+            + 2.0 * np.outer(u, basis)
+            + 2.0 * w * _skew(basis)
+        ) @ vector
+    return derivative @ (np.eye(4) - np.outer(q, q)) / np.linalg.norm(q_raw)
+
+
+def _skew(vector: np.ndarray) -> np.ndarray:
+    x, y, z = vector
+    return np.array([[0.0, -z, y], [z, 0.0, -x], [-y, x, 0.0]])

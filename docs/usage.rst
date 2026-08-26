@@ -137,6 +137,14 @@ For covariance or sensitivity propagation, use
 ``stm`` output has shape ``(N, 6, 6)`` and maps initial Cartesian perturbations
 to each sampled state.
 
+For coupled spacecraft covariance or sensitivity propagation, use
+:func:`ssapy_toolkit.propagators_6dof.propagate_6dof_variational`. The returned
+``stm`` retains the solver's quaternion coordinates. Use its
+``attitude_error_stm`` property for the local multiplicative form with state
+ordering ``[r, v, δθ_body, omega, mass, wheel_momentum]``; ``δθ_body`` is the
+three-parameter body-frame error defined by
+``q_perturbed = q_nominal ⊗ δq_body``.
+
 Export an independent-tool reference case with
 :func:`ssapy_toolkit.io.write_reference_case`. It writes a CCSDS Orbit
 Ephemeris Message (OEM) in km and km/s plus a JSON sidecar in SI units with the

@@ -276,6 +276,26 @@ def build_benchmark_cases(
             default_min_sample_time=0.01,
         ),
         BenchmarkCase(
+            name="propagators_orbit.dop853_32_steps",
+            group="propagators_orbit",
+            description="Adaptive DOP853 translational propagation over 32 short time steps.",
+            factory=lambda _ctx: _call(lambda: _propagator_dop853(r0, v0, times)),
+            validator=_validate_orbit_trajectory,
+            tags=("propagators_orbit", "propagation", "dop853"),
+            default_repeats=3,
+            default_min_sample_time=0.0,
+        ),
+        BenchmarkCase(
+            name="propagators_orbit.dop853_stm_32_steps",
+            group="propagators_orbit",
+            description="Adaptive DOP853 translational propagation with a 6x6 STM.",
+            factory=lambda _ctx: _call(lambda: _propagator_dop853_stm(r0, v0, times)),
+            validator=_validate_orbit_stm,
+            tags=("propagators_orbit", "propagation", "stm", "dop853"),
+            default_repeats=3,
+            default_min_sample_time=0.0,
+        ),
+        BenchmarkCase(
             name="propagators_6dof.point_mass_32_steps",
             group="propagators_6dof",
             description="6-DoF high-accuracy point-mass propagation over 32 short time steps.",
@@ -567,6 +587,33 @@ def _propagator_leapfrog(r0, v0, t):
     from ssapy_toolkit.propagators_orbit.leap_frog import leapfrog
 
     return leapfrog(r0, v0, t)
+
+
+def _propagator_dop853(r0, v0, t):
+    from ssapy_toolkit.propagators_orbit import propagate_orbit_state
+
+    return propagate_orbit_state(r0=r0, v0=v0, times=t)
+
+
+def _propagator_dop853_stm(r0, v0, t):
+    from ssapy_toolkit.propagators_orbit import propagate_orbit_state_with_stm
+
+    return propagate_orbit_state_with_stm(r0=r0, v0=v0, times=t)
+
+
+def _validate_orbit_trajectory(trajectory) -> dict[str, int | float]:
+    state = np.concatenate((trajectory.r.ravel(), trajectory.v.ravel()))
+    return {
+        "nfev": int(trajectory.nfev),
+        "finite_state_residual": 1.0 if np.any(~np.isfinite(state)) else 0.0,
+    }
+
+
+def _validate_orbit_stm(trajectory) -> dict[str, int | float]:
+    metrics = _validate_orbit_trajectory(trajectory)
+    metrics["finite_stm_residual"] = 1.0 if np.any(~np.isfinite(trajectory.stm)) else 0.0
+    metrics["initial_stm_residual"] = float(np.max(np.abs(trajectory.stm[0] - np.eye(6))))
+    return metrics
 
 
 def _propagator_rk4(r0, v0, t):
