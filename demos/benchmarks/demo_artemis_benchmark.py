@@ -77,6 +77,7 @@ def _match_executed_maneuvers(t_ref, metadata):
         matched.append(
             {
                 **event,
+                "match_status": event.get("data_status", "timing_only"),
                 "utc": event_time.utc.isot,
                 "matched_index": index,
                 "sample_utc": t_ref[index].utc.isot,
@@ -133,6 +134,10 @@ def main(
     match_burns = bool(match_burns and maneuver_metadata)
     maneuver_indices, matched_maneuvers = _match_executed_maneuvers(t_ref, maneuver_metadata)
     maneuver_index_set = set(maneuver_indices)
+    burn_data_counts = {}
+    for event in matched_maneuvers:
+        status = event.get("data_status", "timing_only")
+        burn_data_counts[status] = burn_data_counts.get(status, 0) + 1
 
     n = len(t_ref)
     r_model = np.zeros_like(r_ref)
@@ -188,6 +193,7 @@ def main(
         "sync_threshold_km": float(sync_threshold_km),
         "sync_mode": "executed_maneuvers" if match_burns else "position_threshold",
         "maneuvers": matched_maneuvers,
+        "burn_data_counts": burn_data_counts,
     }
 
     if make_figures:
@@ -209,6 +215,7 @@ def main(
                     "sync_threshold_km": result["sync_threshold_km"],
                     "sync_mode": result["sync_mode"],
                     "maneuvers": result["maneuvers"],
+                    "burn_data_counts": result["burn_data_counts"],
                 },
                 indent=2,
                 sort_keys=True,
@@ -225,6 +232,7 @@ def main(
         print("Time scale assumed: TDB")
         print(f"Sync threshold [km]: {sync_threshold_km:.3f}")
         print(f"Number of sync events: {result['n_syncs']}")
+        print(f"Burn data matches: {result['burn_data_counts']}")
         print(f"RMS position error [m]: {result['rms_position_error_m']:.3f}")
         print(f"Max position error [m]: {result['max_position_error_m']:.3f}")
         print(f"RMS velocity error [m/s]: {result['rms_velocity_error_m_s']:.6f}")

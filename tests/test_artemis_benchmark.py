@@ -17,3 +17,4 @@ def test_artemis_maneuver_matching_uses_executed_events_only():
     assert indices == [1]
     assert [event["name"] for event in events] == ["executed"]
     assert np.isclose(events[0]["sample_offset_s"], 0.0)
+    assert events[0]["match_status"] == "timing_only"
