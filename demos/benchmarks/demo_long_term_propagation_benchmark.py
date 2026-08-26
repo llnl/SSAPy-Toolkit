@@ -43,7 +43,7 @@ CASES = (
 )
 
 
-def _compare(rows: np.ndarray, *, scale: float) -> tuple[np.ndarray, dict[str, float]]:
+def _compare(rows: np.ndarray, *, scale: float, mu: float = EARTH_MU) -> tuple[np.ndarray, dict[str, float]]:
     rows = np.asarray(rows, dtype=float).reshape((-1, 7))
     times = rows[:, 0]
     reference = rows[:, 1:] * scale
@@ -51,7 +51,7 @@ def _compare(rows: np.ndarray, *, scale: float) -> tuple[np.ndarray, dict[str, f
         r0=reference[0, :3],
         v0=reference[0, 3:],
         times=times,
-        mu=EARTH_MU,
+        mu=mu,
         rtol=1e-12,
         atol=1e-9,
     )
@@ -154,6 +154,7 @@ def main(make_figures=None, fast=None, verbose=None, allow_install=None):
             residuals["GMAT"], tool_results["GMAT"] = _compare(
                 rows,
                 scale=np.full(6, 1_000.0),
+                mu=GMAT_MU,
             )
             tool_results["GMAT"]["state_path"] = str(state_path)
 

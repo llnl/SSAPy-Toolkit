@@ -139,7 +139,11 @@ def _write_regime_matrix(summaries: dict[str, dict], output_dir: Path) -> Path |
                     continue
                 rows = np.loadtxt(state_path, delimiter=",")
                 if mode is None:
-                    values, _ = two_body._compare(rows, scale=1_000.0 if tool == "GMAT" else 1.0)
+                    values, _ = two_body._compare(
+                        rows,
+                        scale=1_000.0 if tool == "GMAT" else 1.0,
+                        mu=two_body.GMAT_MU if tool == "GMAT" else two_body.EARTH_MU,
+                    )
                 else:
                     cache_key = (mode, regime)
                     if cache_key not in ssatk_rows_cache:

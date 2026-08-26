@@ -239,7 +239,7 @@ def main(make_figures=None, fast=None, verbose=None, allow_install=None):
         r0=reference[0, :3] * 1_000.0,
         v0=reference[0, 3:] * 1_000.0,
         times=times,
-        mu=EARTH_MU,
+        mu=GMAT_JGM2_MU_M3_S2,
         rtol=1e-12,
         atol=1e-9,
     )
