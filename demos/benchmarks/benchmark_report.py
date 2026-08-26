@@ -159,54 +159,39 @@ def _write_regime_matrix(summaries: dict[str, dict], output_dir: Path) -> Path |
         return None
     output_dir.mkdir(parents=True, exist_ok=True)
     fig, axes = plt.subplots(2, 3, figsize=(15, 8), sharex=False)
-    colors = {"GMAT": "#1976d2", "Orekit": "#ef6c00"}
+    colors = {
+        ("2-body", "GMAT"): "#1f77b4",
+        ("2-body", "Orekit"): "#ff7f0e",
+        ("Earth-Moon-Sun", "GMAT"): "#2ca02c",
+        ("Earth-Moon-Sun", "Orekit"): "#d62728",
+        ("Full n-body", "GMAT"): "#9467bd",
+        ("Full n-body", "Orekit"): "#8c564b",
+    }
     styles = {"2-body": "-", "Earth-Moon-Sun": "--", "Full n-body": ":"}
-    floor = {"position": 1e-3, "velocity": 1e-3}
     for i, (regime, orbit_label) in enumerate(zip(regimes, orbit_labels)):
         for (current_regime, model_label, tool), values in residuals.items():
             if current_regime != regime:
                 continue
             hours = values[:, 0] / 3_600.0
-            position = np.maximum(values[:, 1], floor["position"])
-            velocity = np.maximum(values[:, 2], floor["velocity"])
             line_kwargs = dict(
-                color=colors[tool],
+                color=colors[(model_label, tool)],
                 linestyle=styles[model_label],
                 linewidth=1.5,
-                marker="|",
-                markevery=max(1, len(values) // 16),
                 label=f"{model_label} / {tool}",
             )
-            axes[0, i].plot(
-                hours,
-                position,
-                **line_kwargs,
-            )
-            axes[1, i].plot(
-                hours,
-                velocity,
-                **line_kwargs,
-            )
+            axes[0, i].plot(hours, values[:, 1], **line_kwargs)
+            axes[1, i].plot(hours, values[:, 2], **line_kwargs)
         axes[0, i].set_title(orbit_label)
         axes[1, i].set_xlabel("Elapsed time [hr]")
         for axis, ylabel in (
             (axes[0, i], "Position error [m]"),
             (axes[1, i], "Velocity error [m/s]"),
         ):
-            axis.set_yscale("log")
-            axis.set_ylim(bottom=1e-3)
             axis.set_ylabel(ylabel)
-            axis.grid(True, which="both", alpha=0.3)
+            axis.grid(True, alpha=0.3)
     axes[0, 0].legend(fontsize=8)
-    fig.text(
-        0.5,
-        0.01,
-        "Curves at the 1e-3 floor are below the plotted range; tick markers retain their time history.",
-        ha="center",
-        fontsize=8,
-    )
     fig.suptitle("SSATK external residual histories by orbit regime and force model")
-    fig.tight_layout(rect=(0, 0.03, 1, 1))
+    fig.tight_layout()
     path = output_dir / "benchmark_regime_matrix.png"
     fig.savefig(path, dpi=200, bbox_inches="tight")
     plt.close(fig)
