@@ -23,10 +23,12 @@ When figures are enabled, the demos also generate the captioned PDF report
   Orekit. The cislunar case is a two-body regional comparison, not an
   Earth-Moon-Sun model.
 - `demo_nbody_propagation_benchmark.py` repeats those regimes with Earth–Moon–Sun
-  and full planetary point-mass ladders. It records the ephemeris split used by
-  each tool: SSAPy DE430, GMAT DE421, and Orekit DE440. Set `OREKIT_DATA_DIR`
-  to an Orekit-data checkout when the sibling `~/workdir/orekit-data` directory
-  is not available.
+  and full planetary point-mass ladders. The benchmark uses DE430 for SSAPy,
+  GMAT SPICE, and Orekit. Set `GMAT_DE430_BSP` and `OREKIT_DATA_DIR` when the
+  shared `/p/lustre1/yeager7` benchmark data are not available. The supplied
+  GMAT DE430 kernel covers the Earth–Moon–Sun ladder; the full planetary ladder
+  remains available through Orekit because GMAT also requires separate
+  satellite-center kernels for those bodies.
 
 STK and FreeFlyer require separate licensed/native installations and are not
 silently substituted by this benchmark suite. GMAT is optional; when its

@@ -61,7 +61,7 @@ def _gmat_script(*, radius_m: float, duration_s: float, step_s: float, point_mas
         )
     masses = ", ".join(point_masses)
     return f"""% SSATK/GMAT n-body comparison case.
-GMAT SolarSystem.EphemerisSource = 'DE421';
+    GMAT SolarSystem.EphemerisSource = 'SPICE';
 Create Spacecraft Sat;
 Sat.DateFormat = UTCGregorian;
 Sat.Epoch = '01 Jan 2026 12:00:00.000';
@@ -120,7 +120,13 @@ def _run_gmat(*, root: Path, executable: str, script: str, state_path: Path, exp
 def _orekit_data_dir() -> Path | None:
     configured = os.environ.get("OREKIT_DATA_DIR")
     candidates = [Path(configured).expanduser()] if configured else []
-    candidates.extend((Path(__file__).resolve().parents[3] / "orekit-data", Path.home() / "workdir" / "orekit-data"))
+    candidates.extend(
+        (
+            Path("/p/lustre1/yeager7/orekit-data-de430-clean"),
+            Path(__file__).resolve().parents[3] / "orekit-data",
+            Path.home() / "workdir" / "orekit-data",
+        )
+    )
     return next((path for path in candidates if path.is_dir()), None)
 
 
@@ -230,7 +236,7 @@ def _write_case_plot(case: dict, residuals: dict[str, np.ndarray], out_dir: Path
     axes[1].set_xlabel("Elapsed time [hr]")
     axes[0].set_title(
         f"SSATK n-body residuals: {case['label']} — {case['mode_label']}\n"
-        "Earth μ = GMAT JGM2; SSAPy DE430 / GMAT DE421 / Orekit DE440"
+        "Earth μ = GMAT JGM2; SSAPy / GMAT / Orekit DE430"
     )
     for axis in axes:
         axis.grid(True, alpha=0.3)
@@ -265,7 +271,7 @@ def _write_summary_plot(cases: list[dict], out_dir: Path) -> str:
     fig.text(
         0.5,
         0.01,
-        "Earth μ = GMAT JGM2; SSAPy DE430 / GMAT DE421 / Orekit DE440",
+        "Earth μ = GMAT JGM2; SSAPy / GMAT / Orekit DE430",
         ha="center",
         fontsize=9,
     )
@@ -287,7 +293,11 @@ def main(make_figures=None, fast=None, verbose=None, allow_install=None):
         allow_install = not UNDER_PYTEST
 
     gmat = demo_gmat_benchmark._find_gmat()
-    gmat_ready = gmat is not None and demo_gmat_benchmark._ensure_container_image(allow_install=allow_install)
+    gmat_ready = (
+        gmat is not None
+        and demo_gmat_benchmark._ensure_container_image(allow_install=allow_install)
+        and demo_gmat_benchmark._de430_available()
+    )
     figure_dir = Path(figpath("benchmarks"))
     results = []
     for mode, (mode_label, point_masses, _) in MODES.items():
@@ -301,7 +311,7 @@ def main(make_figures=None, fast=None, verbose=None, allow_install=None):
             residuals = {}
             tool_results = {}
 
-            if gmat_ready:
+            if gmat_ready and mode == "earth_moon_sun":
                 state_path = Path(ssatk_data(f"data/benchmarks/nbody/{mode}_{case['name']}_gmat_states.csv"))
                 rows = _run_gmat(
                     root=gmat[0],
@@ -346,7 +356,7 @@ def main(make_figures=None, fast=None, verbose=None, allow_install=None):
         "epoch_utc": EPOCH_UTC,
         "earth_mu_m3_s2": float(GMAT_MU),
         "force_models": "Earth degree/order-0 point mass plus listed third-body point masses",
-        "ephemeris_sources": {"ssatk": "DE430", "gmat": "DE421", "orekit": "DE440"},
+        "ephemeris_sources": {"ssatk": "DE430", "gmat": "DE430", "orekit": "DE430"},
         "ssatk_method": "DOP853, rtol=1e-12, atol=1e-9, SSAPy AccelThirdBody",
         "cases": results,
     }

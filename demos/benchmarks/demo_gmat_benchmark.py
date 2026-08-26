@@ -23,6 +23,11 @@ GALLERY_CATEGORY = "benchmarks"
 GMAT_IMAGE = "ubuntu:24.04"
 # POTFIELD value in GMAT's data/gravity/earth/JGM2.cof.
 GMAT_JGM2_MU_M3_S2 = 3.986004415e14
+GMAT_DE430_BSP = Path(os.environ.get("GMAT_DE430_BSP", "/p/lustre1/yeager7/gmat-data-de430/de430.bsp"))
+
+
+def _de430_available() -> bool:
+    return GMAT_DE430_BSP.is_file()
 
 
 def _find_gmat() -> tuple[Path, str] | None:
@@ -162,6 +167,8 @@ def _run_gmat_script(
             "--userns=keep-id",
             "--volume",
             f"{root}:/GMAT:rw",
+            "--volume",
+            f"{GMAT_DE430_BSP}:/GMAT/data/planetary_ephem/spk/DE421AllPlanets.bsp:ro",
             "--volume",
             f"{temp}:/benchmark:rw",
             GMAT_IMAGE,
