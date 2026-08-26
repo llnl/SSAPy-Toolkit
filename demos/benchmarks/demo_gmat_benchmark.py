@@ -220,7 +220,7 @@ def main(make_figures=None, fast=None, verbose=None, allow_install=None):
 
     radius_m = 7_000_000.0
     velocity_m_s = float(np.sqrt(EARTH_MU / radius_m))
-    duration_s = 3_600.0 if not fast else 600.0
+    duration_s = 14_400.0 if not fast else 600.0
     step_s = 60.0
     state_path = Path(ssatk_data("data/benchmarks/gmat_two_body_states.csv"))
     rows = _run_gmat(

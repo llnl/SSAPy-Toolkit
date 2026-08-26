@@ -40,7 +40,7 @@ CASES = (
         "name": "cislunar_radius",
         "label": "Cislunar radius",
         "radius_m": 384_400_000.0,
-        "duration_s": 30 * 86_400.0,
+        "duration_s": 60 * 86_400.0,
         "step_s": 1_800.0,
     },
 )
