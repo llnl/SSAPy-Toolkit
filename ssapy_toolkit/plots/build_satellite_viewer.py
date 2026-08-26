@@ -472,7 +472,7 @@ def build(out_path=None, verbose=True):
 
     if out_path is None:
         from ssapy_toolkit.plots.figpath import figpath
-        out_path = figpath("figures/satellite_3d_scene_threejs.html")
+        out_path = figpath("satellite_3d_scene_threejs.html")
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(doc)
 

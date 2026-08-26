@@ -75,7 +75,7 @@ def main(make_artifacts=None, fast=None, verbose=None):
             plot_simple,
             x, y,
             label="damped wave",
-            save_path=figpath("figures/test_chunks.gif"),
+            save_path=figpath("test_chunks.gif"),
             array_arg_indices=(0, 1),
             mode="chunks",
             chunk_size=30 if fast else 40,
@@ -107,7 +107,7 @@ def main(make_artifacts=None, fast=None, verbose=None):
         out2 = gifify(
             plot_returns_axes,
             x, y,
-            save_path=figpath("figures/test_cumulative.gif"),
+            save_path=figpath("test_cumulative.gif"),
             array_arg_indices=(0, 1),
             mode="cumulative",
             step=15 if fast else 30,
@@ -136,7 +136,7 @@ def main(make_artifacts=None, fast=None, verbose=None):
         out3 = gifify(
             plot_with_ax,
             x, y,
-            save_path=figpath("figures/test_sliding.gif"),
+            save_path=figpath("test_sliding.gif"),
             array_arg_indices=(0, 1),
             mode="sliding",
             chunk_size=20 if fast else 30,
@@ -176,7 +176,7 @@ def main(make_artifacts=None, fast=None, verbose=None):
         out4 = gifify(
             groundtrack_dashboard,
             r_use, t_use,
-            save_path=figpath("figures/test_groundtrack.gif"),
+            save_path=figpath("test_groundtrack.gif"),
             array_arg_indices=(0, 1),
             mode="sliding",
             chunk_size=30 if fast else 40,

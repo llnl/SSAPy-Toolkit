@@ -45,31 +45,31 @@ def main(make_figures=True, fast=False):
             r         = r_arr,
             t         = t_arr,
             title     = "Low Lunar Orbit — 1000km altitude",
-            save_path = figpath("figures/demo_moon_plot"),
+            save_path = figpath("demo_moon_plot"),
             elev      = 30,
             azim      = 45,
         )
-        print(f"Saved: {figpath('figures/demo_moon_plot')}")
+        print(f"Saved: {figpath('demo_moon_plot')}")
 
         # Polar view
         fig, ax = moon_plot_3d(
             r         = r_arr,
             t         = t_arr,
             title     = "Low Lunar Orbit — polar view",
-            save_path = figpath("figures/demo_moon_plot_polar"),
+            save_path = figpath("demo_moon_plot_polar"),
             elev      = 60,
             azim      = 0,
         )
-        print(f"Saved: {figpath('figures/demo_moon_plot_polar')}")
+        print(f"Saved: {figpath('demo_moon_plot_polar')}")
 
         # Moon only — no orbit
         fig, ax = moon_plot_3d(
             title     = "Moon surface",
-            save_path = figpath("figures/demo_moon_surface"),
+            save_path = figpath("demo_moon_surface"),
             elev      = 20,
             azim      = 30,
         )
-        print(f"Saved: {figpath('figures/demo_moon_surface')}")
+        print(f"Saved: {figpath('demo_moon_surface')}")
 
     return {
         "orbit": orbit,

@@ -83,7 +83,7 @@ python -m ssapy_toolkit.run_all_demos
 ## Output
 
 The gallery runner creates an **HTML report** at
-`~/ssatk_output/figures/index.html` by default and saves generated demo
+`~/ssatk_output/documents/index.html` by default and saves generated demo
 artifacts beside it in the selected output directory. The default output root is
 the user's home directory, not the source checkout; set `SSATK_OUTPUT_DIR` or
 pass `--output` for an explicit alternate location.

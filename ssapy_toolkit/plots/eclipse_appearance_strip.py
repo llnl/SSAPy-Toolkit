@@ -293,6 +293,6 @@ def make_strip(kind="lunar", n_panels=9, save_path=None):
 if __name__ == "__main__":
     from ssapy_toolkit.plots.figpath import figpath
 
-    make_strip("lunar", 9, figpath("figures/lunar_eclipse_strip.png"))
-    make_strip("solar", 11, figpath("figures/solar_eclipse_strip.png"))
+    make_strip("lunar", 9, figpath("lunar_eclipse_strip.png"))
+    make_strip("solar", 11, figpath("solar_eclipse_strip.png"))
     print("done")

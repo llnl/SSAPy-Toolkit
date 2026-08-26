@@ -57,7 +57,7 @@ def main(make_figures=None, fast=None):
         ax.set_title("Path of Object in Free Fall Through Earth (Point Source)")
         ax.legend()
         plt.axis("equal")
-        figsave(fig, "figures/ellipses_rebound_path.jpg")
+        figsave(fig, "ellipses_rebound_path.jpg")
         plt.close(fig)
 
     return {"positions": positions}

@@ -55,7 +55,7 @@ def main(make_figures=None, fast=None):
             pass
 
         fig.tight_layout()
-        figsave(fig, "figures/spheres_subplots.png")
+        figsave(fig, "spheres_subplots.png")
 
     return {"uniform": A_uniform, "random": A_random}
 

@@ -252,7 +252,12 @@ def _safe_path_part(value: str, default: str = "uncategorized") -> str:
 
 def _organized_figure_dir(output_root: Path, category: str, name: str) -> Path:
     category_part = _safe_path_part(category or "misc", default="misc")
-    return output_root / "figures" / category_part
+    return _gallery_figures_root(output_root) / category_part
+
+
+def _gallery_figures_root(output_root: Path) -> Path:
+    local_root = output_root / "figures"
+    return local_root if local_root.exists() else output_root.parent / "figures"
 
 
 def _organize_demo_files(paths: list[Path], output_root: Path, category: str, name: str) -> list[Path]:
@@ -263,7 +268,7 @@ def _organize_demo_files(paths: list[Path], output_root: Path, category: str, na
     per-demo directory.  Files already in subfolders, logs, and outputs outside
     ``output_root`` are left untouched.
     """
-    figures_root = (output_root / "figures").resolve()
+    figures_root = _gallery_figures_root(output_root).resolve()
     target_dir = _organized_figure_dir(output_root, category, name)
     organized: list[Path] = []
     for path in paths:

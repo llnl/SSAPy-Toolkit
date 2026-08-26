@@ -1400,9 +1400,9 @@ def _plot_space_view_unified(ax, moon_r_km, sun_hat, illum, mode, sep_deg=None):
 if __name__ == "__main__":
     from ssapy_toolkit.plots.figpath import figpath
 
-    fig, stats = find_and_plot_eclipse(mode="lunar", save_path=figpath("figures/eclipse_lunar.png"))
+    fig, stats = find_and_plot_eclipse(mode="lunar", save_path=figpath("eclipse_lunar.png"))
     print(stats)
-    fig, stats = find_and_plot_eclipse(mode="solar", save_path=figpath("figures/eclipse_solar.png"))
+    fig, stats = find_and_plot_eclipse(mode="solar", save_path=figpath("eclipse_solar.png"))
     print(stats)
 
 
@@ -2455,5 +2455,5 @@ def plot_space_view_plotly(mode="lunar", search_days=None, save_path=None, verbo
 if __name__ == "__main__":
     from ssapy_toolkit.plots.figpath import figpath
 
-    plot_space_view_plotly(mode="lunar", save_path=figpath("figures/eclipse_space_lunar.html"))
-    plot_space_view_plotly(mode="solar", save_path=figpath("figures/eclipse_space_solar.html"))
+    plot_space_view_plotly(mode="lunar", save_path=figpath("eclipse_space_lunar.html"))
+    plot_space_view_plotly(mode="solar", save_path=figpath("eclipse_space_solar.html"))

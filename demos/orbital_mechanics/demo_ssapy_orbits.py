@@ -37,7 +37,7 @@ def main(make_figures=None, fast=None):
         rs.append(orbit.r)
 
     if make_figures:
-        orbit_plot(rs, view="xy", show=False, save_path=figpath("figures/ssapy_orbit_sampling_trueAnomaly"))
+        orbit_plot(rs, view="xy", show=False, save_path=figpath("ssapy_orbit_sampling_trueAnomaly"))
 
     print("Time sampling")
     rs = []
@@ -47,12 +47,12 @@ def main(make_figures=None, fast=None):
         rs.append(orbit_new.r)
 
     if make_figures:
-        orbit_plot(np.array(rs), show=False, save_path=figpath("figures/ssapy_orbit_sampling_time"))
+        orbit_plot(np.array(rs), show=False, save_path=figpath("ssapy_orbit_sampling_time"))
 
     print("Full orbit sampled.")
     rs, v = rv(orbit, np.arange(0, orbit.period, 3600 if fast else 600))
     if make_figures:
-        orbit_plot(rs, show=False, save_path=figpath("figures/ssapy_orbit_object"))
+        orbit_plot(rs, show=False, save_path=figpath("ssapy_orbit_object"))
     print("Complete.")
 
     return {"samples_true_anomaly": rs, "orbit": orbit}

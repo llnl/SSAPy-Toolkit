@@ -3,12 +3,12 @@ import argparse
 from importlib.metadata import PackageNotFoundError, distribution
 import webbrowser
 from pathlib import Path
-from ssapy_toolkit.plots.figpath import figpath
+from ssapy_toolkit._paths import output_root
 from .demo_gallery import run_all_demos
 
 
 def default_output_dir() -> Path:
-    return Path(figpath("index.html")).expanduser().resolve().parent
+    return output_root() / "documents"
 
 
 def _looks_like_demos_dir(path: Path) -> bool:
@@ -52,7 +52,7 @@ def main(argv: list[str] | None = None) -> int:
         "--output",
         default=str(default_output_dir()),
         help="Output directory for generated demo artifacts and report "
-             "(default: ~/ssatk_output/figures)",
+             "(default: ~/ssatk_output/documents)",
     )
     parser.add_argument(
         "--open",

@@ -110,7 +110,7 @@ def main(make_figures=None, fast=None, verbose=None, allow_install=None):
     if verbose:
         print(json.dumps(result, indent=2, sort_keys=True))
     if make_figures:
-        out_dir = Path(figpath("figures/benchmarks"))
+        out_dir = Path(figpath("benchmarks"))
         out_dir.mkdir(parents=True, exist_ok=True)
         hours = times / 3600.0
         fig, ax = plt.subplots(figsize=(10, 5))

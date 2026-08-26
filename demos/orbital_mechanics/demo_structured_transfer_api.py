@@ -16,7 +16,7 @@ The examples cover:
    searches.
 
 Each run saves one three-panel overview image under
-``~/ssatk_output/figures/figures`` when figures are enabled.
+``~/ssatk_output/figures`` when figures are enabled.
 """
 
 from __future__ import annotations

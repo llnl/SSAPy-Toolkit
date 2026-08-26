@@ -45,9 +45,9 @@ def main(make_figures=None, fast=None):
     outputs = {"figure": fig, "n_traces": len(fig.data), "html": None}
 
     if make_figures:
-        html_path = Path(figpath("figures/demo_solar_view_plot.html"))
+        html_path = Path(figpath("demo_solar_view_plot.html"))
         fig.write_html(str(html_path))
-        alias_path = Path(figpath("figures/demo_solar_view.html"))
+        alias_path = Path(figpath("demo_solar_view.html"))
         fig.write_html(str(alias_path))
         outputs["html"] = str(html_path)
         outputs["html_alias"] = str(alias_path)

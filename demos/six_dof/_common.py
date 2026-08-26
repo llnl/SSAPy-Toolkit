@@ -17,7 +17,7 @@ from ssapy_toolkit.propagators_6dof import rotate_vector
 from ssapy_toolkit.plots.plotutils import figsave
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
-FIGDIR = "figures/six_dof"
+FIGDIR = "six_dof"
 
 
 def demo_flags(make_figures, fast):
@@ -92,4 +92,3 @@ def plot_earth(ax):
     y = radius_km * np.outer(np.sin(u), np.sin(v))
     z = radius_km * np.outer(np.ones_like(u), np.cos(v))
     ax.plot_surface(x, y, z, color="lightsteelblue", alpha=0.35, linewidth=0)
-

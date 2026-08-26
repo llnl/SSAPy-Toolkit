@@ -36,7 +36,7 @@ def main(make_figures=True):
         title        = "Van Allen Radiation Belts — IGRF 2025",
         texture_path = "auto",
         elev=25, azim=-55,
-        save_path    = figpath("figures/demo_van_allen"),
+        save_path    = figpath("demo_van_allen"),
     ))
     print("Saved: demo_van_allen.html/.png")
 
@@ -45,7 +45,7 @@ def main(make_figures=True):
         title        = "Van Allen Belts — equatorial view",
         texture_path = "auto",
         elev=5, azim=0,
-        save_path    = figpath("figures/demo_van_allen_equatorial"),
+        save_path    = figpath("demo_van_allen_equatorial"),
     ))
     print("Saved: demo_van_allen_equatorial.html/.png")
 
@@ -54,7 +54,7 @@ def main(make_figures=True):
         title        = "Van Allen Belts — polar view",
         texture_path = "auto",
         elev=80, azim=0,
-        save_path    = figpath("figures/demo_van_allen_polar"),
+        save_path    = figpath("demo_van_allen_polar"),
     ))
     print("Saved: demo_van_allen_polar.html/.png")
     return {"figures": figures, "skipped": False}

@@ -746,10 +746,10 @@ if __name__ == "__main__":
     plot_globe_orbit_daynight_plotly(
         a_km=26_560.0, e=0.001, inc_deg=55.0,
         sat_name="GPS-like MEO", n_orbits=1.0, n_steps=1500,
-        save_path=figpath("figures/globe_orbit_daynight_plotly.png"),
+        save_path=figpath("globe_orbit_daynight_plotly.png"),
     )
     plot_globe_orbit_daynight_plotly(
         a_km=26_560.0, e=0.001, inc_deg=55.0,
         sat_name="GPS-like MEO", n_orbits=1.0, n_steps=1500,
-        save_path=figpath("figures/globe_orbit_daynight_plotly.html"),
+        save_path=figpath("globe_orbit_daynight_plotly.html"),
     )

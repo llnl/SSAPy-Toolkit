@@ -222,7 +222,7 @@ def main(make_figures=None, fast=None, verbose=None, allow_install=None):
     velocity_m_s = float(np.sqrt(EARTH_MU / radius_m))
     duration_s = 3_600.0 if not fast else 600.0
     step_s = 60.0
-    state_path = Path(ssatk_data("benchmarks/gmat_two_body_states.csv"))
+    state_path = Path(ssatk_data("data/benchmarks/gmat_two_body_states.csv"))
     rows = _run_gmat(
         root=gmat[0],
         executable=gmat[1],
@@ -260,7 +260,7 @@ def main(make_figures=None, fast=None, verbose=None, allow_install=None):
     }
 
     if make_figures:
-        out_dir = Path(figpath("figures/benchmarks"))
+        out_dir = Path(figpath("benchmarks"))
         out_dir.mkdir(parents=True, exist_ok=True)
         hours = times / 3_600.0
 

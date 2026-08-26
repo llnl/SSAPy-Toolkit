@@ -5,7 +5,7 @@ and rendezvous maneuver demos into one user-facing workflow.  It compares
 analytic impulsive transfers, fixed-time Lambert solves, optimized searches,
 explicit staged optimal transfers, continuous low-thrust burns, and
 finite-burn/impulse conversions, then renders summary figures under
-``~/ssatk_output/figures/figures``.
+``~/ssatk_output/figures``.
 """
 
 from __future__ import annotations

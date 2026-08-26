@@ -377,7 +377,7 @@ ssapy-demo-gallery
 ```
 
 The command can be run from any directory after installation. It writes the
-HTML report to `~/ssatk_output/figures/index.html` by default and prints
+HTML report to `~/ssatk_output/documents/index.html` by default and prints
 the exact output path when it finishes. Use `--open` to open the report in a
 browser, `--output PATH` to choose a different output directory, or
 `--demos-dir PATH` to run demos from a source checkout explicitly. The default

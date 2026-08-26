@@ -129,7 +129,7 @@ def main(make_figures=None, fast=None, verbose=None, allow_install=None):
 
     gmat = demo_gmat_benchmark._find_gmat()
     gmat_ready = gmat is not None and demo_gmat_benchmark._ensure_container_image(allow_install=allow_install)
-    figure_dir = Path(figpath("figures/benchmarks"))
+    figure_dir = Path(figpath("benchmarks"))
     results = []
     for case_template in CASES:
         case = dict(case_template)
@@ -141,7 +141,7 @@ def main(make_figures=None, fast=None, verbose=None, allow_install=None):
         tool_results = {}
 
         if gmat_ready:
-            state_path = Path(ssatk_data(f"benchmarks/long_term/{case['name']}_gmat_states.csv"))
+            state_path = Path(ssatk_data(f"data/benchmarks/long_term/{case['name']}_gmat_states.csv"))
             rows = demo_gmat_benchmark._run_gmat(
                 root=gmat[0],
                 executable=gmat[1],
@@ -164,7 +164,7 @@ def main(make_figures=None, fast=None, verbose=None, allow_install=None):
             allow_install=allow_install,
         )
         if orekit is not None:
-            state_path = Path(ssatk_data(f"benchmarks/long_term/{case['name']}_orekit_states.csv"))
+            state_path = Path(ssatk_data(f"data/benchmarks/long_term/{case['name']}_orekit_states.csv"))
             np.savetxt(state_path, orekit, delimiter=",", fmt="%.17g")
             residuals["Orekit"], tool_results["Orekit"] = _compare(orekit, scale=1.0)
             tool_results["Orekit"]["state_path"] = str(state_path)

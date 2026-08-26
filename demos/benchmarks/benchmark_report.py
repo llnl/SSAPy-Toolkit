@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
 from ssapy_toolkit.io.ssatk_data import ssatk_data
-from ssapy_toolkit.plots.figpath import figpath
+from ssapy_toolkit.plots.figpath import document_path
 
 PLOT_ORDER = (
     "artemis_benchmark_cislunar_context.png",
@@ -160,7 +160,7 @@ def _write_plot_page(pdf: PdfPages, path: Path) -> None:
 
 def write_benchmark_report(*, output_dir: Path | None = None, summaries: dict[str, dict] | None = None) -> str:
     """Write a captioned PDF containing every benchmark PNG in ``output_dir``."""
-    output_dir = Path(output_dir or figpath("figures/benchmarks"))
+    output_dir = Path(output_dir or document_path("benchmarks/report.pdf")).parent
     output_dir.mkdir(parents=True, exist_ok=True)
     paths = _figure_paths(output_dir)
     report_path = output_dir / "ssatk_propagation_benchmark_report.pdf"

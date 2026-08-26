@@ -218,7 +218,7 @@ def main(make_figures=None, fast=None, verbose=None):
         if make_figures:
             fig = plot_offsets_2d(label, r_offsets, v_offsets, r_nom, v_nom)
             safe_label = label.replace(" ", "_")
-            figsave(fig, f"figures/sampling_tests_{safe_label}")
+            figsave(fig, f"sampling_tests_{safe_label}")
             plt.close(fig)
 
     return outputs

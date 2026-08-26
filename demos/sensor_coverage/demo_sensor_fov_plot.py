@@ -507,7 +507,7 @@ def main(make_figures=None, fast=None):
 
     html_path = None
     if make_figures:
-        html_path = Path(figpath("figures/demo_sensor_fov_plot.html"))
+        html_path = Path(figpath("demo_sensor_fov_plot.html"))
         fig.write_html(str(html_path))
         print(f"Saved: {html_path}")
 

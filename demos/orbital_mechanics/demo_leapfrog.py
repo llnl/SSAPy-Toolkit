@@ -27,7 +27,7 @@ def main(make_figures=None, fast=None):
         orbit_plot(
             r1,
             view="xy",
-            save_path=figpath("figures/testing_leapfrog_RGEO.jpg"),
+            save_path=figpath("testing_leapfrog_RGEO.jpg"),
             pad=0.1,
             title="GEO",
             show=False,
@@ -35,7 +35,7 @@ def main(make_figures=None, fast=None):
         orbit_plot(
             r2,
             view="xy",
-            save_path=figpath("figures/testing_leapfrog_RGEO_velocity_burn.jpg"),
+            save_path=figpath("testing_leapfrog_RGEO_velocity_burn.jpg"),
             pad=0.1,
             title="GEO",
             show=False,

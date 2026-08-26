@@ -40,7 +40,7 @@ def make_circular_orbit_track(alt_km=500.0, inc_deg=51.6, npts=1200, n_orbits=3.
 
 
 def save_demo(fig, name):
-    figsave(fig, f"figures/{name}")  # [18]
+    figsave(fig, f"{name}")  # [18]
 
 
 def main(make_figures=None, fast=None):

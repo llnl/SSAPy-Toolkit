@@ -311,7 +311,7 @@ def _demo_figures():
     ax2.set_ylabel("model - analytic [mag]")
     ax2.legend(fontsize=9)
     fig.tight_layout()
-    figsave(fig, "figures/demo_phase_curve_benchmark.jpg")
+    figsave(fig, "demo_phase_curve_benchmark.jpg")
     plt.close(fig)
 
     # ---- Figure 2: fractional-flux agreement (machine precision) ------
@@ -325,7 +325,7 @@ def _demo_figures():
                  "(identical Lambertian-sphere model -> machine precision)")
     ax.grid(alpha=0.3)
     fig.tight_layout()
-    figsave(fig, "figures/demo_fractional_flux_benchmark.jpg")
+    figsave(fig, "demo_fractional_flux_benchmark.jpg")
     plt.close(fig)
 
     # ---- Figure 3: airmass benchmark + multi-band magnitudes ----------
@@ -357,7 +357,7 @@ def _demo_figures():
                   "reflection-dominated VIS -> thermal-dominated LWIR")
     ax2.grid(alpha=0.3, axis="y")
     fig.tight_layout()
-    figsave(fig, "figures/demo_airmass_and_bands.jpg")
+    figsave(fig, "demo_airmass_and_bands.jpg")
     plt.close(fig)
 
     print("Saved via figsave: figures/demo_phase_curve_benchmark.jpg")

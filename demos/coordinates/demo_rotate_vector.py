@@ -3,7 +3,7 @@
 Generate a dense set of rotated unit-vector plots and optionally stitch them
 into a GIF.
 
-The final GIF is saved under figpath("figures/") within the
+The final GIF is saved under figpath("") within the
 shared ``~/ssatk_output/figures`` output root.
 Intermediate frame images are created in a temporary directory and removed
 after the GIF is written, so they do not remain on disk or appear in the

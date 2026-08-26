@@ -2,7 +2,7 @@ from pathlib import Path
 
 from ssapy_toolkit._paths import SSATK_OUTPUT_ENV, output_root, safe_relative_parts
 
-__all__ = ["ssatk_path", "figpath"]
+__all__ = ["ssatk_path", "figpath", "document_path"]
 
 # You can keep this around if you like, but it's no longer used for extension logic.
 _KNOWN_EXTS = {
@@ -71,3 +71,22 @@ def _figure_root():
 
 
 figpath = ssatk_path
+
+
+def document_path(filename="document"):
+    """Build a path under the shared SSATK document output directory."""
+    if not isinstance(filename, (str, Path)):
+        raise TypeError("document_path(filename): filename must be str or pathlib.Path")
+    rel_parts = safe_relative_parts(filename)
+    if not rel_parts:
+        rel_parts = ["document"]
+    base = output_root() / "documents"
+    target_dir = base / Path(*rel_parts[:-1])
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+    except (OSError, PermissionError) as exc:
+        raise RuntimeError(
+            f"Could not create or access {base}. Set {SSATK_OUTPUT_ENV} "
+            "to an explicit writable output directory."
+        ) from exc
+    return str(target_dir / rel_parts[-1])

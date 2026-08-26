@@ -151,7 +151,7 @@ def main(make_figures=None, fast=None, verbose=None):
     ]
 
     if make_figures:
-        save_path = figpath("figures/testing_ellipse_fit_vs_ssapy.jpg")
+        save_path = figpath("testing_ellipse_fit_vs_ssapy.jpg")
         if _supports_kwarg(orbit_plot, "labels"):
             orbit_plot(
                 r_list,
@@ -170,7 +170,7 @@ def main(make_figures=None, fast=None, verbose=None):
                 frame="gcrf",
             )
 
-        save_dash = figpath("figures/testing_ellipse_fit_vs_ssapy_dashboard.jpg")
+        save_dash = figpath("testing_ellipse_fit_vs_ssapy_dashboard.jpg")
         if _supports_kwarg(groundtrack_dashboard, "labels"):
             groundtrack_dashboard(
                 r_list,
@@ -218,7 +218,7 @@ def main(make_figures=None, fast=None, verbose=None):
         ax.grid(True, alpha=0.3)
         ax.legend()
 
-        save_dist = figpath("figures/testing_ellipse_fit_distance.jpg")
+        save_dist = figpath("testing_ellipse_fit_distance.jpg")
         fig.savefig(save_dist, dpi=200, bbox_inches="tight")
         plt.close(fig)
 
