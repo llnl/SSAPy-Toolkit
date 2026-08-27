@@ -133,6 +133,17 @@ class StationObservation:
 
         return self.measurement
 
+    def as_measurement(self) -> tuple[np.ndarray, np.ndarray]:
+        """Return a bias-corrected EKF measurement and immutable covariance."""
+
+        if not self.valid or self.value is None:
+            raise ValueError("invalid station observations cannot update an EKF.")
+        measurement = np.atleast_1d(np.asarray(self.value, dtype=float) - self.bias).copy()
+        measurement.flags.writeable = False
+        covariance = np.array(self.covariance, dtype=float, copy=True)
+        covariance.flags.writeable = False
+        return measurement, covariance
+
 
 class GroundStationSensor:
     """Noisy, masked sensor wrapper around :class:`GroundStation`."""

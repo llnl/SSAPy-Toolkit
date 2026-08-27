@@ -98,7 +98,7 @@ class ExtendedKalmanFilter:
         noise: Array,
         *,
         time: float | None = None,
-        angle_indices=(),
+        angle_indices=None,
         residual=None,
     ) -> EKFState:
         prediction, jacobian = model(self.state.x.copy())
@@ -114,6 +114,8 @@ class ExtendedKalmanFilter:
         )
         if innovation.shape != prediction.shape or not np.all(np.isfinite(innovation)):
             raise ValueError("measurement residual must be finite and match model output.")
+        if angle_indices is None:
+            angle_indices = getattr(model, "angle_indices", ())
         innovation = wrap_angle_residual(innovation, angle_indices) if angle_indices else innovation
         innovation_covariance = jacobian @ self.state.covariance @ jacobian.T + noise
         try:
@@ -194,4 +196,10 @@ class CartesianMeasurement:
         return state[list(self.indices)], jacobian
 
 
-__all__ = ["CartesianMeasurement", "CartesianOrbitEKF", "EKFState", "ExtendedKalmanFilter"]
+__all__ = [
+    "CartesianMeasurement",
+    "CartesianOrbitEKF",
+    "EKFState",
+    "ExtendedKalmanFilter",
+    "wrap_angle_residual",
+]
