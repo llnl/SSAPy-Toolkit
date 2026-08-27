@@ -114,7 +114,7 @@ def _textured_moon(ax, cx, cy, cz, radius, moon_img_path, n=64, sun_hat=None,
         return False
 
 
-def _textured_earth(ax, cx, cy, cz, radius, earth_img_path, n=32, sun_hat=None,
+def _textured_earth(ax, cx, cy, cz, radius, earth_img_path, n=128, sun_hat=None,
                      ambient=0.22, diffuse=0.78, zorder=10):
     """Render Earth as a small textured sphere, optionally shaded by sun_hat.
 
@@ -124,7 +124,7 @@ def _textured_earth(ax, cx, cy, cz, radius, earth_img_path, n=32, sun_hat=None,
     """
     try:
         img     = Image.open(earth_img_path).convert("RGB")
-        img     = img.resize((128, 64), Image.LANCZOS)
+        img     = img.resize((1024, 512), Image.LANCZOS)
         img_arr = np.array(img) / 255.0
 
         phi   = np.linspace(0,    np.pi,  n)
@@ -560,7 +560,7 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
     if earth_draw is not None:
         earth_pos, earth_radius, earth_light_dir = earth_draw
         _textured_earth(ax, earth_pos[0], earth_pos[1], earth_pos[2],
-                        earth_radius, earth_img, n=32, sun_hat=earth_light_dir,
+                        earth_radius, earth_img, n=128, sun_hat=earth_light_dir,
                         ambient=shade_ambient, diffuse=shade_diffuse, zorder=10)
     # Use sun_hat directly (same reasoning as Earth's shading above) — the
     # Moon sits at the origin, so light_direction_from_positions(
