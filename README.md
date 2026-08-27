@@ -394,8 +394,19 @@ To run the test suite:
 pytest tests
 ```
 
-Code formatting and linting are handled via `flake8` (see `.flake8` for
-configuration).
+The current CI lint gate checks fatal Ruff errors in changed Python files; it is
+not a full formatting or style pass:
+
+```bash
+set -euo pipefail
+base_ref="$(git merge-base origin/main HEAD)"
+mapfile -t python_files < <(
+  git diff --name-only --diff-filter=ACMR "$base_ref" HEAD -- '*.py'
+)
+if ((${#python_files[@]})); then
+  ruff check --select E9,F63,F7,F82 "${python_files[@]}"
+fi
+```
 
 Optional local repo mapping with Graphify:
 

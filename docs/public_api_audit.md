@@ -58,21 +58,21 @@ python3 scripts/audit_public_api_coverage.py \
   --write-missing-branches /tmp/ssatk_missing_branches.tsv
 ```
 
-Current audited result from this branch:
+Current audited result from this branch (Python 3.13):
 
-- `459 passed, 16 skipped`
-- `public_functions=681`
-- `body_hit=681`
-- `body_unhit=0`
-- `body_hit_pct=100.0`
-- `all_functions_including_nested=1457`
-- `all_functions_body_hit=1457`
-- `all_functions_body_unhit=0`
-- `all_functions_body_hit_pct=100.0`
-- `package_branches=6666`
-- `package_branch_hit_pct=73.6`
+- `617 passed, 18 skipped`
+- `public_functions=928`
+- `body_hit=883`
+- `body_unhit=45`
+- `body_hit_pct=95.2`
+- `all_functions_including_nested=1994`
+- `all_functions_body_hit=1922`
+- `all_functions_body_unhit=72`
+- `all_functions_body_hit_pct=96.4`
+- `package_branches=8094`
+- `package_branch_hit_pct=72.1`
 
 CI enforces the public audit at 95% body-hit and the exhaustive audit at 90%
-body-hit / 65% branch-hit on Python 3.10. Those thresholds are intentionally
+body-hit / 65% branch-hit on Python 3.13. Those thresholds are intentionally
 below the current measured baseline so normal line-number or dependency-version
 drift does not create brittle failures.

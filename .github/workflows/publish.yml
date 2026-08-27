@@ -9,7 +9,66 @@ permissions:
   contents: read
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}/SSAPy-Data/src
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/checkout@v4
+        with:
+          repository: llnl/SSAPy-Data
+          ref: 981aa894b4767103220722fe4a6d449e4077a292
+          path: SSAPy-Data
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e SSAPy-Data
+          pip install -e .[dev]
+
+      - name: Verify release tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          project_version="$(python - <<'PY'
+          import tomllib
+          from pathlib import Path
+
+          with (Path("pyproject.toml")).open("rb") as handle:
+              print(tomllib.load(handle)["project"]["version"])
+          PY
+          )"
+          test "$RELEASE_TAG" = "v$project_version"
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Run Ruff syntax checks
+        run: |
+          set -euo pipefail
+          base_ref="$(git merge-base origin/main HEAD)"
+          mapfile -t python_files < <(
+            git diff --name-only --diff-filter=ACMR "$base_ref" HEAD -- '*.py'
+          )
+          if ((${#python_files[@]})); then
+            ruff check --select E9,F63,F7,F82 "${python_files[@]}"
+          fi
+
+      - name: Check repository policy
+        run: python scripts/check_repository_policy.py --base-ref "$(git merge-base origin/main HEAD)" --head-ref HEAD
+
   build-and-publish:
+    needs: validate
     runs-on: ubuntu-latest
     environment:
       name: pypi

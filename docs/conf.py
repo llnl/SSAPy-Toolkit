@@ -1,6 +1,6 @@
-import os
+import re
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -8,8 +8,15 @@ sys.path.insert(0, str(ROOT))
 
 project = "SSAPy Toolkit"
 author = "Travis R. Yeager"
-copyright = f"{datetime.now().year}, {author}"
-release = "1.0.0"
+copyright = f"{datetime.now(timezone.utc).year}, {author}"
+version_match = re.search(
+    r'^version\s*=\s*["\']([^"\']+)["\']\s*$',
+    (ROOT / "pyproject.toml").read_text(encoding="utf-8"),
+    re.MULTILINE,
+)
+if version_match is None:
+    raise RuntimeError("project version is missing from pyproject.toml")
+release = version_match.group(1)
 
 extensions = [
     "sphinx.ext.autodoc",
