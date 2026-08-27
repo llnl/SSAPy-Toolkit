@@ -589,7 +589,8 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
     theta = np.linspace(0, 2*np.pi, 200)
     ax.plot(visible_moon_r*np.cos(theta), visible_moon_r*np.sin(theta),
             np.zeros(200), color='white', linewidth=0.8, alpha=0.4, linestyle='--')
-    ax.text(0, 0, visible_moon_r*1.1, 'Moon', color='white', fontsize=8, alpha=0.7)
+    ax.text(0, 0, visible_moon_r*1.35, 'Moon', color='white', fontsize=13,
+            alpha=0.9, zorder=30)
 
     # ── Sun sphere — rendered as a true background object: pushed well
     #    behind the Moon (2.5x plot_range, vs. the Moon's ~3x moon_r extent)
@@ -610,12 +611,14 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
     # markers on that data would misrepresent the geometry, so they're
     # skipped automatically for r_frame='moon_centered'.
     if show_lagrange and r_frame != 'moon_centered':
+        label_offset = plot_range * 0.02
         for point, pos in lagrange_points_lunar_fixed_frame().items():
             pos_geo = pos / unit_conversion
             ax.scatter([pos_geo[0]], [pos_geo[1]], [pos_geo[2]],
                        color='white', s=15, zorder=6, clip_on=False)
-            ax.text(pos_geo[0], pos_geo[1], pos_geo[2], point,
-                    color='#aaaaaa', fontsize=8, zorder=6)
+            ax.text(pos_geo[0], pos_geo[1] + label_offset,
+                    pos_geo[2] + label_offset, point,
+                    color='white', fontsize=12, zorder=30)
     elif show_lagrange and r_frame == 'moon_centered':
         print("[moon_plot_3d] Skipping Lagrange points: they're only valid "
               "in the rotating lunar-fixed frame at a single instant, not "
