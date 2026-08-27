@@ -42,6 +42,26 @@ from .sun_render import (
 )
 
 
+def _split_orbit_segments_for_bodies(xyz, bodies, elev_deg, azim_deg):
+    """Split line segments into camera-occluded and foreground groups."""
+    segments = np.stack((xyz[:-1], xyz[1:]), axis=1)
+    midpoints = segments.mean(axis=1)
+    elev = np.radians(elev_deg)
+    azim = np.radians(azim_deg)
+    camera = np.array([
+        np.cos(elev) * np.cos(azim),
+        np.cos(elev) * np.sin(azim),
+        np.sin(elev),
+    ])
+    hidden = np.zeros(len(midpoints), dtype=bool)
+    for center, radius in bodies:
+        relative = midpoints - center
+        depth = relative @ camera
+        perpendicular = relative - depth[:, None] * camera
+        hidden |= (depth < 0.0) & (np.einsum("ij,ij->i", perpendicular, perpendicular) < radius**2)
+    return segments[hidden], segments[~hidden]
+
+
 def _ssapy_texture(name):
     """Return a base SSAPy texture path, or None if unavailable."""
     try:
@@ -151,6 +171,7 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
                  shade_diffuse=0.78,
                  scene_pad=0.30,
                  view_zoom=1.0,
+                 physical_body_sizes=False,
                  r_frame='gcrf'):
     """
     3D Moon surface plot with star background, real Sun shading, and
@@ -224,6 +245,9 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
     view_zoom : float, default 1.0
         Camera zoom applied after framing; values above one fill more of the
         figure canvas.
+    physical_body_sizes : bool, default False
+        Draw Earth and Moon at physical radii rather than applying the
+        visibility enlargement used for wide cislunar scenes.
     r_frame : str, default 'gcrf'
         Frame that `r` is already expressed in.
           'gcrf'          : r is Earth-centered GCRF/equatorial (the
@@ -492,9 +516,10 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
         earth_pos_km = np.array([-384400.0, 0.0, 0.0])
 
     _earth_visible = (plot_range > 100000) if show_earth is None else show_earth
+    earth_draw = None
     if earth_pos_km is not None and _earth_visible:
         earth_r = EARTH_RADIUS / unit_conversion
-        visible_earth_r = max(earth_r, plot_range * 0.03)
+        visible_earth_r = earth_r if physical_body_sizes else max(earth_r, plot_range * 0.03)
         # Use the real sun_hat directly — NOT a projection from
         # sun_pos_local. sun_pos_local is a STYLIZED rendering position
         # (scaled to plot_range so the Sun fits inside the visible box,
@@ -510,31 +535,32 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
         # correct (to well under 1 degree of parallax) for every body in
         # the Earth-Moon system, so just reuse it directly.
         earth_light_dir = sun_hat
-        _textured_earth(ax, earth_pos_km[0], earth_pos_km[1], earth_pos_km[2],
-                        visible_earth_r, earth_img, n=32, sun_hat=earth_light_dir,
-                        ambient=shade_ambient, diffuse=shade_diffuse, zorder=10)
+        earth_draw = (earth_pos_km, visible_earth_r, earth_light_dir)
    # ── Orbit tracks ──────────────────────────────────────────────────────────
+    visible_moon_r = moon_r if physical_body_sizes else max(moon_r, plot_range * 0.03)
+    bodies = [(np.zeros(3), visible_moon_r)]
+    if earth_draw is not None:
+        bodies.append((earth_draw[0], earth_draw[1]))
+    foreground_tracks = []
     for orbit_index, xyz in xyz_list:
-        if len(xyz_list) == 1:
-            colors_track = cm.plasma(np.linspace(0.2, 0.9, len(xyz)))
-            from matplotlib.collections import LineCollection
-            from mpl_toolkits.mplot3d.art3d import Line3DCollection
-            n_seg = len(xyz) - 1
-            segs = [[xyz[i], xyz[i+1]] for i in range(n_seg)]
-            lc = Line3DCollection(segs, colors=['#ff6600'],
-                                  linewidth=2.0, alpha=0.9, zorder=5)
-            ax.add_collection(lc)
-        else:
-            tc = cm.rainbow(np.linspace(0, 1, len(xyz_list)))[orbit_index]
-            ax.plot(xyz[:, 0], xyz[:, 1], xyz[:, 2],
-                    color=tc, linewidth=1.5, alpha=0.9, zorder=5)
+        from mpl_toolkits.mplot3d.art3d import Line3DCollection
+        background, foreground = _split_orbit_segments_for_bodies(xyz, bodies, elev, azim)
+        color = "#ff6600" if len(xyz_list) == 1 else cm.rainbow(np.linspace(0, 1, len(xyz_list)))[orbit_index]
+        linewidth = 2.0 if len(xyz_list) == 1 else 1.5
+        if len(background):
+            ax.add_collection(Line3DCollection(background, colors=[color], linewidth=linewidth, alpha=0.9, zorder=5))
+        foreground_tracks.append((foreground, color, linewidth))
  # ── Moon ─────────────────────────────────────────────────────────────────
     # Visibility floor matching Earth's existing pattern (visible_earth_r =
     # max(earth_r, plot_range*0.03)) — without this, the Moon renders at
     # its true physical radius (~1737 km) regardless of scene scale, so
     # any plot spanning hundreds of thousands of km (e.g. a real cislunar
     # trajectory) shrinks it to an invisible sub-pixel dot.
-    visible_moon_r = max(moon_r, plot_range * 0.03)
+    if earth_draw is not None:
+        earth_pos, earth_radius, earth_light_dir = earth_draw
+        _textured_earth(ax, earth_pos[0], earth_pos[1], earth_pos[2],
+                        earth_radius, earth_img, n=32, sun_hat=earth_light_dir,
+                        ambient=shade_ambient, diffuse=shade_diffuse, zorder=10)
     # Use sun_hat directly (same reasoning as Earth's shading above) — the
     # Moon sits at the origin, so light_direction_from_positions(
     # sun_pos_local, zeros(3)) would reduce to exactly sun_hat anyway,
@@ -553,7 +579,11 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
             visible_moon_r * np.outer(np.cos(u), np.sin(v)),
             visible_moon_r * np.outer(np.sin(u), np.sin(v)),
             visible_moon_r * np.outer(np.ones(30), np.cos(v)),
-            color='#aaaaaa', alpha=0.9)
+            color='#aaaaaa', alpha=0.9, zorder=10)
+    for foreground, color, linewidth in foreground_tracks:
+        if len(foreground):
+            from mpl_toolkits.mplot3d.art3d import Line3DCollection
+            ax.add_collection(Line3DCollection(foreground, colors=[color], linewidth=linewidth, alpha=0.9, zorder=15))
     # Moon position indicator
     theta = np.linspace(0, 2*np.pi, 200)
     ax.plot(visible_moon_r*np.cos(theta), visible_moon_r*np.sin(theta),
