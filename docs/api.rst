@@ -22,6 +22,7 @@ Subpackages
    ssapy_toolkit.propagators_6dof
    ssapy_toolkit.engines
    ssapy_toolkit.io
+   ssapy_toolkit.navigation
    ssapy_toolkit.launch
    ssapy_toolkit.propagators_orbit
    ssapy_toolkit.orbital_mechanics
