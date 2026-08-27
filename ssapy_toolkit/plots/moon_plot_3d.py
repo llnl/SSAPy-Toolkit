@@ -150,6 +150,7 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
                  shade_ambient=0.22,
                  shade_diffuse=0.78,
                  scene_pad=0.30,
+                 view_zoom=1.0,
                  r_frame='gcrf'):
     """
     3D Moon surface plot with star background, real Sun shading, and
@@ -220,6 +221,9 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
     scene_pad : float, default 0.30
         Fractional padding around the trajectory bounds. Smaller values give
         a tighter orbit framing.
+    view_zoom : float, default 1.0
+        Camera zoom applied after framing; values above one fill more of the
+        figure canvas.
     r_frame : str, default 'gcrf'
         Frame that `r` is already expressed in.
           'gcrf'          : r is Earth-centered GCRF/equatorial (the
@@ -380,7 +384,7 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
     # Equal aspect ratio on all three axes — without this, matplotlib
     # scales each axis independently and every sphere (Moon, Earth, Sun)
     # renders as a squashed ellipsoid instead of a circle.
-    ax.set_box_aspect([1, 1, 1])
+    ax.set_box_aspect([1, 1, 1], zoom=view_zoom)
 
     # ── Sun direction ──────────────────────────────────────────────────────
     # By default this comes from real ephemeris (get_body("sun") transformed
