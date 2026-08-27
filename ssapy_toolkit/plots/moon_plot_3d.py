@@ -283,6 +283,7 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
     ax.set_facecolor(plotcolor)
     fig.patch.set_facecolor(plotcolor)
     ax.view_init(elev=elev, azim=azim)
+    ax.set_proj_type("ortho")
     ax.xaxis.pane.set_facecolor(plotcolor)
     ax.yaxis.pane.set_facecolor(plotcolor)
     ax.zaxis.pane.set_facecolor(plotcolor)
