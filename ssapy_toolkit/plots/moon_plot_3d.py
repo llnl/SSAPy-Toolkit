@@ -142,6 +142,7 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
                  show_lagrange=True,
                  show_stars=True,
                  show_sun=True,
+                 show_sun_graphic=None,
                  show_earth=None,
                  mag_limit=5.5,
                  sun_azimuth_deg=None,
@@ -187,7 +188,11 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
         to force it off.
     show_sun : bool
         Compute real solar ephemeris, shade Moon/Earth textures by true
-        illumination, and draw a Sun sphere closer than the starfield.
+        illumination.
+    show_sun_graphic : bool or None, default None
+        Draw the Sun sphere. ``None`` preserves the historical behavior and
+        follows ``show_sun``; set ``False`` to retain solar illumination
+        without a visible Sun graphic.
     mag_limit : float
         Star magnitude limit.
     sun_azimuth_deg : float, optional
@@ -230,6 +235,9 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
     fig, ax
     """
     from ..orbital_mechanics import lagrange_points_lunar_fixed_frame
+
+    if show_sun_graphic is None:
+        show_sun_graphic = show_sun
 
     moon_img = _ssapy_texture("moon")
     earth_img = _ssapy_texture("earth")
@@ -385,7 +393,7 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
             np.cos(el) * np.sin(az),
             np.sin(el),
         ])
-    elif show_sun:
+    elif show_sun or show_sun_graphic:
         try:
             if t_ref is None:
                 # No orbit time given — default to "now"
@@ -549,7 +557,7 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
     #    distant rather than as a nearby second body. Limb darkening is
     #    computed from the actual camera angle (elev/azim) so the Sun
     #    looks genuinely spherical from whatever viewpoint is chosen. ──────
-    if sun_pos_local is not None:
+    if show_sun_graphic and sun_pos_local is not None:
         sun_radius = background_sun_radius(plot_range, size_factor=0.018)
         render_sun(ax, sun_pos_local, radius=sun_radius,
                    elev_deg=elev, azim_deg=azim)
