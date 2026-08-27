@@ -306,8 +306,9 @@ Reusable models live in :mod:`ssapy_toolkit.accelerations_6dof` and include
 ``SpacecraftReactionWheelTorque``,
 ``SpacecraftAttitudePD``, ``SpacecraftAccelSum``, ``SpacecraftTorqueSum``, and
 constant thrust/torque callback helpers. Flat-plate models use spacecraft
-``mass``, ``area``, ``cd``/``cr``, and body-frame ``center_of_pressure`` when
-those values are not provided directly to the model. Thruster models report
+``mass``, ``area``, ``cd``/``cl``/``cr``, and body-frame ``center_of_pressure``
+when those values are not provided directly to the model; ``cl`` adds signed
+lift and ``cl=0`` preserves drag-only behavior. Thruster models report
 positive propellant mass flow from thrust and specific impulse, and
 ``propagate_6dof`` can propagate mass when a mass-flow model is supplied. For
 ``SpacecraftBody`` objects with tanks, propagated mass is distributed across

@@ -10,11 +10,25 @@ from collections.abc import Callable as _Callable
 
 import numpy as _np
 
-from ..constants import AU, EARTH_MU, EARTH_RADIUS, SOLAR_FLUX_1_AU, WGS84_EARTH_OMEGA, J2_wgs, c
+from ..constants import (
+    AU,
+    EARTH_MU,
+    EARTH_RADIUS,
+    SOLAR_FLUX_1_AU,
+    WGS84_EARTH_OMEGA,
+    J2_wgs,
+    c,
+)
 from ..coordinates.attitude import (
     normalize_quaternion as _normalize_quaternion,
+)
+from ..coordinates.attitude import (
     quaternion_conjugate as _quaternion_conjugate,
+)
+from ..coordinates.attitude import (
     quaternion_multiply as _quaternion_multiply,
+)
+from ..coordinates.attitude import (
     rotate_vector as _rotate_vector,
 )
 from ..coordinates.satellite_frames import frame_to_gcrf_matrix
@@ -70,8 +84,8 @@ __all__ = [
     "make_srp_acceleration",
     "make_third_body_acceleration",
     "make_thruster_acceleration",
-    "reaction_wheel_torque_commands",
     "reaction_wheel_torque",
+    "reaction_wheel_torque_commands",
     "srp_acceleration",
     "sum_accelerations",
     "sum_torques",
@@ -303,7 +317,11 @@ class SpacecraftTorqueSum:
 
 
 class SpacecraftFlatPlateDrag(SpacecraftAccel):
-    """Attitude-dependent flat-plate atmospheric drag with optional torque."""
+    """Attitude-dependent flat-plate aerodynamic force with optional torque.
+
+    ``cl=0`` retains the historical drag-only model. A nonzero ``cl`` adds a
+    lift component in the plate-normal/relative-wind plane.
+    """
 
     spacecraft_torque_model = True
 
@@ -314,6 +332,7 @@ class SpacecraftFlatPlateDrag(SpacecraftAccel):
         area: float | None = None,
         mass: float | None = None,
         cd: float | None = 2.2,
+        cl: float = 0.0,
         normal_body: ArrayLike = (1.0, 0.0, 0.0),
         center_of_pressure: ArrayLike | None = None,
         atmosphere_velocity=None,
@@ -324,6 +343,7 @@ class SpacecraftFlatPlateDrag(SpacecraftAccel):
         self.area = None if area is None else _validate_positive(area, "area")
         self.mass = None if mass is None else _validate_positive(mass, "mass")
         self.cd = None if cd is None else _validate_positive(cd, "cd")
+        self.cl = _validate_finite(cl, "cl")
         self.normal_body = _unit_vector(normal_body, "normal_body")
         self.center_of_pressure = None if center_of_pressure is None else _as_vector3(center_of_pressure, "center_of_pressure")
         self.atmosphere_velocity = atmosphere_velocity
@@ -348,6 +368,7 @@ class SpacecraftFlatPlateDrag(SpacecraftAccel):
             area=_value_or_spacecraft(self.area, spacecraft, "area"),
             mass=_value_or_spacecraft(self.mass, spacecraft, "mass"),
             cd=_value_or_spacecraft(self.cd, spacecraft, "cd"),
+            cl=self.cl,
             normal_body=self.normal_body,
             center_of_pressure=_center_of_pressure(self.center_of_pressure, spacecraft),
             omega_body=omega,
@@ -841,6 +862,7 @@ def flat_plate_drag_acceleration_torque(
     area: float,
     mass: float,
     cd: float = 2.2,
+    cl: float = 0.0,
     normal_body: ArrayLike = (1.0, 0.0, 0.0),
     center_of_pressure: ArrayLike = (0.0, 0.0, 0.0),
     omega_body: ArrayLike = (0.0, 0.0, 0.0),
@@ -848,7 +870,12 @@ def flat_plate_drag_acceleration_torque(
     earth_radius: float = EARTH_RADIUS,
     earth_rotation_rate: float = WGS84_EARTH_OMEGA,
 ) -> tuple[_np.ndarray, _np.ndarray]:
-    """Flat-plate drag acceleration and body-frame torque."""
+    """Flat-plate aerodynamic acceleration and body-frame torque.
+
+    ``cl=0`` gives the historical drag-only result. Positive lift acts toward
+    the exposed plate normal after removing its component along the relative
+    wind.
+    """
 
     r = _as_vector3(r_inertial, "r_inertial")
     v = _as_vector3(v_inertial, "v_inertial")
@@ -857,6 +884,7 @@ def flat_plate_drag_acceleration_torque(
     area = _validate_positive(area, "area")
     mass = _validate_positive(mass, "mass")
     cd = _validate_positive(cd, "cd")
+    cl = _validate_finite(cl, "cl")
     normal_body = _unit_vector(normal_body, "normal_body")
     center_of_pressure = _as_vector3(center_of_pressure, "center_of_pressure")
     omega_body = _as_vector3(omega_body, "omega_body")
@@ -878,7 +906,16 @@ def flat_plate_drag_acceleration_torque(
     if projected == 0.0:
         return _np.zeros(3), _np.zeros(3)
 
-    force_inertial = -0.5 * density * cd * area * projected * relative_speed**2 * relative_hat
+    dynamic_pressure = 0.5 * density * relative_speed**2
+    if cl == 0.0:
+        force_inertial = -dynamic_pressure * cd * area * projected * relative_hat
+    else:
+        lift_direction = normal_inertial - projected * relative_hat
+        lift_norm = _np.linalg.norm(lift_direction)
+        lift_direction = _np.zeros(3) if lift_norm == 0.0 else lift_direction / lift_norm
+        force_inertial = dynamic_pressure * area * projected * (
+            -cd * relative_hat + cl * lift_direction
+        )
     acceleration = force_inertial / mass
     force_body = _rotate_vector(_quaternion_conjugate(q), force_inertial)
     return acceleration, _np.cross(center_of_pressure, force_body)
@@ -997,6 +1034,15 @@ def facet_drag_acceleration_torque(
             * relative_speed**2
             * relative_hat
         )
+        cl = _validate_finite(getattr(facet, "cl", 0.0), "facet.cl")
+        if cl != 0.0:
+            lift_direction = normal_inertial - projected * relative_hat
+            lift_norm = _np.linalg.norm(lift_direction)
+            if lift_norm != 0.0:
+                force_inertial = force_inertial + (
+                    0.5 * density * _validate_positive(facet.area, "facet.area")
+                    * projected * relative_speed**2 * cl * lift_direction / lift_norm
+                )
         total_force_inertial = total_force_inertial + force_inertial
         force_body = _rotate_vector(q_conj, force_inertial)
         total_torque_body = total_torque_body + _np.cross(arm_body, force_body)
@@ -1414,6 +1460,13 @@ def _validate_positive(value: float, name: str) -> float:
     value = float(value)
     if value <= 0.0:
         raise ValueError(f"{name} must be positive.")
+    return value
+
+
+def _validate_finite(value: float, name: str) -> float:
+    value = float(value)
+    if not _np.isfinite(value):
+        raise ValueError(f"{name} must be finite.")
     return value
 
 

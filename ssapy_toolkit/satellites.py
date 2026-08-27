@@ -100,10 +100,11 @@ class ReactionWheel:
 class Facet:
     """Fixed body-frame surface used by facet drag and SRP models.
 
-    ``cr`` is the effective cannonball-style solar radiation pressure
-    coefficient. Set ``specular_reflectivity`` or ``diffuse_reflectivity`` to
-    use the optical flat-plate SRP model instead. ``vertices_body`` enables mesh-derived
-    facets and optional self-shadowing in the SRP force model.
+    ``cd`` and ``cl`` are the aerodynamic drag and lift coefficients. ``cr`` is
+    the effective cannonball-style solar radiation pressure coefficient. Set
+    ``specular_reflectivity`` or ``diffuse_reflectivity`` to use the optical
+    flat-plate SRP model instead. ``vertices_body`` enables mesh-derived facets
+    and optional self-shadowing in the SRP force model.
     """
 
     area: float
@@ -116,12 +117,14 @@ class Facet:
     thermal_reemission: float = 0.0
     vertices_body: ArrayLike | None = None
     name: str = ""
+    cl: float = 0.0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "area", _positive(self.area, "area"))
         object.__setattr__(self, "normal_body", _unit(self.normal_body, "normal_body"))
         object.__setattr__(self, "center_of_pressure", _vector3(self.center_of_pressure, "center_of_pressure"))
         object.__setattr__(self, "cd", _positive(self.cd, "cd"))
+        object.__setattr__(self, "cl", _finite(self.cl, "cl"))
         object.__setattr__(self, "cr", _positive(self.cr, "cr"))
         if self.specular_reflectivity is not None:
             object.__setattr__(self, "specular_reflectivity", _unit_interval(self.specular_reflectivity, "specular_reflectivity"))
@@ -844,6 +847,13 @@ def _positive(value: float, name: str) -> float:
     value = float(value)
     if value <= 0.0:
         raise ValueError(f"{name} must be positive.")
+    return value
+
+
+def _finite(value: float, name: str) -> float:
+    value = float(value)
+    if not np.isfinite(value):
+        raise ValueError(f"{name} must be finite.")
     return value
 
 

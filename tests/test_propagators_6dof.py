@@ -691,6 +691,84 @@ def test_flat_plate_drag_acceleration_torque_and_attitude_shadowing():
     np.testing.assert_allclose(facet_torque, torque)
 
 
+def test_flat_plate_and_facet_lift_are_projected_and_signed():
+    r = np.array([7_000_000.0, 0.0, 0.0])
+    v = np.array([3.0, 4.0, 0.0])
+    q = [1.0, 0.0, 0.0, 0.0]
+    kwargs = {
+        "density": 1.0,
+        "area": 2.0,
+        "mass": 10.0,
+        "cd": 2.0,
+        "normal_body": [1.0, 0.0, 0.0],
+        "center_of_pressure": [0.0, 1.0, 0.0],
+        "atmosphere_velocity": [0.0, 0.0, 0.0],
+        "earth_radius": 0.0,
+        "earth_rotation_rate": 0.0,
+    }
+
+    legacy_accel, legacy_torque = flat_plate_drag_acceleration_torque(r, v, q, **kwargs)
+    zero_lift_accel, zero_lift_torque = flat_plate_drag_acceleration_torque(r, v, q, cl=0.0, **kwargs)
+    np.testing.assert_allclose(zero_lift_accel, legacy_accel)
+    np.testing.assert_allclose(zero_lift_torque, legacy_torque)
+
+    lift_accel, lift_torque = flat_plate_drag_acceleration_torque(r, v, q, cl=1.0, **kwargs)
+    np.testing.assert_allclose(lift_accel, [-0.6, -3.3, 0.0])
+    np.testing.assert_allclose(lift_torque, [0.0, 0.0, 6.0])
+
+    facet_accel, facet_torque = facet_drag_acceleration_torque(
+        r,
+        v,
+        q,
+        [Facet(area=2.0, normal_body=[1.0, 0.0, 0.0], center_of_pressure=[0.0, 1.0, 0.0], cd=2.0, cl=1.0)],
+        density=1.0,
+        mass=10.0,
+        atmosphere_velocity=[0.0, 0.0, 0.0],
+        earth_radius=0.0,
+        earth_rotation_rate=0.0,
+    )
+    np.testing.assert_allclose(facet_accel, lift_accel)
+    np.testing.assert_allclose(facet_torque, lift_torque)
+
+    with pytest.raises(ValueError, match="cl must be finite"):
+        flat_plate_drag_acceleration_torque(r, v, q, cl=np.nan, **kwargs)
+    with pytest.raises(ValueError, match="cl must be finite"):
+        Facet(area=1.0, normal_body=[1.0, 0.0, 0.0], cl=np.inf)
+
+
+def test_flat_plate_drag_wrapper_forwards_lift_coefficient():
+    r = np.array([7_000_000.0, 0.0, 0.0])
+    v = np.array([3.0, 4.0, 0.0])
+    q = [1.0, 0.0, 0.0, 0.0]
+    model = SpacecraftFlatPlateDrag(
+        density=1.0,
+        area=2.0,
+        mass=10.0,
+        cd=2.0,
+        cl=1.0,
+        normal_body=[1.0, 0.0, 0.0],
+        atmosphere_velocity=[0.0, 0.0, 0.0],
+        earth_radius=0.0,
+        earth_rotation_rate=0.0,
+    )
+    wrapped = model.acceleration(t=0.0, r=r, v=v, q=q, omega=[0.0, 0.0, 0.0])
+    expected, _ = flat_plate_drag_acceleration_torque(
+        r,
+        v,
+        q,
+        density=1.0,
+        area=2.0,
+        mass=10.0,
+        cd=2.0,
+        cl=1.0,
+        normal_body=[1.0, 0.0, 0.0],
+        atmosphere_velocity=[0.0, 0.0, 0.0],
+        earth_radius=0.0,
+        earth_rotation_rate=0.0,
+    )
+    np.testing.assert_allclose(wrapped, expected)
+
+
 def test_drag_models_include_local_surface_velocity_from_body_rotation():
     r = np.array([7_000_000.0, 0.0, 0.0])
     v = np.zeros(3)
