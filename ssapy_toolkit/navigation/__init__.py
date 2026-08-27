@@ -1,5 +1,6 @@
 """Navigation and state-estimation helpers."""
 
+from .batch import BatchOrbitFitResult, solve_batch_orbit
 from .ekf import (
     CartesianMeasurement,
     CartesianOrbitEKF,
@@ -16,6 +17,7 @@ from .sensors import (
 )
 
 __all__ = [
+    "BatchOrbitFitResult",
     "CartesianMeasurement",
     "CartesianOrbitEKF",
     "CartesianSensor",
@@ -27,5 +29,6 @@ __all__ = [
     "SensorMeasurement",
     "StationObservation",
     "StationPrediction",
+    "solve_batch_orbit",
     "wrap_angle_residual",
 ]
