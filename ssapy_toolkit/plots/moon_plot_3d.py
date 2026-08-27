@@ -53,7 +53,7 @@ def _ssapy_texture(name):
 
 
 def _textured_moon(ax, cx, cy, cz, radius, moon_img_path, n=64, sun_hat=None,
-                    ambient=0.22, diffuse=0.78):
+                    ambient=0.22, diffuse=0.78, zorder=10):
     """Render Moon as a textured 3D sphere, optionally shaded by sun_hat.
 
     sun_hat : array-like (3,), unit vector toward the Sun in the same
@@ -86,7 +86,7 @@ def _textured_moon(ax, cx, cy, cz, radius, moon_img_path, n=64, sun_hat=None,
 
         ax.plot_surface(x, y, z, facecolors=facecolors,
                         rstride=1, cstride=1,
-                        linewidth=0, antialiased=True,
+                        linewidth=0, antialiased=True, zorder=zorder,
                         shade=False)
         return True
     except Exception as e:
@@ -95,7 +95,7 @@ def _textured_moon(ax, cx, cy, cz, radius, moon_img_path, n=64, sun_hat=None,
 
 
 def _textured_earth(ax, cx, cy, cz, radius, earth_img_path, n=32, sun_hat=None,
-                     ambient=0.22, diffuse=0.78):
+                     ambient=0.22, diffuse=0.78, zorder=10):
     """Render Earth as a small textured sphere, optionally shaded by sun_hat.
 
     sun_hat : array-like (3,), unit vector toward the Sun in the same
@@ -128,7 +128,7 @@ def _textured_earth(ax, cx, cy, cz, radius, earth_img_path, n=32, sun_hat=None,
 
         ax.plot_surface(x, y, z, facecolors=facecolors,
                         rstride=1, cstride=1,
-                        linewidth=0, antialiased=True,
+                        linewidth=0, antialiased=True, zorder=zorder,
                         shade=False)
         return True
     except Exception as e:
@@ -149,6 +149,7 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
                  sun_elevation_deg=None,
                  shade_ambient=0.22,
                  shade_diffuse=0.78,
+                 scene_pad=0.30,
                  r_frame='gcrf'):
     """
     3D Moon surface plot with star background, real Sun shading, and
@@ -216,6 +217,9 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
         these two act as the "shading percentage" control — e.g.
         ambient=0.5, diffuse=0.5 gives a soft, low-contrast terminator;
         ambient=0.05, diffuse=0.95 gives a harsh, high-contrast one.
+    scene_pad : float, default 0.30
+        Fractional padding around the trajectory bounds. Smaller values give
+        a tighter orbit framing.
     r_frame : str, default 'gcrf'
         Frame that `r` is already expressed in.
           'gcrf'          : r is Earth-centered GCRF/equatorial (the
@@ -256,6 +260,7 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
     ax.zaxis.pane.set_facecolor(plotcolor)
     ax.set_axis_off()
     ax.set_clip_on(False)
+    ax.computed_zorder = False
 
     # ── Unit conversion ───────────────────────────────────────────────────────
     unit_conversion = 1e3   # km
@@ -341,7 +346,7 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
         cx_ = (raw_lower[0] + raw_upper[0]) / 2
         cy_ = (raw_lower[1] + raw_upper[1]) / 2
         cz_ = (raw_lower[2] + raw_upper[2]) / 2
-        pad = plot_range * 0.3
+        pad = plot_range * scene_pad
         ax.set_xlim(cx_ - plot_range/2 - pad, cx_ + plot_range/2 + pad)
         ax.set_ylim(cy_ - plot_range/2 - pad, cy_ + plot_range/2 + pad)
         ax.set_zlim(cz_ - plot_range/2 - pad, cz_ + plot_range/2 + pad)
@@ -503,7 +508,7 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
         earth_light_dir = sun_hat
         _textured_earth(ax, earth_pos_km[0], earth_pos_km[1], earth_pos_km[2],
                         visible_earth_r, earth_img, n=32, sun_hat=earth_light_dir,
-                        ambient=shade_ambient, diffuse=shade_diffuse)
+                        ambient=shade_ambient, diffuse=shade_diffuse, zorder=10)
    # ── Orbit tracks ──────────────────────────────────────────────────────────
     for orbit_index, xyz in xyz_list:
         if len(xyz_list) == 1:
@@ -513,12 +518,12 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
             n_seg = len(xyz) - 1
             segs = [[xyz[i], xyz[i+1]] for i in range(n_seg)]
             lc = Line3DCollection(segs, colors=['#ff6600'],
-                                  linewidth=2.0, alpha=0.9)
+                                  linewidth=2.0, alpha=0.9, zorder=5)
             ax.add_collection(lc)
         else:
             tc = cm.rainbow(np.linspace(0, 1, len(xyz_list)))[orbit_index]
             ax.plot(xyz[:, 0], xyz[:, 1], xyz[:, 2],
-                    color=tc, linewidth=1.5, alpha=0.9)
+                    color=tc, linewidth=1.5, alpha=0.9, zorder=5)
  # ── Moon ─────────────────────────────────────────────────────────────────
     # Visibility floor matching Earth's existing pattern (visible_earth_r =
     # max(earth_r, plot_range*0.03)) — without this, the Moon renders at
@@ -536,7 +541,7 @@ def moon_plot_3d(r=None, t=None, title='', figsize=(10, 10),
     moon_light_dir = sun_hat
     drawn = _textured_moon(ax, 0, 0, 0, visible_moon_r, moon_img, n=96,
                            sun_hat=moon_light_dir,
-                           ambient=shade_ambient, diffuse=shade_diffuse)
+                           ambient=shade_ambient, diffuse=shade_diffuse, zorder=10)
     if not drawn:
         u = np.linspace(0, 2*np.pi, 30)
         v = np.linspace(0, np.pi,   30)
