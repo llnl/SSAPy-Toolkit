@@ -28,6 +28,7 @@ Subpackages
    ssapy_toolkit.orbital_mechanics
    ssapy_toolkit.plots
    ssapy_toolkit.satellites
+   ssapy_toolkit.ssa
    ssapy_toolkit.ssapy_wrappers
    ssapy_toolkit.time_functions
    ssapy_toolkit.yastropy

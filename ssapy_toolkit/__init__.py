@@ -94,6 +94,7 @@ _TOOLKIT_SUBMODULE_NAMES = frozenset(
         "propagators_6dof",
         "run_all_demos",
         "satellites",
+        "ssa",
         "ssapy_wrappers",
         "time_functions",
         "utils",
