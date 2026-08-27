@@ -52,6 +52,31 @@ class StationPrediction:
 
 
 @dataclass(frozen=True)
+class GroundStationMeasurement:
+    """EKF-compatible callable for one ground-station observable."""
+
+    station: GroundStation
+    time: object
+    measurement: str = "range"
+
+    def __post_init__(self):
+        if not isinstance(self.station, GroundStation):
+            raise TypeError("station must be a GroundStation.")
+        if self.measurement not in _MEASUREMENTS:
+            raise ValueError(f"unsupported measurement {self.measurement!r}.")
+
+    @property
+    def angle_indices(self) -> tuple[int, ...]:
+        """Indices requiring circular innovation wrapping."""
+
+        return (0,) if self.measurement in {"az_el", "ra_dec"} else ()
+
+    def __call__(self, state) -> tuple[np.ndarray, np.ndarray]:
+        prediction = self.station.predict(state, self.time, self.measurement)
+        return np.atleast_1d(prediction.value).astype(float), prediction.jacobian
+
+
+@dataclass(frozen=True)
 class GroundStation:
     """Earth-fixed ground station using SSAPy's ``EarthObserver``.
 
@@ -177,4 +202,4 @@ class GroundStation:
         return StationPrediction(time, measurement, value, jacobian, visible, elevation)
 
 
-__all__ = ["GroundStation", "StationPrediction"]
+__all__ = ["GroundStation", "GroundStationMeasurement", "StationPrediction"]

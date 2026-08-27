@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from astropy.time import Time
 
-from ssapy_toolkit.navigation import GroundStation
+from ssapy_toolkit.navigation import GroundStation, GroundStationMeasurement
 
 
 @pytest.fixture
@@ -133,3 +133,14 @@ def test_scalar_astropy_time_matches_numeric_time(station, monkeypatch):
     scalar_time = station.predict(state, Time(123.0, format="gps"), "range")
     assert scalar_time.time == pytest.approx(numeric.time)
     assert scalar_time.value == pytest.approx(numeric.value)
+
+
+def test_ground_station_measurement_adapts_prediction_to_ekf(station, monkeypatch):
+    monkeypatch.setattr(GroundStation, "_observer", lambda self: type("Observer", (), {
+        "getRV": lambda self, time: (np.zeros(3), np.zeros(3)),
+    })())
+    model = GroundStationMeasurement(station, 0.0, "ra_dec")
+    value, jacobian = model(np.array([4.0, 3.0, 2.0, 0.0, 0.0, 0.0]))
+    assert value.shape == (2,)
+    assert jacobian.shape == (2, 6)
+    assert model.angle_indices == (0,)

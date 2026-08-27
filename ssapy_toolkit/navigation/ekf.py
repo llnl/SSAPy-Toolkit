@@ -13,6 +13,22 @@ from ..propagators_orbit import propagate_orbit_state_with_stm
 Array = np.ndarray
 
 
+def wrap_angle_residual(residual, indices=(0,), *, period: float = 2.0 * np.pi) -> Array:
+    """Wrap selected angular innovations into ``[-period/2, period/2)``."""
+
+    residual = np.asarray(residual, dtype=float).copy()
+    if residual.ndim != 1 or not np.all(np.isfinite(residual)):
+        raise ValueError("residual must be a finite one-dimensional array.")
+    period = float(period)
+    if not np.isfinite(period) or period <= 0.0:
+        raise ValueError("period must be finite and positive.")
+    indices = tuple(int(index) for index in indices)
+    if any(index < 0 or index >= residual.size for index in indices):
+        raise ValueError("angle residual indices are out of bounds.")
+    residual[list(indices)] = (residual[list(indices)] + period / 2.0) % period - period / 2.0
+    return residual
+
+
 def _matrix(value, shape, name):
     matrix = np.asarray(value, dtype=float)
     if matrix.shape != shape or not np.all(np.isfinite(matrix)):
@@ -82,6 +98,8 @@ class ExtendedKalmanFilter:
         noise: Array,
         *,
         time: float | None = None,
+        angle_indices=(),
+        residual=None,
     ) -> EKFState:
         prediction, jacobian = model(self.state.x.copy())
         prediction = np.asarray(prediction, dtype=float)
@@ -91,7 +109,12 @@ class ExtendedKalmanFilter:
         m, n = prediction.size, self.state.x.size
         jacobian = _matrix(jacobian, (m, n), "measurement jacobian")
         noise = _matrix(noise, (m, m), "measurement noise")
-        innovation = measurement - prediction
+        innovation = measurement - prediction if residual is None else np.asarray(
+            residual(measurement, prediction), dtype=float
+        )
+        if innovation.shape != prediction.shape or not np.all(np.isfinite(innovation)):
+            raise ValueError("measurement residual must be finite and match model output.")
+        innovation = wrap_angle_residual(innovation, angle_indices) if angle_indices else innovation
         innovation_covariance = jacobian @ self.state.covariance @ jacobian.T + noise
         try:
             gain = np.linalg.solve(innovation_covariance, jacobian @ self.state.covariance).T

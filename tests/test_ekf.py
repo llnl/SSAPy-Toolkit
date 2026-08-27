@@ -1,7 +1,13 @@
 import numpy as np
 import pytest
 
-from ssapy_toolkit.navigation import CartesianMeasurement, CartesianOrbitEKF, EKFState, ExtendedKalmanFilter
+from ssapy_toolkit.navigation import (
+    CartesianMeasurement,
+    CartesianOrbitEKF,
+    EKFState,
+    ExtendedKalmanFilter,
+    wrap_angle_residual,
+)
 
 
 def test_ekf_predict_update_reduces_position_error():
@@ -19,6 +25,23 @@ def test_cartesian_measurement_builds_selection_matrix():
     measurement, jacobian = CartesianMeasurement((0, 2))(np.arange(4.0))
     np.testing.assert_allclose(measurement, [0.0, 2.0])
     np.testing.assert_allclose(jacobian, [[1.0, 0.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0]])
+
+
+def test_wrap_angle_residual_handles_circular_innovation():
+    np.testing.assert_allclose(
+        wrap_angle_residual([2.0 * np.pi - 1.0e-3], (0,)), [-1.0e-3], atol=1.0e-12
+    )
+
+
+def test_ekf_update_wraps_requested_angle_components():
+    ekf = ExtendedKalmanFilter(EKFState([0.0], [[1.0]]))
+    updated = ekf.update(
+        [2.0 * np.pi - 0.1],
+        lambda state: (np.array([state[0]]), np.ones((1, 1))),
+        [[0.01]],
+        angle_indices=(0,),
+    )
+    assert updated.x[0] == pytest.approx(-0.099, abs=0.002)
 
 
 def test_ekf_rejects_invalid_covariance():
