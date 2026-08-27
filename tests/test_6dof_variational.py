@@ -1,7 +1,7 @@
 import numpy as np
 
 import ssapy_toolkit as ssatk
-from ssapy_toolkit.coordinates.attitude import rotate_vector
+from ssapy_toolkit.coordinates.attitude import normalize_quaternion, rotate_vector
 from ssapy_toolkit.propagators_6dof import (
     attitude_error_stm,
     propagate_6dof,
@@ -199,3 +199,33 @@ def test_variational_jacobian_includes_analytic_body_force_attitude_partial():
         finite[:, column] = (plus - minus) / (2.0 * step)
 
     np.testing.assert_allclose(jacobian[3:6, 6:10], finite, rtol=1.0e-6, atol=1.0e-12)
+
+
+def test_body_force_attitude_jacobian_chains_quaternion_normalization():
+    def body_acceleration(t, r, v, q, omega):
+        return 1.0e-3 * np.array([q[0], 2.0 * q[1], -q[2]])
+
+    body_acceleration.attitude_jacobian = lambda q: 1.0e-3 * np.array([
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 2.0, 0.0, 0.0],
+        [0.0, 0.0, -1.0, 0.0],
+    ])
+    state = np.array([
+        7.0e6, -1.2e6, 0.8e6, 1.2e3, 7.3e3, -0.5e3,
+        0.9, 0.1, -0.2, 0.3, 0.01, -0.02, 0.03,
+    ])
+    jacobian = _body_acceleration_jacobian(
+        body_acceleration, 0.0, state, q_raw=state[6:10]
+    )
+    finite = np.empty((3, 4))
+    for column in range(4):
+        step = 1.0e-7
+        delta = np.zeros(4)
+        delta[column] = step
+        plus_q = normalize_quaternion(state[6:10] + delta)
+        minus_q = normalize_quaternion(state[6:10] - delta)
+        plus = rotate_vector(plus_q, body_acceleration(0.0, state[:3], state[3:6], plus_q, state[10:13]))
+        minus = rotate_vector(minus_q, body_acceleration(0.0, state[:3], state[3:6], minus_q, state[10:13]))
+        finite[:, column] = (plus - minus) / (2.0 * step)
+
+    np.testing.assert_allclose(jacobian, finite, rtol=1.0e-6, atol=1.0e-12)

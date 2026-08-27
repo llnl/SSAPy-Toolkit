@@ -365,7 +365,13 @@ def _body_acceleration_jacobian(model, t, y, *, q_raw):
     body_jacobian = np.asarray(model.attitude_jacobian(q), dtype=float)
     if body_jacobian.shape != (3, 4):
         raise ValueError("attitude_jacobian must return a (3, 4) array.")
-    return _rotate_vector_jacobian(q, body_acceleration) + rotate_vector_matrix(q) @ body_jacobian
+    normalization_jacobian = (
+        np.eye(4) - np.outer(q, q)
+    ) / np.linalg.norm(q_raw)
+    return (
+        _rotate_vector_jacobian(q_raw, body_acceleration)
+        + rotate_vector_matrix(q) @ body_jacobian @ normalization_jacobian
+    )
 
 
 def rotate_vector_matrix(q: np.ndarray) -> np.ndarray:
