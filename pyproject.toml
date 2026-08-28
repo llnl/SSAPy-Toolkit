@@ -46,7 +46,6 @@ dependencies = [
   "pypdf",
   "rebound",
   "scipy",
-  "tqdm",
 ]
 
 [project.optional-dependencies]

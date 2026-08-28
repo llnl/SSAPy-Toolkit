@@ -1,4 +1,3 @@
-from tqdm import tqdm
 import os
 import sys
 
@@ -32,7 +31,7 @@ def main(make_figures=None, fast=None):
 
     rs = []
     peris = np.linspace(10e3, EARTH_RADIUS, 4 if fast else 10)
-    for peri in tqdm(peris):
+    for peri in peris:
         a = (peri + ap) / 2
         e = (ap - peri) / (peri + ap)
         orbit = Orbit.fromKeplerianElements(a, e, 0, 0, 0, 0, t=t0)

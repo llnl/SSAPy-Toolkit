@@ -1,7 +1,6 @@
 import os
 import sys
 import numpy as np
-from tqdm import tqdm
 
 from ssapy import Orbit, rv
 from astropy.time import Time
@@ -42,7 +41,7 @@ def main(make_figures=None, fast=None):
     print("Time sampling")
     rs = []
     orbit = Orbit.fromKeplerianElements(a=RGEO, e=0.4, i=0, pa=0, raan=0, trueAnomaly=0.0, t=t0)
-    for t in tqdm(np.arange(0, orbit.period, 3600 if fast else 600)):
+    for t in np.arange(0, orbit.period, 3600 if fast else 600):
         orbit_new = orbit.at(t)
         rs.append(orbit_new.r)
 

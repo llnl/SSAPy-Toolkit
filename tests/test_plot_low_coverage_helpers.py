@@ -135,7 +135,6 @@ def test_groundtrack_video_helpers_and_fake_writer(monkeypatch, tmp_path, capsys
     monkeypatch.setattr(module, "_ensure_ffmpeg_path", lambda: "/usr/bin/ffmpeg")
     monkeypatch.setattr(module, "FFMpegWriter", DummyWriter)
     monkeypatch.setattr(module, "_try_load_earth", lambda: np.zeros((2, 2, 3)))
-    monkeypatch.setattr(module, "_HAS_TQDM", False)
 
     def fake_groundtrack(r, t, format="geodetic"):
         n = len(r)
