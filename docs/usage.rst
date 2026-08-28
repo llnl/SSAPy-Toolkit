@@ -234,6 +234,15 @@ Compare a trajectory against an OEM or JSON reference with
 the reference epochs and returns maximum, root-mean-square, and final position
 and velocity residuals in SI units.
 
+Read a standalone, state-only CCSDS OEM 2.0 KVN message with
+:func:`ssapy_toolkit.io.read_oem`. The reader accepts standard multi-segment
+messages and legacy ``DATA_START``/``DATA_STOP`` wrappers, preserves each
+segment's metadata and comments, and converts the km/km/s state records to
+meters and meters per second. OEM covariance blocks and extra state components
+are rejected explicitly. Absolute UTC, TAI, TT, TDB, TCB, TCG, UT1, and GPS
+calendar or ordinal epochs are supported; mission-relative time systems such
+as MRT require an external epoch and are rejected.
+
 .. code-block:: python
 
    from ssapy_toolkit.io import compare_reference_case
