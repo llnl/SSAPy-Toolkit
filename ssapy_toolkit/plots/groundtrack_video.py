@@ -87,7 +87,8 @@ def groundtrack_video(
         (lat_deg, lon_deg) rows. Used in "map" and "surface3d" modes.
     save_path : str, required, must end with '.mp4'
     start_end_markers : bool
-    fps, bitrate, max_frames, progress : controls
+    fps, bitrate, max_frames : int
+    progress : bool
     mode : "map" | "surface3d" | "eci3d"
     """
     save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
