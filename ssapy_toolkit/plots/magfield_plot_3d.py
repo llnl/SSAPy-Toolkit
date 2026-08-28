@@ -24,7 +24,7 @@ High-fidelity model content
 
 Dependencies
 ------------
-    pip install ppigrf pillow plotly kaleido
+    pip install 'ssapy-toolkit[static,geomagnetics]'
 """
 
 

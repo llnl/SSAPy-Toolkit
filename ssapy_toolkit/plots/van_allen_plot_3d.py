@@ -22,7 +22,7 @@ orbits inside it and near-side stars never render in front of the planet.
 
 Dependencies
 ------------
-    pip install pillow plotly kaleido      (ppigrf optional, for belt_style='igrf')
+    pip install 'ssapy-toolkit[static]'    (ppigrf optional, for belt_style='igrf')
 """
 
 from __future__ import annotations

@@ -19,7 +19,7 @@ Reads GUI_CONFIG from environment or falls back to defaults.
 Output
 ------
   <output_dir>/earth_sun_plot.html   — interactive, animated Plotly HTML
-  <output_dir>/earth_sun_plot.jpg    — static high-res snapshot (requires kaleido)
+  <output_dir>/earth_sun_plot.jpg    — static snapshot (requires the ``static`` extra)
 """
 
 from __future__ import annotations
@@ -484,6 +484,6 @@ if __name__ == "__main__":
         hero_fig.write_image(str(jpg_path), width=1920, height=1080, scale=2)
         print(f"[earth_sun_plot] Saved → {jpg_path}")
     except Exception as e:
-        print(f"[earth_sun_plot] write_image failed: {e} — install kaleido")
+        print(f"[earth_sun_plot] write_image failed: {e} — install ssapy-toolkit[static]")
 
     print("[earth_sun_plot] Done.")

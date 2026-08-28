@@ -672,7 +672,10 @@ def test_pyproject_optional_extras_are_named_as_documented():
     notebook = {requirement.lower() for requirement in extras.get("notebook", [])}
     assert notebook == {"ipython", "ipyvolume"}
     assert notebook <= {requirement.lower() for requirement in extras.get("dev", [])}
-    assert notebook.isdisjoint(
+    static = {requirement.lower() for requirement in extras.get("static", [])}
+    assert static == {"kaleido"}
+    assert static <= {requirement.lower() for requirement in extras.get("dev", [])}
+    assert (notebook | static).isdisjoint(
         requirement.lower() for requirement in project.get("dependencies", [])
     )
     joined = " ".join(" ".join(v) for v in extras.values()).lower()

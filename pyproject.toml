@@ -34,7 +34,6 @@ dependencies = [
   "global-land-mask",
   "h5py",
   "imageio",
-  "kaleido",
   "llnl-ssapy-data>=0.1.5",
   "llnl-ssapy>=1.1.9",
   "matplotlib",
@@ -54,6 +53,10 @@ dependencies = [
 notebook = [
   "ipython",
   "ipyvolume",
+]
+
+static = [
+  "kaleido",
 ]
 
 browser = [
@@ -82,6 +85,7 @@ dev = [
   "coverage",
   "ipython",
   "ipyvolume",
+  "kaleido",
   "pytest",
   "pytest-mpi",
   "sphinx",

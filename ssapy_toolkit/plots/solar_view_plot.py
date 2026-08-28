@@ -13,7 +13,7 @@ Reads GUI_CONFIG from environment or falls back to defaults.
 Output
 ------
   <output_dir>/solar_view_plot.html   — interactive Plotly HTML
-  <output_dir>/solar_view_plot.jpg    — static snapshot (requires kaleido)
+  <output_dir>/solar_view_plot.jpg    — static snapshot (requires the ``static`` extra)
 """
 
 from __future__ import annotations
@@ -420,6 +420,6 @@ if __name__ == "__main__":
         fig.write_image(str(jpg_path), width=1920, height=1080, scale=2)
         print(f"[solar_view_plot] Saved → {jpg_path}")
     except Exception as e:
-        print(f"[solar_view_plot] write_image failed: {e} — install kaleido")
+        print(f"[solar_view_plot] write_image failed: {e} — install ssapy-toolkit[static]")
 
     print("[solar_view_plot] Done.")

@@ -824,7 +824,7 @@ if __name__ == "__main__":
         print(f"[sensor_fov_plot] Saved → {jpg_path}")
     except Exception as e:
         print(f"[sensor_fov_plot] write_image failed ({e}). "
-              f"Try: pip install kaleido --break-system-packages")
+              f"Try: pip install 'ssapy-toolkit[static]'")
 
     # --- Save interactive HTML ---
     html_path = output_dir / "sensor_fov_plot.html"
