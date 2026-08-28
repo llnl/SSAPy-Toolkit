@@ -5,9 +5,10 @@ KVN state vectors are written in km and km/s; the primary RTN covariance is
 written in m², m²/s, and m²/s².  CDM relative quantities use Object 2 minus
 Object 1, matching :mod:`ssapy_toolkit.ssa`.
 
-The mandatory six-state RTN covariance block is supported, and optional
-CDRG/CSRP/CTHR covariance extensions are preserved.  Dynamic and alternate
-XYZ covariance blocks are rejected instead of being silently truncated.
+All three CDM 1.0 state frames are supported.  The mandatory six-state RTN
+covariance block and complete optional CDRG/CSRP/CTHR rows are preserved.
+Nonstandard alternate XYZ covariance blocks are rejected instead of being
+silently truncated.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ import numpy as np
 from astropy import units as u
 from astropy.coordinates import (
     GCRS,
+    ITRS,
     CartesianDifferential,
     CartesianRepresentation,
     PrecessedGeocentric,
@@ -50,8 +52,9 @@ _TIME_SCALES = {
     "TCG": "tcg",
     "UT1": "ut1",
 }
-_SUPPORTED_FRAMES = {"GCRF", "EME2000"}
-_MANEUVERABLE = {"YES", "NO", "UNKNOWN", "N/A"}
+_SUPPORTED_FRAMES = {"GCRF", "EME2000", "ITRF"}
+_MANEUVERABLE = {"YES", "NO", "N/A"}
+_COVARIANCE_METHODS = {"CALCULATED", "DEFAULT"}
 
 _STATE_KEYS = {"X", "Y", "Z", "X_DOT", "Y_DOT", "Z_DOT"}
 _OBJECT_REQUIRED_KEYS = {
@@ -87,6 +90,86 @@ _RELATIVE_KEYS = {
     "COLLISION_PROBABILITY",
     "COLLISION_PROBABILITY_METHOD",
 }
+_SCREENING_KEYS = (
+    "START_SCREEN_PERIOD",
+    "STOP_SCREEN_PERIOD",
+    "SCREEN_VOLUME_FRAME",
+    "SCREEN_VOLUME_SHAPE",
+    "SCREEN_VOLUME_X",
+    "SCREEN_VOLUME_Y",
+    "SCREEN_VOLUME_Z",
+    "SCREEN_ENTRY_TIME",
+    "SCREEN_EXIT_TIME",
+)
+_SCREENING_DATES = {"START_SCREEN_PERIOD", "STOP_SCREEN_PERIOD", "SCREEN_ENTRY_TIME", "SCREEN_EXIT_TIME"}
+_SCREENING_UNITS = {key: "m" for key in ("SCREEN_VOLUME_X", "SCREEN_VOLUME_Y", "SCREEN_VOLUME_Z")}
+_SCREENING_ENUMS = {
+    "SCREEN_VOLUME_FRAME": {"RTN", "TVN"},
+    "SCREEN_VOLUME_SHAPE": {"ELLIPSOID", "BOX"},
+}
+_OBJECT_CONTACT_KEYS = (
+    "OBJECT_TYPE",
+    "OPERATOR_CONTACT_POSITION",
+    "OPERATOR_ORGANIZATION",
+    "OPERATOR_PHONE",
+    "OPERATOR_EMAIL",
+)
+_OBJECT_MODEL_KEYS = (
+    "GRAVITY_MODEL",
+    "ATMOSPHERIC_MODEL",
+    "N_BODY_PERTURBATIONS",
+    "SOLAR_RAD_PRESSURE",
+    "EARTH_TIDES",
+    "INTRACK_THRUST",
+)
+_OBJECT_DATA_KEYS = (
+    "TIME_LASTOB_START",
+    "TIME_LASTOB_END",
+    "RECOMMENDED_OD_SPAN",
+    "ACTUAL_OD_SPAN",
+    "OBS_AVAILABLE",
+    "OBS_USED",
+    "TRACKS_AVAILABLE",
+    "TRACKS_USED",
+    "RESIDUALS_ACCEPTED",
+    "WEIGHTED_RMS",
+    "AREA_PC",
+    "AREA_DRG",
+    "AREA_SRP",
+    "MASS",
+    "CD_AREA_OVER_MASS",
+    "CR_AREA_OVER_MASS",
+    "THRUST_ACCELERATION",
+    "SEDR",
+)
+_OBJECT_DATES = {"TIME_LASTOB_START", "TIME_LASTOB_END"}
+_OBJECT_INTEGERS = {"OBS_AVAILABLE", "OBS_USED", "TRACKS_AVAILABLE", "TRACKS_USED"}
+_OBJECT_UNITS = {
+    "RECOMMENDED_OD_SPAN": "d",
+    "ACTUAL_OD_SPAN": "d",
+    "RESIDUALS_ACCEPTED": "%",
+    "WEIGHTED_RMS": None,
+    "AREA_PC": "m**2",
+    "AREA_DRG": "m**2",
+    "AREA_SRP": "m**2",
+    "MASS": "kg",
+    "CD_AREA_OVER_MASS": "m**2/kg",
+    "CR_AREA_OVER_MASS": "m**2/kg",
+    "THRUST_ACCELERATION": "m/s**2",
+    "SEDR": "W/kg",
+}
+_OBJECT_ENUMS = {
+    "OBJECT_TYPE": {"PAYLOAD", "ROCKET BODY", "DEBRIS", "UNKNOWN", "OTHER"},
+    "SOLAR_RAD_PRESSURE": {"YES", "NO"},
+    "EARTH_TIDES": {"YES", "NO"},
+    "INTRACK_THRUST": {"YES", "NO"},
+}
+_OBJECT_OPTIONAL_KEYS = {
+    *_OBJECT_CONTACT_KEYS,
+    "ORBIT_CENTER",
+    *_OBJECT_MODEL_KEYS,
+    *_OBJECT_DATA_KEYS,
+}
 
 _COVARIANCE_FIELDS = (
     ("CR_R", 0, 0, "m**2"),
@@ -118,6 +201,41 @@ _UNSUPPORTED_COVARIANCE_PREFIXES = (
     "CZ_",
 )
 _COVARIANCE_EXTENSION_PREFIXES = ("CDRG_", "CSRP_", "CTHR_")
+_COVARIANCE_EXTENSION_ROWS = (
+    (
+        ("CDRG_R", "m**3/kg"),
+        ("CDRG_T", "m**3/kg"),
+        ("CDRG_N", "m**3/kg"),
+        ("CDRG_RDOT", "m**3/(kg*s)"),
+        ("CDRG_TDOT", "m**3/(kg*s)"),
+        ("CDRG_NDOT", "m**3/(kg*s)"),
+        ("CDRG_DRG", "m**4/kg**2"),
+    ),
+    (
+        ("CSRP_R", "m**3/kg"),
+        ("CSRP_T", "m**3/kg"),
+        ("CSRP_N", "m**3/kg"),
+        ("CSRP_RDOT", "m**3/(kg*s)"),
+        ("CSRP_TDOT", "m**3/(kg*s)"),
+        ("CSRP_NDOT", "m**3/(kg*s)"),
+        ("CSRP_DRG", "m**4/kg**2"),
+        ("CSRP_SRP", "m**4/kg**2"),
+    ),
+    (
+        ("CTHR_R", "m**2/s**2"),
+        ("CTHR_T", "m**2/s**2"),
+        ("CTHR_N", "m**2/s**2"),
+        ("CTHR_RDOT", "m**2/s**3"),
+        ("CTHR_TDOT", "m**2/s**3"),
+        ("CTHR_NDOT", "m**2/s**3"),
+        ("CTHR_DRG", "m**3/(kg*s**2)"),
+        ("CTHR_SRP", "m**3/(kg*s**2)"),
+        ("CTHR_THR", "m**2/s**4"),
+    ),
+)
+_COVARIANCE_EXTENSION_KEYS = {
+    key for row in _COVARIANCE_EXTENSION_ROWS for key, _ in row
+}
 _UNSUPPORTED_COVARIANCE_KEYS = {"ALT_COV_TYPE", "ALT_COV_REF_FRAME"}
 _FORBIDDEN_STRUCTURE_KEYS = {
     "META_START",
@@ -155,6 +273,9 @@ def _readonly_mapping(values):
     copied = {str(key): str(value) for key, value in values.items()}
     if len(copied) != len(values):
         raise ValueError("extra fields must have unique keys.")
+    normalized = {key.strip().upper() for key in copied}
+    if len(normalized) != len(copied):
+        raise ValueError("extra fields must have case-insensitively unique keys.")
     return MappingProxyType(copied)
 
 
@@ -169,11 +290,17 @@ def _time(value, scale):
     else:
         text = str(value).strip()
         text = text.removesuffix("Z")
+        precision = min(len(text.rsplit(".", 1)[1]), 9) if "." in text else 0
+        time_format = "isot"
+        if len(text) > 8 and text[4] == "-" and text[8] == "T":
+            text = f"{text[:4]}:{text[5:8]}:{text[9:]}"
+            time_format = "yday"
         if scale == "GPS":
             # Astropy has no GPS civil-time scale.  GPS = TAI - 19 s.
-            result = Time(text, format="isot", scale="tai") + 19.0 * u.s
+            result = Time(text, format=time_format, scale="tai") + 19.0 * u.s
         else:
-            result = Time(text, format="isot", scale=_TIME_SCALES[scale])
+            result = Time(text, format=time_format, scale=_TIME_SCALES[scale])
+        result.precision = precision
     if not np.all(np.isfinite(np.asarray(result.jd))):
         raise ValueError("CDM times must be finite.")
     return result
@@ -192,12 +319,16 @@ def _state_gcrf(state, frame, epoch):
             state[:3] * u.m,
             differentials=CartesianDifferential(state[3:] * u.m / u.s),
         )
-        eme2000 = PrecessedGeocentric(
-            representation,
-            obstime=epoch,
-            equinox=Time("J2000", scale="tt"),
+        source = (
+            ITRS(representation, obstime=epoch)
+            if frame == "ITRF"
+            else PrecessedGeocentric(
+                representation,
+                obstime=epoch,
+                equinox=Time("J2000", scale="tt"),
+            )
         )
-        transformed = eme2000.transform_to(GCRS(obstime=epoch))
+        transformed = source.transform_to(GCRS(obstime=epoch))
         result = np.concatenate(
             (
                 transformed.cartesian.xyz.to_value(u.m),
@@ -225,6 +356,80 @@ def _validate_covariance(covariance):
     result = np.array(0.5 * (covariance + covariance.T), copy=True)
     result.flags.writeable = False
     return result
+
+
+def _validate_covariance_extensions(extras):
+    values = {key.strip().upper(): value for key, value in extras.items()}
+    unsupported = {
+        key
+        for key in values
+        if key.startswith(_COVARIANCE_EXTENSION_PREFIXES)
+        and key not in _COVARIANCE_EXTENSION_KEYS
+    }
+    if unsupported:
+        raise ValueError(
+            "unsupported optional covariance fields: "
+            + ", ".join(sorted(unsupported))
+            + "."
+        )
+    required = set()
+    for row in _COVARIANCE_EXTENSION_ROWS:
+        row_keys = {key for key, _ in row}
+        if row_keys & values.keys():
+            required |= row_keys
+            missing = required - values.keys()
+            if missing:
+                raise ValueError(
+                    "optional covariance rows must be complete; missing "
+                    + ", ".join(sorted(missing))
+                    + "."
+                )
+        for key, unit in row:
+            if key in values:
+                _parse_unit(values[key], unit, key)
+        required |= row_keys
+
+
+def _validate_enum(value, allowed, key):
+    if str(value).strip().upper() not in allowed:
+        raise ValueError(f"invalid {key} value {value!r}.")
+
+
+def _identifier(value, key):
+    text = str(value).strip()
+    if not text or any(
+        not character.isascii()
+        or not (character.isalnum() or character in "_-")
+        for character in text
+    ):
+        raise ValueError(f"{key} must contain only ASCII letters, digits, '_' or '-'.")
+    return text.upper()
+
+
+def _validate_integer(value, key):
+    text = str(value).strip()
+    digits = text[1:] if text[:1] in "+-" else text
+    if not digits.isascii() or not digits.isdigit():
+        raise ValueError(f"{key} must be an integer.")
+    if not -(2**31) <= int(text) < 2**31:
+        raise ValueError(f"{key} is outside the CCSDS 32-bit integer range.")
+
+
+def _validate_standard_extras(extras, *, object_fields=False):
+    values = {key.strip().upper(): value for key, value in extras.items()}
+    dates = _OBJECT_DATES if object_fields else _SCREENING_DATES
+    units = _OBJECT_UNITS if object_fields else _SCREENING_UNITS
+    enums = _OBJECT_ENUMS if object_fields else _SCREENING_ENUMS
+    for key in dates & values.keys():
+        _parse_date(values[key], key)
+    for key in _OBJECT_INTEGERS & values.keys() if object_fields else ():
+        _validate_integer(values[key], key)
+    for key in units.keys() & values.keys():
+        parsed = _parse_unit(values[key], units[key], key)
+        if key == "RESIDUALS_ACCEPTED" and not 0.0 <= parsed <= 100.0:
+            raise ValueError("RESIDUALS_ACCEPTED must lie in [0, 100].")
+    for key in enums.keys() & values.keys():
+        _validate_enum(values[key], enums[key], key)
 
 
 @dataclass(frozen=True)
@@ -258,6 +463,11 @@ class CDMObject:
         )
         if not all(isinstance(value, str) and value.strip() for value in text_fields):
             raise ValueError("CDM object identity and covariance fields must be non-empty strings.")
+        object_designator = _identifier(self.object_designator, "OBJECT_DESIGNATOR")
+        catalog_name = _identifier(self.catalog_name, "CATALOG_NAME")
+        international_designator = _identifier(
+            self.international_designator, "INTERNATIONAL_DESIGNATOR"
+        )
         frame = str(self.reference_frame).strip().upper()
         if frame not in _SUPPORTED_FRAMES:
             raise ValueError(f"unsupported CDM reference frame {frame!r}.")
@@ -267,6 +477,9 @@ class CDMObject:
         maneuverable = str(self.maneuverable).strip().upper()
         if maneuverable not in _MANEUVERABLE:
             raise ValueError(f"invalid MANEUVERABLE value {maneuverable!r}.")
+        covariance_method = str(self.covariance_method).strip().upper()
+        if covariance_method not in _COVARIANCE_METHODS:
+            raise ValueError(f"invalid COVARIANCE_METHOD value {covariance_method!r}.")
         if not isinstance(self.epoch, Time):
             raise TypeError("epoch must be an astropy.time.Time.")
         covariance_frame = str(self.covariance_reference_frame).strip().upper()
@@ -285,10 +498,18 @@ class CDMObject:
             key.startswith(_UNSUPPORTED_COVARIANCE_PREFIXES) for key in extra_keys
         ):
             raise ValueError("extra_fields cannot replace known CDM object fields.")
+        if extra_keys & (_HEADER_KEYS | _RELATIVE_KEYS | set(_SCREENING_KEYS)):
+            raise ValueError("extra_fields contain CDM fields from the wrong section.")
+        _validate_covariance_extensions(extras)
+        _validate_standard_extras(extras, object_fields=True)
         object.__setattr__(self, "reference_frame", frame)
         object.__setattr__(self, "time_system", time_system)
         object.__setattr__(self, "covariance_reference_frame", covariance_frame)
         object.__setattr__(self, "maneuverable", maneuverable)
+        object.__setattr__(self, "covariance_method", covariance_method)
+        object.__setattr__(self, "object_designator", object_designator)
+        object.__setattr__(self, "catalog_name", catalog_name)
+        object.__setattr__(self, "international_designator", international_designator)
         object.__setattr__(self, "epoch", epoch)
         object.__setattr__(self, "state", state)
         object.__setattr__(self, "covariance_rtn", covariance)
@@ -324,6 +545,7 @@ class ConjunctionDataMessage:
     version: str
     creation_date: Time
     originator: str
+    message_id: str
     tca: Time
     miss_distance_m: float
     object1: CDMObject
@@ -334,7 +556,6 @@ class ConjunctionDataMessage:
     relative_velocity_rtn_m_s: np.ndarray | None = None
     collision_probability: float | None = None
     collision_probability_method: str | None = None
-    message_id: str | None = None
     message_for: str | None = None
     classification: str | None = None
     comments: tuple[str, ...] = ()
@@ -345,6 +566,10 @@ class ConjunctionDataMessage:
             raise ValueError("only CCSDS CDM version 1.0 is supported.")
         if not isinstance(self.originator, str) or not self.originator.strip():
             raise ValueError("originator must be a non-empty string.")
+        if not isinstance(self.message_id, str) or not self.message_id.strip():
+            raise ValueError("message_id must be a non-empty string.")
+        originator = _identifier(self.originator, "ORIGINATOR")
+        message_id = _identifier(self.message_id, "MESSAGE_ID")
         creation_date = _utc_time(self.creation_date)
         tca = _utc_time(self.tca)
         miss_distance = float(self.miss_distance_m)
@@ -352,6 +577,8 @@ class ConjunctionDataMessage:
             raise ValueError("miss_distance_m must be finite and nonnegative.")
         if not isinstance(self.object1, CDMObject) or not isinstance(self.object2, CDMObject):
             raise TypeError("object1 and object2 must be CDMObject instances.")
+        if self.object1.reference_frame != self.object2.reference_frame:
+            raise ValueError("OBJECT1 and OBJECT2 REF_FRAME values must match.")
         if not np.isclose(self.object1.epoch.jd, tca.jd, rtol=0.0, atol=1.0e-12):
             raise ValueError("object1 epoch must equal message TCA.")
         if not np.isclose(self.object2.epoch.jd, tca.jd, rtol=0.0, atol=1.0e-12):
@@ -378,7 +605,12 @@ class ConjunctionDataMessage:
             key.startswith(_UNSUPPORTED_COVARIANCE_PREFIXES) for key in extra_keys
         ):
             raise ValueError("extra_fields cannot replace known CDM message fields.")
+        if extra_keys & (_OBJECT_OPTIONAL_KEYS | _COVARIANCE_EXTENSION_KEYS):
+            raise ValueError("extra_fields contain CDM fields from the wrong section.")
+        _validate_standard_extras(extras)
         object.__setattr__(self, "version", "1.0")
+        object.__setattr__(self, "originator", originator)
+        object.__setattr__(self, "message_id", message_id)
         object.__setattr__(self, "creation_date", creation_date)
         object.__setattr__(self, "tca", tca)
         object.__setattr__(self, "miss_distance_m", miss_distance)
@@ -417,10 +649,10 @@ def _parse_line(line):
 
 
 def _parse_comment(line):
-    value = line[len("COMMENT") :].lstrip()
-    if value.startswith("="):
-        value = value[1:].lstrip()
-    if not value:
+    if not line.startswith("COMMENT "):
+        raise ValueError(f"invalid CDM COMMENT line: {line!r}")
+    value = line[len("COMMENT ") :]
+    if not value or value.lstrip().startswith("="):
         raise ValueError(f"invalid CDM COMMENT line: {line!r}")
     return value
 
@@ -431,9 +663,11 @@ def _parse_unit(value, expected, key):
     if value.endswith("]") and "[" in value:
         number, unit = value.rsplit("[", 1)
         value = number.strip()
-        unit = unit[:-1].strip().replace("^", "**").replace(" ", "")
-    if unit is not None and unit != expected:
-        raise ValueError(f"{key} has unit [{unit}], expected [{expected}].")
+        unit = unit[:-1].strip()
+    if unit != expected:
+        expected_text = "no unit" if expected is None else f"[{expected}]"
+        actual_text = "no unit" if unit is None else f"[{unit}]"
+        raise ValueError(f"{key} has {actual_text}, expected {expected_text}.")
     try:
         parsed = float(value)
     except (TypeError, ValueError) as exc:
@@ -495,6 +729,7 @@ def _parse_object(values, state_values, covariance_values, comments, extras, def
 def read_cdm(source: str | Path | TextIO) -> ConjunctionDataMessage:
     """Read a CCSDS CDM KVN 1.0 message into SI arrays."""
 
+    text = _validate_kvn_text(_split_source(source))
     values = {"header": {}, "relative": {}, "object1": {}, "object2": {}}
     states = {"object1": {}, "object2": {}}
     covariances = {"object1": {}, "object2": {}}
@@ -502,18 +737,15 @@ def read_cdm(source: str | Path | TextIO) -> ConjunctionDataMessage:
     extras = {"header": {}, "relative": {}, "object1": {}, "object2": {}}
     section = "header"
     object_order = []
+    pending_comments = []
     seen = {name: set() for name in values}
-    for raw_line in _split_source(source).splitlines():
+    for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
-        if line.upper().startswith("COMMENT") and (
-            len(line) == len("COMMENT") or line[len("COMMENT")].isspace() or line[len("COMMENT")] == "="
-        ):
-            key, raw_value = "COMMENT", _parse_comment(line)
-            if section not in comments:
-                raise ValueError("COMMENT is out of order")
-            comments[section].append(raw_value)
+        if line.startswith("COMMENT"):
+            key, raw_value = "COMMENT", _parse_comment(raw_line)
+            pending_comments.append(raw_value)
             continue
         key, raw_value = _parse_line(line)
         if key in _FORBIDDEN_STRUCTURE_KEYS:
@@ -528,10 +760,15 @@ def read_cdm(source: str | Path | TextIO) -> ConjunctionDataMessage:
             if marker != expected:
                 raise ValueError(f"expected {expected}, got {marker}.")
             section = marker.lower()
+            comments[section].extend(pending_comments)
+            pending_comments.clear()
             object_order.append(marker)
             seen[section].add(key)
             values[section][key] = marker
             continue
+        comment_section = "relative" if section == "header" and key in _RELATIVE_KEYS else section
+        comments[comment_section].extend(pending_comments)
+        pending_comments.clear()
         if key in seen[section]:
             raise ValueError(f"duplicate CDM key {key}.")
         seen[section].add(key)
@@ -543,6 +780,8 @@ def read_cdm(source: str | Path | TextIO) -> ConjunctionDataMessage:
                 continue
             if key in _HEADER_KEYS:
                 values[section][key] = raw_value
+            elif key in _OBJECT_OPTIONAL_KEYS or key in _COVARIANCE_EXTENSION_KEYS:
+                raise ValueError(f"CDM object key {key} is out of order.")
             else:
                 extras[section][key] = raw_value
         elif section == "relative":
@@ -550,6 +789,8 @@ def read_cdm(source: str | Path | TextIO) -> ConjunctionDataMessage:
                 values[section][key] = raw_value
             elif key in _HEADER_KEYS:
                 raise ValueError(f"CDM header key {key} is out of order.")
+            elif key in _OBJECT_OPTIONAL_KEYS or key in _COVARIANCE_EXTENSION_KEYS:
+                raise ValueError(f"CDM object key {key} is out of order.")
             else:
                 extras[section][key] = raw_value
         elif section.startswith("object"):
@@ -564,17 +805,18 @@ def read_cdm(source: str | Path | TextIO) -> ConjunctionDataMessage:
                 values[section][key] = raw_value
             elif key in _COVARIANCE_KEYS or key == "COV_REF_FRAME":
                 covariances[section][key] = raw_value
-            elif key in _HEADER_KEYS or key in _RELATIVE_KEYS:
+            elif key in _HEADER_KEYS or key in _RELATIVE_KEYS or key in _SCREENING_KEYS:
                 raise ValueError(f"CDM key {key} is out of order.")
             else:
                 extras[section][key] = raw_value
         else:
             raise ValueError(f"unexpected CDM key {key}.")
+    comments[section].extend(pending_comments)
     if object_order != ["OBJECT1", "OBJECT2"]:
         raise ValueError("CDM must contain OBJECT1 followed by OBJECT2.")
     header = values["header"]
     relative = values["relative"]
-    for key in ("CCSDS_CDM_VERS", "CREATION_DATE", "ORIGINATOR"):
+    for key in ("CCSDS_CDM_VERS", "CREATION_DATE", "ORIGINATOR", "MESSAGE_ID"):
         if key not in header:
             raise ValueError(f"CDM header is missing required field {key}.")
     for key in ("TCA", "MISS_DISTANCE"):
@@ -606,12 +848,13 @@ def read_cdm(source: str | Path | TextIO) -> ConjunctionDataMessage:
     probability = (
         None
         if "COLLISION_PROBABILITY" not in relative
-        else _parse_unit(relative["COLLISION_PROBABILITY"], "1", "COLLISION_PROBABILITY")
+        else _parse_unit(relative["COLLISION_PROBABILITY"], None, "COLLISION_PROBABILITY")
     )
     return ConjunctionDataMessage(
         version=header["CCSDS_CDM_VERS"],
         creation_date=creation_date,
         originator=header["ORIGINATOR"],
+        message_id=header["MESSAGE_ID"],
         tca=tca,
         miss_distance_m=miss_distance,
         object1=_parse_object(
@@ -628,7 +871,6 @@ def read_cdm(source: str | Path | TextIO) -> ConjunctionDataMessage:
         relative_velocity_rtn_m_s=velocity,
         collision_probability=probability,
         collision_probability_method=relative.get("COLLISION_PROBABILITY_METHOD"),
-        message_id=header.get("MESSAGE_ID"),
         message_for=header.get("MESSAGE_FOR"),
         classification=header.get("CLASSIFICATION"),
         comments=tuple(comments["header"] + comments["relative"]),
@@ -647,28 +889,66 @@ def _line(key, value, unit=None):
     return f"{key:<30} = {value}{suffix}"
 
 
+def _comment_line(value):
+    return f"COMMENT {value}"
+
+
+def _validate_kvn_text(text):
+    try:
+        text.encode("ascii")
+    except UnicodeEncodeError as exc:
+        raise ValueError("CDM KVN must contain only ASCII characters.") from exc
+    if any(character not in "\r\n" and not 32 <= ord(character) <= 126 for character in text):
+        raise ValueError("CDM KVN must contain only printable ASCII characters.")
+    if any(len(line) > 254 for line in text.splitlines()):
+        raise ValueError("CDM KVN output lines must not exceed 254 characters.")
+    return text
+
+
 def _number(value, precision):
     return f"{float(value):.{precision}e}"
 
 
 def _object_lines(label, obj, precision):
+    extras = {key.strip().upper(): value for key, value in obj.extra_fields.items()}
     lines = [
         _line("OBJECT", label),
-        _line("OBJECT_DESIGNATOR", obj.object_designator),
-        _line("CATALOG_NAME", obj.catalog_name),
-        _line("OBJECT_NAME", obj.object_name),
-        _line("INTERNATIONAL_DESIGNATOR", obj.international_designator),
-        _line("EPHEMERIS_NAME", obj.ephemeris_name),
-        _line("COVARIANCE_METHOD", obj.covariance_method),
-        _line("MANEUVERABLE", obj.maneuverable),
-        _line("REF_FRAME", obj.reference_frame),
+        _line("OBJECT_DESIGNATOR", obj.object_designator.upper()),
+        _line("CATALOG_NAME", obj.catalog_name.upper()),
+        _line("OBJECT_NAME", obj.object_name.upper()),
+        _line("INTERNATIONAL_DESIGNATOR", obj.international_designator.upper()),
     ]
+    lines.extend(_line(key, extras.pop(key).upper()) for key in _OBJECT_CONTACT_KEYS if key in extras)
+    lines.extend([
+        _line("EPHEMERIS_NAME", obj.ephemeris_name.upper()),
+        _line("COVARIANCE_METHOD", obj.covariance_method),
+    ])
+    if "COVARIANCE_SOURCE" in extras:
+        lines.append(_line("COVARIANCE_SOURCE", extras.pop("COVARIANCE_SOURCE")))
+    lines.extend([
+        _line("MANEUVERABLE", obj.maneuverable),
+    ])
+    if "ORBIT_CENTER" in extras:
+        lines.append(_line("ORBIT_CENTER", extras.pop("ORBIT_CENTER").upper()))
+    lines.append(_line("REF_FRAME", obj.reference_frame))
+    lines.extend(_line(key, extras.pop(key).upper()) for key in _OBJECT_MODEL_KEYS if key in extras)
+    lines.extend(_comment_line(comment) for comment in obj.comments)
+    lines.extend(
+        _line(
+            key,
+            _date_text(_parse_date(extras.pop(key), key))
+            if key in _OBJECT_DATES
+            else extras.pop(key),
+        )
+        for key in _OBJECT_DATA_KEYS
+        if key in extras
+    )
     lines.extend(
         _line(key, value)
-        for key, value in obj.extra_fields.items()
-        if not key.upper().startswith(_COVARIANCE_EXTENSION_PREFIXES)
+        for key, value in extras.items()
+        if not key.startswith(_COVARIANCE_EXTENSION_PREFIXES)
     )
-    return [*lines, *(_line("COMMENT", comment) for comment in obj.comments)]
+    return lines
 
 
 def _state_and_covariance_lines(obj, precision):
@@ -682,32 +962,33 @@ def _state_and_covariance_lines(obj, precision):
     ]
     lines.extend(_line(key, _number(obj.covariance_rtn[row, column], precision), unit)
                  for key, row, column, unit in _COVARIANCE_FIELDS)
+    extras = {key.strip().upper(): value for key, value in obj.extra_fields.items()}
     lines.extend(
-        _line(key, value)
-        for key, value in obj.extra_fields.items()
-        if key.upper().startswith(_COVARIANCE_EXTENSION_PREFIXES)
+        _line(key, extras[key])
+        for row in _COVARIANCE_EXTENSION_ROWS
+        for key, _ in row
+        if key in extras
     )
     return lines
 
 
-def format_cdm(message: ConjunctionDataMessage, *, precision: int = 17) -> str:
+def format_cdm(message: ConjunctionDataMessage, *, precision: int = 15) -> str:
     """Format a CDM as canonical CCSDS KVN text."""
 
     if not isinstance(message, ConjunctionDataMessage):
         raise TypeError("message must be a ConjunctionDataMessage.")
-    if not isinstance(precision, int) or not 1 <= precision <= 17:
-        raise ValueError("precision must be an integer from 1 through 17.")
+    if not isinstance(precision, int) or not 1 <= precision <= 15:
+        raise ValueError("precision must be an integer from 1 through 15.")
     lines = [
         _line("CCSDS_CDM_VERS", message.version),
+        *(_comment_line(comment) for comment in message.comments),
         _line("CREATION_DATE", _date_text(message.creation_date)),
-        _line("ORIGINATOR", message.originator),
+        _line("ORIGINATOR", message.originator.upper()),
     ]
-    for key, value in (("MESSAGE_ID", message.message_id), ("MESSAGE_FOR", message.message_for), ("CLASSIFICATION", message.classification)):
+    for key, value in (("MESSAGE_FOR", message.message_for), ("MESSAGE_ID", message.message_id), ("CLASSIFICATION", message.classification)):
         if value is not None:
-            lines.append(_line(key, value))
-    lines.extend(_line("COMMENT", comment) for comment in message.comments)
+            lines.append(_line(key, value.upper()))
     relative = [
-        ("CONJUNCTION_ID", message.conjunction_id, None),
         ("TCA", _date_text(message.tca), None),
         ("MISS_DISTANCE", _number(message.miss_distance_m, precision), "m"),
         ("RELATIVE_SPEED", None if message.relative_speed_m_s is None else _number(message.relative_speed_m_s, precision), "m/s"),
@@ -716,22 +997,35 @@ def format_cdm(message: ConjunctionDataMessage, *, precision: int = 17) -> str:
         relative.extend((key, _number(value, precision), "m") for key, value in zip(("RELATIVE_POSITION_R", "RELATIVE_POSITION_T", "RELATIVE_POSITION_N"), message.relative_position_rtn_m))
     if message.relative_velocity_rtn_m_s is not None:
         relative.extend((key, _number(value, precision), "m/s") for key, value in zip(("RELATIVE_VELOCITY_R", "RELATIVE_VELOCITY_T", "RELATIVE_VELOCITY_N"), message.relative_velocity_rtn_m_s))
-    relative.extend(
-        (
-            ("COLLISION_PROBABILITY", None if message.collision_probability is None else _number(message.collision_probability, precision), None),
-            ("COLLISION_PROBABILITY_METHOD", message.collision_probability_method, None),
-        )
-    )
     lines.extend(_line(key, value, unit) for key, value, unit in relative if value is not None)
-    lines.extend(_line(key, value) for key, value in message.extra_fields.items())
+    extra_fields = {key.strip().upper(): value for key, value in message.extra_fields.items()}
+    lines.extend(
+        _line(
+            key,
+            _date_text(_parse_date(extra_fields.pop(key), key))
+            if key in _SCREENING_DATES
+            else extra_fields.pop(key).upper()
+            if key in _SCREENING_ENUMS
+            else extra_fields.pop(key),
+        )
+        for key in _SCREENING_KEYS
+        if key in extra_fields
+    )
+    if message.collision_probability is not None:
+        lines.append(_line("COLLISION_PROBABILITY", _number(message.collision_probability, precision)))
+    if message.collision_probability_method is not None:
+        lines.append(_line("COLLISION_PROBABILITY_METHOD", message.collision_probability_method.upper()))
+    if message.conjunction_id is not None:
+        lines.append(_line("CONJUNCTION_ID", message.conjunction_id.upper()))
+    lines.extend(_line(key, value) for key, value in extra_fields.items())
     lines.extend(_object_lines("OBJECT1", message.object1, precision))
     lines.extend(_state_and_covariance_lines(message.object1, precision))
     lines.extend(_object_lines("OBJECT2", message.object2, precision))
     lines.extend(_state_and_covariance_lines(message.object2, precision))
-    return "\n".join(lines) + "\n"
+    return _validate_kvn_text("\n".join(lines).replace("−", "-") + "\n")
 
 
-def write_cdm(message, destination, *, precision: int = 17, overwrite: bool = False):
+def write_cdm(message, destination, *, precision: int = 15, overwrite: bool = False):
     """Write a CDM to a text stream or path."""
 
     text = format_cdm(message, precision=precision)
