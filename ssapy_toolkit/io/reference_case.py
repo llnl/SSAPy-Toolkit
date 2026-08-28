@@ -4,17 +4,22 @@ from __future__ import annotations
 
 import json
 import re
+import warnings
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
+from astropy import units as u
+from astropy.time import Time
 
 __all__ = [
     "ReferenceCase",
     "ReferenceCaseFiles",
+    "ReferenceCaseSegment",
     "compare_reference_case",
+    "read_oem",
     "read_reference_case",
     "write_reference_case",
 ]
@@ -36,6 +41,18 @@ class ReferenceCase:
     r: np.ndarray
     v: np.ndarray
     metadata: Mapping[str, object]
+    segments: tuple[ReferenceCaseSegment, ...] = ()
+
+
+@dataclass(frozen=True)
+class ReferenceCaseSegment:
+    """One CCSDS OEM segment with SI Cartesian states and KVN metadata."""
+
+    t: np.ndarray
+    r: np.ndarray
+    v: np.ndarray
+    metadata: Mapping[str, object]
+    comments: tuple[str, ...] = ()
 
 
 def read_reference_case(source) -> ReferenceCase:
@@ -63,19 +80,105 @@ def read_reference_case(source) -> ReferenceCase:
         raise ValueError("source must be an SSATK .json or CCSDS .oem file.")
     if not ephemeris_path.exists():
         raise FileNotFoundError(ephemeris_path)
-    epochs, values = _read_oem_records(ephemeris_path)
-    epoch = _epoch_utc(metadata["epoch"]) if metadata.get("epoch") else epochs[0]
+    oem = read_oem(ephemeris_path)
     time_origin = float(metadata.get("time_origin_s", 0.0))
-    times = time_origin + np.array([(item - epoch).total_seconds() for item in epochs])
-    if metadata.get("sample_count") not in (None, len(values)):
+    epoch_offset = 0.0
+    if metadata.get("epoch"):
+        sidecar_epoch = _oem_epoch(metadata["epoch"], "UTC")
+        oem_epoch = _oem_epoch(oem.metadata["epoch"], oem.metadata["TIME_SYSTEM"])
+        epoch_offset = float((oem_epoch - sidecar_epoch).sec)
+    times = time_origin + epoch_offset + oem.t
+    if metadata.get("sample_count") not in (None, len(oem.t)):
         raise ValueError("OEM sample count does not match reference-case metadata.")
     if not np.all(np.diff(times) > 0.0) and len(times) > 1:
         raise ValueError("OEM epochs must be strictly increasing.")
     return ReferenceCase(
         t=times,
-        r=values[:, :3] * 1.0e3,
-        v=values[:, 3:] * 1.0e3,
-        metadata=metadata,
+        r=oem.r,
+        v=oem.v,
+        metadata={**oem.metadata, **metadata},
+        segments=tuple(replace(segment, t=segment.t + time_origin + epoch_offset) for segment in oem.segments),
+    )
+
+
+def read_oem(source) -> ReferenceCase:
+    """Read a state-only CCSDS OEM 2.0 KVN message into SI arrays."""
+
+    text = _oem_text_source(source)
+    header, parsed_segments = _parse_oem(text)
+    if header.get("CCSDS_OEM_VERS") != "2.0":
+        raise ValueError("only CCSDS OEM version 2.0 is supported.")
+    for key in ("CREATION_DATE", "ORIGINATOR"):
+        if not header.get(key):
+            raise ValueError(f"OEM header is missing required {key}.")
+    _oem_epoch(header["CREATION_DATE"], "UTC")
+    if not parsed_segments:
+        raise ValueError("CCSDS OEM contains no state segments.")
+
+    common = None
+    all_epochs = []
+    segments = []
+    for metadata, comments, records in parsed_segments:
+        segment = _parse_oem_segment(metadata, comments, records)
+        if common is None:
+            common = {
+                key: metadata[key].strip().upper()
+                for key in ("OBJECT_NAME", "OBJECT_ID", "CENTER_NAME", "REF_FRAME", "TIME_SYSTEM")
+            }
+        elif any(metadata[key].strip().upper() != common[key] for key in common):
+            raise ValueError("OEM segments must describe the same object, center, frame, and time system.")
+        all_epochs.extend(segment[0])
+        segments.append(segment)
+
+    first_epoch = all_epochs[0]
+    times = np.asarray([float((epoch - first_epoch).sec) for epoch in all_epochs])
+    if times.size > 1 and not np.all(np.diff(times) > 0.0):
+        raise ValueError("OEM epochs must be strictly increasing across segments.")
+    offset = 0
+    segment_objects = []
+    positions = []
+    velocities = []
+    for metadata, comments, (epochs, states) in zip(
+        (item[0] for item in parsed_segments),
+        (item[1] for item in parsed_segments),
+        segments,
+    ):
+        count = len(states)
+        segment_times = times[offset:offset + count]
+        offset += count
+        segment_objects.append(
+            ReferenceCaseSegment(
+                t=segment_times,
+                r=states[:, :3] * 1.0e3,
+                v=states[:, 3:] * 1.0e3,
+                metadata=metadata,
+                comments=comments,
+            )
+        )
+        positions.append(states[:, :3])
+        velocities.append(states[:, 3:])
+
+    header_comments = tuple(header.pop("_COMMENTS", ()))
+    aggregate = dict(header)
+    aggregate.update(parsed_segments[0][0])
+    aggregate.update({
+        "format": "ccsds-oem",
+        "schema_version": "2.0",
+        "segment_count": len(segments),
+        "epoch": parsed_segments[0][2][0][0],
+    })
+    aggregate.update({
+        "center_name": parsed_segments[0][0]["CENTER_NAME"],
+        "reference_frame": parsed_segments[0][0]["REF_FRAME"],
+        "time_system": parsed_segments[0][0]["TIME_SYSTEM"],
+    })
+    aggregate["comments"] = header_comments
+    return ReferenceCase(
+        t=times,
+        r=np.vstack(positions) * 1.0e3,
+        v=np.vstack(velocities) * 1.0e3,
+        metadata=aggregate,
+        segments=tuple(segment_objects),
     )
 
 
@@ -94,7 +197,11 @@ def compare_reference_case(trajectory, reference, *, time_tolerance=1e-9):
         reference_metadata = getattr(reference, "metadata", {})
         actual_value = actual_metadata.get(name) if isinstance(actual_metadata, Mapping) else None
         reference_value = reference_metadata.get(name) if isinstance(reference_metadata, Mapping) else None
-        if actual_value is not None and reference_value is not None and actual_value != reference_value:
+        if (
+            actual_value is not None
+            and reference_value is not None
+            and str(actual_value).strip().upper() != str(reference_value).strip().upper()
+        ):
             raise ValueError(f"trajectory and reference {name} metadata do not match.")
     if reference_t[0] < actual_t[0] - time_tolerance or reference_t[-1] > actual_t[-1] + time_tolerance:
         raise ValueError("reference epochs must overlap the trajectory time span.")
@@ -197,33 +304,179 @@ def write_reference_case(
     return ReferenceCaseFiles(metadata_path, ephemeris_path)
 
 
-def _read_oem_records(path):
+def _oem_text_source(source):
+    if hasattr(source, "read"):
+        value = source.read()
+        return value.decode() if isinstance(value, bytes) else str(value)
+    if isinstance(source, Path) or hasattr(source, "__fspath__"):
+        return Path(source).read_text(encoding="utf-8")
+    if isinstance(source, str):
+        if "\n" in source or "\r" in source or source.lstrip().startswith("CCSDS_"):
+            return source
+        return Path(source).read_text(encoding="utf-8")
+    raise TypeError("source must be CCSDS OEM text, a path, or a text stream.")
+
+
+def _oem_key_value(text):
+    if "=" not in text:
+        raise ValueError(f"invalid CCSDS OEM key/value line: {text!r}")
+    key, value = text.split("=", 1)
+    key = key.strip().upper()
+    if not key or not value.strip():
+        raise ValueError(f"invalid CCSDS OEM key/value line: {text!r}")
+    return key, value.strip()
+
+
+def _oem_comment(text):
+    value = text[len("COMMENT"):].strip()
+    return value[1:].strip() if value.startswith("=") else value
+
+
+def _parse_oem(text):
+    header = {}
+    header_comments = []
+    parsed = []
+    metadata = None
+    comments = []
     records = []
-    in_data = False
-    for line in path.read_text(encoding="utf-8").splitlines():
-        text = line.strip()
-        if text == "DATA_START":
-            in_data = True
+    section = "header"
+    data_open = False
+
+    def finish():
+        nonlocal metadata, comments, records, section, data_open
+        if metadata is None:
+            return
+        if not records:
+            raise ValueError("CCSDS OEM segment contains no state records.")
+        parsed.append((metadata, tuple(comments), records))
+        metadata = None
+        comments = []
+        records = []
+        section = "header"
+        data_open = False
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
             continue
-        if text == "DATA_STOP":
-            in_data = False
+        marker = line.upper()
+        if marker in {"COVARIANCE_START", "COVARIANCE_STOP"}:
+            raise NotImplementedError("CCSDS OEM covariance blocks are not supported by the state-only reader.")
+        if marker == "META_START":
+            if section == "meta":
+                raise ValueError("duplicate CCSDS OEM META_START.")
+            if metadata is not None:
+                if data_open:
+                    raise ValueError("CCSDS OEM DATA_START is missing DATA_STOP.")
+                finish()
+            metadata = {}
+            comments = []
+            records = []
+            section = "meta"
             continue
-        if not in_data or not text or text.startswith("#"):
+        if marker == "META_STOP":
+            if section != "meta" or metadata is None:
+                raise ValueError("CCSDS OEM META_STOP is out of order.")
+            section = "data"
             continue
-        fields = text.split()
-        if len(fields) != 7:
-            raise ValueError(f"invalid CCSDS OEM state record: {text!r}")
-        try:
-            epoch = _epoch_utc(fields[0])
-            state = np.asarray(fields[1:], dtype=float)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"invalid CCSDS OEM state record: {text!r}") from exc
-        if not np.all(np.isfinite(state)):
-            raise ValueError("CCSDS OEM state records must be finite.")
-        records.append((epoch, state))
-    if not records:
-        raise ValueError("CCSDS OEM contains no state records.")
-    return [item[0] for item in records], np.vstack([item[1] for item in records])
+        if marker == "DATA_START":
+            if metadata is None or section == "meta" or data_open:
+                raise ValueError("CCSDS OEM DATA_START is out of order.")
+            data_open = True
+            section = "data"
+            continue
+        if marker == "DATA_STOP":
+            if metadata is None or section != "data" or not data_open:
+                raise ValueError("CCSDS OEM DATA_STOP is out of order.")
+            finish()
+            continue
+        if marker.startswith("COMMENT"):
+            if metadata is None:
+                header_comments.append(_oem_comment(line))
+            else:
+                comments.append(_oem_comment(line))
+            continue
+
+        if section == "data":
+            fields = line.replace("D", "E").replace("d", "e").split()
+            if len(fields) != 7:
+                raise ValueError("CCSDS OEM state records must contain one epoch and six state components.")
+            try:
+                state = np.asarray(fields[1:], dtype=float)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"invalid CCSDS OEM state record: {line!r}") from exc
+            if not np.all(np.isfinite(state)):
+                raise ValueError("CCSDS OEM state records must be finite.")
+            records.append((fields[0], state))
+            continue
+
+        key, value = _oem_key_value(line)
+        target = header if metadata is None else metadata
+        if key in target:
+            raise ValueError(f"duplicate CCSDS OEM key {key}.")
+        target[key] = value
+
+    if section == "meta":
+        raise ValueError("CCSDS OEM META_START is missing META_STOP.")
+    if metadata is not None:
+        if data_open:
+            raise ValueError("CCSDS OEM DATA_START is missing DATA_STOP.")
+        finish()
+    header["_COMMENTS"] = tuple(header_comments)
+    return header, parsed
+
+
+def _parse_oem_segment(metadata, comments, records):
+    required = ("OBJECT_NAME", "OBJECT_ID", "CENTER_NAME", "REF_FRAME", "TIME_SYSTEM", "START_TIME", "STOP_TIME")
+    missing = [key for key in required if not metadata.get(key)]
+    if missing:
+        raise ValueError("OEM segment is missing required " + ", ".join(missing) + ".")
+    scale = metadata["TIME_SYSTEM"].upper()
+    start = _oem_epoch(metadata["START_TIME"], scale)
+    stop = _oem_epoch(metadata["STOP_TIME"], scale)
+    if stop < start:
+        raise ValueError("OEM STOP_TIME must not precede START_TIME.")
+    epochs = []
+    states = []
+    for epoch_text, state in records:
+        epoch = _oem_epoch(epoch_text, scale)
+        if epoch < start or epoch > stop:
+            raise ValueError("OEM state epoch is outside the segment START_TIME/STOP_TIME span.")
+        if epochs and epoch <= epochs[-1]:
+            raise ValueError("OEM state epochs must be strictly increasing within a segment.")
+        epochs.append(epoch)
+        states.append(state)
+    return epochs, np.vstack(states)
+
+
+def _oem_epoch(value, scale):
+    scale = str(scale).upper()
+    scales = {"UTC": "utc", "TAI": "tai", "TT": "tt", "TDB": "tdb", "TCB": "tcb", "TCG": "tcg", "UT1": "ut1"}
+    if scale not in scales and scale != "GPS":
+        raise ValueError(f"unsupported OEM time system {scale!r}.")
+    text = str(value).strip().removesuffix("Z")
+    try:
+        with warnings.catch_warnings():
+            warnings.filterwarnings("error", message=".*time is after end of day.*")
+            if scale == "GPS":
+                result = Time(_oem_time_text(text), format=_oem_time_format(text), scale="tai") + 19.0 * u.s
+            else:
+                result = Time(_oem_time_text(text), format=_oem_time_format(text), scale=scales[scale])
+    except (TypeError, ValueError, Warning) as exc:
+        raise ValueError(f"invalid OEM {scale} epoch {value!r}.") from exc
+    if not np.all(np.isfinite(np.asarray(result.jd))):
+        raise ValueError(f"invalid OEM {scale} epoch {value!r}.")
+    return result
+
+
+def _oem_time_text(text):
+    if len(text) > 8 and text[4] == "-" and text[8] == "T":
+        return f"{text[:4]}:{text[5:8]}:{text[9:]}"
+    return text
+
+
+def _oem_time_format(text):
+    return "yday" if len(text) > 8 and text[4] == "-" and text[8] == "T" else "isot"
 
 
 def _trajectory_arrays(trajectory):
@@ -282,28 +535,32 @@ def _oem_text(
     reference_frame,
     precision,
 ) -> str:
-    start = _format_epoch(epoch)
-    stop = _format_epoch(epoch + timedelta(seconds=float(elapsed[-1])))
+    start = _format_oem_epoch(epoch)
+    stop = _format_oem_epoch(epoch + timedelta(seconds=float(elapsed[-1])))
     lines = [
         "CCSDS_OEM_VERS = 2.0",
         f"CREATION_DATE = {start}",
         "ORIGINATOR = SSATK",
         "META_START",
+        "COMMENT SSATK state-only reference ephemeris; positions in km and velocities in km/s.",
         f"OBJECT_NAME = {case_name}",
         "OBJECT_ID = UNKNOWN",
         f"CENTER_NAME = {center_name}",
         f"REF_FRAME = {reference_frame}",
         "TIME_SYSTEM = UTC",
         f"START_TIME = {start}",
+        f"STOP_TIME = {stop}",
         f"USEABLE_START_TIME = {start}",
         f"USEABLE_STOP_TIME = {stop}",
         "META_STOP",
-        "DATA_START",
-        "# EPOCH X Y Z X_DOT Y_DOT Z_DOT (km, km/s)",
     ]
     for offset, position, velocity in zip(elapsed, positions, velocities):
-        sample_epoch = _format_epoch(epoch + timedelta(seconds=float(offset)))
+        sample_epoch = _format_oem_epoch(epoch + timedelta(seconds=float(offset)))
         state = [_number(value * 1.0e-3, precision) for value in (*position, *velocity)]
         lines.append(" ".join([sample_epoch, *state]))
-    lines.extend(("DATA_STOP", ""))
+    lines.append("")
     return "\n".join(lines)
+
+
+def _format_oem_epoch(value: datetime) -> str:
+    return value.isoformat(timespec="microseconds").replace("+00:00", "")
