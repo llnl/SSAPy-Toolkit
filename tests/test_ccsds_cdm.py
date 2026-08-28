@@ -130,6 +130,7 @@ def test_gcrf_rtn_covariance_rotation_and_immutable_arrays():
     message = read_cdm(_fixture())
     obj = message.object1
 
+    assert obj.covariance_ref_frame == "RTN"
     rotated = obj.position_covariance_gcrf()
     assert np.allclose(rotated, rotated.T, atol=1e-12)
     assert np.allclose(np.linalg.eigvalsh(rotated), [1.0, 4.0, 9.0], atol=1e-12)

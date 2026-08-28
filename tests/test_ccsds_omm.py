@@ -27,6 +27,12 @@ def test_celestrak_shaped_read_round_trip_and_comments():
     assert record.comments == ("first", "second")
     assert record.extra_fields["HEADER_EXTRA"] == "kept"
     assert record.extra_fields["USER_DEFINED"] == "kept"
+    assert record.mean_motion_rad_s == pytest.approx(record.mean_motion)
+    assert record.mean_motion_dot_rad_s2 == pytest.approx(record.mean_motion_dot)
+    assert record.mean_motion_ddot_rad_s3 == pytest.approx(record.mean_motion_ddot)
+    assert record.argument_of_pericenter == pytest.approx(record.argument_of_perigee)
+    assert record.inclination_rad == pytest.approx(record.inclination)
+    assert record.raan_rad == pytest.approx(record.raan)
     text = format_omm_xml(record)
     assert "<omm " in text and "<omm><omm" not in text
     restored = read_omm_xml(text)
