@@ -42,7 +42,6 @@ dependencies = [
   "plotly",
   "psutil",
   "pyerfa",
-  "pypdf",
   "rebound",
   "scipy",
 ]
@@ -59,6 +58,10 @@ static = [
 
 browser = [
   "selenium",
+]
+
+pdf = [
+  "pypdf",
 ]
 
 video = [
@@ -92,6 +95,7 @@ dev = [
   "nodeenv",
   "imageio-ffmpeg",
   "opencv-python",
+  "pypdf",
   "ruff",
   "selenium",
   "build",

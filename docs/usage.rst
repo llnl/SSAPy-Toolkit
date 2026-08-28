@@ -13,6 +13,7 @@ Install in editable mode with development extras:
 Plotting installs the Python packages needed for HTML, image, and GIF outputs,
 including Plotly, Matplotlib, Pillow, imageio, and SSAPy-Data.
 Install ``ssapy-toolkit[static]`` for Plotly static-image export through Kaleido.
+Install ``ssapy-toolkit[pdf]`` to append pages to existing PDF plots.
 Install ``ssapy-toolkit[notebook]`` for IPython display and ipyvolume
 Earth/Moon meshes.
 Install ``ssapy-toolkit[video]`` for OpenCV MP4 output and a bundled FFmpeg

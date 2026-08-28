@@ -85,6 +85,7 @@ This installs the package in editable mode along with development dependencies
 plotting dependencies support HTML, image, and GIF output through Plotly,
 Matplotlib, Pillow, imageio, and SSAPy-Data assets. Install
 `ssapy-toolkit[static]` for Plotly static-image export through Kaleido,
+`ssapy-toolkit[pdf]` for appending pages to existing PDF plots,
 `ssapy-toolkit[notebook]` for IPython display and ipyvolume Earth/Moon meshes,
 `ssapy-toolkit[video]` for OpenCV MP4 output and a bundled FFmpeg fallback, and
 `ssapy-toolkit[browser]` for Selenium browser capture. Node.js 20+ is used only to validate the
