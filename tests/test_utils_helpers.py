@@ -29,6 +29,7 @@ def test_array_filtering_shape_and_size_helpers():
     assert np.isnan(utils.nan_array(3)).all()
     np.testing.assert_allclose(utils.remove_np_nans(np.array([1.0, np.nan, 2.0])), [1.0, 2.0])
     np.testing.assert_allclose(utils.remove_zeros(np.array([[1, 0], [0, 0], [2, 3]]), axis=1), [[1, 0], [2, 3]])
+    np.testing.assert_allclose(utils.remove_zeros(np.array([[1, 0, 2], [3, 0, 4]])), [[1, 2], [3, 4]])
 
     np.testing.assert_allclose(utils.nby3shape(np.array([1.0, 2.0, 3.0])), [[1.0, 2.0, 3.0]])
     np.testing.assert_allclose(utils.nby3shape(np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])), [[1.0, 3.0, 5.0], [2.0, 4.0, 6.0]])

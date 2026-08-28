@@ -181,7 +181,8 @@ def remove_zeros(data: np.ndarray, axis: int = 0) -> np.ndarray:
     data : numpy.ndarray
         Input array.
     axis : int
-        Axis along which to remove zeros (default: 1, columns).
+        Axis across which to test for zeros. The default (0) removes all-zero
+        columns; 1 removes all-zero rows.
 
     Returns
     -------
@@ -189,7 +190,7 @@ def remove_zeros(data: np.ndarray, axis: int = 0) -> np.ndarray:
         Array with all-zero rows or columns removed.
     Author: Travis Yeager (yeager7@llnl.gov)
     """
-    return data[~np.all(data == 0, axis=axis)]
+    return np.compress(~np.all(data == 0, axis=axis), data, axis=1 - axis)
 
 
 def nby3shape(arr_: np.ndarray) -> np.ndarray:
