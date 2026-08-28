@@ -1,7 +1,7 @@
 import numpy as np
 from astropy.time import Time
 from astropy import units as u
-from astropy.coordinates import get_body, GCRS, solar_system_ephemeris
+from astropy.coordinates import get_body, GCRS
 
 from ..constants import SUN_MU
 from ..time_functions import to_gps
@@ -23,6 +23,12 @@ def accel_point_sun(r: np.ndarray, time=None) -> np.ndarray:
     -------
     a_sun : ndarray, shape (3,)
         Perturbing acceleration from the Sun (m/s²).
+
+    Notes
+    -----
+    Uses Astropy's active solar-system ephemeris, which defaults to the offline
+    built-in model. Select a JPL kernel with
+    ``astropy.coordinates.solar_system_ephemeris.set`` when required.
     """
     r, _, time = state(r, np.zeros(3), time)
 
@@ -30,9 +36,8 @@ def accel_point_sun(r: np.ndarray, time=None) -> np.ndarray:
     time_gps = to_gps(time)
     t = Time(time_gps, format="gps", scale="utc")
 
-    # 2) Get Sun position in GCRS at this time using JPL ephemeris
-    with solar_system_ephemeris.set('jpl'):
-        sun_gcrs = get_body("sun", t).transform_to(GCRS(obstime=t))
+    # 2) Get Sun position in GCRS using Astropy's configured ephemeris.
+    sun_gcrs = get_body("sun", t).transform_to(GCRS(obstime=t))
 
     r_sun = sun_gcrs.cartesian.xyz.to(u.m).value
 

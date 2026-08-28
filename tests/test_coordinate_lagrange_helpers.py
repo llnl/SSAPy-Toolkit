@@ -261,15 +261,11 @@ def test_local_equatorial_and_earth_trojan_helpers():
 
 
 def test_point_mass_accelerations_with_fake_ephemerides(monkeypatch):
+    from astropy.coordinates import solar_system_ephemeris
+
     moon = importlib.import_module("ssapy_toolkit.accelerations_orbit.accel_moon")
     sun = importlib.import_module("ssapy_toolkit.accelerations_orbit.accel_sun")
-
-    class FakeContext:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
+    sun_view = importlib.import_module("ssapy_toolkit.plots.sun_view")
 
     class FakeXYZ:
         def __init__(self, value):
@@ -291,13 +287,18 @@ def test_point_mass_accelerations_with_fake_ephemerides(monkeypatch):
 
     monkeypatch.setattr(moon, "to_gps", lambda t: 0.0)
     monkeypatch.setattr(sun, "to_gps", lambda t: 0.0)
-    monkeypatch.setattr(moon.solar_system_ephemeris, "set", lambda name: FakeContext())
-    monkeypatch.setattr(sun.solar_system_ephemeris, "set", lambda name: FakeContext())
-    monkeypatch.setattr(moon, "get_body", lambda name, t: FakeBody([10.0, 0.0, 0.0]))
-    monkeypatch.setattr(sun, "get_body", lambda name, t: FakeBody([20.0, 0.0, 0.0]))
+    def fake_body(name, t):
+        assert solar_system_ephemeris.get() == "builtin"
+        return FakeBody({"moon": [10.0, 0.0, 0.0], "sun": [20.0, 0.0, 0.0]}[name])
 
-    np.testing.assert_allclose(moon.accel_point_moon([10.0, 0.0, 0.0], 0.0), np.zeros(3))
-    np.testing.assert_allclose(moon.accel_point_moon([0.0, 0.0, 0.0], 0.0), np.zeros(3))
-    np.testing.assert_allclose(sun.accel_point_sun(np.array([0.0, 0.0, 0.0]), 0.0), np.zeros(3))
-    assert moon.accel_point_moon([1.0, 0.0, 0.0], 0.0)[0] > 0.0
-    assert sun.accel_point_sun(np.array([1.0, 0.0, 0.0]), 0.0)[0] > 0.0
+    monkeypatch.setattr(moon, "get_body", fake_body)
+    monkeypatch.setattr(sun, "get_body", fake_body)
+    monkeypatch.setattr(sun_view, "get_body", fake_body)
+
+    with solar_system_ephemeris.set("builtin"):
+        np.testing.assert_allclose(moon.accel_point_moon([10.0, 0.0, 0.0], 0.0), np.zeros(3))
+        np.testing.assert_allclose(moon.accel_point_moon([0.0, 0.0, 0.0], 0.0), np.zeros(3))
+        np.testing.assert_allclose(sun.accel_point_sun(np.array([0.0, 0.0, 0.0]), 0.0), np.zeros(3))
+        assert moon.accel_point_moon([1.0, 0.0, 0.0], 0.0)[0] > 0.0
+        assert sun.accel_point_sun(np.array([1.0, 0.0, 0.0]), 0.0)[0] > 0.0
+        np.testing.assert_allclose(sun_view.sun_position_eci(0.0)[0], [1.0, 0.0, 0.0])

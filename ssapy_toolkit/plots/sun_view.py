@@ -48,7 +48,7 @@ import plotly.graph_objects as go
 
 from astropy.time import Time
 from astropy import units as u
-from astropy.coordinates import get_body, GCRS, solar_system_ephemeris
+from astropy.coordinates import get_body, GCRS
 
 from ssapy_toolkit.constants import AU_KM, EARTH_RADIUS, MOON_RADIUS, SUN_RADIUS
 from ssapy_toolkit.plots.scene_primitives import earth_rotation_deg_from_time, stabilize_sphere_poles
@@ -128,11 +128,9 @@ def sun_position_eci(t) -> tuple[np.ndarray, float]:
     """Return the geocentric ECI (GCRS) unit vector toward the Sun, plus
     the Earth-Sun distance in AU.
 
-    This uses SSAPy's real solar ephemeris (JPL, via astropy's get_body),
-    the same real API already used elsewhere in the toolkit -- see
-    ssapy_toolkit/accelerations_orbit/accel_sun.py's accel_point_sun, which this
-    follows directly -- rather than a hand-rolled low-precision analytic
-    series.
+    This uses Astropy's configured solar ephemeris, which defaults to its
+    offline built-in model. Use :class:`astropy.coordinates.solar_system_ephemeris`
+    when a JPL kernel is required.
 
     Parameters
     ----------
@@ -151,8 +149,7 @@ def sun_position_eci(t) -> tuple[np.ndarray, float]:
     if not isinstance(t, Time):
         t = Time(float(t), format="jd", scale="utc")
 
-    with solar_system_ephemeris.set("jpl"):
-        sun_gcrs = get_body("sun", t).transform_to(GCRS(obstime=t))
+    sun_gcrs = get_body("sun", t).transform_to(GCRS(obstime=t))
 
     r_sun_m = sun_gcrs.cartesian.xyz.to(u.m).value
     dist_m = float(np.linalg.norm(r_sun_m))

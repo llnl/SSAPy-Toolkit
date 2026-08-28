@@ -58,7 +58,7 @@ CAPTIONS = {
     "nbody_solar_system_leo_residuals.png": "Seven-day LEO residuals with Earth, Moon, Sun, and the seven additional planetary point masses.",
     "nbody_solar_system_geo_residuals.png": "Thirty-day GEO residuals with Earth, Moon, Sun, and the seven additional planetary point masses.",
     "nbody_solar_system_cislunar_radius_residuals.png": "Sixty-day cislunar-radius residuals with Earth, Moon, Sun, and the seven additional planetary point masses.",
-    "benchmark_regime_matrix.png": "Combined residual histories for two-body, Earth-Moon-Sun, and full planetary point-mass models across LEO, GEO, and cislunar-radius cases. Position and velocity axes use logarithmic scaling with a 1 mm floor.",
+    "benchmark_regime_matrix.png": "Combined RMS residual matrix for two-body, Earth-Moon-Sun, and full planetary point-mass models across LEO, GEO, and cislunar-radius cases.",
 }
 
 
@@ -110,7 +110,7 @@ def _summary_lines(summaries: dict[str, dict]) -> list[str]:
 
 
 def _write_regime_matrix(summaries: dict[str, dict], output_dir: Path) -> Path | None:
-    """Write directly comparable residual histories for all regimes."""
+    """Write one directly comparable RMS residual figure for all regimes."""
     long_term = summaries.get("long_term_propagation_results.json", {})
     nbody = summaries.get("nbody_propagation_results.json", {})
     cases = {case["name"]: case for case in long_term.get("cases", [])}
@@ -122,79 +122,36 @@ def _write_regime_matrix(summaries: dict[str, dict], output_dir: Path) -> Path |
     regimes = ("leo", "geo", "cislunar_radius")
     orbit_labels = ("LEO", "GEO", "Cislunar")
     tools = ("GMAT", "Orekit")
-    from demos.benchmarks import demo_long_term_propagation_benchmark as two_body
-    from demos.benchmarks import demo_nbody_propagation_benchmark as n_body
-
-    residuals = {}
-    ssatk_rows_cache = {}
-    for regime in regimes:
-        for mode, label in zip(modes, labels):
+    position = np.full((len(regimes), len(labels), len(tools)), np.nan)
+    velocity = np.full_like(position, np.nan)
+    for i, regime in enumerate(regimes):
+        for j, mode in enumerate(modes):
             case = cases.get(regime) if mode is None else nbody_cases.get((mode, regime))
-            if case is None:
-                continue
-            for tool in tools:
-                result = case.get("tools", {}).get(tool, {})
-                state_path = result.get("state_path")
-                if not state_path or not Path(state_path).is_file():
-                    continue
-                rows = np.loadtxt(state_path, delimiter=",")
-                if mode is None:
-                    values, _ = two_body._compare(
-                        rows,
-                        scale=1_000.0 if tool == "GMAT" else 1.0,
-                        mu=two_body.GMAT_MU if tool == "GMAT" else two_body.EARTH_MU,
-                    )
-                else:
-                    cache_key = (mode, regime)
-                    if cache_key not in ssatk_rows_cache:
-                        ssatk_rows_cache[cache_key] = n_body._ssatk_rows(
-                            mode=mode,
-                            radius=case["radius_m"],
-                            duration=case["duration_s"],
-                            step=case["step_s"],
-                        )
-                    values, _ = n_body._compare(
-                        rows,
-                        ssatk_rows_cache[cache_key],
-                        scale=1_000.0 if tool == "GMAT" else 1.0,
-                    )
-                residuals[(regime, label, tool)] = values
-    if not residuals:
+            for k, tool in enumerate(tools):
+                result = (case or {}).get("tools", {}).get(tool, {})
+                position[i, j, k] = result.get("rms_position_error_m", np.nan)
+                velocity[i, j, k] = result.get("rms_velocity_error_m_s", np.nan)
+    if not (np.isfinite(position).any() or np.isfinite(velocity).any()):
         return None
     output_dir.mkdir(parents=True, exist_ok=True)
     fig, axes = plt.subplots(2, 3, figsize=(15, 8), sharex=False)
-    colors = {
-        ("2-body", "GMAT"): "#1f77b4",
-        ("2-body", "Orekit"): "#ff7f0e",
-        ("Earth-Moon-Sun", "GMAT"): "#2ca02c",
-        ("Earth-Moon-Sun", "Orekit"): "#d62728",
-        ("Full n-body", "GMAT"): "#9467bd",
-        ("Full n-body", "Orekit"): "#8c564b",
-    }
-    styles = {"2-body": "-", "Earth-Moon-Sun": "--", "Full n-body": ":"}
-    for i, (regime, orbit_label) in enumerate(zip(regimes, orbit_labels)):
-        for (current_regime, model_label, tool), values in residuals.items():
-            if current_regime != regime:
-                continue
-            hours = values[:, 0] / 3_600.0
-            line_kwargs = dict(
-                color=colors[(model_label, tool)],
-                linestyle=styles[model_label],
-                linewidth=1.5,
-                label=f"{model_label} / {tool}",
-            )
-            axes[0, i].plot(hours, values[:, 1], **line_kwargs)
-            axes[1, i].plot(hours, values[:, 2], **line_kwargs)
-        axes[0, i].set_title(orbit_label)
-        axes[1, i].set_xlabel("Elapsed time [hr]")
-        for axis, ylabel in (
-            (axes[0, i], "Position error [m]"),
-            (axes[1, i], "Velocity error [m/s]"),
+    x = np.arange(len(labels))
+    width = 0.34
+    for i, orbit_label in enumerate(orbit_labels):
+        for axis, values, ylabel in (
+            (axes[0, i], position[i], "RMS position [m]"),
+            (axes[1, i], velocity[i], "RMS velocity [m/s]"),
         ):
+            axis.bar(x - width / 2, values[:, 0], width, label="GMAT")
+            axis.bar(x + width / 2, values[:, 1], width, label="Orekit")
+            axis.set_xticks(x, labels, rotation=25, ha="right")
+            if np.any(values > 0):
+                axis.set_yscale("log")
             axis.set_ylabel(ylabel)
-            axis.grid(True, alpha=0.3)
-    axes[0, 0].legend(fontsize=8)
-    fig.suptitle("SSATK external residual histories by orbit regime and force model")
+            axis.set_title(orbit_label)
+            axis.grid(True, axis="y", alpha=0.3)
+    axes[0, 0].legend()
+    fig.suptitle("SSATK external residuals by orbit regime and force model")
     fig.tight_layout()
     path = output_dir / "benchmark_regime_matrix.png"
     fig.savefig(path, dpi=200, bbox_inches="tight")

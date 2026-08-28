@@ -3,7 +3,7 @@
 import numpy as np
 from astropy.time import Time
 from astropy import units as u
-from astropy.coordinates import get_body, GCRS, solar_system_ephemeris
+from astropy.coordinates import get_body, GCRS
 
 from ..constants import MOON_MU
 from ..time_functions import to_gps
@@ -25,6 +25,12 @@ def accel_point_moon(r: np.ndarray, time=None) -> np.ndarray:
     -------
     a_moon : ndarray, shape (3,)
         Perturbing acceleration from the Moon (m/s^2).
+
+    Notes
+    -----
+    Uses Astropy's active solar-system ephemeris, which defaults to the offline
+    built-in model. Select a JPL kernel with
+    ``astropy.coordinates.solar_system_ephemeris.set`` when required.
     """
     r, _, time = state(r, np.zeros(3), time)
 
@@ -32,9 +38,8 @@ def accel_point_moon(r: np.ndarray, time=None) -> np.ndarray:
     time_gps = to_gps(time)  # [176]
     t = Time(time_gps, format="gps", scale="utc")
 
-    # 2) Get Moon position in GCRS at this time using JPL ephemeris
-    with solar_system_ephemeris.set("jpl"):
-        moon_gcrs = get_body("moon", t).transform_to(GCRS(obstime=t))
+    # 2) Get Moon position in GCRS using Astropy's configured ephemeris.
+    moon_gcrs = get_body("moon", t).transform_to(GCRS(obstime=t))
 
     r_moon = moon_gcrs.cartesian.xyz.to(u.m).value  # (3,)
 
