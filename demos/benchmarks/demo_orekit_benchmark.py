@@ -23,6 +23,21 @@ OREKIT_VERSION = "10.3.1"
 OREKIT_DIR = Path(__file__).with_name("orekit")
 
 
+def _eigen_6s_file() -> Path | None:
+    configured_file = os.environ.get("OREKIT_EIGEN_6S")
+    configured_data = os.environ.get("OREKIT_DATA_DIR")
+    candidates = [Path(configured_file).expanduser()] if configured_file else []
+    if configured_data:
+        candidates.append(Path(configured_data).expanduser() / "Potential" / "eigen-6s.gfc")
+    candidates.extend(
+        (
+            Path("/p/lustre1/yeager7/orekit-data-de430-clean/Potential/eigen-6s.gfc"),
+            Path.home() / "workdir" / "orekit-data" / "Potential" / "eigen-6s.gfc",
+        )
+    )
+    return next((path for path in candidates if path.is_file()), None)
+
+
 def _orekit_jar(*, allow_install: bool) -> Path | None:
     configured = os.environ.get("OREKIT_JAR")
     if configured and Path(configured).is_file():
@@ -69,6 +84,48 @@ def _run_orekit(*, radius: float, duration: float, step: float, allow_install: b
         )
     rows = np.loadtxt(completed.stdout.splitlines()[1:], delimiter=",")
     return rows.reshape((-1, 7))
+
+
+def _run_orekit_j2(*, coefficient_file: Path, duration: float, step: float, allow_install: bool):
+    """Run the EIGEN-6S degree-2/order-0 GCRF validation case, or return ``None`` if unavailable."""
+    jar = _orekit_jar(allow_install=allow_install)
+    if (
+        not coefficient_file.is_file()
+        or jar is None
+        or shutil.which("mvn") is None
+        or shutil.which("javac") is None
+        or shutil.which("java") is None
+    ):
+        return None
+    with tempfile.TemporaryDirectory(prefix="ssatk-orekit-j2-") as temp:
+        temp = Path(temp)
+        classpath_file = temp / "classpath.txt"
+        subprocess.run(
+            ["mvn", "-q", "dependency:build-classpath", f"-Dmdep.outputFile={classpath_file}"],
+            cwd=OREKIT_DIR,
+            check=True,
+        )
+        dependencies = classpath_file.read_text(encoding="utf-8").strip()
+        classpath = os.pathsep.join((str(jar), dependencies))
+        subprocess.run(
+            ["javac", "-source", "8", "-target", "8", "-cp", classpath, "-d", str(temp), str(OREKIT_DIR / "OrekitJ2.java")],
+            check=True,
+        )
+        completed = subprocess.run(
+            [
+                "java", "-cp", os.pathsep.join((str(temp), classpath)), "OrekitJ2",
+                str(coefficient_file), str(duration), str(step),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    lines = completed.stdout.splitlines()
+    constants = {
+        key: float(value)
+        for key, value in (item.split("=", 1) for item in lines[0].removeprefix("# ").split(","))
+    }
+    return np.loadtxt(lines[2:], delimiter=",").reshape((-1, 7)), constants
 
 
 def main(make_figures=None, fast=None, verbose=None, allow_install=None):

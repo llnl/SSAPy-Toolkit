@@ -335,6 +335,15 @@ SSATK DOP853 trajectory, the maximum position and velocity residuals were
 ``5.37e-7 m/s``. These residuals establish a numerical baseline for the
 propagator pair, not a general claim about all Orekit or SSATK force models.
 
+A matched perturbation case used Orekit 10.3.1's
+``HolmesFeatherstoneAttractionModel`` with the EIGEN-6S field truncated to
+degree 2 and order 0. The SSATK ``SpacecraftAccelJ2`` instance used the same
+``mu = 3.986004415e14 m^3/s^2``, ``R = 6378136.460 m``, and
+``J2 = 1.0826265227440867e-3`` derived from the fully normalized EIGEN-6S
+``C20`` coefficient. Over a 5400 s, 91-sample, 63-degree low-Earth-orbit case,
+the maximum SSATK-minus-Orekit position and velocity residuals were
+``1.11e-7 m`` and ``1.05e-10 m/s``.
+
 GMAT R2026a also ran through the configured Ubuntu 24.04 Podman container for
 the matched Earth degree/order-0 JGM2 point-mass case over 600 s with 60 s
 output spacing. The maximum position and velocity residuals were
