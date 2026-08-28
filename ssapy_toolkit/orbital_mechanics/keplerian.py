@@ -414,6 +414,7 @@ def kepler_to_state(a=1, e=0, i=0, pa=0, raan=0, nu=0, mu=EARTH_MU):
     -------
     tuple
         A tuple containing:
+
         - r : ndarray
             Position vector(s) in inertial frame (m). Shape is (3,) for
             single set of orbital elements or (N, 3) for multiple sets.
@@ -537,6 +538,7 @@ def kepler_to_state_loop(a=1, e=0, i=0, pa=0, raan=0, nu=0, mu=EARTH_MU):
     -------
     tuple
         A tuple containing:
+
         - r : ndarray
             Position vector(s) in inertial frame (m).
         - v : ndarray

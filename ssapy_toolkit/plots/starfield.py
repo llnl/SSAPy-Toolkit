@@ -24,15 +24,12 @@ Reference frames
 ----------------
 `frame` decides how far along the chain the catalogue is carried:
 
-    "j2000"  catalogue positions as-is
-    "gcrf"   + proper motion + precession to the mean equator of date.
-             Inertial.  This is what trajectory plots want, and what this
-             module did before.
-    "ecef"   + rotation by Greenwich Mean Sidereal Time, so the sky is in the
-             Earth-fixed frame.  Needed whenever the scene also contains
-             Earth's surface, an IGRF field, or ground locations — otherwise
-             the sky is misaligned by up to a full rotation.  Measured
-             misalignment from skipping this step: median 68.6 deg.
+* ``"j2000"``: catalogue positions as-is.
+* ``"gcrf"``: proper motion and precession to the mean equator of date; this
+  inertial frame is appropriate for trajectory plots.
+* ``"ecef"``: rotation by Greenwich Mean Sidereal Time into the Earth-fixed
+  frame. Use it with Earth's surface, an IGRF field, or ground locations;
+  otherwise the sky can be misaligned by a full rotation.
 
 Nutation (<=17") and polar motion (<0.5") are omitted.  Validated against
 astropy's ITRS transform: star directions agree to 8-24 arcsec, GMST to 0.01 s.

@@ -3,13 +3,18 @@ core/accel_thrust.py
 ---------------------
 Custom SSAPy acceleration class for finite-duration constant-thrust burns.
 
-Implements a physically accurate finite burn model:
-  - Constant thrust magnitude and direction during [t_start, t_end]
-  - Mass decreases continuously per Tsiolkovsky (mdot = F / (Isp * g0))
-  - Returns zero acceleration outside the burn window
-  - Hashable so SSAPy's internal LRU cache works correctly
+Implements a finite burn model:
 
-Usage:
+- Constant thrust magnitude and direction during ``[t_start, t_end]``.
+- Continuous Tsiolkovsky mass decrease.
+- Zero acceleration outside the burn window.
+- Hashable state for SSAPy's internal LRU cache.
+
+Usage
+-----
+
+.. code-block:: python
+
     from ssapy_toolkit.plots.accel_thrust import AccelConstantThrust
     burn = AccelConstantThrust(
         direction_unit=dv_vec / np.linalg.norm(dv_vec),
@@ -53,7 +58,7 @@ class AccelConstantThrust(Accel):
     t_end_gps : float
         Burn cutoff time in GPS seconds. Computed externally from
         Tsiolkovsky: t_end = t_start + m_prop / mdot, where
-        m_prop = wet_mass * (1 - exp(-|dv| / (Isp * g0))).
+        m_prop = wet_mass * (1 - exp(-abs(dv) / (Isp * g0))).
     """
 
     def __init__(self, direction_unit, thrust_n, isp_s, wet_mass_kg,

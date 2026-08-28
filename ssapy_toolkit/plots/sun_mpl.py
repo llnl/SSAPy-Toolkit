@@ -169,8 +169,9 @@ def _first_epoch(t):
 def shade_texture(PHI, THETA, sun_hat, ambient: float = 0.30, diffuse: float = 0.70):
     """Compute a per-vertex lighting factor for a textured sphere.
 
-    Designed to match the (PHI, THETA) meshgrid convention used by
-    ``_textured_moon`` / ``_textured_earth`` in moon_plot_3d.py:
+    Designed to match the ``(PHI, THETA)`` meshgrid convention used by
+    ``_textured_moon`` / ``_textured_earth`` in ``moon_plot_3d.py``::
+
         x = r * sin(PHI) * cos(THETA)
         y = r * sin(PHI) * sin(THETA)
         z = r * cos(PHI)

@@ -21,7 +21,7 @@ def rv_to_ellipse(
     When `num` ≥ 2, generate that many samples starting with (r0, v0):
 
         • Elliptic   – advance uniformly in true anomaly through 2π.
-        • Non-elliptic – advance until r = 2·|r0|.
+        • Non-elliptic – advance until ``r = 2 * norm(r0)``.
 
     The first sample is always the exact input state.
     """

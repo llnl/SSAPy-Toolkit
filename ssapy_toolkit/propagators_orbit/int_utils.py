@@ -33,14 +33,11 @@ def build_profile(profile, t_arr):
     """
     Build an (n,) acceleration-magnitude profile aligned to t_arr.
 
-    Supports:
-    - None -> zeros
-    - scalar -> constant
-    - array-like length n -> pass-through
-    - dict or list of dict segments with keys:
-        start, end, thrust (or accel)
-      where start/end can be indices or times (searched in t_arr).
-    - tuple segments: (start, thrust) or (start, end, thrust)
+    Supported profiles include ``None`` (zeros), a scalar (constant), an
+    array-like of length ``n`` (pass-through), dictionaries or lists of
+    dictionary segments with ``start``, ``end``, and ``thrust``/``accel``
+    keys, and tuple segments ``(start, thrust)`` or ``(start, end, thrust)``.
+    Segment bounds may be indices or times searched in ``t_arr``.
     """
     n = len(t_arr)
     out = np.zeros(n, float)

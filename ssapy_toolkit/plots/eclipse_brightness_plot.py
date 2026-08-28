@@ -136,19 +136,21 @@ def _circle_overlap_fraction(r1, r2, d):
 def illumination_fraction(r_eval_km, sun_hat, R_body_km, R_sun_km=R_SUN_KM, D_km=AU_KM):
     """
     Fraction of the Sun's apparent disk still visible from a point whose
-    position relative to the occluding body is `r_eval_km`, given the
-    Sun's direction `sun_hat` (unit vector, same frame as r_eval_km).
+    position relative to the occluding body is ``r_eval_km``, given the
+    Sun's direction ``sun_hat``.
 
-    r_eval_km : (..., 3) position of the illuminated point relative to
-                the occluder (e.g. Moon relative to Earth for a lunar
-                eclipse; a Moon-surface vertex relative to Earth; Earth
-                relative to the Moon for a solar eclipse)
-    sun_hat   : (..., 3) unit vector toward the Sun, same leading shape
-    R_body_km : occluder's real radius (km)
-    R_sun_km  : Sun's real radius (km)
-    D_km      : distance to the Sun (km) — used only for the Sun's own
-                angular radius, since D_km >> |r_eval_km| always holds
-                here (a few hundred thousand km vs ~150 million km)
+    Parameters
+    ----------
+    r_eval_km : array_like, shape (..., 3)
+        Illuminated-point position relative to the occluder.
+    sun_hat : array_like, shape (..., 3)
+        Unit vector toward the Sun in the same frame.
+    R_body_km : float
+        Occluder radius in km.
+    R_sun_km : float
+        Sun radius in km.
+    D_km : float
+        Distance to the Sun in km; it is much larger than ``norm(r_eval_km)``.
     """
     r_eval_km = np.asarray(r_eval_km, dtype=float)
     sun_hat = np.asarray(sun_hat, dtype=float)

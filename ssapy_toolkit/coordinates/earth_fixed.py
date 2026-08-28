@@ -11,14 +11,20 @@ def gcrf_to_itrf(r_gcrf, t, v=None):
     """
     Convert GCRF coordinates to ITRF coordinates.
 
-    Parameters:
-    - r_gcrf (np.ndarray): 3D position vector in GCRF coordinates (meters).
-    - t (np.ndarray): Time array for conversion.
-    - v (np.ndarray, optional): Velocity vector in GCRF coordinates (m/s). Optional.
+    Parameters
+    ----------
+    r_gcrf : numpy.ndarray
+        3D position vector in GCRF coordinates (meters).
+    t : numpy.ndarray
+        Time array for conversion.
+    v : numpy.ndarray, optional
+        Velocity vector in GCRF coordinates (m/s).
 
-    Returns:
-    - np.ndarray: Position in ITRF coordinates,
-      or (position, velocity) in ITRF coordinates if velocity is provided.
+    Returns
+    -------
+    numpy.ndarray or tuple
+        Position in ITRF coordinates, or ``(position, velocity)`` when a
+        velocity is provided.
     """
     t = to_gps(t)
     x, y, z = groundTrack(r_gcrf, t, format="cartesian")

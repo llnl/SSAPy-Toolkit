@@ -34,12 +34,10 @@ def ensure_demo_data_file(
 ):
     """Return a local optional-demo data file, fetching it when available.
 
-    The lookup order is:
-    1. ``datapath(filename)`` (normally ``~/ssatk_output`` or ``SSATK_OUTPUT_DIR``).
-    2. Nearby ``ssatk_output`` folders, including the current directory and its
-       parent, for local development checkouts.
-    3. A known public source for the requested demo file, when
-       ``allow_download`` is true.
+    Lookup order: ``datapath(filename)`` (normally ``~/ssatk_output`` or
+    ``SSATK_OUTPUT_DIR``), nearby ``ssatk_output`` folders including the
+    current directory and its parent, then a known public source when
+    ``allow_download`` is true.
 
     Missing data or download failures return ``None`` and emit a warning by
     default so demos can skip gracefully when offline.

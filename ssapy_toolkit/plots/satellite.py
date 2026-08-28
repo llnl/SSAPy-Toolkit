@@ -5,24 +5,26 @@ core/satellite.py
 
 Usage
 -----
-from ssapy_toolkit.plots.satellite import Satellite3D, BurnEvent
-import numpy as np
+::
 
-sat = Satellite3D(model_path="models/cubesat.obj", mass_kg=500)
-sat.show_ntw   = True          # draw N, T, W axes
-sat.show_burns = True
+    from ssapy_toolkit.plots.satellite import Satellite3D, BurnEvent
+    import numpy as np
 
-# Add an impulsive burn (delta-v in NTW frame)
-sat.add_burn(BurnEvent(
-    epoch_offset_s = 1800,          # seconds from propagation start
-    dv_ntw_km_s    = np.array([0, 0.02, 0]),  # along T (prograde), [N,T,W]
-    mode           = "impulsive",
-))
+    sat = Satellite3D(model_path="models/cubesat.obj", mass_kg=500)
+    sat.show_ntw   = True          # draw N, T, W axes
+    sat.show_burns = True
 
-# Get NTW unit vectors at a given state
-r = np.array([6928, 0, 0])  # km
-v = np.array([0, 7.612, 0])  # km/s
-T, N, W = sat.ntw_vectors(r, v)
+    # Add an impulsive burn (delta-v in NTW frame)
+    sat.add_burn(BurnEvent(
+        epoch_offset_s = 1800,          # seconds from propagation start
+        dv_ntw_km_s    = np.array([0, 0.02, 0]),  # along T (prograde), [N,T,W]
+        mode           = "impulsive",
+    ))
+
+    # Get NTW unit vectors at a given state
+    r = np.array([6928, 0, 0])  # km
+    v = np.array([0, 7.612, 0])  # km/s
+    T, N, W = sat.ntw_vectors(r, v)
 """
 
 from __future__ import annotations

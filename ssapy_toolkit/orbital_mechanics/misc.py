@@ -32,7 +32,7 @@ def specific_angular_momentum(r_vec: np.ndarray, v_vec: np.ndarray) -> np.ndarra
 
 
 def eccentricity_vector(r_vec: np.ndarray, v_vec: np.ndarray, mu: float) -> np.ndarray:
-    """Eccentricity vector: e_vec = (v x h)/mu - r/|r|"""
+    """Eccentricity vector: e_vec = (v x h)/mu - r/norm(r)."""
     h = specific_angular_momentum(r_vec, v_vec)
     return np.cross(v_vec, h) / mu - r_vec / np.linalg.norm(r_vec)
 
@@ -148,7 +148,7 @@ def hohmann_transfer_delta_v(r1: float, r2: float, mu: float) -> Tuple[float, fl
 
 
 def bi_elliptic_transfer_delta_v(r1: float, r2: float, rb: float, mu: float) -> Tuple[float, float, float, float]:
-    """Return (dv1, dv2, dv3, total_dv) for bi-elliptic transfer via intermediate apoapsis rb."""
+    """Return delta-v components for a bi-elliptic transfer via apoapsis ``rb``."""
     if r1 <= 0 or r2 <= 0 or rb <= 0:
         raise ValueError("r1, r2, and rb must be positive radii")
     if rb <= max(r1, r2):
@@ -169,7 +169,7 @@ def bi_elliptic_transfer_delta_v(r1: float, r2: float, rb: float, mu: float) -> 
 
 
 def plane_change_delta_v(v: float, i1: float, i2: float) -> float:
-    """Delta-v for plane change at speed v from inclination i1 to i2: dv = 2*v*sin(|i2-i1|/2)"""
+    """Delta-v for a plane change: ``2 * v * sin(abs(i2 - i1) / 2)``."""
     return 2 * v * np.abs(np.sin((i2 - i1) / 2.0))
 
 

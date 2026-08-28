@@ -10,15 +10,21 @@ def orbit_plot_rv(state_vectors, colors=False, mu=EARTH_MU, show=True, c='black'
     """
     Plots the 3D orbital ellipse(s) given one or more sets of state vectors.
 
-    Parameters:
-        state_vectors: Single tuple (r, v) or list of tuples [(r1, v1), (r2, v2), ...]
-            - r (array): Position vector in meters (SI units)
-            - v (array): Velocity vector in m/s (SI units)
-        mu (float): Gravitational parameter (default: Earth's, m^3/s^2)
-        show (bool): If True, display the plot
-        c (str): Color theme ('black', 'b', 'white', 'w')
-        figsize (tuple): Figure size (width, height)
-        save_path (str or False): Path to save plot, or False to not save
+    Parameters
+    ----------
+    state_vectors : tuple or list of tuple
+        A single ``(r, v)`` tuple or a list of tuples, with position ``r`` in
+        metres and velocity ``v`` in m/s.
+    mu : float
+        Gravitational parameter in m³/s².
+    show : bool
+        Display the plot when true.
+    c : str
+        Color theme: ``'black'``, ``'b'``, ``'white'``, or ``'w'``.
+    figsize : tuple
+        Figure size as ``(width, height)``.
+    save_path : str or bool
+        Output path, or false to skip saving.
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """

@@ -15,7 +15,7 @@ def reset_orbit_status():
 
 def accel_to_circular(r, v=None, t=None, *, thrust, tol=10.0, min_altitude=100e3):
     """
-    Acceleration command that steers (r, v) toward a circular orbit at radius |r|.
+    Acceleration command that steers (r, v) toward a circular orbit at radius ``|r|``.
 
     Designed to be passed into leapfrog(..., accels=[...]) where leapfrog may call
     accelerations as f(r,v,t) (t is accepted but not required here).
@@ -31,7 +31,7 @@ def accel_to_circular(r, v=None, t=None, *, thrust, tol=10.0, min_altitude=100e3
     thrust : float
         Magnitude of available acceleration (m/s^2).
     tol : float, optional
-        Convergence tolerance on ||v_target - v|| (m/s). Default 10.
+        Convergence tolerance on ``||v_target - v||`` (m/s). Default 10.
     min_altitude : float, optional
         Minimum altitude above Earth's surface to allow control (m). Default 100 km.
 

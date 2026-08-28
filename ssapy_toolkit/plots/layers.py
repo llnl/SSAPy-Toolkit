@@ -1214,15 +1214,17 @@ class SensorFOVLayer(BaseLayer):
 
     Usage
     -----
-    fov = SensorFOVLayer(
-        r_gcrf_km=r_arr / 1e3,    # (N,3) metres → km
-        v_gcrf_kms=v_arr / 1e3,   # (N,3) m/s    → km/s  (needed for velocity modes)
-        time_index=42,
-        half_angle_deg=15.0,
-        cone_length_km=8_000.0,
-        pointing_mode="nadir",
-    )
-    fov.add_to_plotly(fig, orbit_state)
+    ::
+
+        fov = SensorFOVLayer(
+            r_gcrf_km=r_arr / 1e3,    # (N,3) metres → km
+            v_gcrf_kms=v_arr / 1e3,   # (N,3) m/s    → km/s  (needed for velocity modes)
+            time_index=42,
+            half_angle_deg=15.0,
+            cone_length_km=8_000.0,
+            pointing_mode="nadir",
+        )
+        fov.add_to_plotly(fig, orbit_state)
     """
 
     POINTING_MODES = ("nadir", "anti-nadir", "velocity", "anti-velocity", "custom")
@@ -1296,11 +1298,13 @@ class SensorFOVLayer(BaseLayer):
 
         Always returns exactly 5 traces in a fixed order so Plotly animation
         frames can reliably reference them by index:
-          [0] satellite marker  (Scatter3d)
-          [1] FOV cone          (Mesh3d)
-          [2] boresight line    (Scatter3d)
-          [3] footprint day arc (Scatter3d)
-          [4] footprint night arc (Scatter3d)
+
+        * Satellite marker (Scatter3d)
+        * FOV cone (Mesh3d)
+        * Boresight line (Scatter3d)
+        * Footprint day arc (Scatter3d)
+        * Footprint night arc (Scatter3d)
+
         Missing / disabled items are replaced by empty placeholder traces.
         """
         if not _HAS_PLOTLY:

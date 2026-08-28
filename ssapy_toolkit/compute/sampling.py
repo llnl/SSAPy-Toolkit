@@ -485,11 +485,10 @@ def perturb_state_3d(
         Nominal 3D velocity vector.
     pos_scale : float, default 1.0
         Characteristic scale of the position perturbation.
-        Interpretation depends on `pos_distribution`:
-          - 'uniform' : max radius of solid ball
-          - 'normal'  : standard deviation per component
-          - 'shell'   : fixed radius
-          - 'laplace' : Laplace scale per component
+        Interpretation depends on ``pos_distribution``: uniform is the
+        maximum radius of a solid ball, normal is the per-component standard
+        deviation, shell is a fixed radius, and laplace is the per-component
+        Laplace scale.
     vel_scale : float, default 0.1
         Same idea as `pos_scale`, but for the velocity perturbation.
     pos_distribution : {'uniform', 'normal', 'gaussian', 'shell', 'surface', 'laplace'}

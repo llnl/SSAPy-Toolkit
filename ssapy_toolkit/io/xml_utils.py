@@ -137,14 +137,21 @@ def read_xml(filename, keep_root=False, decode_special=True):
     """
     Parse an XML file into Python data.
 
-    Args:
-        filename: Path-like or string to an XML file.
-        keep_root (bool): If False (default), return the content of the root element.
-                          If True, return {root_tag: content}.
-        decode_special (bool): If True (default), restore marked ndarray/datetime/Time/set/tuple.
+    Parameters
+    ----------
+    filename : path-like or str
+        Path to an XML file.
+    keep_root : bool, optional
+        If false (default), return the root content; if true, return
+        ``{root_tag: content}``.
+    decode_special : bool, optional
+        If true (default), restore marked ndarray, datetime, Time, set, and
+        tuple values.
 
-    Returns:
-        dict | list | str | int | float | bool | numpy.ndarray | datetime | astropy.time.Time
+    Returns
+    -------
+    object
+        A nested Python representation of the XML content.
     """
     tree = ET.parse(str(filename))
     root = tree.getroot()

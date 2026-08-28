@@ -346,7 +346,7 @@ class SpacecraftBody:
         cd: float = 2.2,
         cr: float = 1.3,
     ) -> SpacecraftBody:
-        """Return a simple ``N``U CubeSat bus."""
+        """Return a simple N-U CubeSat bus."""
 
         if units <= 0:
             raise ValueError("units must be positive.")

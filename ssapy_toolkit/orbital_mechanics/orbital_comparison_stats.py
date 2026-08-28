@@ -28,24 +28,10 @@ def orbit_stats_dashboard(
     """
     Orbit ensemble dashboard with two modes.
 
-    mode="population"
-      - Top-left: population envelope of ||r-r_base|| (bands + median/mean/max).
-      - Top-right: population envelope of ||v-v_base|| if v exists, else duplicate of position.
-      - Bottom-left: two side-by-side step-hist axes sharing y:
-          left:  position spread
-          right: velocity spread (if available)
-        with one shared legend only (no duplication between position/velocity).
-      - Bottom-right: RTN 3-stack (R/T/N), no vertical gaps, shared x and shared y label.
-
-    mode="benchmark"
-      - Top-left: per-orbit time series ||r-r_base|| (one line per model/orbit).
-      - Top-right: per-orbit time series ||v-v_base|| (if velocity exists).
-      - Bottom-left: same split hist layout.
-      - Bottom-right: RTN 3-stack (R/T/N) of per-model time series.
-
-    Legends:
-      - All legends are placed inside plots at the upper-left corner when enabled.
-      - Upper-right and lower-right legends are suppressed.
+    ``mode="population"`` shows position and velocity envelopes, split
+    histograms, and an RTN stack. ``mode="benchmark"`` shows the corresponding
+    per-orbit time series. When enabled, legends appear only in upper-left
+    panels.
     """
     r_list, v_list, t_list = _normalize_inputs(r_list, v_list, t_list)
 

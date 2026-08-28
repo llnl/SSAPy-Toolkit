@@ -5,20 +5,24 @@ Central OrbitalState object.  Everything in the toolkit starts here.
 
 Usage
 -----
-state = OrbitalState(a_km=6928, e=0.001, inc_deg=51.6)
-traj  = state.propagate(n_orbits=3, dt_s=60)
-print(state.regime, state.period_hr, state.j2_raan_drift_deg_day)
+::
+
+    state = OrbitalState(a_km=6928, e=0.001, inc_deg=51.6)
+    traj  = state.propagate(n_orbits=3, dt_s=60)
+    print(state.regime, state.period_hr, state.j2_raan_drift_deg_day)
 
 Force-model customisation
 -------------------------
-cfg = PropagatorConfig(
-    propagator  = "rk78",
-    gravity     = "8x8",
-    third_body  = "both",
-    non_grav    = "drag",
-)
-state = OrbitalState(..., config=cfg)
-traj  = state.propagate(n_orbits=5, dt_s=30, callback=my_fn)
+::
+
+    cfg = PropagatorConfig(
+        propagator  = "rk78",
+        gravity     = "8x8",
+        third_body  = "both",
+        non_grav    = "drag",
+    )
+    state = OrbitalState(..., config=cfg)
+    traj  = state.propagate(n_orbits=5, dt_s=30, callback=my_fn)
 """
 
 from __future__ import annotations
@@ -167,15 +171,7 @@ class OrbitalState:
     j2_raan_drift_deg_day   secular nodal regression
     j2_argp_drift_deg_day   secular apsidal advance
 
-    Methods
-    -------
-    propagate(n_orbits, dt_s, callback) → Trajectory
-    propagate_async(...)                → (thread, stop_event)
-    osculating_ellipse(n_pts)           → (3, N) array
-    from_tle(tle_text)                  classmethod
-    from_rv(r, v, epoch)               classmethod
-    to_ssapy()                         → ssapy.Orbit (if SSAPy available)
-    clone(**overrides)                 → OrbitalState
+    Propagation, conversion, and cloning methods are documented below.
     """
 
     # ── construction ─────────────────────────────────────────────────────────

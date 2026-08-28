@@ -10,11 +10,15 @@ def sun_ra_dec(time_):
     """
     Calculate the Right Ascension and Declination of the Sun for a given time.
 
-    Parameters:
-    - time_ (Union[int, float, str]): The time for which to calculate the Sun's position (in MJD or string format).
+    Parameters
+    ----------
+    time : int, float, or str
+        Time for the Sun position, as MJD or an ISO-format string.
 
-    Returns:
-    - Tuple[float, float]: Right Ascension and Declination of the Sun in radians.
+    Returns
+    -------
+    tuple of float
+        Right Ascension and Declination of the Sun in radians.
     """
     out = get_body(Time(time_, format='mjd'))
     return out.ra.to('rad').value, out.dec.to('rad').value

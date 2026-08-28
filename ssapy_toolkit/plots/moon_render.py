@@ -38,6 +38,8 @@ What actually changes visual quality vs. the old _moon_mesh_plotly():
 
 Usage
 -----
+::
+
     from moon_render import moon_mesh_plotly
     fig.add_trace(moon_mesh_plotly(center, radius, sun_hat=sun_hat,
                                    real_center_km=moon_r_km, mode="lunar"))

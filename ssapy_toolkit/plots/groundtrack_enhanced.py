@@ -36,6 +36,9 @@ they're available, instead of reimplementing them:
 
 Interface
 ---------
+
+.. code-block:: python
+
     from groundtrack_enhanced import plot_enhanced_groundtrack
     plot_enhanced_groundtrack(
         r_eci_km, t,                      # from your real propagator

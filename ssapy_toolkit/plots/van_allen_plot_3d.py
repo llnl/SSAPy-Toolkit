@@ -5,17 +5,17 @@ Interactive Plotly 3D scene of the inner and outer radiation belts.
 
 Belt geometry (belt_style)
 --------------------------
-  'igrf'   — belt shells bounded by REAL IGRF-traced L-shells.  Because the
-             geomagnetic field is not axisymmetric, the inner belt dips
-             toward the surface over the South Atlantic, reproducing the
-             South Atlantic Anomaly.  Requires ppigrf (falls back
-             automatically if unavailable).
-  'lshell' — analytic dipole L-shell crescent (no ppigrf needed).
-  'torus'  — analytic circular torus.
+* ``'igrf'``: belt shells bounded by real IGRF-traced L-shells. Because the
+  geomagnetic field is not axisymmetric, the inner belt dips toward the South
+  Atlantic Anomaly. It falls back automatically if ppigrf is unavailable.
+* ``'lshell'``: analytic dipole L-shell crescent (no ppigrf needed).
+* ``'torus'``: analytic circular torus.
 
 Belt dimensions (approximate, L-shell based):
-  Inner belt : 1.0 - 2.0 RE  (proton-dominated, warm)
-  Outer belt : 3.0 - 6.0 RE  (electron-dominated, cool)
+
+* Inner belt: 1.0 - 2.0 RE (proton-dominated, warm).
+* Outer belt: 3.0 - 6.0 RE (electron-dominated, cool).
+
 
 Earth is the WGS84 oblate ellipsoid; stars sit on a far sphere so the camera
 orbits inside it and near-side stars never render in front of the planet.
@@ -188,10 +188,15 @@ def plot_van_allen_3d(
     """
     Render the Van Allen belts in an interactive Plotly 3D scene.
 
-    belt_style : 'igrf' traces real IGRF L-shells (shows the South Atlantic
-                 Anomaly; needs ppigrf, falls back to 'lshell' if missing).
-    zoom       : >1 tightens framing, <1 pulls back.
-    save_path  : writes an interactive .html (and .png if save_png).
+    Parameters
+    ----------
+    belt_style : {'igrf', 'lshell', 'torus'}
+        ``'igrf'`` traces real IGRF L-shells; it falls back to ``'lshell'`` if
+        ppigrf is unavailable.
+    zoom : float
+        Values greater than one tighten framing; values below one pull back.
+    save_path : path-like
+        Writes an interactive HTML file and a PNG when ``save_png`` is true.
 
     Returns
     -------

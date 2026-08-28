@@ -952,8 +952,8 @@ def transfer_optimal(
       resulting epoch error is absorbed by the final refinement, but for
       strongly perturbed, multi-week windows treat the porkchop as
       approximate.
-        * Both motion senses are searched automatically when the two orbits
-        counter-rotate; co-rotating geometries search prograde only.
+    * Both motion senses are searched automatically when the two orbits
+      counter-rotate; co-rotating geometries search prograde only.
     """
     if orbit1 is not None:
         if initial is not None:

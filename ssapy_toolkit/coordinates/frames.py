@@ -99,7 +99,7 @@ def eci_to_ecf_matrix(t_gps: float) -> np.ndarray:
 def lvlh_matrix(r: np.ndarray, v: np.ndarray) -> np.ndarray:
     """
     3×3 matrix whose rows are [R_hat, S_hat, W_hat] in ECI.
-    R = r/|r|  (radial),  W = h/|h|  (orbit normal),  S = W × R
+    R = r/``|r|``  (radial),  W = h/``|h|``  (orbit normal),  S = W × R
     Transforms ECI → LVLH/RSW.
     """
     R_hat = _unit(r)
@@ -111,8 +111,8 @@ def lvlh_matrix(r: np.ndarray, v: np.ndarray) -> np.ndarray:
 def ntw_matrix(r: np.ndarray, v: np.ndarray) -> np.ndarray:
     """
     3×3 matrix whose rows are [N_hat, T_hat, W_hat] in ECI.
-    T = v/|v|  (tangential / along-track),
-    W = h/|h|  (orbit normal),
+    T = v/``|v|``  (tangential / along-track),
+    W = h/``|h|``  (orbit normal),
     N = T × W  (in-plane, radial for circular prograde equatorial orbits).
     Transforms ECI → NTW.
 

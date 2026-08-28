@@ -1,34 +1,30 @@
 """
 SSAPy acceleration-ladder runner + accel-ladder-specific divergence dashboard.
 
-Design in this file:
-  - calculate_accel_comparisons(): the ONE function that does *all* propagation + math
-  - make_accel_ladder_dashboard_figures(): plotting only (always called)
-  - compare_models(): workflow wrapper that calls exactly:
-        1) calculate_accel_comparisons()
-        2) make_accel_ladder_dashboard_figures()
-    (no optional plotting; make_plots is always True)
+Design
+------
 
-Early-stop behavior:
-  - If SSAPy terminates early (e.g., collision/event), r_hist/v_hist will be shorter than `times`.
-  - We truncate all rungs to the common prefix length (minimum length across rungs) so
-    comparisons remain aligned. We also return per-rung stop indices/times.
+- ``calculate_accel_comparisons()`` performs propagation and comparison math.
+- ``make_accel_ladder_dashboard_figures()`` performs plotting.
+- ``compare_models()`` calls both functions; plotting is always enabled.
 
-Dashboard:
-  - Figure 1: time-domain comparisons (divergence vs ref, incremental per rung, worst-rung NTW)
-      * time-domain model lines alternate solid/dashed to help reveal overlaps
-      * includes a top-left text box with the initial Keplerian elements (in ax[0])
-  - Figure 2: rung-summary with:
-      (A) final ||dr|| vs ref by rung (colored points + colored rung index annotations)
-      (B) final ||dr_inc|| by rung (colored points + colored rung index annotations)
-      (C) heatmap of log10(||dr|| vs ref) with color-coded rung index y-tick labels
-    plus a header area above the subplots:
-      - LEFT: accel ladder key with color-coded indices (figure-level, left aligned)
-      - RIGHT: initial Keplerian elements (figure-level, top-right)
+Early-stop behavior
+-------------------
 
-Notes:
-  - Log plots use a floor epsilon_m (default 1 mm = 1e-3 m).
-  - Heatmap colorbar is capped at max_error_m (default 1e7 m).
+If SSAPy terminates early, the runner truncates all rungs to their common
+prefix and reports per-rung stop indices and epochs.
+
+Dashboard
+---------
+
+- Figure 1 shows time-domain reference, incremental, and NTW comparisons.
+- Figure 2 summarizes final errors and a reference-error heatmap.
+
+Notes
+-----
+
+- Log plots use a floor ``epsilon_m`` (default 1 mm).
+- The heatmap colorbar is capped at ``max_error_m`` (default 1e7 m).
 """
 
 from __future__ import annotations

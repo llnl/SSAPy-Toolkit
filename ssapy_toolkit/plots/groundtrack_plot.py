@@ -174,9 +174,7 @@ def groundtrack_plot(
         Extra legend kwargs.
     central_longitude : float, default 0.0
         Center longitude of the displayed map.
-        Examples:
-            0   -> Greenwich-centered
-            180 -> Pacific-centered
+        Use 0 for Greenwich-centered or 180 for Pacific-centered maps.
     relabel_xticks : bool, default True
         If True, relabel x ticks into conventional [-180, 180) longitude values.
 

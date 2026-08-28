@@ -13,6 +13,8 @@ Public API
 
 Usage
 -----
+::
+
     from ssapy_toolkit.plots.sun_view import (
         sun_position_eci, SunLayer, EarthShadingLayer, starfield_trace,
         VISUAL_DIST_KM_LEO,

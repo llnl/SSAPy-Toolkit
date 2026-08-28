@@ -9,7 +9,7 @@ High-fidelity model content
                 RK4 integrator — small steps near the surface where the
                 field varies fastest, larger steps far out.  Lines are
                 terminated exactly on the ellipsoid by interpolation and
-                coloured by |B| along their length.
+                coloured by ``|B|`` along their length.
   Van Allen   : belt shells built from REAL IGRF-traced L-shells rather
                 than an axisymmetric dipole, so the inner belt reproduces
                 the South Atlantic Anomaly dip.  Dipole L-shell and legacy
@@ -606,15 +606,21 @@ def quick_figure(preset="poster", epoch=None, save_path=None, **overrides):
     """
     One-line entry point.
 
+    Examples
+    --------
+    ::
+
         from magfield_plot_3d import quick_figure
         quick_figure("public", save_path="magnetosphere")
 
-    preset : 'draft'   fast preview, no stars or boundary  (~30 s)
-             'poster'  full fidelity for print             (~2 min warm)
-             'public'  poster plus Sun, orbits and open/closed field lines
-             'measure' orthographic, no decoration, for reading geometry
-    epoch  : datetime or decimal year.  Defaults to the most recent date with a
-             complete OMNI solar-wind record, since the drivers come from it.
+    Parameters
+    ----------
+    preset : {'draft', 'poster', 'public', 'measure'}
+        ``'draft'`` is a fast preview; ``'poster'`` is for print; ``'public'``
+        adds Sun, orbits, and field-line topology; ``'measure'`` is orthographic.
+    epoch : datetime or float
+        Defaults to the most recent date with a complete OMNI solar-wind record.
+
     Anything else is passed through to plot_magfield_3d().
     """
     if preset not in PRESETS:
@@ -757,14 +763,18 @@ def plot_magfield_3d(
     Render IGRF field lines, Van Allen belts and a WGS84 Earth in an
     interactive Plotly 3D scene.
 
-    fidelity    : 'high' uses fine integration steps, a dense Earth mesh and
-                  IGRF-traced belts; 'draft' is the fast preview path.
-    belt_style  : 'igrf'   — belts from real IGRF-traced L-shells (shows the
-                             South Atlantic Anomaly);
-                  'lshell' — analytic dipole L-shell crescent;
-                  'torus'  — analytic circular torus.
-    zoom        : >1 tightens framing, <1 pulls back.
-    save_path   : writes an interactive .html (and .png if save_png).
+    Parameters
+    ----------
+    fidelity : {'high', 'draft'}
+        ``'high'`` uses fine integration steps, a dense Earth mesh, and
+        IGRF-traced belts; ``'draft'`` is the fast preview path.
+    belt_style : {'igrf', 'lshell', 'torus'}
+        ``'igrf'`` uses real IGRF-traced L-shells; ``'lshell'`` uses an analytic
+        dipole crescent; ``'torus'`` uses an analytic circular torus.
+    zoom : float
+        Values greater than one tighten framing; values below one pull back.
+    save_path : path-like
+        Writes an interactive HTML file and a PNG when ``save_png`` is true.
     """
     if not _HAS_PPIGRF:
         raise ImportError("ppigrf is required: pip install ppigrf")

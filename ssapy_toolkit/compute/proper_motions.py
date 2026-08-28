@@ -62,18 +62,26 @@ def proper_motion_ra_dec(
     """
     Calculate the proper motion in right ascension (RA) and declination (DEC) for a given position and velocity in 3D space.
 
-    Parameters:
-    - r (np.ndarray): 3D position vector (x, y, z) in SI units (m). Default is None.
-    - v (np.ndarray): 3D velocity vector (vx, vy, vz) in SI units (m/s). Default is None.
-    - x, y, z (float): Individual coordinates for position (in meters). These are optional if r is provided.
-    - vx, vy, vz (float): Individual velocities (in m/s). These are optional if v is provided.
-    - r_earth (np.ndarray): 3D position vector of Earth (default is [0, 0, 0]).
-    - v_earth (np.ndarray): 3D velocity vector of Earth (default is [0, 0, 0]).
-    - input_unit (str): The units for the output. Options are 'si' (SI units) or 'rebound' (rebound units). Default is 'si'.
+    Parameters
+    ----------
+    r : numpy.ndarray, optional
+        3D position vector (x, y, z) in SI units (m).
+    v : numpy.ndarray, optional
+        3D velocity vector (vx, vy, vz) in SI units (m/s).
+    x, y, z : float, optional
+        Individual position coordinates in meters, used when ``r`` is absent.
+    vx, vy, vz : float, optional
+        Individual velocity components in m/s, used when ``v`` is absent.
+    r_earth, v_earth : numpy.ndarray, optional
+        Earth position and velocity vectors; both default to zero.
+    input_unit : {"si", "rebound"}, optional
+        Unit system for the output. Defaults to ``"si"``.
 
-    Returns:
-    - Tuple of proper motion in right ascension and declination (in arcseconds per second) if input_unit is 'si',
-      or in rebound units if input_unit is 'rebound'.
+    Returns
+    -------
+    tuple of numpy.ndarray
+        Proper motion in right ascension and declination, in arcseconds per
+        second for ``"si"`` or in rebound units for ``"rebound"``.
     """
     if r is None or v is None:
         if x is not None and y is not None and z is not None and vx is not None and vy is not None and vz is not None:

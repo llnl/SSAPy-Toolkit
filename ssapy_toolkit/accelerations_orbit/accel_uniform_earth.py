@@ -8,7 +8,7 @@ from ._state import position
 def accel_uniform_earth(r):
     """
     Piecewise gravity model:
-    - Outside Earth: point-mass gravity ~ -mu r / |r|^3
+    - Outside Earth: point-mass gravity ~ -mu r / norm(r)^3
     - Inside Earth (uniform-density sphere): linear gravity ~ -mu r / R^3
 
     Parameters

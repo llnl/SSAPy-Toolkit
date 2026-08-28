@@ -139,10 +139,8 @@ def write_gif(
     gif_name : str
         Output path ending with .gif
     frames : iterable of str/Path or str/Path glob pattern
-        Either:
-          - a list/iterable of image file paths
-          - a glob pattern like '/folder/frame_*.png'
-        Must resolve to at least 2 frames.
+        A list or iterable of image paths, or a glob pattern such as
+        ``'/folder/frame_*.png'``. It must resolve to at least two frames.
     fps : int
         Frames per second (ignored if duration is provided)
     duration : float or None

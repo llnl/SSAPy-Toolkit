@@ -8,12 +8,16 @@ def megno(r: np.ndarray) -> float:
     The MEGNO is a measure of the chaos in the orbital evolution. It quantifies the exponential 
     divergence of nearby trajectories over time, used to detect chaotic regions in orbital dynamics.
 
-    Parameters:
-    - r: A 2D numpy array of shape (n_states, 3) representing the initial positions of the orbital states 
-         in 3D space (x, y, z).
+    Parameters
+    ----------
+    r : numpy.ndarray
+        A 2D array of shape (n_states, 3) representing the initial positions
+        of the orbital states in 3D space (x, y, z).
 
-    Returns:
-    - A float representing the mean MEGNO value for the given orbital states.
+    Returns
+    -------
+    float
+        The mean MEGNO value for the given orbital states.
     """
     n_states = len(r)
     perturbed_states = r + 1e-8 * np.random.randn(n_states, 3)

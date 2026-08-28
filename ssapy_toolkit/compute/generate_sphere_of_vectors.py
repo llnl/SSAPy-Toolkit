@@ -30,9 +30,10 @@ def generate_sphere_vectors(n, magnitude, seed=None, distribution="uniform"):
     seed : int or None
         Optional seed for reproducibility.
     distribution : {"uniform", "random"}
-        "uniform": normalize i.i.d. Gaussian vectors (isotropic -> area-uniform).
-        "random" : area-uniform using spherical coordinates with
-                   z ~ U[-1, 1], phi ~ U[0, 2*pi).
+        * ``"uniform"``: normalize i.i.d. Gaussian vectors (isotropic and
+          area-uniform).
+        * ``"random"``: area-uniform using spherical coordinates with
+          ``z ~ U[-1, 1]`` and ``phi ~ U[0, 2*pi)``.
 
     Returns
     -------

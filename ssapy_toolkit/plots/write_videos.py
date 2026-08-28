@@ -34,7 +34,8 @@ def write_video(
     frames : iterable of str, str, or Path
         - Iterable of image file paths, OR
         - Path to a folder (all files in it are used), OR
-        - Wildcard pattern string (e.g. 'frames_*.png', 'root/**/frame_*.png').
+        - Wildcard pattern string (e.g. ``'frames_*.png'`` or
+          ``'root/**/frame_*.png'``).
     fps : int
         Frame rate.
     sort_frames : bool

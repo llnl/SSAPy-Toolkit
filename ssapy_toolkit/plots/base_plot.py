@@ -92,7 +92,6 @@ class BasePlot3D:
     dark      : bool         dark background
     layers    : dict         key → BaseLayer
     satellite : Satellite3D | None
-    fidelity  : str          "fast" | "loading" | "high"
     """
 
     def __init__(
@@ -178,6 +177,7 @@ class BasePlot3D:
     # ── IERS background upgrade ───────────────────────────────────────────────
     @property
     def fidelity(self) -> str:
+        """Return the current Earth-orientation fidelity state."""
         return self._fidelity
 
     def _start_iers_thread(self):

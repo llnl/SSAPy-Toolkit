@@ -24,13 +24,14 @@ def build_dashboard(
     Parameters
     ----------
     panels : list[dict]
-        Each entry describes one panel:
-          {
-            "loc": (r, c) or (r0, r1, c0, c1),  # single cell or row/col span
-            "projection": None or "3d",
-            "render": callable(ax, fig, **kwargs) -> any,
-            "kwargs": dict (optional)            # passed to render()
-          }
+        Each entry describes one panel::
+
+            {
+                "loc": (r, c) or (r0, r1, c0, c1),
+                "projection": None or "3d",
+                "render": callable(ax, fig, **kwargs),
+                "kwargs": dict (optional),
+            }
     nrows, ncols : int
         GridSpec dimensions.
     save_path : str or None

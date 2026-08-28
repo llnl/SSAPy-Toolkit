@@ -574,9 +574,12 @@ def lambertian_sphere_brightness(
         Extinction coefficient [mag/airmass] *for the chosen band*.
     include_* : bool
         Toggle individual components.
-    solar_const, t_sun, r_sun_radius, r_earth, albedo_earth, olr_earth,
-    t_earth_lw, r_moon, albedo_moon, atmosphere_top_m, f_nu_ab_zero : float
-        Physical model parameters; defaults are the module-level constants.
+
+    Model parameters : float
+        ``solar_const``, ``t_sun``, ``r_sun_radius``, ``r_earth``,
+        ``albedo_earth``, ``olr_earth``, ``t_earth_lw``, ``r_moon``,
+        ``albedo_moon``, ``atmosphere_top_m``, and ``f_nu_ab_zero`` default to
+        the module-level constants.
 
     Returns
     -------

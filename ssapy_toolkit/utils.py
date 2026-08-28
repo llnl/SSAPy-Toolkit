@@ -39,12 +39,17 @@ def pd_flatten(data: list, factor: float = 1.0) -> list:
     """
     Flattens the data and converts each element to a float, dividing by a factor.
 
-    Parameters:
-        data (list): list of string elements to be converted.
-        factor (float): Factor to divide each number (default is 1.0).
+    Parameters
+    ----------
+    data : list
+        String elements to convert.
+    factor : float
+        Divisor (default: 1.0).
 
-    Returns:
-        list: list of converted floats.
+    Returns
+    -------
+    list
+        Converted floats.
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     # Filter out empty strings or any non-convertible strings
@@ -58,11 +63,15 @@ def str_to_array(s: str) -> np.ndarray:
     """
     Converts a string of comma-separated values into a numpy array of floats.
 
-    Parameters:
-        s (str): Input string.
+    Parameters
+    ----------
+    s : str
+        Input string.
 
-    Returns:
-        np.ndarray: Array of floats converted from the input string.
+    Returns
+    -------
+    numpy.ndarray
+        Floats converted from the input string.
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     s = s.replace('[', '').replace(']', '')  # Remove square brackets
@@ -73,11 +82,15 @@ def pdstr_to_arrays(df: DataFrame) -> np.ndarray:
     """
     Converts all string representations of arrays in a dataframe to numpy arrays.
 
-    Parameters:
-        df (pd.DataFrame): DataFrame containing string representations of arrays.
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        DataFrame containing string representations of arrays.
 
-    Returns:
-        np.ndarray: Numpy array of the converted arrays.
+    Returns
+    -------
+    numpy.ndarray
+        Converted arrays.
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     return df.apply(str_to_array).to_numpy()
@@ -87,11 +100,15 @@ def b2str(array_: np.ndarray) -> list:
     """
     Decodes a list of byte strings into regular strings.
 
-    Parameters:
-        array_ (np.ndarray): Array of byte strings to decode.
+    Parameters
+    ----------
+    array_ : numpy.ndarray
+        Byte strings to decode.
 
-    Returns:
-        list: list of decoded strings.
+    Returns
+    -------
+    list
+        Decoded strings.
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     return [i.decode("utf-8") for i in array_]
@@ -101,12 +118,17 @@ def find_indices(lst: list, condition: callable) -> list:
     """
     Finds indices in a list that satisfy a given condition.
 
-    Parameters:
-        lst (list): list to search through.
-        condition (callable): A function that takes an element and returns True or False.
+    Parameters
+    ----------
+    lst : list
+        List to search.
+    condition : callable
+        Function returning whether an element matches.
 
-    Returns:
-        list: list of indices where the condition is true.
+    Returns
+    -------
+    list
+        Indices where the condition is true.
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     return [i for i, elem in enumerate(lst) if condition(elem)]
@@ -116,11 +138,15 @@ def nan_array(size: int = 1) -> np.ndarray:
     """
     Creates an array of NaNs with the specified size.
 
-    Parameters:
-        size (int): The size of the array (default is 1).
+    Parameters
+    ----------
+    size : int
+        Array size (default: 1).
 
-    Returns:
-        np.ndarray: An array filled with NaNs.
+    Returns
+    -------
+    numpy.ndarray
+        Array filled with NaNs.
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     x = np.zeros(size)
@@ -132,11 +158,15 @@ def remove_np_nans(numpy_array: np.ndarray) -> np.ndarray:
     """
     Removes NaN values from a numpy array.
 
-    Parameters:
-        numpy_array (np.ndarray): Input array with potential NaN values.
+    Parameters
+    ----------
+    numpy_array : numpy.ndarray
+        Input array with potential NaN values.
 
-    Returns:
-        np.ndarray: Array with NaN values removed.
+    Returns
+    -------
+    numpy.ndarray
+        Array with NaN values removed.
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     return numpy_array[~np.isnan(numpy_array)]
@@ -146,12 +176,17 @@ def remove_zeros(data: np.ndarray, axis: int = 0) -> np.ndarray:
     """
     Removes rows or columns where all elements are zeros.
 
-    Parameters:
-        data (np.ndarray): Input array.
-        axis (int): Axis along which to remove zeros (default is 1, i.e., columns).
+    Parameters
+    ----------
+    data : numpy.ndarray
+        Input array.
+    axis : int
+        Axis along which to remove zeros (default: 1, columns).
 
-    Returns:
-        np.ndarray: Array with rows/columns removed where all elements were zero.
+    Returns
+    -------
+    numpy.ndarray
+        Array with all-zero rows or columns removed.
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     return data[~np.all(data == 0, axis=axis)]
@@ -161,11 +196,15 @@ def nby3shape(arr_: np.ndarray) -> np.ndarray:
     """
     Reshapes a 1D or 2D array to have 3 columns, preserving the structure.
 
-    Parameters:
-        arr_ (np.ndarray): Input array to reshape.
+    Parameters
+    ----------
+    arr_ : numpy.ndarray
+        Input array to reshape.
 
-    Returns:
-        np.ndarray: Reshaped array with 3 columns.
+    Returns
+    -------
+    numpy.ndarray
+        Array with three columns.
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     if arr_.ndim == 1:
@@ -182,13 +221,19 @@ def eformat(f: float, prec: int, exp_digits: int) -> str:
     Formats a floating-point number into scientific notation with the specified precision 
     and exponent width.
     
-    Parameters:
-        f (float): The number to format.
-        prec (int): The number of digits to show after the decimal point.
-        exp_digits (int): The number of digits to show in the exponent part.
-    
-    Returns:
-        str: The formatted string in scientific notation.
+    Parameters
+    ----------
+    f : float
+        Number to format.
+    prec : int
+        Digits after the decimal point.
+    exp_digits : int
+        Digits in the exponent.
+
+    Returns
+    -------
+    str
+        Formatted scientific-notation string.
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     s = "%.*e" % (prec, f)
@@ -204,11 +249,15 @@ def extractNum(s: str) -> int:
     """
     Extracts the first integer from a string.
 
-    Parameters:
-        s (str): The string to extract the integer from.
+    Parameters
+    ----------
+    s : str
+        String to search.
 
-    Returns:
-        int: The first integer found in the string.
+    Returns
+    -------
+    int
+        First integer in the string.
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     numre = re.compile('[0-9]+')
@@ -219,11 +268,15 @@ def sortbynum(files: list) -> list:
     """
     Sorts a list of file paths based on numbers embedded in the filenames.
 
-    Parameters:
-        files (list): list of file paths to sort.
+    Parameters
+    ----------
+    files : list
+        File paths to sort.
 
-    Returns:
-        list: Sorted list of file paths.
+    Returns
+    -------
+    list
+        Sorted file paths.
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     def sort_key(path):
@@ -241,11 +294,15 @@ def issorted(test_list: list) -> bool:
     """
     Checks if a list is sorted.
 
-    Parameters:
-        test_list (list): The list to check.
+    Parameters
+    ----------
+    test_list : list
+        List to check.
 
-    Returns:
-        bool: True if the list is sorted, False otherwise.
+    Returns
+    -------
+    bool
+        Whether the list is sorted.
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     flag = False
@@ -262,11 +319,15 @@ def byte2str(byte_string: bytes) -> str:
     """
     Converts a byte string into a regular string.
 
-    Parameters:
-        byte_string (bytes): The byte string to convert.
+    Parameters
+    ----------
+    byte_string : bytes
+        Byte string to convert.
 
-    Returns:
-        str: The decoded string.
+    Returns
+    -------
+    str
+        Decoded string.
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     try:
@@ -279,11 +340,15 @@ def flatten(t: list) -> list:
     """
     Flattens a list of lists into a single list.
 
-    Parameters:
-        t (list): The input list of lists.
+    Parameters
+    ----------
+    t : list
+        Input list of lists.
 
-    Returns:
-        list: A flattened list containing all the elements.
+    Returns
+    -------
+    list
+        Flattened elements.
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     return [item for sublist in t for item in sublist]
@@ -397,11 +462,15 @@ def isint(var_: object) -> bool:
     """
     Checks if a variable is an integer.
 
-    Parameters:
-        var_ (object): The variable to check.
+    Parameters
+    ----------
+    var_ : object
+        Variable to check.
 
-    Returns:
-        bool: True if the variable is an integer, False otherwise.
+    Returns
+    -------
+    bool
+        Whether the variable is an integer.
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
@@ -412,11 +481,15 @@ def isfloat(var_: object) -> bool:
     """
     Checks if a variable is a float.
 
-    Parameters:
-        var_ (object): The variable to check.
+    Parameters
+    ----------
+    var_ : object
+        Variable to check.
 
-    Returns:
-        bool: True if the variable is a float, False otherwise.
+    Returns
+    -------
+    bool
+        Whether the variable is a float.
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
@@ -427,11 +500,15 @@ def isstr(var_: object) -> bool:
     """
     Checks if a variable is a string.
 
-    Parameters:
-        var_ (object): The variable to check.
+    Parameters
+    ----------
+    var_ : object
+        Variable to check.
 
-    Returns:
-        bool: True if the variable is a string, False otherwise.
+    Returns
+    -------
+    bool
+        Whether the variable is a string.
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
@@ -459,11 +536,15 @@ def kde(data_: np.ndarray) -> stats.gaussian_kde:
     """
     Computes the Kernel Density Estimate (KDE) of the given data.
 
-    Parameters:
-        data_ (np.ndarray): Input data to estimate the density of.
+    Parameters
+    ----------
+    data_ : numpy.ndarray
+        Input data used to estimate the density.
 
-    Returns:
-        stats.gaussian_kde: KDE object.
+    Returns
+    -------
+    scipy.stats.gaussian_kde
+        Kernel density estimate.
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
