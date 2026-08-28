@@ -115,6 +115,8 @@ _TOOLKIT_DUPLICATE_ALIASES = {
     "dms_to_dd": ".time_functions.convert_dd_and_dms",
     "dms_to_deg": ".coordinates.angle_units",
     "dms_to_rad": ".coordinates.angle_units",
+    "draw_earth": ".plots.plotutils",
+    "draw_moon": ".plots.plotutils",
     "ecliptic_to_equatorial": ".coordinates.equatorial_ecliptic",
     "ecliptic_xyz_to_equatorial": ".coordinates.equatorial_ecliptic",
     "ecliptic_xyz_to_equatorial_xyz": ".coordinates.equatorial_ecliptic",

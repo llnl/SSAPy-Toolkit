@@ -87,6 +87,9 @@ functions such as ``ssatk.Orbit``, ``ssatk.rv``, ``ssatk.groundTrack``, and
 ``ssatk.AccelKepler`` are also lazily available through the Toolkit. If a name
 exists in both packages, Toolkit helpers and submodules take precedence; direct
 base-package access remains available through ``ssatk.ssapy``.
+Earth/Moon helpers formerly provided by ``ssapy.plotUtils`` are available as
+``ssatk.draw_earth``, ``ssatk.draw_moon``, ``ssatk.load_earth_file``, and
+``ssatk.load_moon_file``.
 
 Satellite operation frames
 --------------------------

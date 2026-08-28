@@ -215,6 +215,8 @@ def test_draw_earth_and_moon_with_fake_ipyvolume(monkeypatch):
 
     assert plotutils.drawEarth(0.0, ngrid=4, R=1.0, rfactor=2.0) == "mesh"
     assert plotutils.drawMoon(Time(0.0, format="gps"), ngrid=4, R=1.0, rfactor=3.0) == "mesh"
+    assert plotutils.draw_earth(0.0, ngrid=4, R=1.0, rfactor=2.0) == "mesh"
+    assert plotutils.draw_moon(Time(0.0, format="gps"), ngrid=4, R=1.0, rfactor=3.0) == "mesh"
     assert calls[0][1]["texture"] == "earth-texture"
     assert calls[1][1]["texture"] == "moon-texture"
     assert calls[0][0][0].shape == (4, 4)

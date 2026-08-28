@@ -125,6 +125,9 @@ precedence at the top level, so names such as `ssapy_toolkit.norm`,
 implementations. Toolkit submodules also win on collisions such as
 `ssapy_toolkit.io` and `ssapy_toolkit.utils`; the base package remains available
 as `ssapy_toolkit.ssapy` when direct SSAPy module access is needed.
+Earth/Moon helpers formerly provided by `ssapy.plotUtils` are available as
+`ssapy_toolkit.draw_earth`, `draw_moon`, `load_earth_file`, and
+`load_moon_file`.
 
 For workflow functions, import the specific Toolkit module you need:
 

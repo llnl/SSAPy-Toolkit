@@ -621,6 +621,11 @@ def drawEarth(time, ngrid=100, R=EARTH_RADIUS, rfactor=1):
     )
 
 
+def draw_earth(time, ngrid=100, R=EARTH_RADIUS, rfactor=1):
+    """Draw the textured Earth mesh; snake-case alias for :func:`drawEarth`."""
+    return drawEarth(time, ngrid=ngrid, R=R, rfactor=rfactor)
+
+
 def load_moon_file():
     moon = PILImage.open(find_file("moon", ext=".png"))
     moon = moon.resize((5400 // 5, 2700 // 5))
@@ -669,6 +674,11 @@ def drawMoon(time, ngrid=100, R=MOON_RADIUS, rfactor=1):
         x * R * rfactor, y * R * rfactor, z * R * rfactor,
         u=u, v=v, wireframe=False, texture=moon
     )
+
+
+def draw_moon(time, ngrid=100, R=MOON_RADIUS, rfactor=1):
+    """Draw the textured Moon mesh; snake-case alias for :func:`drawMoon`."""
+    return drawMoon(time, ngrid=ngrid, R=R, rfactor=rfactor)
 
 
 save_plot_to_pdf_call_count = 0
