@@ -576,6 +576,17 @@ def load_earth_file():
     return earth
 
 
+def _require_ipyvolume():
+    try:
+        import ipyvolume
+    except (ImportError, OSError) as exc:
+        raise ImportError(
+            "Earth/Moon notebook meshes require the optional 'notebook' dependencies; "
+            "install with 'pip install ssapy-toolkit[notebook]'."
+        ) from exc
+    return ipyvolume
+
+
 def drawEarth(time, ngrid=100, R=EARTH_RADIUS, rfactor=1):
     """
     Parameters
@@ -590,7 +601,7 @@ def drawEarth(time, ngrid=100, R=EARTH_RADIUS, rfactor=1):
     rfactor : float
         Factor by which to enlarge Earth (for visualization purposes)
     """
-    import ipyvolume as ipv
+    ipv = _require_ipyvolume()
 
     earth = load_earth_file()
 
@@ -646,7 +657,7 @@ def drawMoon(time, ngrid=100, R=MOON_RADIUS, rfactor=1):
     rfactor : float
         Factor by which to enlarge Moon (for visualization purposes)
     """
-    import ipyvolume as ipv
+    ipv = _require_ipyvolume()
 
     moon = load_moon_file()
 
@@ -891,7 +902,14 @@ def plotly_orbit_trace(r_km, *, name="Orbit", color="#ff4d4d", width=5, go_modul
 def display_figure(figname, display='IPython'):
     def open_image(filename):
         if display == 'IPython':
-            from IPython.display import Image as IPythonImage, display as ipython_display
+            try:
+                from IPython.display import Image as IPythonImage
+                from IPython.display import display as ipython_display
+            except ImportError as exc:
+                raise ImportError(
+                    "IPython display requires the optional 'notebook' dependencies; "
+                    "install with 'pip install ssapy-toolkit[notebook]'."
+                ) from exc
 
             img = IPythonImage(filename=filename)
             ipython_display(img)

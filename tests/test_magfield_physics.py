@@ -655,6 +655,7 @@ def test_pyproject_declares_runtime_dependencies():
     for pkg in ("numpy", "plotly", "pandas", "pillow"):
         assert pkg in declared.lower(), (
             f"{pkg} missing from [project] dependencies (found: {declared!r})")
+    assert "llnl-ssapy>=1.1.9" in project["dependencies"]
 
 
 def test_pyproject_optional_extras_are_named_as_documented():
@@ -668,6 +669,12 @@ def test_pyproject_optional_extras_are_named_as_documented():
     extras = project.get("optional-dependencies", {})
     if not extras:
         pytest.skip("no extras declared yet")
+    notebook = {requirement.lower() for requirement in extras.get("notebook", [])}
+    assert notebook == {"ipython", "ipyvolume"}
+    assert notebook <= {requirement.lower() for requirement in extras.get("dev", [])}
+    assert notebook.isdisjoint(
+        requirement.lower() for requirement in project.get("dependencies", [])
+    )
     joined = " ".join(" ".join(v) for v in extras.values()).lower()
     declared = " ".join(project.get("dependencies", [])).lower()
     for pkg in ("ppigrf", "geopack"):

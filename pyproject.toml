@@ -34,11 +34,9 @@ dependencies = [
   "global-land-mask",
   "h5py",
   "imageio",
-  "ipython",
   "kaleido",
-  "ipyvolume",
   "llnl-ssapy-data>=0.1.5",
-  "llnl-ssapy",
+  "llnl-ssapy>=1.1.9",
   "matplotlib",
   "numpy",
   "pandas",
@@ -53,6 +51,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+notebook = [
+  "ipython",
+  "ipyvolume",
+]
+
 browser = [
   "selenium",
 ]
@@ -77,6 +80,8 @@ validation = [
 
 dev = [
   "coverage",
+  "ipython",
+  "ipyvolume",
   "pytest",
   "pytest-mpi",
   "sphinx",

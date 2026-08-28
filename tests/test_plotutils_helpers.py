@@ -222,6 +222,19 @@ def test_draw_earth_and_moon_with_fake_ipyvolume(monkeypatch):
     assert calls[0][0][0].shape == (4, 4)
 
 
+def test_notebook_helpers_explain_the_optional_extra(monkeypatch, tmp_path):
+    monkeypatch.setitem(sys.modules, "ipyvolume", None)
+    with pytest.raises(ImportError, match=r"ssapy-toolkit\[notebook\]"):
+        plotutils.drawEarth(0.0)
+
+    image_path = tmp_path / "shown.png"
+    image_path.touch()
+    monkeypatch.setitem(sys.modules, "IPython", None)
+    monkeypatch.delitem(sys.modules, "IPython.display", raising=False)
+    with pytest.raises(ImportError, match=r"ssapy-toolkit\[notebook\]"):
+        plotutils.display_figure(str(image_path), display="IPython")
+
+
 def test_plot_geometry_and_color_helpers():
     sphere = plotutils.create_sphere(1.0, 2.0, 3.0, 4.0, resolution=5)
     assert sphere.shape == (3, 10, 5)
