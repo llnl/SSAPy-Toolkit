@@ -31,7 +31,6 @@ classifiers = [
 
 dependencies = [
   "astropy",
-  "global-land-mask",
   "h5py",
   "imageio",
   "llnl-ssapy-data>=0.1.5",
