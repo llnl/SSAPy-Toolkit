@@ -7,7 +7,7 @@ starfield, for SSAPy-Toolkit's 3D scenes.
 
 ```python
 from ssapy_toolkit.plots.sun_view import (
-    sun_position_eci,     # real JPL ephemeris sun direction + distance
+    sun_position_eci,     # configured Astropy ephemeris direction + distance
     SunLayer,             # glowing sun sphere + corona
     EarthShadingLayer,    # textured, day/night-shaded Earth
     MoonShadingLayer,     # textured, day/night-shaded Moon

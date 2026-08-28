@@ -213,6 +213,37 @@ def test_benchmark_cli_quick_no_dashboard(tmp_path):
     assert not (tmp_path / "benchmark_dashboard.html").exists()
 
 
+def test_benchmark_report_uses_saved_rms_without_repropagation(tmp_path, monkeypatch):
+    from demos.benchmarks import benchmark_report
+    from demos.benchmarks import demo_nbody_propagation_benchmark as nbody
+
+    state_path = tmp_path / "external.csv"
+    np.savetxt(state_path, np.zeros((2, 7)), delimiter=",")
+    monkeypatch.setattr(
+        nbody,
+        "_ssatk_rows",
+        lambda **_kwargs: pytest.fail("report must not repropagate"),
+    )
+    summaries = {
+        "nbody_propagation_results.json": {
+            "cases": [{
+                "mode": "solar_system",
+                "name": "leo",
+                "tools": {"Orekit": {
+                    "state_path": str(state_path),
+                    "rms_position_error_m": 1.0,
+                    "rms_velocity_error_m_s": 2.0,
+                }},
+            }],
+        },
+    }
+
+    path = benchmark_report._write_regime_matrix(summaries, tmp_path)
+
+    assert path == tmp_path / "benchmark_regime_matrix.png"
+    assert path.is_file()
+
+
 def test_benchmark_private_wrappers_have_expected_outputs(monkeypatch, tmp_path):
     from ssapy_toolkit import benchmark
     from ssapy_toolkit.orbital_mechanics import transfer_optimal_function
