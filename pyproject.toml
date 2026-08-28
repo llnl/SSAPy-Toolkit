@@ -31,7 +31,6 @@ classifiers = [
 
 dependencies = [
   "astropy",
-  "emcee",
   "global-land-mask",
   "h5py",
   "imageio",
@@ -39,12 +38,9 @@ dependencies = [
   "ipython",
   "kaleido",
   "ipyvolume",
-  "jplephem",
   "llnl-ssapy-data>=0.1.5",
   "llnl-ssapy",
-  "lmfit",
   "matplotlib",
-  "mpmath",
   "numpy",
   "pandas",
   "pillow",
@@ -53,13 +49,8 @@ dependencies = [
   "pyerfa",
   "pypdf",
   "rebound",
-  "regex",
-  "requests",
   "scipy",
-  "sympy",
   "tqdm",
-  "spacetrack",
-  "vg",
 ]
 
 [project.optional-dependencies]
