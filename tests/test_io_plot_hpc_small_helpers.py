@@ -6,6 +6,14 @@ import numpy as np
 import pytest
 
 
+def test_html_to_gif_requires_optional_selenium(monkeypatch):
+    module = pytest.importorskip("ssapy_toolkit.io.html_to_gif")
+
+    monkeypatch.setattr(module, "_SELENIUM_IMPORT_ERROR", ImportError("blocked selenium"))
+    with pytest.raises(ImportError, match=r"ssapy-toolkit\[browser\]"):
+        module.html_to_gif(html_path="unused.html", out_gif="unused.gif")
+
+
 def test_html_to_gif_crop_and_fake_browser(monkeypatch, tmp_path):
     module = pytest.importorskip("ssapy_toolkit.io.html_to_gif")
     Image = module.Image

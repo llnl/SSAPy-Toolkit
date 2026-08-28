@@ -1,9 +1,16 @@
 from .write_gifs import _sort_frames
 import numpy as np
 import warnings
-import cv2
 import glob
 from pathlib import Path
+
+try:
+    import cv2
+except (ImportError, OSError) as exc:
+    cv2 = None
+    _CV2_IMPORT_ERROR = exc
+else:
+    _CV2_IMPORT_ERROR = None
 
 
 def write_video(
@@ -41,6 +48,11 @@ def write_video(
     verbose : bool
         If True, print progress messages while writing.
     """
+    if _CV2_IMPORT_ERROR is not None:
+        raise ImportError(
+            "write_video requires OpenCV; install ssapy-toolkit[video]."
+        ) from _CV2_IMPORT_ERROR
+
     # Normalize frames into a list of file paths
     if isinstance(frames, (str, Path)):
         pattern = str(frames)

@@ -38,7 +38,7 @@ def _require_html_to_gif_dependencies():
         raise ImportError(
             "html_to_gif requires optional dependencies: "
             + ", ".join(missing)
-            + ". Install the package with its normal dependencies or install pillow and selenium."
+            + ". Install ssapy-toolkit[browser]."
         )
 
 

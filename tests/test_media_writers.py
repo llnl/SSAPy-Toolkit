@@ -57,6 +57,12 @@ def test_write_video_accepts_explicit_frames_and_resizes(tmp_path):
     assert output.stat().st_size > 0
 
 
+def test_write_video_requires_optional_opencv(monkeypatch):
+    monkeypatch.setattr(write_videos, "_CV2_IMPORT_ERROR", ImportError("blocked cv2"))
+    with pytest.raises(ImportError, match=r"ssapy-toolkit\[video\]"):
+        write_video("unused.mp4", [])
+
+
 def test_gif_sorting_resolution_and_validation_branches(tmp_path, monkeypatch):
     assert write_gifs._sort_frames([]) == []
     frame = _make_frame(tmp_path / "only.png")
