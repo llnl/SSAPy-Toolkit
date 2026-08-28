@@ -88,6 +88,7 @@ _TOOLKIT_SUBMODULE_NAMES = frozenset(
         "launch",
         "navigation",
         "operations",
+        "orbit_initializer",
         "orbital_mechanics",
         "plots",
         "propagators_orbit",
@@ -295,6 +296,8 @@ _TOOLKIT_DUPLICATE_ALIASES = {
     "xyz_to_ecliptic": ".coordinates.equatorial_ecliptic",
     "xyz_to_equatorial": ".coordinates.equatorial_ecliptic",
 }
+
+__all__ = []
 
 
 def _constant_names():

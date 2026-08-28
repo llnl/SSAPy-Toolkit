@@ -1,4 +1,7 @@
+import importlib
+
 import ssapy
+
 import ssapy_toolkit as ssatk
 from ssapy_toolkit import coordinates, orbital_mechanics, vectors
 from ssapy_toolkit.time_functions.convert_dd_and_hms import dd_to_hms
@@ -27,6 +30,19 @@ def test_from_import_uses_lazy_base_aliases():
 def test_base_ssapy_module_is_available_for_direct_access():
     assert ssatk.ssapy is ssapy
     assert ssatk.ssapy.utils is ssapy.utils
+
+
+def test_all_registered_root_exports_resolve_to_their_declared_owner():
+    for name in ssatk._TOOLKIT_SUBMODULE_NAMES:
+        assert getattr(ssatk, name) is importlib.import_module(f"ssapy_toolkit.{name}")
+    for name, module_name in ssatk._TOOLKIT_DUPLICATE_ALIASES.items():
+        assert getattr(ssatk, name) is getattr(importlib.import_module(module_name, "ssapy_toolkit"), name)
+    for name in ssatk._SSAPY_ALIAS_NAMES:
+        assert getattr(ssatk, name) is getattr(ssapy, name)
+
+
+def test_root_wildcard_imports_are_explicitly_unsupported():
+    assert ssatk.__all__ == []
 
 
 def test_toolkit_submodules_take_precedence_over_base_submodules():

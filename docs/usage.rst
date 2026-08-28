@@ -90,6 +90,8 @@ base-package access remains available through ``ssatk.ssapy``.
 Earth/Moon helpers formerly provided by ``ssapy.plotUtils`` are available as
 ``ssatk.draw_earth``, ``ssatk.draw_moon``, ``ssatk.load_earth_file``, and
 ``ssatk.load_moon_file``.
+Wildcard imports are intentionally unsupported; use ``import ssapy_toolkit as
+ssatk`` or import individual names explicitly.
 
 Satellite operation frames
 --------------------------

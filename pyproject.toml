@@ -72,7 +72,6 @@ atmosphere = [
 ]
 
 validation = [
-  "netCDF4",
   "spacepy",
 ]
 
