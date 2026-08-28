@@ -33,7 +33,10 @@ from ssapy_toolkit import __version__
 from ssapy_toolkit.plots.figpath import figpath
 
 CallFactory = Callable[["BenchmarkContext"], Callable[[], Any]]
-Validator = Callable[[Any], dict[str, int | float]]
+ValidationScalar = int | float | str | bool
+ValidationMetric = dict[str, ValidationScalar]
+Validation = dict[str, ValidationMetric]
+Validator = Callable[[Any], Validation]
 
 
 @dataclass(frozen=True)
@@ -59,6 +62,7 @@ class BenchmarkCase:
     default_repeats: int | None = None
     default_min_sample_time: float | None = None
     validator: Validator | None = None
+    validation_settings: dict[str, ValidationScalar] = field(default_factory=dict)
 
 
 @dataclass
@@ -90,15 +94,14 @@ class BenchmarkResult:
     peak_memory_bytes: int | None = None
     error: str | None = None
     traceback: str | None = None
-    validation: dict[str, int | float] | None = None
+    validation: Validation | None = None
+    validation_pass: bool | None = None
+    validation_settings: dict[str, ValidationScalar] | None = None
 
     def as_dict(self) -> dict[str, Any]:
         data = dict(self.__dict__)
         data["tags"] = list(self.tags)
-        for key, value in list(data.items()):
-            if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
-                data[key] = None
-        return data
+        return _json_safe(data)
 
 
 # ---------------------------------------------------------------------------
@@ -409,6 +412,58 @@ def build_benchmark_cases(
             default_repeats=3,
             default_min_sample_time=0.0,
         ),
+        BenchmarkCase(
+            name="validation.two_body_invariants",
+            group="validation",
+            description="Analytical specific-energy and angular-momentum invariants for one two-body orbit.",
+            factory=lambda _ctx: _call(_propagator_two_body_invariants),
+            validator=_validate_two_body_invariants,
+            tags=("validation", "analytical", "orbit"),
+            default_repeats=1,
+            default_min_sample_time=0.0,
+            validation_settings={"method": "DOP853", "rtol": 1.0e-10, "atol": 1.0e-8, "max_step": 60.0},
+        ),
+        BenchmarkCase(
+            name="validation.j2_raan_drift",
+            group="validation",
+            description="First-order secular J2 nodal-precession check over 20 near-circular-orbit periods.",
+            factory=lambda _ctx: _call(_propagator_j2_raan_drift),
+            validator=_validate_j2_raan_drift,
+            tags=("validation", "analytical", "J2"),
+            default_repeats=1,
+            default_min_sample_time=0.0,
+            validation_settings={
+                "method": "DOP853", "rtol": 1.0e-10, "atol": 1.0e-9, "max_step": 120.0,
+            },
+        ),
+        BenchmarkCase(
+            name="validation.torque_free_invariants",
+            group="validation",
+            description="Analytical angular-momentum and energy invariants for torque-free rigid-body motion.",
+            factory=lambda _ctx: _call(_propagator_torque_free_invariants),
+            validator=_validate_torque_free_invariants,
+            tags=("validation", "analytical", "6dof"),
+            default_repeats=1,
+            default_min_sample_time=0.0,
+            validation_settings={
+                "method": "DOP853", "rtol": 1.0e-10, "atol": 1.0e-9,
+                "max_step": 1.0, "mu": 0.0,
+            },
+        ),
+        BenchmarkCase(
+            name="validation.finite_burn_mass_delta_v_impulse",
+            group="validation",
+            description="Constant finite-burn mass, delta-v, and impulse checks against analytical equations.",
+            factory=lambda _ctx: _call(_propagator_finite_burn_analytic),
+            validator=_validate_finite_burn_analytic,
+            tags=("validation", "analytical", "finite-burn"),
+            default_repeats=1,
+            default_min_sample_time=0.0,
+            validation_settings={
+                "method": "DOP853", "rtol": 1.0e-10, "atol": 1.0e-9, "mu": 0.0,
+                "impulse_samples": 1001,
+            },
+        ),
     ]
 
     if include_io:
@@ -601,18 +656,55 @@ def _propagator_dop853_stm(r0, v0, t):
     return propagate_orbit_state_with_stm(r0=r0, v0=v0, times=t)
 
 
-def _validate_orbit_trajectory(trajectory) -> dict[str, int | float]:
-    state = np.concatenate((trajectory.r.ravel(), trajectory.v.ravel()))
+def _validation_metric(
+    value: ValidationScalar,
+    unit: str,
+    tolerance: ValidationScalar,
+    reference: str,
+    *,
+    passed: bool | None = None,
+) -> ValidationMetric:
+    if passed is None:
+        passed = isinstance(value, (int, float)) and abs(float(value)) <= float(tolerance)
     return {
-        "nfev": int(trajectory.nfev),
-        "finite_state_residual": 1.0 if np.any(~np.isfinite(state)) else 0.0,
+        "value": value,
+        "unit": unit,
+        "tolerance": tolerance,
+        "pass": bool(passed),
+        "reference": reference,
     }
 
 
-def _validate_orbit_stm(trajectory) -> dict[str, int | float]:
+def _validation_passed(validation: Validation | None) -> bool | None:
+    if validation is None:
+        return None
+    return all(bool(metric["pass"]) for metric in validation.values())
+
+
+def _validate_orbit_trajectory(trajectory) -> Validation:
+    state = np.concatenate((trajectory.r.ravel(), trajectory.v.ravel()))
+    return {
+        "nfev": _validation_metric(
+            int(trajectory.nfev), "count", 0, "DOP853 reports a positive evaluation count.",
+            passed=trajectory.nfev > 0,
+        ),
+        "finite_state_residual": _validation_metric(
+            1.0 if np.any(~np.isfinite(state)) else 0.0,
+            "1", 0.0, "finite propagated position and velocity",
+        ),
+    }
+
+
+def _validate_orbit_stm(trajectory) -> Validation:
     metrics = _validate_orbit_trajectory(trajectory)
-    metrics["finite_stm_residual"] = 1.0 if np.any(~np.isfinite(trajectory.stm)) else 0.0
-    metrics["initial_stm_residual"] = float(np.max(np.abs(trajectory.stm[0] - np.eye(6))))
+    metrics["finite_stm_residual"] = _validation_metric(
+        1.0 if np.any(~np.isfinite(trajectory.stm)) else 0.0,
+        "1", 0.0, "finite state-transition matrix",
+    )
+    metrics["initial_stm_residual"] = _validation_metric(
+        float(np.max(np.abs(trajectory.stm[0] - np.eye(6)))),
+        "1", 1.0e-12, "initial STM equals the 6x6 identity",
+    )
     return metrics
 
 
@@ -740,7 +832,7 @@ def _propagator_6dof_articulated_facet(times):
     )
 
 
-def _validate_6dof_trajectory(trajectory) -> dict[str, int | float]:
+def _validate_6dof_trajectory(trajectory) -> Validation:
     """Return stable physical checks for machine-readable 6-DoF results."""
     state = np.concatenate(
         (trajectory.r.ravel(), trajectory.v.ravel(), trajectory.q.ravel(), trajectory.omega.ravel())
@@ -749,14 +841,24 @@ def _validate_6dof_trajectory(trajectory) -> dict[str, int | float]:
     mass = getattr(trajectory, "mass", None)
     mass_residual = 0.0 if mass is None else float(max(0.0, -np.min(mass)))
     return {
-        "nfev": int(trajectory.nfev),
-        "finite_state_residual": 1.0 if np.any(~np.isfinite(state)) else 0.0,
-        "quaternion_norm_residual": quaternion_residual,
-        "negative_mass_residual": mass_residual,
+        "nfev": _validation_metric(
+            int(trajectory.nfev), "count", 0, "DOP853 reports a positive evaluation count.",
+            passed=trajectory.nfev > 0,
+        ),
+        "finite_state_residual": _validation_metric(
+            1.0 if np.any(~np.isfinite(state)) else 0.0,
+            "1", 0.0, "finite propagated 6-DoF state",
+        ),
+        "quaternion_norm_residual": _validation_metric(
+            quaternion_residual, "1", 1.0e-10, "unit quaternion norm",
+        ),
+        "negative_mass_residual": _validation_metric(
+            mass_residual, "kg", 0.0, "mass remains non-negative",
+        ),
     }
 
 
-def _validate_6dof_point_mass(trajectory) -> dict[str, int | float]:
+def _validate_6dof_point_mass(trajectory) -> Validation:
     """Add an independent two-body residual to the point-mass benchmark."""
     import rebound
 
@@ -780,9 +882,184 @@ def _validate_6dof_point_mass(trajectory) -> dict[str, int | float]:
     reference_r = np.array([particle.x, particle.y, particle.z])
     reference_v = np.array([particle.vx, particle.vy, particle.vz])
     metrics = _validate_6dof_trajectory(trajectory)
-    metrics["final_position_residual_m"] = float(np.linalg.norm(trajectory.r[-1] - reference_r))
-    metrics["final_velocity_residual_mps"] = float(np.linalg.norm(trajectory.v[-1] - reference_v))
+    metrics["final_position_residual_m"] = _validation_metric(
+        float(np.linalg.norm(trajectory.r[-1] - reference_r)),
+        "m", 1.0e-3, "REBOUND IAS15 two-body propagation",
+    )
+    metrics["final_velocity_residual_mps"] = _validation_metric(
+        float(np.linalg.norm(trajectory.v[-1] - reference_v)),
+        "m/s", 1.0e-6, "REBOUND IAS15 two-body propagation",
+    )
     return metrics
+
+
+def _propagator_two_body_invariants():
+    from ssapy_toolkit.constants import EARTH_MU
+    from ssapy_toolkit.propagators_orbit import propagate_orbit_state
+
+    radius = 7_000e3
+    speed = np.sqrt(EARTH_MU / radius)
+    period = 2.0 * np.pi * np.sqrt(radius**3 / EARTH_MU)
+    return propagate_orbit_state(
+        r0=[radius, 0.0, 0.0],
+        v0=[0.0, speed, 0.0],
+        times=np.linspace(0.0, 10.0 * period, 201),
+        rtol=1.0e-10,
+        atol=1.0e-8,
+        max_step=60.0,
+    )
+
+
+def _validate_two_body_invariants(trajectory) -> Validation:
+    from ssapy_toolkit.constants import EARTH_MU
+
+    specific_energy = 0.5 * np.sum(trajectory.v**2, axis=1) - EARTH_MU / np.linalg.norm(trajectory.r, axis=1)
+    angular_momentum = np.cross(trajectory.r, trajectory.v)
+    angular_momentum_scale = np.linalg.norm(angular_momentum[0])
+    return {
+        "specific_energy_residual": _validation_metric(
+            float(np.max(np.abs(specific_energy - specific_energy[0]))),
+            "J/kg", 2.0e-6, "analytic two-body specific energy",
+        ),
+        "angular_momentum_residual": _validation_metric(
+            float(np.max(np.linalg.norm(angular_momentum - angular_momentum[0], axis=1)) / angular_momentum_scale),
+            "1", 1.0e-12, "analytic two-body angular momentum magnitude",
+        ),
+    }
+
+
+def _propagator_j2_raan_drift():
+    from ssapy_toolkit.accelerations_6dof import SpacecraftAccelJ2
+    from ssapy_toolkit.constants import EARTH_MU
+    from ssapy_toolkit.orbital_mechanics import kepler_to_state
+    from ssapy_toolkit.propagators_6dof import propagate_6dof_high_accuracy
+
+    semimajor_axis = 7_000e3
+    eccentricity = 0.01
+    inclination = np.deg2rad(63.0)
+    r0, v0 = kepler_to_state(semimajor_axis, eccentricity, inclination, 0.2, 0.3, 0.1)
+    period = 2.0 * np.pi * np.sqrt(semimajor_axis**3 / EARTH_MU)
+    return propagate_6dof_high_accuracy(
+        r0=r0,
+        v0=v0,
+        times=np.linspace(0.0, 20.0 * period, 401),
+        inertia=np.eye(3),
+        acceleration=SpacecraftAccelJ2(),
+        max_step=120.0,
+    )
+
+
+def _raan(trajectory):
+    h = np.cross(trajectory.r, trajectory.v)
+    node = np.column_stack((-h[:, 1], h[:, 0]))
+    return np.unwrap(np.arctan2(node[:, 1], node[:, 0]))
+
+
+def _validate_j2_raan_drift(trajectory) -> Validation:
+    from ssapy_toolkit.constants import EARTH_MU, EARTH_RADIUS, J2_wgs
+
+    semimajor_axis = 7_000e3
+    eccentricity = 0.01
+    inclination = np.deg2rad(63.0)
+    rate = -1.5 * J2_wgs * np.sqrt(EARTH_MU / semimajor_axis**3)
+    rate *= (EARTH_RADIUS / (semimajor_axis * (1.0 - eccentricity**2))) ** 2 * np.cos(inclination)
+    actual_drift = _raan(trajectory)[-1] - _raan(trajectory)[0]
+    expected_drift = rate * (trajectory.t[-1] - trajectory.t[0])
+    return {
+        "raan_drift_residual": _validation_metric(
+            float(abs(actual_drift - expected_drift)), "rad", 3.0e-4,
+            "first-order secular J2 nodal-precession drift over 20 periods",
+        ),
+    }
+
+
+def _propagator_torque_free_invariants():
+    from ssapy_toolkit.propagators_6dof import propagate_6dof_high_accuracy
+
+    return propagate_6dof_high_accuracy(
+        r0=[0.0, 0.0, 0.0],
+        v0=[0.0, 0.0, 0.0],
+        times=np.linspace(0.0, 100.0, 101),
+        inertia=np.diag([2.0, 3.0, 4.0]),
+        q0=[1.0, 0.0, 0.0, 0.0],
+        omega0=[0.1, 0.2, 0.3],
+        mu=0.0,
+        max_step=1.0,
+    )
+
+
+def _validate_torque_free_invariants(trajectory) -> Validation:
+    from ssapy_toolkit.coordinates.attitude import rotate_vector
+
+    inertia = np.diag([2.0, 3.0, 4.0])
+    angular_momentum = np.array([
+        rotate_vector(q, inertia @ omega)
+        for q, omega in zip(trajectory.q, trajectory.omega)
+    ])
+    kinetic_energy = 0.5 * np.einsum("ij,jk,ik->i", trajectory.omega, inertia, trajectory.omega)
+    angular_momentum_scale = np.linalg.norm(angular_momentum[0])
+    return {
+        "angular_momentum_residual": _validation_metric(
+            float(np.max(np.linalg.norm(angular_momentum - angular_momentum[0], axis=1)) / angular_momentum_scale),
+            "1", 1.0e-9, "torque-free inertial angular-momentum invariant",
+        ),
+        "rotational_energy_residual": _validation_metric(
+            float(np.max(np.abs(kinetic_energy - kinetic_energy[0]))),
+            "J", 1.0e-10, "torque-free rotational-energy invariant",
+        ),
+    }
+
+
+def _propagator_finite_burn_analytic():
+    from ssapy_toolkit.accelerations_6dof import (
+        SpacecraftManeuverAccel,
+        integrated_thrust_impulse,
+        thrust_profile_constant,
+    )
+    from ssapy_toolkit.propagators_6dof import Spacecraft
+    from ssapy_toolkit.propagators_6dof import propagate_spacecraft_high_accuracy
+
+    profile = thrust_profile_constant(2.0, start=0.0, stop=10.0)
+    model = SpacecraftManeuverAccel(
+        profile, direction=[1.0, 0.0, 0.0], frame="inertial", isp=200.0,
+    )
+    spacecraft = Spacecraft(
+        r=[0.0, 0.0, 0.0], v=[0.0, 0.0, 0.0], inertia=np.eye(3), mass=10.0,
+    )
+    trajectory = propagate_spacecraft_high_accuracy(
+        spacecraft,
+        times=np.linspace(0.0, 10.0, 101), models=[model], mu=0.0,
+    )
+    return trajectory, integrated_thrust_impulse(profile, 0.0, 10.0)
+
+
+def _validate_finite_burn_analytic(trajectory) -> Validation:
+    from ssapy_toolkit.constants import STANDARD_GRAVITY
+
+    trajectory, measured_impulse = trajectory
+    thrust = 2.0
+    burn_time = 10.0
+    initial_mass = 10.0
+    isp = 200.0
+    mass_flow = thrust / (isp * STANDARD_GRAVITY)
+    expected_mass = initial_mass - mass_flow * burn_time
+    expected_impulse = thrust * burn_time
+    expected_delta_v = isp * STANDARD_GRAVITY * np.log(initial_mass / expected_mass)
+    actual_delta_v = float(np.linalg.norm(trajectory.v[-1] - trajectory.v[0]))
+    return {
+        "mass_residual": _validation_metric(
+            float(abs(trajectory.mass[-1] - expected_mass)), "kg", 1.0e-8,
+            "constant thrust / Isp mass-flow equation",
+        ),
+        "delta_v_residual": _validation_metric(
+            float(abs(actual_delta_v - expected_delta_v)), "m/s", 1.0e-8,
+            "Tsiolkovsky rocket equation",
+        ),
+        "impulse_residual": _validation_metric(
+            float(abs(measured_impulse - expected_impulse)),
+            "N s", 1.0e-8, "integrated_thrust_impulse(thrust_profile_constant)",
+        ),
+    }
 
 
 def _orbital_kepler_to_state(**kwargs):
@@ -847,6 +1124,18 @@ def _plot_orbit_xy(positions):
 
 # ---------------------------------------------------------------------------
 # Timing, statistics, and output helpers
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, (float, np.floating)) and not math.isfinite(value):
+        return None
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
 
 
 def _run_once(call: Callable[[], Any], *, quiet: bool = True) -> Any:
@@ -968,8 +1257,10 @@ def run_benchmark_case(
         peak_memory = _measure_peak_memory(call, quiet=quiet) if trace_memory else None
         values = _stats(samples)
         validation = None
+        validation_pass = None
         if case.validator is not None:
             validation = case.validator(_run_once(call, quiet=quiet))
+            validation_pass = _validation_passed(validation)
         return BenchmarkResult(
             name=case.name,
             group=case.group,
@@ -982,6 +1273,8 @@ def run_benchmark_case(
             total_sample_time_s=float(sum(samples) * loops),
             peak_memory_bytes=peak_memory,
             validation=validation,
+            validation_pass=validation_pass,
+            validation_settings=case.validation_settings or None,
             **values,
         )
     except Exception as exc:
@@ -997,6 +1290,7 @@ def run_benchmark_case(
             total_sample_time_s=0.0,
             error=f"{type(exc).__name__}: {exc}",
             traceback=traceback.format_exc(),
+            validation_settings=case.validation_settings or None,
         )
 
 
@@ -1051,6 +1345,9 @@ def default_output_dir() -> Path:
 
 
 def environment_metadata() -> dict[str, Any]:
+    import scipy
+    import ssapy
+
     return {
         "generated_utc": datetime.now(timezone.utc).isoformat(),
         "python": sys.version.replace("\n", " "),
@@ -1061,6 +1358,8 @@ def environment_metadata() -> dict[str, Any]:
         "node": platform.node(),
         "pid": os.getpid(),
         "ssapy_toolkit_version": __version__,
+        "ssapy_version": getattr(ssapy, "__version__", None),
+        "scipy_version": scipy.__version__,
         "numpy_version": np.__version__,
     }
 
@@ -1082,7 +1381,10 @@ def write_json(results: list[BenchmarkResult], metadata: dict[str, Any], path: P
         "metadata": metadata,
         "results": [result.as_dict() for result in results],
     }
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    path.write_text(
+        json.dumps(_json_safe(payload), allow_nan=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
     return path
 
 
@@ -1300,6 +1602,8 @@ def filter_cases(
 
 
 def _profile_flags(profile: str) -> tuple[bool, bool, bool]:
+    if profile == "validation":
+        return False, False, False
     if profile == "core":
         return False, False, False
     if profile == "standard":
@@ -1323,9 +1627,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--profile",
-        choices=("core", "standard", "full"),
+        choices=("core", "standard", "full", "validation"),
         default="standard",
-        help="Benchmark set to run: core excludes IO/plots; standard includes IO and plots; full adds slow cases.",
+        help="Benchmark set: core excludes IO/plots; standard includes IO/plots; full adds slow cases; validation runs four analytical cases.",
     )
     parser.add_argument("--include-io", action="store_true", help="Force-enable IO benchmarks.")
     parser.add_argument("--no-io", action="store_true", help="Disable IO benchmarks.")
@@ -1351,6 +1655,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--trace-memory", action="store_true", help="Run each case once with tracemalloc and report peak allocations.")
     parser.add_argument("--no-dashboard", action="store_true", help="Write CSV/JSON only; skip chart and HTML dashboard generation.")
     parser.add_argument("--fail-on-error", action="store_true", help="Return a nonzero exit code if any benchmark case fails.")
+    parser.add_argument("--fail-on-validation", action="store_true", help="Return a nonzero exit code if any validation metric fails.")
     parser.add_argument(
         "--quick",
         action="store_true",
@@ -1389,6 +1694,8 @@ def main(argv: list[str] | None = None) -> int:
         include_plots=include_plots,
         include_slow=include_slow,
     )
+    if args.profile == "validation":
+        cases = [case for case in cases if case.group == "validation"]
     cases = filter_cases(cases, groups=groups, pattern=args.pattern)
     if args.list:
         print(list_cases(cases))
@@ -1424,6 +1731,7 @@ def main(argv: list[str] | None = None) -> int:
         quiet=args.quiet,
         gc_disabled_during_timing=not args.keep_gc,
         trace_memory=args.trace_memory,
+        validation_gate=args.profile == "validation" or args.fail_on_validation,
     )
 
     csv_path = write_csv(results, output_dir / "benchmark_results.csv")
@@ -1443,6 +1751,7 @@ def main(argv: list[str] | None = None) -> int:
 
     ok = _successful(results)
     failed = [result for result in results if not result.success]
+    validation_failed = any(result.validation_pass is False for result in results)
     print(f"Completed {len(ok)}/{len(results)} benchmark cases successfully.")
     if ok:
         slowest = max(ok, key=lambda item: item.median_s or 0.0)
@@ -1457,7 +1766,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"JSON: {json_path}")
     if dashboard_path is not None:
         print(f"Dashboard: {dashboard_path}")
-    return 1 if failed and args.fail_on_error else 0
+    return 1 if (failed and (args.fail_on_error or args.profile == "validation")) or (
+        validation_failed and (args.fail_on_validation or args.profile == "validation")
+    ) else 0
 
 
 if __name__ == "__main__":  # pragma: no cover

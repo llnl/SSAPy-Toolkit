@@ -56,3 +56,15 @@ jobs:
             --min-hit-pct 90 \
             --min-branch-pct 65 \
             --require-branch-data
+
+      - name: Run analytical validation profile
+        if: matrix.python-version == '3.13'
+        run: python -m ssapy_toolkit.benchmark --profile validation --quick --no-dashboard --fail-on-validation --output-dir .ci-output/benchmark-validation
+
+      - name: Upload analytical validation results
+        if: always() && matrix.python-version == '3.13'
+        uses: actions/upload-artifact@v4
+        with:
+          name: analytical-validation-python-${{ matrix.python-version }}
+          path: .ci-output/benchmark-validation/benchmark_results.json
+          if-no-files-found: error

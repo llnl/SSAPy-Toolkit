@@ -1020,6 +1020,32 @@ should include:
 * final attitude residual for 6-DoF cases,
 * mass residual for finite-burn cases.
 
+Validation profile
+^^^^^^^^^^^^^^^^^^
+
+``ssatk-benchmark --profile validation`` runs the four analytical cases in the
+``validation`` registry group: two-body invariants, J2 nodal precession,
+torque-free rigid-body invariants, and finite-burn mass/delta-v/impulse. These
+cases retain timing output, but timing statistics never affect validation
+acceptance. The profile exits with status 1 for an execution failure or a
+failed validation metric. Use ``--fail-on-validation`` to apply the same gate
+to another profile.
+
+Each result contains a ``validation`` mapping whose metrics have the stable
+machine-readable schema ``value``, ``unit``, ``tolerance``, ``pass``, and
+``reference``. ``value`` is normally a residual compared with zero; the
+validator records any non-residual comparison explicitly in ``pass``. The
+result also contains ``validation_pass`` and, for analytical cases,
+``validation_settings`` with solver method, tolerances, and step limits. JSON
+metadata records the SSAPy and SciPy versions alongside the SSATK and NumPy
+versions.
+
+Continuous integration and release publishing run the reproducible gate as::
+
+   python -m ssapy_toolkit.benchmark --profile validation --quick --no-dashboard --fail-on-validation --output-dir .ci-output/benchmark-validation
+
+The resulting ``benchmark_results.json`` is retained as a workflow artifact.
+
 For SSATK, the first performance table should compare:
 
 * fixed-step RK4,

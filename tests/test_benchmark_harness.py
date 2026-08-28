@@ -1,11 +1,14 @@
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
 
 from ssapy_toolkit.constants import EARTH_MU
 from ssapy_toolkit.benchmark import (
+    BenchmarkCase,
     BenchmarkContext,
+    _validation_metric,
     build_benchmark_cases,
     filter_cases,
     main,
@@ -49,11 +52,16 @@ def test_benchmark_json_output(tmp_path):
         min_sample_time=0.0,
         max_loops=1,
     )
-    path = write_json(results, {"unit_test": True}, tmp_path / "benchmark_results.json")
+    path = write_json(
+        results,
+        {"unit_test": True, "nested": {"nonfinite": float("nan")}},
+        tmp_path / "benchmark_results.json",
+    )
 
     text = path.read_text(encoding="utf-8")
     assert "coordinates.cart2sph_deg_scalar" in text
     assert "unit_test" in text
+    assert json.loads(text)["metadata"]["nested"]["nonfinite"] is None
 
 
 def test_benchmark_registry_includes_6dof_propagation_speed_cases():
@@ -90,13 +98,101 @@ def test_6dof_benchmark_json_contains_validation_metrics(tmp_path):
     assert result["success"]
     assert result["median_s"] >= 0.0
     validation = result["validation"]
-    assert validation["nfev"] > 0
-    assert validation["finite_state_residual"] == 0.0
-    assert np.isfinite(validation["quaternion_norm_residual"])
-    assert validation["final_position_residual_m"] >= 0.0
-    assert np.isfinite(validation["final_position_residual_m"])
-    assert validation["final_velocity_residual_mps"] >= 0.0
-    assert np.isfinite(validation["final_velocity_residual_mps"])
+    assert result["validation_pass"] is True
+    for metric in validation.values():
+        assert set(metric) == {"value", "unit", "tolerance", "pass", "reference"}
+    assert validation["nfev"]["value"] > 0
+    assert validation["finite_state_residual"]["value"] == 0.0
+    assert np.isfinite(validation["quaternion_norm_residual"]["value"])
+    assert validation["final_position_residual_m"]["value"] >= 0.0
+    assert np.isfinite(validation["final_position_residual_m"]["value"])
+    assert validation["final_velocity_residual_mps"]["value"] >= 0.0
+    assert np.isfinite(validation["final_velocity_residual_mps"]["value"])
+
+
+def test_validation_profile_registry_contains_four_analytical_cases():
+    cases = build_benchmark_cases(include_io=False, include_plots=False, include_slow=False)
+    assert [case.name for case in cases if case.group == "validation"] == [
+        "validation.two_body_invariants",
+        "validation.j2_raan_drift",
+        "validation.torque_free_invariants",
+        "validation.finite_burn_mass_delta_v_impulse",
+    ]
+    assert all(case.validation_settings for case in cases if case.group == "validation")
+
+
+def test_validation_failure_has_machine_readable_schema_and_nonzero_cli_exit(monkeypatch, tmp_path):
+    from ssapy_toolkit import benchmark
+
+    failing = BenchmarkCase(
+        name="validation.synthetic_failure",
+        group="validation",
+        description="synthetic",
+        factory=lambda _ctx: lambda: object(),
+        validator=lambda _value: {
+            "residual": _validation_metric(2.0, "m", 1.0, "synthetic reference"),
+        },
+    )
+    nonvalidation = BenchmarkCase(
+        name="vectors.synthetic_ignored",
+        group="vectors",
+        description="synthetic",
+        factory=lambda _ctx: lambda: object(),
+    )
+    monkeypatch.setattr(benchmark, "build_benchmark_cases", lambda **_kwargs: [failing, nonvalidation])
+
+    exit_code = benchmark.main([
+        "--profile", "validation", "--quick", "--no-dashboard", "--output-dir", str(tmp_path),
+    ])
+
+    assert exit_code == 1
+    payload = json.loads((tmp_path / "benchmark_results.json").read_text(encoding="utf-8"))
+    assert [item["name"] for item in payload["results"]] == ["validation.synthetic_failure"]
+    metric = payload["results"][0]["validation"]["residual"]
+    assert metric == {
+        "value": 2.0,
+        "unit": "m",
+        "tolerance": 1.0,
+        "pass": False,
+        "reference": "synthetic reference",
+    }
+    assert payload["results"][0]["validation_pass"] is False
+
+    gated_exit_code = benchmark.main([
+        "--profile", "core", "--groups", "validation", "--fail-on-validation",
+        "--quick", "--no-dashboard", "--output-dir", str(tmp_path / "gated"),
+    ])
+    assert gated_exit_code == 1
+
+
+def test_analytical_validation_profile_passes(tmp_path):
+    assert main([
+        "--profile", "validation", "--quick", "--no-dashboard",
+        "--output-dir", str(tmp_path),
+    ]) == 0
+
+    payload = json.loads((tmp_path / "benchmark_results.json").read_text(encoding="utf-8"))
+    assert len(payload["results"]) == 4
+    assert all(result["validation_pass"] for result in payload["results"])
+    assert all(result["validation_settings"] for result in payload["results"])
+    assert payload["metadata"]["ssapy_version"]
+    assert payload["metadata"]["scipy_version"]
+
+
+def test_validation_profile_gates_ci_and_publishing():
+    root = Path(__file__).resolve().parents[1]
+    command = (
+        "python -m ssapy_toolkit.benchmark --profile validation --quick "
+        "--no-dashboard --fail-on-validation --output-dir .ci-output/benchmark-validation"
+    )
+    for workflow in ("ci.yml", "publish.yml"):
+        text = (root / ".github" / "workflows" / workflow).read_text(encoding="utf-8")
+        assert command in text
+        assert "actions/upload-artifact@v4" in text
+        assert ".ci-output/benchmark-validation/benchmark_results.json" in text
+
+    publish = (root / ".github" / "workflows" / "publish.yml").read_text(encoding="utf-8")
+    assert "needs: validate" in publish
 
 
 def test_benchmark_cli_quick_no_dashboard(tmp_path):
