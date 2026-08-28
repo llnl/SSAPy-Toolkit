@@ -3,8 +3,6 @@ import sys
 
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib import rcParams
-import imageio_ffmpeg
 
 from astropy.time import Time
 from ssapy import Orbit, rv, AccelKepler
@@ -28,9 +26,6 @@ def main(make_figures=None, make_video=None, fast=None):
         make_video = False
     if fast is None:
         fast = UNDER_PYTEST
-
-    if make_video:
-        rcParams["animation.ffmpeg_path"] = imageio_ffmpeg.get_ffmpeg_exe()
 
     t0 = Time("2025-1-15")
     r1 = [0, 3 * RGEO, 0]

@@ -12,8 +12,8 @@ Install in editable mode with development extras:
 
 Plotting installs the Python packages needed for HTML, image, and GIF outputs,
 including Plotly, Matplotlib, Pillow, Kaleido, imageio, and SSAPy-Data.
-Install ``ssapy-toolkit[video]`` for OpenCV MP4 output and
-``ssapy-toolkit[browser]`` for Selenium browser capture.
+Install ``ssapy-toolkit[video]`` for OpenCV MP4 output and a bundled FFmpeg
+fallback, and ``ssapy-toolkit[browser]`` for Selenium browser capture.
 Node.js 20+ is only needed for validating the JavaScript satellite-viewer source;
 GitHub Actions installs it with ``actions/setup-node``.
 

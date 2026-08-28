@@ -8,13 +8,14 @@ if str(ROOT) not in sys.path:
 
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation, FFMpegWriter, PillowWriter
+from matplotlib.animation import FuncAnimation, PillowWriter
 from ssapy import rv, Orbit
 from ssapy.propagator import default_numerical
 from astropy.time import Time
 
 from ssapy_toolkit.coordinates.lunar import get_lunar_rv
 from ssapy_toolkit.plots.figpath import figpath
+from ssapy_toolkit.plots.orbit_animation import _animation_writer
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 GALLERY_CATEGORY = "video_animation"
@@ -239,7 +240,7 @@ def orbit_moon_video_demo(
     )
 
     out_mp4 = figpath(out_name)
-    writer = FFMpegWriter(fps=fps, bitrate=8000)
+    writer = _animation_writer(".mp4", fps=fps, bitrate=8000)
     ani.save(out_mp4, writer=writer)
     print(f"Saved MP4: {out_mp4}")
 

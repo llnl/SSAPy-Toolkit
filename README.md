@@ -84,8 +84,8 @@ This installs the package in editable mode along with development dependencies
 (testing, linting, docs tools, JavaScript validation helpers, etc.). Runtime
 plotting dependencies support HTML, image, and GIF output through Plotly,
 Matplotlib, Pillow, Kaleido, imageio, and SSAPy-Data assets. Install
-`ssapy-toolkit[video]` for OpenCV MP4 output and `ssapy-toolkit[browser]` for
-Selenium browser capture. Node.js 20+ is used only to validate the
+`ssapy-toolkit[video]` for OpenCV MP4 output and a bundled FFmpeg fallback, and
+`ssapy-toolkit[browser]` for Selenium browser capture. Node.js 20+ is used only to validate the
 self-contained JavaScript viewer sources; GitHub Actions installs it with
 `actions/setup-node`, and local developers can use system Node.js or `nodeenv`.
 
