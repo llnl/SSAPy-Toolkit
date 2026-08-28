@@ -146,27 +146,43 @@ def propagate_spacecraft_segments(spacecraft, segments, **defaults):
     preserve_boundaries = []
     current = spacecraft
     for segment in segments:
-        options = dict(segment)
-        if "times" not in options:
-            raise ValueError("each segment must define times.")
-        times = np.asarray(options["times"], dtype=float)
-        if times.ndim != 1 or times.size < 2:
-            raise ValueError("each segment times must be a 1-D array with at least two entries.")
-        if not np.isclose(times[0], current.t):
-            raise ValueError("each segment must start at the current spacecraft epoch.")
-        impulses = options.pop("impulses", ())
-        if isinstance(impulses, ImpulseManeuver):
-            impulses = (impulses,)
-        for impulse in impulses:
-            if not isinstance(impulse, ImpulseManeuver):
-                raise TypeError("impulses must contain ImpulseManeuver objects.")
-            current = impulse.apply(current)
-        preserve_boundaries.append(bool(impulses))
-        if tracks_mass:
-            options.setdefault("mass0", current.mass)
-        trajectory = propagate_spacecraft_high_accuracy(current, **options)
+        trajectory, current, has_impulses = _propagate_spacecraft_segment(
+            current, segment, tracks_mass=tracks_mass
+        )
         trajectories.append(trajectory)
-        current = trajectory.spacecraft(
+        preserve_boundaries.append(has_impulses)
+        if trajectory.status == 1:
+            break
+    if not trajectories:
+        raise ValueError("segments must contain at least one segment.")
+    return _combine_trajectories(trajectories, preserve_boundaries)
+
+
+def _propagate_spacecraft_segment(spacecraft, segment, *, tracks_mass=False):
+    """Propagate one segment from its pre-impulse spacecraft state."""
+
+    options = dict(segment)
+    if "times" not in options:
+        raise ValueError("each segment must define times.")
+    times = np.asarray(options["times"], dtype=float)
+    if times.ndim != 1 or times.size < 2:
+        raise ValueError("each segment times must be a 1-D array with at least two entries.")
+    if not np.isclose(times[0], spacecraft.t):
+        raise ValueError("each segment must start at the current spacecraft epoch.")
+    impulses = options.pop("impulses", ())
+    if isinstance(impulses, ImpulseManeuver):
+        impulses = (impulses,)
+    current = spacecraft
+    for impulse in impulses:
+        if not isinstance(impulse, ImpulseManeuver):
+            raise TypeError("impulses must contain ImpulseManeuver objects.")
+        current = impulse.apply(current)
+    if tracks_mass:
+        options.setdefault("mass0", current.mass)
+    trajectory = propagate_spacecraft_high_accuracy(current, **options)
+    return (
+        trajectory,
+        trajectory.spacecraft(
             inertia=current.inertia,
             mass=current.mass if trajectory.mass is None else None,
             area=current.area,
@@ -174,12 +190,9 @@ def propagate_spacecraft_segments(spacecraft, segments, **defaults):
             cr=current.cr,
             center_of_pressure=current.center_of_pressure,
             body=current.body,
-        )
-        if trajectory.status == 1:
-            break
-    if not trajectories:
-        raise ValueError("segments must contain at least one segment.")
-    return _combine_trajectories(trajectories, preserve_boundaries)
+        ),
+        bool(impulses),
+    )
 
 
 def _spacecraft_physical_kwargs(spacecraft) -> dict:
