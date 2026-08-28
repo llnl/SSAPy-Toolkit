@@ -91,6 +91,8 @@ Matplotlib, Pillow, imageio, and SSAPy-Data assets. Install
 `ssapy-toolkit[browser]` for Selenium browser capture. Node.js 20+ is used only to validate the
 self-contained JavaScript viewer sources; GitHub Actions installs it with
 `actions/setup-node`, and local developers can use system Node.js or `nodeenv`.
+Install `ssapy-toolkit[monitoring]` to enable the optional current-process RSS
+memory helper.
 
 SSAPy Toolkit builds on SSAPy; see the
 [SSAPy](https://github.com/llnl/SSAPy) repository for its installation details.

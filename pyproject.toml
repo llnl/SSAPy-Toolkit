@@ -40,13 +40,16 @@ dependencies = [
   "pandas",
   "pillow",
   "plotly",
-  "psutil",
   "pyerfa",
   "rebound",
   "scipy",
 ]
 
 [project.optional-dependencies]
+monitoring = [
+  "psutil",
+]
+
 notebook = [
   "ipython",
   "ipyvolume",
@@ -96,6 +99,7 @@ dev = [
   "imageio-ffmpeg",
   "opencv-python",
   "pypdf",
+  "psutil",
   "ruff",
   "selenium",
   "build",

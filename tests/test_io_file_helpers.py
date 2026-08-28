@@ -1,6 +1,7 @@
 import csv
 import importlib
 import json
+import sys
 import types
 from datetime import datetime
 from pathlib import Path
@@ -278,10 +279,29 @@ def test_pickle_and_memory_helpers_roundtrip(tmp_path, monkeypatch):
         def memory_info(self):
             return FakeMemoryInfo()
 
-    monkeypatch.setattr(get_memory, "Process", FakeProcess)
+    monkeypatch.setitem(sys.modules, "psutil", types.SimpleNamespace(Process=FakeProcess))
     monkeypatch.setattr(get_memory.os, "getpid", lambda: 123)
 
     assert get_memory.get_memory_usage() == "Memory used: 2.00 GB"
+
+
+def test_memory_helper_without_psutil(monkeypatch):
+    monkeypatch.setitem(sys.modules, "psutil", None)
+
+    assert get_memory.get_memory_usage() == (
+        "Memory usage unavailable; install ssapy-toolkit[monitoring] to enable it."
+    )
+
+
+def test_append_csv_does_not_need_psutil(tmp_path, monkeypatch):
+    source = tmp_path / "source.csv"
+    output = tmp_path / "output.csv"
+    source.write_text("x\n1\n", encoding="utf-8")
+    monkeypatch.setitem(sys.modules, "psutil", None)
+
+    csv_utils.append_csv([source], save_path=output, progress=lambda: None)
+
+    assert output.read_text(encoding="utf-8") == "x\n1\n"
 
 
 def test_io_utils_directory_branches_and_numbered_image_sort(tmp_path, monkeypatch, capsys):
