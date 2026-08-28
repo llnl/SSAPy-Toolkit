@@ -8,11 +8,13 @@ not an implementation of Patera's published algorithm.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from itertools import pairwise
 
 import numpy as np
 from scipy.integrate import quad
+from scipy.spatial import cKDTree
 
 
 @dataclass(frozen=True)
@@ -91,6 +93,15 @@ class ClosestApproach:
 
 
 @dataclass(frozen=True)
+class CatalogConjunctionEvent:
+    """A refined conjunction for an ordered pair of catalog object IDs."""
+
+    object_id_a: object
+    object_id_b: object
+    closest_approach: ClosestApproach
+
+
+@dataclass(frozen=True)
 class _Trajectory:
     t: np.ndarray
     r: np.ndarray
@@ -158,6 +169,27 @@ def _scalar_nonnegative(value, name):
     return value
 
 
+def _linear_candidate(first, second, start, end, threshold):
+    relative_start = _linear_position(second, start) - _linear_position(first, start)
+    relative_end = _linear_position(second, end) - _linear_position(first, end)
+    if end == start:
+        minimum_time = start
+        minimum = float(np.linalg.norm(relative_start))
+    else:
+        relative_velocity = (relative_end - relative_start) / (end - start)
+        speed_squared = float(np.dot(relative_velocity, relative_velocity))
+        tau = 0.0 if speed_squared == 0.0 else np.clip(
+            -float(np.dot(relative_start, relative_velocity)) / speed_squared,
+            0.0,
+            end - start,
+        )
+        minimum_time = start + tau
+        minimum = float(np.linalg.norm(relative_start + tau * relative_velocity))
+    if minimum <= threshold:
+        return ConjunctionCandidate(start, end, minimum_time, minimum)
+    return None
+
+
 def coarse_conjunction_screen(
     trajectory_a,
     trajectory_b,
@@ -174,25 +206,13 @@ def coarse_conjunction_screen(
     first, second = _trajectory(trajectory_a), _trajectory(trajectory_b)
     grid = _time_grid(first, second)
     if grid.size == 1:
-        relative = _linear_position(second, grid[0]) - _linear_position(first, grid[0])
-        distance = float(np.linalg.norm(relative))
-        if distance <= threshold:
-            return (ConjunctionCandidate(grid[0], grid[0], grid[0], distance),)
-        return ()
+        candidate = _linear_candidate(first, second, grid[0], grid[0], threshold)
+        return () if candidate is None else (candidate,)
     candidates = []
     for start, end in pairwise(grid):
-        relative_start = _linear_position(second, start) - _linear_position(first, start)
-        relative_end = _linear_position(second, end) - _linear_position(first, end)
-        relative_velocity = (relative_end - relative_start) / (end - start)
-        speed_squared = float(np.dot(relative_velocity, relative_velocity))
-        tau = 0.0 if speed_squared == 0.0 else np.clip(
-            -float(np.dot(relative_start, relative_velocity)) / speed_squared,
-            0.0,
-            end - start,
-        )
-        minimum = float(np.linalg.norm(relative_start + tau * relative_velocity))
-        if minimum <= threshold:
-            candidates.append(ConjunctionCandidate(start, end, start + tau, minimum))
+        candidate = _linear_candidate(first, second, start, end, threshold)
+        if candidate is not None:
+            candidates.append(candidate)
     return tuple(candidates)
 
 
@@ -280,6 +300,76 @@ def refine_closest_approach(
     tca = min(candidates, key=objective)
     relative_position, relative_velocity = state(tca)
     return ClosestApproach(tca, float(np.linalg.norm(relative_position)), relative_position, relative_velocity, bounds)
+
+
+def catalog_conjunction_screen(
+    catalog: Mapping,
+    threshold,
+    *,
+    xatol: float = 1.0e-9,
+) -> tuple[CatalogConjunctionEvent, ...]:
+    """Return refined conjunctions from an insertion-ordered trajectory mapping.
+
+    Object pairs retain mapping insertion order: the first ID is object A and
+    the second is B, so each event uses the existing B-minus-A convention.
+    Results are ordered by that pair order and then TCA. Adjacent qualifying
+    brackets are one event when the pair remains within ``threshold`` at their
+    shared boundary.
+    """
+
+    threshold = _scalar_nonnegative(threshold, "threshold")
+    xatol = float(xatol)
+    if not np.isfinite(xatol) or xatol <= 0.0:
+        raise ValueError("xatol must be finite and positive.")
+    if not isinstance(catalog, Mapping):
+        raise TypeError("catalog must be a mapping of object IDs to trajectories.")
+    items = tuple((object_id, _trajectory(trajectory)) for object_id, trajectory in catalog.items())
+    if len(items) < 2:
+        return ()
+
+    segment_objects = np.concatenate(
+        [np.full(trajectory.t.size - 1, index, dtype=int) for index, (_, trajectory) in enumerate(items)]
+    )
+    segment_starts = np.concatenate([trajectory.t[:-1] for _, trajectory in items])
+    segment_ends = np.concatenate([trajectory.t[1:] for _, trajectory in items])
+    position_starts = np.concatenate([trajectory.r[:-1] for _, trajectory in items])
+    position_ends = np.concatenate([trajectory.r[1:] for _, trajectory in items])
+    centers = 0.5 * (position_starts + position_ends)
+    radii = 0.5 * np.linalg.norm(position_ends - position_starts, axis=1)
+    segment_pairs = cKDTree(centers).query_pairs(
+        threshold + 2.0 * float(np.max(radii)), output_type="ndarray"
+    )
+    candidates_by_pair = {}
+    for segment_a, segment_b in segment_pairs:
+        first, second = sorted((segment_objects[segment_a], segment_objects[segment_b]))
+        if first == second:
+            continue
+        start = max(segment_starts[segment_a], segment_starts[segment_b])
+        end = min(segment_ends[segment_a], segment_ends[segment_b])
+        if end < start or np.linalg.norm(centers[segment_a] - centers[segment_b]) > (
+            radii[segment_a] + radii[segment_b] + threshold
+        ):
+            continue
+        candidate = _linear_candidate(items[first][1], items[second][1], start, end, threshold)
+        if candidate is not None:
+            candidates_by_pair.setdefault((first, second), []).append(candidate)
+
+    events = []
+    for (first, second), candidates in sorted(candidates_by_pair.items()):
+        brackets = []
+        for candidate in sorted(candidates, key=lambda value: value.bracket):
+            if brackets and candidate.t_start <= brackets[-1][1]:
+                position_a, _ = _hermite_state(items[first][1], candidate.t_start)
+                position_b, _ = _hermite_state(items[second][1], candidate.t_start)
+                if np.linalg.norm(position_b - position_a) <= threshold:
+                    brackets[-1] = (brackets[-1][0], max(brackets[-1][1], candidate.t_end))
+                    continue
+            brackets.append(candidate.bracket)
+        for bracket in brackets:
+            closest = refine_closest_approach(items[first][1], items[second][1], bracket, xatol=xatol)
+            if closest.miss_distance <= threshold:
+                events.append(CatalogConjunctionEvent(items[first][0], items[second][0], closest))
+    return tuple(events)
 
 
 def encounter_frame(relative_position, relative_velocity, *, speed_tolerance: float = 0.0) -> np.ndarray:
@@ -405,8 +495,10 @@ def probability_of_collision(
 
 
 __all__ = [
+    "CatalogConjunctionEvent",
     "ClosestApproach",
     "ConjunctionCandidate",
+    "catalog_conjunction_screen",
     "coarse_conjunction_screen",
     "encounter_frame",
     "probability_of_collision",

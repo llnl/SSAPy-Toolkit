@@ -5,8 +5,10 @@ import pytest
 from scipy.stats import ncx2
 
 from ssapy_toolkit.ssa import (
+    CatalogConjunctionEvent,
     ClosestApproach,
     ConjunctionCandidate,
+    catalog_conjunction_screen,
     coarse_conjunction_screen,
     encounter_frame,
     probability_of_collision,
@@ -143,6 +145,74 @@ def test_candidate_validation():
         ConjunctionCandidate(0.0, 1.0, 2.0, 0.0)
     with pytest.raises(ValueError, match="nonnegative"):
         ConjunctionCandidate(0.0, 1.0, 0.5, -1.0)
+
+
+def test_catalog_screen_uses_union_intervals_and_deduplicates_boundary_event():
+    catalog = {
+        "alpha": _trajectory([0.0, 2.0], [[0, 0, 0], [0, 0, 0]], [[0, 0, 0]] * 2),
+        "beta": _trajectory(
+            [0.0, 1.0, 2.0], [[2, 0, 0], [0, 0, 0], [2, 0, 0]], [[-2, 0, 0], [0, 0, 0], [2, 0, 0]]
+        ),
+    }
+    events = catalog_conjunction_screen(catalog, 0.01)
+    assert isinstance(events, tuple)
+    assert len(events) == 1
+    event = events[0]
+    assert isinstance(event, CatalogConjunctionEvent)
+    assert (event.object_id_a, event.object_id_b) == ("alpha", "beta")
+    assert event.closest_approach.tca == pytest.approx(1.0)
+    np.testing.assert_allclose(event.closest_approach.relative_position, 0.0, atol=1e-8)
+    with pytest.raises(AttributeError):
+        event.object_id_a = "changed"
+
+    continuous = {
+        "alpha": _trajectory([0.0, 1.0, 2.0], [[0, 0, 0]] * 3),
+        "beta": _trajectory([0.0, 1.0, 2.0], [[0.5, 0, 0]] * 3),
+    }
+    continuous_events = catalog_conjunction_screen(continuous, 1.0)
+    assert len(continuous_events) == 1
+    assert continuous_events[0].closest_approach.bracket == (0.0, 2.0)
+
+
+def test_catalog_screen_sparse_filtering_and_deterministic_pair_order(monkeypatch):
+    from ssapy_toolkit.ssa import conjunction
+
+    original = conjunction._linear_candidate
+    calls = 0
+
+    def counted(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(conjunction, "_linear_candidate", counted)
+    catalog = {
+        object_id: _trajectory([0.0, 1.0], [[position, 0, 0], [position, 0, 0]])
+        for object_id, position in [("a", 0.0), ("b", 0.5)] + [(f"far-{i}", 1000.0 * i) for i in range(1, 65)]
+    }
+    events = catalog_conjunction_screen(catalog, 1.0)
+    assert [(event.object_id_a, event.object_id_b) for event in events] == [("a", "b")]
+    assert calls == 1
+
+    ordered = {
+        "third": _trajectory([0.0, 1.0], [[0.4, 0, 0], [0.4, 0, 0]]),
+        "first": _trajectory([0.0, 1.0], [[0.0, 0, 0], [0.0, 0, 0]]),
+        "second": _trajectory([0.0, 1.0], [[0.2, 0, 0], [0.2, 0, 0]]),
+    }
+    assert [(event.object_id_a, event.object_id_b) for event in catalog_conjunction_screen(ordered, 1.0)] == [
+        ("third", "first"),
+        ("third", "second"),
+        ("first", "second"),
+    ]
+
+
+def test_catalog_screen_validation():
+    with pytest.raises(TypeError, match="mapping"):
+        catalog_conjunction_screen([], 1.0)
+    with pytest.raises(ValueError, match="positive"):
+        catalog_conjunction_screen({}, 1.0, xatol=0.0)
+    with pytest.raises(ValueError, match="shape"):
+        catalog_conjunction_screen({"a": SimpleNamespace(t=[0, 1], r=[[0, 0]], v=[[0, 0, 0]]), "b": _trajectory([0, 1], [[0, 0, 0], [0, 0, 0]])}, 1.0)
 
 
 def test_probability_centered_offset_and_anisotropic_rotation():

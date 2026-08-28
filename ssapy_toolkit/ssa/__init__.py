@@ -1,8 +1,10 @@
 """Space-situational-awareness screening and conjunction utilities."""
 
 from .conjunction import (
+    CatalogConjunctionEvent,
     ClosestApproach,
     ConjunctionCandidate,
+    catalog_conjunction_screen,
     coarse_conjunction_screen,
     encounter_frame,
     probability_of_collision,
@@ -11,8 +13,10 @@ from .conjunction import (
 )
 
 __all__ = [
+    "CatalogConjunctionEvent",
     "ClosestApproach",
     "ConjunctionCandidate",
+    "catalog_conjunction_screen",
     "coarse_conjunction_screen",
     "encounter_frame",
     "probability_of_collision",
