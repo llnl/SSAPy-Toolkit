@@ -20,6 +20,35 @@ fallback, and ``ssapy-toolkit[browser]`` for Selenium browser capture.
 Node.js 20+ is only needed for validating the JavaScript satellite-viewer source;
 GitHub Actions installs it with ``actions/setup-node``.
 
+Migrating from 1.x
+------------------
+
+Version 2 reorganizes modules around their physical role. Replace
+``accelerations`` with ``accelerations_orbit`` or ``accelerations_6dof``;
+replace ``integrators`` with ``propagators_orbit`` or ``propagators_6dof``;
+use ``ssapy_wrappers.quick_int`` for the former ``integrators.quick_int``;
+use ``engines.fuel_usage.estimate_fuel_usage`` for the former
+``integrators.fuel.estimate_fuel_usage``; and replace ``rockets`` and
+``launch_pads`` with ``engines`` and ``launch``. The replacement fuel estimator
+requires ``engine`` and ``initial_mass_kg`` as keyword arguments and uses
+standard gravity ``g0`` rather than local ``EARTH_MU / r²``.
+``rockets.rescale_burn`` is now ``engines.rescale_burn``. The former
+``rockets.fuel.estimate_fuel_for_accel_ntw_burn`` and
+``mass_profile_for_accel_ntw_burn`` helpers have no direct replacement; use
+6-DoF tank/mass propagation or the engine-catalog fuel utilities.
+Coordinate transforms are grouped below :mod:`ssapy_toolkit.coordinates`.
+For former ``accelerations.accel_deltav*`` calls, use
+:func:`ssapy_toolkit.orbital_mechanics.calculate_finite_burn_acceleration` for
+vector/duration calculations or
+:func:`ssapy_toolkit.orbital_mechanics.deltav_to_burn` for orbit burn
+workflows.
+The former ``orbit_plot_xy*`` and ``cislunar_*`` plotting modules are view
+selectors on :func:`ssapy_toolkit.plots.orbit_plot`. The former
+``transfer_coplanar``, ``transfer_lambertian``, and ``transfer_shooter``
+wrappers are replaced by ``transfer_ssapy``, ``transfer_optimal``, and the
+named transfer solvers. Root wildcard imports are unsupported; use
+``import ssapy_toolkit as ssatk`` or explicit imports.
+
 Basic Example
 -------------
 
@@ -95,6 +124,27 @@ Earth/Moon helpers formerly provided by ``ssapy.plotUtils`` are available as
 ``ssatk.load_moon_file``.
 Wildcard imports are intentionally unsupported; use ``import ssapy_toolkit as
 ssatk`` or import individual names explicitly.
+
+CCSDS conjunction messages
+---------------------------
+
+Read and write CCSDS 508.0-B-1 Conjunction Data Message (CDM) KVN 1.0 files
+with :func:`ssapy_toolkit.io.ccsds_cdm.read_cdm` and
+:func:`ssapy_toolkit.io.ccsds_cdm.write_cdm`:
+
+.. code-block:: python
+
+   from ssapy_toolkit.io.ccsds_cdm import read_cdm, write_cdm
+
+   cdm = read_cdm("conjunction.cdm")
+   object1_gcrf = cdm.object1.state_gcrf()
+   write_cdm(cdm, "canonical.cdm")
+
+States and covariances use SI units in memory. The KVN reader accepts calendar
+or ordinal Coordinated Universal Time (UTC), ``GCRF``, ``EME2000``, and
+``ITRF`` state frames, and the mandatory RTN covariance plus complete optional
+drag, solar-radiation-pressure, and thrust rows. Alternate XYZ covariance
+extensions from later message specifications are rejected explicitly.
 
 Satellite operation frames
 --------------------------

@@ -59,9 +59,9 @@ GMAT, Orekit, STK, or FreeFlyer:
   controller.
 - **Launch & propulsion** — launch-pad definitions, gravity-turn ascent,
   engine catalogs, thrust profiles, and fuel/burn utilities.
-- **Data I/O** — HDF5 helpers (including dictionary/HDF5 conversion with array
-  handling and selective key loading), plus CSV, JSON, XML, and pickle I/O, and
-  TLE/3LE parsing.
+- **Data I/O** — CCSDS CDM KVN 1.0 and OMM XML 2.0 interoperability, HDF5
+  helpers (including dictionary/HDF5 conversion with array handling and
+  selective key loading), plus CSV, JSON, XML, pickle, and TLE/3LE parsing.
 - **SSAPy wrappers & HPC helpers** — convenience wrappers around SSAPy orbits,
   propagators, and satellite keyword arguments, plus utilities for HPC
   workflows.
@@ -93,6 +93,35 @@ self-contained JavaScript viewer sources; GitHub Actions installs it with
 
 SSAPy Toolkit builds on SSAPy; see the
 [SSAPy](https://github.com/llnl/SSAPy) repository for its installation details.
+
+---
+
+## Migrating from 1.x
+
+Version 2 reorganizes modules around their physical role. Existing calls may
+keep importing public functions from package namespaces, while direct imports
+from old leaf modules must change:
+
+| 1.x module path | 2.x replacement |
+| --- | --- |
+| `ssapy_toolkit.accelerations` | `ssapy_toolkit.accelerations_orbit` or `ssapy_toolkit.accelerations_6dof` |
+| `accelerations.accel_deltav*` | `orbital_mechanics.calculate_finite_burn_acceleration` for vector/duration calculations or `orbital_mechanics.deltav_to_burn` for orbit burn workflows |
+| `ssapy_toolkit.integrators` | `ssapy_toolkit.propagators_orbit` or `ssapy_toolkit.propagators_6dof` |
+| `ssapy_toolkit.integrators.quick_int` | `ssapy_toolkit.ssapy_wrappers.quick_int` |
+| `integrators.fuel.estimate_fuel_usage` | `engines.fuel_usage.estimate_fuel_usage` |
+| `ssapy_toolkit.rockets` | `ssapy_toolkit.engines` and `ssapy_toolkit.launch` |
+| `ssapy_toolkit.rockets.rescale_burn` | `ssapy_toolkit.engines.rescale_burn` |
+| `rockets.fuel.estimate_fuel_for_accel_ntw_burn` and `mass_profile_for_accel_ntw_burn` | No direct replacement; use 6-DoF tank/mass propagation or engine-catalog fuel utilities |
+| `ssapy_toolkit.launch_pads` | `ssapy_toolkit.launch.sites` |
+| individual coordinate-transform modules | grouped modules under `ssapy_toolkit.coordinates` |
+| `plots.orbit_plot_xy*` and `plots.cislunar_*` | `ssapy_toolkit.plots.orbit_plot(..., view=...)` |
+| `transfer_coplanar`, `transfer_lambertian`, and `transfer_shooter` | `transfer_ssapy`, `transfer_optimal`, or a named transfer solver |
+
+Wildcard imports from the package root are no longer supported. Use
+`import ssapy_toolkit as ssatk` or explicit imports.
+The replacement `engines.fuel_usage.estimate_fuel_usage` requires `engine` and
+`initial_mass_kg` as keyword arguments and uses standard gravity `g0`; the 1.x
+helper inferred fuel use from local `EARTH_MU / r²`.
 
 ---
 
@@ -130,6 +159,21 @@ as `ssapy_toolkit.ssapy` when direct SSAPy module access is needed.
 Earth/Moon helpers formerly provided by `ssapy.plotUtils` are available as
 `ssapy_toolkit.draw_earth`, `draw_moon`, `load_earth_file`, and
 `load_moon_file`.
+
+CCSDS Conjunction Data Message (CDM) KVN 1.0 files use SI values in memory:
+
+```python
+from ssapy_toolkit.io.ccsds_cdm import read_cdm, write_cdm
+
+cdm = read_cdm("conjunction.cdm")
+object1_gcrf = cdm.object1.state_gcrf()
+write_cdm(cdm, "canonical.cdm")
+```
+
+The reader accepts calendar or ordinal Coordinated Universal Time (UTC), all
+three CDM 1.0 state frames (`GCRF`, `EME2000`, and `ITRF`), and the mandatory
+RTN covariance plus complete optional drag, solar-radiation-pressure, and
+thrust rows. Later alternate-covariance extensions are rejected explicitly.
 
 For workflow functions, import the specific Toolkit module you need:
 

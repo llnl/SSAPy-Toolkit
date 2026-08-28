@@ -6,7 +6,7 @@
     "codeRepository": "https://github.com/llnl/SSAPy-Toolkit",
     "url": "https://github.com/llnl/SSAPy-Toolkit",
     "license": "https://spdx.org/licenses/BSD-3-Clause",
-    "version": "1.0.5",
+    "version": "2.0.0",
     "programmingLanguage": "Python",
     "creator": {
         "@type": "Person",
