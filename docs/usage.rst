@@ -412,7 +412,9 @@ For linearized appendage and propellant-slosh states, use
 :func:`ssapy_toolkit.propagators_6dof.propagate_6dof_extended` with
 ``HingedAppendage``, ``FlexibleMode``, and ``SloshMode``. These models are
 linear reduced-order couplings, not finite-element or computational-fluid-
-dynamics replacements.
+dynamics replacements. Each mode argument may be one mode or a sequence;
+single-mode results retain shape ``(samples, 2)`` and multi-mode results use
+``(samples, 2, modes)``.
 ``SpaceEnvironment.force_models(...)`` can assemble environment-backed drag,
 solar-radiation pressure, magnetic torque, and named third-body perturbations
 such as ``third_bodies=("moon", "sun")``. Use ``third_bodies=True`` for

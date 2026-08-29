@@ -25,6 +25,26 @@ def test_extended_modes_propagate_and_couple_to_rigid_body():
     np.testing.assert_allclose(np.linalg.norm(result.trajectory.q, axis=1), 1.0, atol=1e-12)
 
 
+def test_extended_modes_accept_multiple_modes_per_category():
+    result = propagate_6dof_extended(
+        times=np.linspace(0, 0.1, 3), inertia=np.eye(3), mu=0,
+        r0=[7e6, 0, 0], v0=[0, 7500, 0], q0=[1, 0, 0, 0], bus_mass=10,
+        hinge=(
+            HingedAppendage([0, 0, 1], 1, stiffness=2, angle0=0.1),
+            HingedAppendage([0, 1, 0], 2, stiffness=3, angle0=-0.2),
+        ),
+        flexible=[
+            FlexibleMode([1, 0, 0], 1, 3, displacement0=0.1),
+            FlexibleMode([0, 1, 0], 2, 4, displacement0=-0.1),
+        ],
+        slosh=(SloshMode([1, 0, 0], 1, 2, displacement0=0.1),),
+    )
+
+    assert result.hinge.shape == (3, 2, 2)
+    assert result.flexible.shape == (3, 2, 2)
+    assert result.slosh.shape == (3, 2)
+
+
 def test_extended_modes_reject_invalid_coupling():
     with pytest.raises(ValueError):
         HingedAppendage([0, 0, 0], 1)

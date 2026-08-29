@@ -39,6 +39,15 @@ def _vec(value, name):
     return value
 
 
+def _modes(value, mode_type, name):
+    if value is None:
+        return ()
+    modes = value if isinstance(value, (tuple, list)) else (value,)
+    if not all(isinstance(mode, mode_type) for mode in modes):
+        raise TypeError(f"{name} must contain only {mode_type.__name__} instances.")
+    return tuple(modes)
+
+
 @dataclass(frozen=True)
 class HingedAppendage:
     """Reduced-order hinged appendage with linear and optional cubic stiffness."""
@@ -128,53 +137,65 @@ def propagate_6dof_extended(*, times, inertia, hinge=None, flexible=None, slosh=
                             mass0=None, mu=EARTH_MU, acceleration=None, torque=None,
                             gravity_gradient=False, rtol=1e-9, atol=1e-12, method="DOP853",
                             max_step=np.inf, first_step=None):
-    """Propagate rigid-body state plus one each of hinge, flexible, and slosh modes.
+    """Propagate rigid-body state plus hinge, flexible, and slosh modes.
 
-    Extended arrays have columns ``[coordinate, rate]`` and are optional. Slosh
-    coupling is the linear restoring force ``m*w²*x`` at ``lever_arm_body``.
+    Each mode argument may be one mode or a sequence of modes. Extended arrays
+    have columns ``[coordinate, rate]`` for one mode, or shape ``(samples, 2,
+    modes)`` for multiple modes. Slosh coupling is the linear restoring force
+    ``m*w²*x`` at ``lever_arm_body``.
     ``HingedAppendage.cubic_stiffness`` adds the restoring torque
     ``cubic_stiffness * angle**3`` in N m, and defaults to zero.
     """
     times = _times(times)
-    if sum(x is not None for x in (hinge, flexible, slosh)) == 0:
+    hinges = _modes(hinge, HingedAppendage, "hinge")
+    flexibles = _modes(flexible, FlexibleMode, "flexible")
+    sloshes = _modes(slosh, SloshMode, "slosh")
+    if not (hinges or flexibles or sloshes):
         raise ValueError("at least one extended mode is required.")
-    if slosh is not None:
+    if sloshes:
         bus_mass = float(bus_mass) if bus_mass is not None else 0.0
         if not np.isfinite(bus_mass) or bus_mass <= 0:
             raise ValueError("positive bus_mass is required for slosh force coupling.")
     state = _initial_state(orbit0=None, r0=r0, v0=v0, t0=t0, q0=q0, omega0=omega0, mass0=mass0)
     _validate_time_direction(times, state.t)
     ext0 = []
-    if hinge is not None: ext0 += [hinge.angle0, hinge.rate0]
-    if flexible is not None: ext0 += [flexible.displacement0, flexible.velocity0]
-    if slosh is not None: ext0 += [slosh.displacement0, slosh.velocity0]
+    for mode in hinges: ext0 += [mode.angle0, mode.rate0]
+    for mode in flexibles: ext0 += [mode.displacement0, mode.velocity0]
+    for mode in sloshes: ext0 += [mode.displacement0, mode.velocity0]
     y0 = np.concatenate(([ *state.r, *state.v, *state.q, *state.omega] + ([] if mass0 is None else [mass0]), ext0))
     rigid_n = 14 if mass0 is not None else 13
 
     def rhs(t, y):
         rigid, z = y[:rigid_n], y[rigid_n:]
         i = 0; loads_t = np.zeros(3); loads_a = np.zeros(3)
-        if hinge is not None:
+        for mode in hinges:
             angle, rate = z[i:i+2]; i += 2
-            loads_t += hinge.axis_body * (hinge.stiffness * angle + hinge.cubic_stiffness * angle**3 + hinge.damping * rate)
-        if flexible is not None:
+            loads_t += mode.axis_body * (mode.stiffness * angle + mode.cubic_stiffness * angle**3 + mode.damping * rate)
+        for mode in flexibles:
             disp, rate = z[i:i+2]; i += 2
-            loads_t += flexible.axis_body * (flexible.effective_mass * flexible.natural_frequency**2 * disp + 2 * flexible.damping_ratio * flexible.natural_frequency * flexible.effective_mass * rate)
-        if slosh is not None:
-            disp, rate = z[i:i+2]
-            force = slosh.axis_body * (
-                slosh.mass * slosh.natural_frequency**2 * disp
-                + 2 * slosh.damping_ratio * slosh.natural_frequency * slosh.mass * rate
+            loads_t += mode.axis_body * (mode.effective_mass * mode.natural_frequency**2 * disp + 2 * mode.damping_ratio * mode.natural_frequency * mode.effective_mass * rate)
+        for mode in sloshes:
+            disp, rate = z[i:i+2]; i += 2
+            force = mode.axis_body * (
+                mode.mass * mode.natural_frequency**2 * disp
+                + 2 * mode.damping_ratio * mode.natural_frequency * mode.mass * rate
             )
-            loads_a = rotate_vector(rigid[6:10], force) / bus_mass
-            loads_t = loads_t + np.cross(slosh.lever_arm_body, force)
+            loads_a += rotate_vector(rigid[6:10], force) / bus_mass
+            loads_t += np.cross(mode.lever_arm_body, force)
         a = lambda tt, r, v, q, om: np.asarray(acceleration(tt, r, v, q, om) if acceleration else 0.0) + loads_a
         trq = lambda tt, r, v, q, om: np.asarray(torque(tt, r, v, q, om) if torque else 0.0) + loads_t
         base = sixdof_rhs(t, rigid, inertia=inertia, mu=mu, acceleration=a, torque=trq, gravity_gradient=gravity_gradient, mass_state=mass0 is not None)
         dz = []
-        if hinge is not None: dz += [rate, -(hinge.stiffness * angle + hinge.cubic_stiffness * angle**3 + hinge.damping * rate) / hinge.inertia]
-        if flexible is not None: dz += [rate, -flexible.natural_frequency**2 * disp - 2 * flexible.damping_ratio * flexible.natural_frequency * rate]
-        if slosh is not None: dz += [rate, -slosh.natural_frequency**2 * disp - 2 * slosh.damping_ratio * slosh.natural_frequency * rate]
+        i = 0
+        for mode in hinges:
+            angle, rate = z[i:i+2]; i += 2
+            dz += [rate, -(mode.stiffness * angle + mode.cubic_stiffness * angle**3 + mode.damping * rate) / mode.inertia]
+        for mode in flexibles:
+            disp, rate = z[i:i+2]; i += 2
+            dz += [rate, -mode.natural_frequency**2 * disp - 2 * mode.damping_ratio * mode.natural_frequency * rate]
+        for mode in sloshes:
+            disp, rate = z[i:i+2]; i += 2
+            dz += [rate, -mode.natural_frequency**2 * disp - 2 * mode.damping_ratio * mode.natural_frequency * rate]
         return np.concatenate((base, dz))
 
     sol = solve_ivp(rhs, (state.t, float(times[-1])), y0, t_eval=times, rtol=rtol, atol=atol, method=method, max_step=max_step, first_step=first_step)
@@ -184,8 +205,11 @@ def propagate_6dof_extended(*, times, inertia, hinge=None, flexible=None, slosh=
     trajectory = SixDOFTrajectory(sol.t, y[:, :3], y[:, 3:6], q, y[:, 10:13], None if mass0 is None else y[:, 13], nfev=sol.nfev, message=sol.message, status=sol.status)
     j = rigid_n
     arrays = []
-    for mode in (hinge, flexible, slosh):
-        arrays.append(None if mode is None else y[:, j:j + 2])
-        if mode is not None:
-            j += 2
+    for modes in (hinges, flexibles, sloshes):
+        if not modes:
+            arrays.append(None)
+            continue
+        values = y[:, j:j + 2 * len(modes)].reshape(len(times), len(modes), 2)
+        arrays.append(values[:, 0, :] if len(modes) == 1 else values.transpose(0, 2, 1))
+        j += 2 * len(modes)
     return Extended6DOFTrajectory(trajectory, *arrays)
