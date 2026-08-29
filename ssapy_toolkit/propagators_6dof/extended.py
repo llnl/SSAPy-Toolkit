@@ -177,7 +177,7 @@ def propagate_6dof_extended(*, times, inertia, hinge=None, flexible=None, slosh=
         if slosh is not None: dz += [rate, -slosh.natural_frequency**2 * disp - 2 * slosh.damping_ratio * slosh.natural_frequency * rate]
         return np.concatenate((base, dz))
 
-    sol = solve_ivp(rhs, (times[0], times[-1]), y0, t_eval=times, rtol=rtol, atol=atol, method=method, max_step=max_step, first_step=first_step)
+    sol = solve_ivp(rhs, (state.t, float(times[-1])), y0, t_eval=times, rtol=rtol, atol=atol, method=method, max_step=max_step, first_step=first_step)
     if not sol.success: raise RuntimeError(sol.message)
     y = sol.y.T
     q = np.array([item / np.linalg.norm(item) for item in y[:, 6:10]])

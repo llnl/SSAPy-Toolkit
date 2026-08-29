@@ -44,10 +44,23 @@ def test_slosh_force_follows_attitude():
 
 
 def test_hinge_cubic_stiffness_matches_initial_torque_response():
-    kwargs = dict(times=np.linspace(0, 1e-4, 3), inertia=np.eye(3), mu=0,
-                  r0=[1, 0, 0], v0=[0, 0, 0], q0=[1, 0, 0, 0])
+    kwargs = {
+        "times": np.linspace(0, 1e-4, 3), "inertia": np.eye(3), "mu": 0,
+        "r0": [1, 0, 0], "v0": [0, 0, 0], "q0": [1, 0, 0, 0],
+    }
     nonlinear = propagate_6dof_extended(
         hinge=HingedAppendage([0, 0, 1], 1, angle0=0.5, cubic_stiffness=8), **kwargs)
 
     np.testing.assert_allclose(nonlinear.hinge[-1, 1], -1e-4, rtol=1e-6, atol=1e-12)
     np.testing.assert_allclose(nonlinear.trajectory.omega[-1, 2], 1e-4, rtol=1e-6, atol=1e-12)
+
+
+def test_extended_propagation_honors_initial_epoch_before_first_sample():
+    result = propagate_6dof_extended(
+        times=[10.0, 10.1], t0=0.0, inertia=np.eye(3), mu=0.0,
+        r0=[1.0, 0.0, 0.0], v0=[0.0, 0.0, 0.0],
+        acceleration=lambda t, r, v, q, omega: [t, 0.0, 0.0],
+        hinge=HingedAppendage([0.0, 0.0, 1.0], 1.0),
+    )
+
+    np.testing.assert_allclose(result.trajectory.v[0], [50.0, 0.0, 0.0], atol=1e-10)
