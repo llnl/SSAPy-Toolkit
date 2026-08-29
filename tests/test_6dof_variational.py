@@ -4,6 +4,7 @@ import ssapy_toolkit as ssatk
 from ssapy_toolkit.accelerations_6dof import (
     SpacecraftAccelConstBody,
     SpacecraftAccelConstNTW,
+    constant_body_torque,
 )
 from ssapy_toolkit.coordinates.attitude import normalize_quaternion, rotate_vector
 from ssapy_toolkit.propagators_6dof import (
@@ -14,10 +15,10 @@ from ssapy_toolkit.propagators_6dof import (
 )
 from ssapy_toolkit.propagators_6dof.sixdof import sixdof_rhs
 from ssapy_toolkit.propagators_6dof.variational import (
-    _acceleration_state_jacobian,
     _body_acceleration_jacobian,
     _free_rigid_body_jacobian,
     _gravity_gradient_jacobian,
+    _model_state_jacobian,
 )
 
 
@@ -94,13 +95,51 @@ def test_variational_constant_ntw_acceleration_uses_analytic_state_jacobian():
     np.testing.assert_allclose(result.stm[-1] @ delta, finite_difference, rtol=2e-4, atol=1e-11)
 
 
+def test_variational_constant_body_torque_uses_analytic_state_jacobian():
+    model = constant_body_torque([0.0, 0.0, 1.0e-6])
+    calls = [0]
+    state_jacobian = model.state_jacobian
+
+    def counted_state_jacobian(**kwargs):
+        calls[0] += 1
+        return state_jacobian(**kwargs)
+
+    model.state_jacobian = counted_state_jacobian
+    kwargs = {
+        "times": np.array([0.0, 0.2]),
+        "r0": np.array([7_000_000.0, 0.0, 0.0]),
+        "v0": np.array([0.0, 7_500.0, 0.0]),
+        "q0": np.array([1.0, 0.0, 0.0, 0.0]),
+        "omega0": np.array([0.0, 0.0, 0.01]),
+        "inertia": np.diag([2.0, 3.0, 4.0]),
+        "torque": model,
+        "rtol": 1e-10,
+        "atol": 1e-12,
+    }
+    result = propagate_6dof_variational(**kwargs)
+    assert calls[0] > 0
+
+    delta = np.zeros(13)
+    delta[10] = 1.0e-7
+    plus = propagate_6dof(**{**kwargs, "omega0": kwargs["omega0"] + delta[10:13]})
+    minus = propagate_6dof(**{**kwargs, "omega0": kwargs["omega0"] - delta[10:13]})
+    finite_difference = np.concatenate((
+        plus.r[-1] - minus.r[-1],
+        plus.v[-1] - minus.v[-1],
+        plus.q[-1] - minus.q[-1],
+        plus.omega[-1] - minus.omega[-1],
+    )) / 2.0
+
+    np.testing.assert_allclose(result.stm[-1] @ delta, finite_difference, rtol=2e-4, atol=1e-11)
+
+
 def test_constant_body_acceleration_state_jacobian_matches_finite_difference():
     model = SpacecraftAccelConstBody([1.0e-3, -2.0e-3, 0.5e-3])
     state = np.array([
         7.0e6, -1.2e6, 0.8e6, 1.2e3, 7.3e3, -0.5e3,
         0.9, 0.1, -0.2, 0.3, 0.01, -0.02, 0.03,
     ])
-    jacobian = _acceleration_state_jacobian(model, 0.0, state)
+    jacobian = _model_state_jacobian(model, 0.0, state)
     finite_difference = np.empty((3, 13))
 
     def acceleration(y):

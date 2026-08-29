@@ -1246,10 +1246,11 @@ def prompt_for_satellites(pool):
 def resolve_satellites():
     """
     Decide which satellites to analyse — asked FIRST, before
-    resolve_point() asks for a ground site. Checked in order:
-      1. --all-sats flag            -> everything in the pool
-      2. --sats "ISS,Hubble" flag   -> matched non-interactively
-      3. otherwise                  -> interactive prompt
+    resolve_point() asks for a ground site. The selection order is:
+
+    * ``--all-sats`` flag -> everything in the pool.
+    * ``--sats "ISS,Hubble"`` flag -> matched non-interactively.
+    * Otherwise -> interactive prompt.
 
     The pool comes from load_satellites() (prefers ~/ssapy_satellites.json,
     falls back to this file's own SATELLITES list above if that doesn't

@@ -1440,8 +1440,13 @@ def constant_body_thrust(thrust: ArrayLike, mass: float):
 
 
 def constant_body_torque(torque: ArrayLike):
-    torque = _as_vector3(torque, "torque")
-    return lambda t, r, v, q, omega: torque
+    value = _as_vector3(torque, "torque")
+
+    def torque_model(t, r, v, q, omega):
+        return value
+
+    torque_model.state_jacobian = lambda **kwargs: _np.zeros((3, 13))
+    return torque_model
 
 
 def sum_accelerations(*models):

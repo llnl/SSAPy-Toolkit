@@ -465,13 +465,14 @@ articulated-facet SRP case. Optimization work should preserve the public API,
 avoid duplicated solver logic, and move shared math into reusable helpers rather
 than copying code between force models, propagators, demos, and tests.
 
-The remaining major gaps are higher-fidelity reduced-order body modeling and
-independent external-tool validation. SSATK now provides linear propagated
-hinge, flexible-mode, and propellant-slosh states, bounded multi-segment
-targeting, and coupled STM/covariance utilities. The extended models do not
-replace nonlinear multibody, finite-element, or computational-fluid-dynamics
-solvers. GMAT, STK/Astrogator, FreeFlyer, Orekit, Basilisk, and Tudat reference
-runs still require an environment with those tools and their force-model data.
+The remaining major gap is higher-fidelity reduced-order body modeling. SSATK
+now provides linear propagated hinge, flexible-mode, and propellant-slosh
+states, bounded multi-segment targeting, coupled STM/covariance utilities, and
+deterministic external-validation reporting through
+``scripts/external_validation_report.py``. The extended models do not replace
+nonlinear multibody, finite-element, or computational-fluid-dynamics solvers.
+GMAT, STK/Astrogator, FreeFlyer, Orekit, Basilisk, and Tudat reference runs
+still require an environment with those tools and their force-model data.
 
 Recommended Direction
 ---------------------

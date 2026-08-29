@@ -3,10 +3,10 @@
 The state-transition matrix is integrated with the same ``sixdof_rhs`` used
 by the nominal propagator. The central-gravity, fixed-inertia rigid-body case
 uses analytic Jacobians, including gravity-gradient torque partials.
-Acceleration models that expose a ``state_jacobian`` (such as constant NTW
-acceleration) are included analytically; other model combinations retain
-central differences so every existing force, torque, mass, and wheel model
-stays in the loop.
+Force and torque models that expose a ``state_jacobian`` (such as constant
+NTW, inertial, body-frame, and body-torque models) are included analytically;
+other model combinations retain central differences so every existing force,
+torque, mass, and wheel model stays in the loop.
 """
 
 from __future__ import annotations
@@ -233,7 +233,7 @@ def propagate_6dof_variational(
         (acceleration is None or callable(getattr(acceleration, "state_jacobian", None)))
         and ntw_acceleration is None
         and (body_acceleration is None or hasattr(body_acceleration, "attitude_jacobian"))
-        and torque is None
+        and (torque is None or callable(getattr(torque, "state_jacobian", None)))
         and mass_flow_rate is None
         and wheel_torque is None
         and not callable(inertia)
@@ -260,7 +260,11 @@ def propagate_6dof_variational(
                     body_acceleration, t, y, q_raw=y[6:10]
                 )
             if acceleration is not None:
-                jac[3:6, :13] += _acceleration_state_jacobian(acceleration, t, y)
+                jac[3:6, :13] += _model_state_jacobian(acceleration, t, y)
+            if torque is not None:
+                jac[10:13, :13] += np.linalg.solve(
+                    inertia_arg, _model_state_jacobian(torque, t, y)
+                )
         else:
             jac = np.empty((n, n))
             for column in range(n):
@@ -378,7 +382,7 @@ def _body_acceleration_jacobian(model, t, y, *, q_raw):
     )
 
 
-def _acceleration_state_jacobian(model, t, y) -> np.ndarray:
+def _model_state_jacobian(model, t, y) -> np.ndarray:
     q = normalize_quaternion(y[6:10])
     jacobian = np.asarray(
         model.state_jacobian(
