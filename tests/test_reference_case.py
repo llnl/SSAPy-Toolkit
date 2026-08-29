@@ -68,7 +68,7 @@ def test_write_reference_case_emits_reproducible_oem_and_metadata(tmp_path):
     assert "REF_FRAME = GCRF" in ephemeris
     assert "2025-01-01T00:00:02.500000" in ephemeris
     assert "STOP_TIME = 2025-01-01T00:00:02.500000" in ephemeris
-    assert "COMMENT SSATK state-only reference ephemeris" in ephemeris
+    assert "COMMENT SSATK reference ephemeris" in ephemeris
     assert "DATA_START" not in ephemeris
     assert "DATA_STOP" not in ephemeris
     assert "# EPOCH" not in ephemeris
@@ -229,6 +229,78 @@ def test_read_oem_compare_compatibility_and_package_exports():
     assert residuals["max_position_m"] == residuals["max_velocity_m_s"] == 0.0
 
 
+def _covariance_block(epoch, frame="RTN", diagonal=1.0):
+    return f"""COVARIANCE_START
+EPOCH = {epoch}
+COV_REF_FRAME = {frame}
+{diagonal}
+0 {diagonal}
+0 0 {diagonal}
+0 0 0 {diagonal}
+0 0 0 0 {diagonal}
+0 0 0 0 0 {diagonal}
+COVARIANCE_STOP
+"""
+
+
+def test_read_oem_preserves_covariance_epochs_frames_and_si_units():
+    source = _multi_segment_oem()
+    source = source.replace(
+        "2025-001T00:00:01.000000 1.001D+03 2 3 4 5 6\nMETA_START",
+        "2025-001T00:00:01.000000 1.001D+03 2 3 4 5 6\n"
+        + _covariance_block("2025-001T00:00:00.500000", diagonal=2.0)
+        + "META_START",
+    )
+    source += _covariance_block("2025-001T00:00:03.000000", diagonal=3.0)
+    loaded = read_oem(source)
+
+    np.testing.assert_allclose(loaded.covariance_t, [0.5, 3.0])
+    np.testing.assert_allclose(np.diag(loaded.covariance[0]), np.full(6, 2.0e6))
+    np.testing.assert_allclose(np.diag(loaded.covariance[1]), np.full(6, 3.0e6))
+    assert loaded.covariance_reference_frame == "RTN"
+    assert loaded.segments[0].covariance_reference_frame == "RTN"
+    assert loaded.segments[1].covariance_reference_frame == "RTN"
+
+
+def test_write_reference_case_round_trips_covariance_and_sidecar_offsets(tmp_path):
+    trajectory = SimpleNamespace(
+        t=np.array([10.0, 12.5]),
+        r=np.array([[7_000_000.0, 0.0, 0.0], [7_000_001.0, 10.0, 20.0]]),
+        v=np.array([[0.0, 7_500.0, 0.0], [-1.0, 7_500.5, 2.0]]),
+    )
+    covariance = np.stack((np.eye(6) * 4.0, np.eye(6) * 9.0))
+    files = write_reference_case(
+        trajectory,
+        tmp_path,
+        epoch="2025-01-01T00:00:00Z",
+        covariance=covariance,
+        covariance_t=[0.0, 2.5],
+        covariance_reference_frame="RIC",
+    )
+
+    loaded = read_reference_case(files.metadata_path)
+    np.testing.assert_allclose(loaded.covariance_t, [10.0, 12.5])
+    np.testing.assert_allclose(loaded.covariance, covariance)
+    assert loaded.covariance_reference_frame == "RIC"
+    metadata = json.loads(files.metadata_path.read_text())
+    assert metadata["covariance_count"] == 2
+    assert metadata["covariance_reference_frame"] == "RIC"
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    [
+        _covariance_block("2025-001T00:00:00.000000").replace("0 0 0 0 0 1.0\n", ""),
+        _covariance_block("2025-001T00:00:00.000000").replace("1.0  ", "nan  "),
+        _covariance_block("2025-001T00:00:00.000000", frame="UNKNOWN"),
+    ],
+)
+def test_read_oem_rejects_invalid_covariance_blocks(replacement):
+    source = _multi_segment_oem() + replacement
+    with pytest.raises(ValueError):
+        read_oem(source)
+
+
 @pytest.mark.parametrize("bad", [
     _multi_segment_oem().replace("CCSDS_OEM_VERS = 2.0", "CCSDS_OEM_VERS = 3.0"),
     _multi_segment_oem().replace("ORIGINATOR = OREKIT\n", ""),
@@ -247,11 +319,6 @@ def test_read_oem_compare_compatibility_and_package_exports():
 def test_read_oem_rejects_malformed_state_only_messages(bad):
     with pytest.raises(ValueError):
         read_oem(bad)
-
-
-def test_read_oem_rejects_covariance_explicitly():
-    with pytest.raises(NotImplementedError, match="covariance"):
-        read_oem(_multi_segment_oem().replace("META_START\nCOMMENT first", "COVARIANCE_START\nMETA_START\nCOMMENT first"))
 
 
 def test_read_oem_rejects_unclosed_legacy_data_block():

@@ -24,6 +24,10 @@ __all__ = [
     "write_reference_case",
 ]
 
+_SUPPORTED_COVARIANCE_FRAMES = frozenset(
+    {"GCRF", "ICRF", "EME2000", "ITRF", "RTN", "RIC", "RSW", "QSW", "TNW", "VNC", "LVLH", "TEME"}
+)
+
 
 @dataclass(frozen=True)
 class ReferenceCaseFiles:
@@ -42,17 +46,23 @@ class ReferenceCase:
     v: np.ndarray
     metadata: Mapping[str, object]
     segments: tuple[ReferenceCaseSegment, ...] = ()
+    covariance_t: np.ndarray | None = None
+    covariance: np.ndarray | None = None
+    covariance_reference_frame: str | None = None
 
 
 @dataclass(frozen=True)
 class ReferenceCaseSegment:
-    """One CCSDS OEM segment with SI Cartesian states and KVN metadata."""
+    """One CCSDS OEM segment with SI states, covariance, and KVN metadata."""
 
     t: np.ndarray
     r: np.ndarray
     v: np.ndarray
     metadata: Mapping[str, object]
     comments: tuple[str, ...] = ()
+    covariance_t: np.ndarray | None = None
+    covariance: np.ndarray | None = None
+    covariance_reference_frame: str | None = None
 
 
 def read_reference_case(source) -> ReferenceCase:
@@ -90,19 +100,50 @@ def read_reference_case(source) -> ReferenceCase:
     times = time_origin + epoch_offset + oem.t
     if metadata.get("sample_count") not in (None, len(oem.t)):
         raise ValueError("OEM sample count does not match reference-case metadata.")
+    covariance_count = metadata.get("covariance_count")
+    actual_covariance_count = 0 if oem.covariance_t is None else len(oem.covariance_t)
+    if covariance_count not in (None, actual_covariance_count):
+        raise ValueError("OEM covariance count does not match reference-case metadata.")
+    covariance_frame = metadata.get("covariance_reference_frame")
+    if (
+        covariance_frame is not None
+        and oem.covariance_reference_frame is not None
+        and str(covariance_frame).strip().upper() != oem.covariance_reference_frame
+    ):
+        raise ValueError("OEM covariance reference frame does not match reference-case metadata.")
+    covariance_epochs = metadata.get("covariance_epochs_s")
+    if covariance_epochs is not None:
+        if oem.covariance_t is None:
+            raise ValueError("reference-case metadata declares covariance epochs but OEM has none.")
+        covariance_epochs = np.asarray(covariance_epochs, dtype=float)
+        if covariance_epochs.shape != oem.covariance_t.shape or not np.allclose(
+            covariance_epochs, oem.covariance_t, rtol=0.0, atol=1.0e-9
+        ):
+            raise ValueError("OEM covariance epochs do not match reference-case metadata.")
     if not np.all(np.diff(times) > 0.0) and len(times) > 1:
         raise ValueError("OEM epochs must be strictly increasing.")
+    covariance_t = None if oem.covariance_t is None else oem.covariance_t + time_origin + epoch_offset
     return ReferenceCase(
         t=times,
         r=oem.r,
         v=oem.v,
         metadata={**oem.metadata, **metadata},
-        segments=tuple(replace(segment, t=segment.t + time_origin + epoch_offset) for segment in oem.segments),
+        segments=tuple(
+            replace(
+                segment,
+                t=segment.t + time_origin + epoch_offset,
+                covariance_t=None if segment.covariance_t is None else segment.covariance_t + time_origin + epoch_offset,
+            )
+            for segment in oem.segments
+        ),
+        covariance_t=covariance_t,
+        covariance=oem.covariance,
+        covariance_reference_frame=oem.covariance_reference_frame,
     )
 
 
 def read_oem(source) -> ReferenceCase:
-    """Read a state-only CCSDS OEM 2.0 KVN message into SI arrays."""
+    """Read a CCSDS OEM 2.0 KVN message into SI state and covariance arrays."""
 
     text = _oem_text_source(source)
     header, parsed_segments = _parse_oem(text)
@@ -118,8 +159,8 @@ def read_oem(source) -> ReferenceCase:
     common = None
     all_epochs = []
     segments = []
-    for metadata, comments, records in parsed_segments:
-        segment = _parse_oem_segment(metadata, comments, records)
+    for metadata, comments, records, covariance_records in parsed_segments:
+        segment = _parse_oem_segment(metadata, comments, records, covariance_records)
         if common is None:
             common = {
                 key: metadata[key].strip().upper()
@@ -138,7 +179,10 @@ def read_oem(source) -> ReferenceCase:
     segment_objects = []
     positions = []
     velocities = []
-    for metadata, comments, (epochs, states) in zip(
+    covariance_times = []
+    covariances = []
+    covariance_frames = set()
+    for metadata, comments, (epochs, states, covariance_epochs, covariance_values, covariance_frame) in zip(
         (item[0] for item in parsed_segments),
         (item[1] for item in parsed_segments),
         segments,
@@ -153,10 +197,21 @@ def read_oem(source) -> ReferenceCase:
                 v=states[:, 3:] * 1.0e3,
                 metadata=metadata,
                 comments=comments,
+                covariance_t=None if not covariance_epochs else np.asarray(
+                    [float((epoch - first_epoch).sec) for epoch in covariance_epochs]
+                ),
+                covariance=None if covariance_values is None else covariance_values * 1.0e6,
+                covariance_reference_frame=covariance_frame,
             )
         )
         positions.append(states[:, :3])
         velocities.append(states[:, 3:])
+        if covariance_epochs:
+            covariance_times.extend(float((epoch - first_epoch).sec) for epoch in covariance_epochs)
+            covariances.append(covariance_values)
+            covariance_frames.add(covariance_frame)
+    if len(covariance_times) > 1 and not np.all(np.diff(covariance_times) > 0.0):
+        raise ValueError("OEM covariance epochs must be strictly increasing across segments.")
 
     header_comments = tuple(header.pop("_COMMENTS", ()))
     aggregate = dict(header)
@@ -173,12 +228,24 @@ def read_oem(source) -> ReferenceCase:
         "time_system": parsed_segments[0][0]["TIME_SYSTEM"],
     })
     aggregate["comments"] = header_comments
+    if covariance_frames:
+        aggregate["covariance_count"] = len(covariance_times)
+        aggregate["covariance_reference_frame"] = (
+            next(iter(covariance_frames)) if len(covariance_frames) == 1 else "MIXED"
+        )
     return ReferenceCase(
         t=times,
         r=np.vstack(positions) * 1.0e3,
         v=np.vstack(velocities) * 1.0e3,
         metadata=aggregate,
         segments=tuple(segment_objects),
+        covariance_t=None if not covariance_times else np.asarray(covariance_times),
+        covariance=None if not covariances else np.vstack(covariances) * 1.0e6,
+        covariance_reference_frame=(
+            None
+            if not covariance_frames
+            else next(iter(covariance_frames)) if len(covariance_frames) == 1 else "MIXED"
+        ),
     )
 
 
@@ -234,6 +301,9 @@ def write_reference_case(
     constants: Mapping[str, object] | None = None,
     integrator: Mapping[str, object] | None = None,
     precision: int = 17,
+    covariance: np.ndarray | None = None,
+    covariance_t: np.ndarray | None = None,
+    covariance_reference_frame: str | None = None,
     overwrite: bool = False,
 ) -> ReferenceCaseFiles:
     """Write a trajectory as CCSDS OEM 2.0 plus a JSON case description.
@@ -241,6 +311,9 @@ def write_reference_case(
     ``trajectory`` must expose ``t``, ``r``, and ``v`` arrays. Times are
     interpreted as seconds from the first sample; OEM positions and velocities
     are written in km and km/s, while the JSON sidecar records SI states too.
+    Optional ``covariance`` values use SI state units and shape ``(M, 6, 6)``;
+    ``covariance_t`` is measured from the first state sample and
+    ``covariance_reference_frame`` is preserved without frame rotation.
     The sidecar is intentionally explicit so another propagator can reproduce
     the case without inferring frames, constants, or tolerances from a plot.
     """
@@ -256,6 +329,16 @@ def write_reference_case(
         raise ValueError("center_name must be a non-empty string.")
     if not isinstance(precision, int) or not 1 <= precision <= 17:
         raise ValueError("precision must be an integer from 1 through 17.")
+    if covariance is None:
+        covariance = getattr(trajectory, "covariance", None)
+    elapsed = times - times[0]
+    covariance, covariance_t, covariance_reference_frame = _normalize_oem_covariance(
+        covariance,
+        covariance_t,
+        covariance_reference_frame or getattr(trajectory, "covariance_reference_frame", None),
+        elapsed,
+        reference_frame,
+    )
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -264,7 +347,6 @@ def write_reference_case(
     if not overwrite and (metadata_path.exists() or ephemeris_path.exists()):
         raise FileExistsError(f"reference case already exists: {case_name}")
 
-    elapsed = times - times[0]
     models = [force_models] if isinstance(force_models, str) else [str(model) for model in force_models]
     metadata = {
         "format": "ssatk-reference-case",
@@ -287,6 +369,13 @@ def write_reference_case(
         "final_state": np.concatenate((positions[-1], velocities[-1])).tolist(),
         "files": {"ephemeris": ephemeris_path.name},
     }
+    if covariance is not None:
+        metadata.update({
+            "covariance_count": int(covariance.shape[0]),
+            "covariance_reference_frame": covariance_reference_frame,
+            "covariance_units": "km^2 for the canonical [km, km/s] state covariance",
+            "covariance_epochs_s": covariance_t.tolist(),
+        })
     metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     ephemeris_path.write_text(
         _oem_text(
@@ -298,6 +387,9 @@ def write_reference_case(
             center_name=center_name,
             reference_frame=reference_frame,
             precision=precision,
+            covariance=covariance,
+            covariance_t=covariance_t,
+            covariance_reference_frame=covariance_reference_frame,
         ),
         encoding="utf-8",
     )
@@ -339,19 +431,26 @@ def _parse_oem(text):
     metadata = None
     comments = []
     records = []
+    covariance_records = []
+    covariance_metadata = None
+    covariance_lines = []
+    covariance_comments = []
     section = "header"
     data_open = False
 
     def finish():
-        nonlocal metadata, comments, records, section, data_open
+        nonlocal metadata, comments, records, covariance_records, section, data_open
         if metadata is None:
             return
+        if covariance_metadata is not None:
+            raise ValueError("CCSDS OEM COVARIANCE_START is missing COVARIANCE_STOP.")
         if not records:
             raise ValueError("CCSDS OEM segment contains no state records.")
-        parsed.append((metadata, tuple(comments), records))
+        parsed.append((metadata, tuple(comments), records, covariance_records))
         metadata = None
         comments = []
         records = []
+        covariance_records = []
         section = "header"
         data_open = False
 
@@ -360,8 +459,23 @@ def _parse_oem(text):
         if not line or line.startswith("#"):
             continue
         marker = line.upper()
-        if marker in {"COVARIANCE_START", "COVARIANCE_STOP"}:
-            raise NotImplementedError("CCSDS OEM covariance blocks are not supported by the state-only reader.")
+        if marker == "COVARIANCE_START":
+            if metadata is None or section == "meta" or covariance_metadata is not None:
+                raise ValueError("CCSDS OEM COVARIANCE_START is out of order.")
+            covariance_metadata = {}
+            covariance_lines = []
+            covariance_comments = []
+            continue
+        if marker == "COVARIANCE_STOP":
+            if covariance_metadata is None:
+                raise ValueError("CCSDS OEM COVARIANCE_STOP is out of order.")
+            covariance_metadata["_LINES"] = tuple(covariance_lines)
+            covariance_metadata["_COMMENTS"] = tuple(covariance_comments)
+            covariance_records.append(covariance_metadata)
+            covariance_metadata = None
+            covariance_lines = []
+            covariance_comments = []
+            continue
         if marker == "META_START":
             if section == "meta":
                 raise ValueError("duplicate CCSDS OEM META_START.")
@@ -391,10 +505,22 @@ def _parse_oem(text):
             finish()
             continue
         if marker.startswith("COMMENT"):
-            if metadata is None:
+            if covariance_metadata is not None:
+                covariance_comments.append(_oem_comment(line))
+            elif metadata is None:
                 header_comments.append(_oem_comment(line))
             else:
                 comments.append(_oem_comment(line))
+            continue
+
+        if covariance_metadata is not None:
+            if "=" not in line:
+                covariance_lines.append(line)
+                continue
+            key, value = _oem_key_value(line)
+            if key in covariance_metadata:
+                raise ValueError(f"duplicate CCSDS OEM covariance key {key}.")
+            covariance_metadata[key] = value
             continue
 
         if section == "data":
@@ -418,6 +544,8 @@ def _parse_oem(text):
 
     if section == "meta":
         raise ValueError("CCSDS OEM META_START is missing META_STOP.")
+    if covariance_metadata is not None:
+        raise ValueError("CCSDS OEM COVARIANCE_START is missing COVARIANCE_STOP.")
     if metadata is not None:
         if data_open:
             raise ValueError("CCSDS OEM DATA_START is missing DATA_STOP.")
@@ -426,7 +554,7 @@ def _parse_oem(text):
     return header, parsed
 
 
-def _parse_oem_segment(metadata, comments, records):
+def _parse_oem_segment(metadata, comments, records, covariance_records=()):
     required = ("OBJECT_NAME", "OBJECT_ID", "CENTER_NAME", "REF_FRAME", "TIME_SYSTEM", "START_TIME", "STOP_TIME")
     missing = [key for key in required if not metadata.get(key)]
     if missing:
@@ -446,7 +574,60 @@ def _parse_oem_segment(metadata, comments, records):
             raise ValueError("OEM state epochs must be strictly increasing within a segment.")
         epochs.append(epoch)
         states.append(state)
-    return epochs, np.vstack(states)
+    covariance_epochs = []
+    covariance_values = []
+    covariance_frame = None
+    for covariance_record in covariance_records:
+        epoch, covariance, frame = _parse_oem_covariance(
+            covariance_record, scale, metadata["REF_FRAME"]
+        )
+        if epoch < start or epoch > stop:
+            raise ValueError("OEM covariance epoch is outside the segment START_TIME/STOP_TIME span.")
+        if covariance_epochs and epoch <= covariance_epochs[-1]:
+            raise ValueError("OEM covariance epochs must be strictly increasing within a segment.")
+        if covariance_frame is not None and frame != covariance_frame:
+            raise ValueError("OEM covariance reference frame must be constant within a segment.")
+        covariance_epochs.append(epoch)
+        covariance_values.append(covariance)
+        covariance_frame = frame
+    return (
+        epochs,
+        np.vstack(states),
+        covariance_epochs,
+        None if not covariance_values else np.stack(covariance_values),
+        covariance_frame,
+    )
+
+
+def _parse_oem_covariance(record, scale, default_frame):
+    if not record.get("EPOCH"):
+        raise ValueError("OEM covariance block is missing EPOCH.")
+    frame = str(record.get("COV_REF_FRAME", default_frame)).strip().upper()
+    if frame not in _SUPPORTED_COVARIANCE_FRAMES:
+        raise ValueError(f"unsupported OEM covariance reference frame {frame!r}.")
+    lines = tuple(record.get("_LINES", ()))
+    unknown = set(record) - {"EPOCH", "COV_REF_FRAME", "_LINES", "_COMMENTS"}
+    if unknown:
+        raise ValueError("unsupported OEM covariance fields: " + ", ".join(sorted(unknown)) + ".")
+    if len(lines) != 6 or any(
+        len(line.replace("D", "E").replace("d", "e").split()) != row + 1
+        for row, line in enumerate(lines)
+    ):
+        raise ValueError("OEM KVN covariance blocks must contain six triangular rows.")
+    covariance = np.zeros((6, 6), dtype=float)
+    try:
+        for row, line in enumerate(lines):
+            row_values = [float(value) for value in line.replace("D", "E").replace("d", "e").split()]
+            for column, value in enumerate(row_values):
+                covariance[row, column] = covariance[column, row] = value
+    except (TypeError, ValueError) as exc:
+        raise ValueError("OEM covariance entries must be finite numbers.") from exc
+    if not np.all(np.isfinite(covariance)):
+        raise ValueError("OEM covariance entries must be finite numbers.")
+    scale_value = max(1.0, float(np.max(np.abs(covariance))))
+    if np.min(np.linalg.eigvalsh(covariance)) < -1.0e-12 * scale_value:
+        raise ValueError("OEM covariance must be positive semidefinite.")
+    return _oem_epoch(record["EPOCH"], scale), covariance, frame
 
 
 def _oem_epoch(value, scale):
@@ -497,6 +678,42 @@ def _trajectory_arrays(trajectory):
     return times, positions, velocities
 
 
+def _normalize_oem_covariance(covariance, covariance_t, covariance_reference_frame, elapsed, default_frame):
+    if covariance is None:
+        if covariance_t is not None or covariance_reference_frame is not None:
+            raise ValueError("covariance_t and covariance_reference_frame require covariance.")
+        return None, None, None
+    covariance = np.asarray(covariance, dtype=float)
+    if covariance.ndim != 3 or covariance.shape[1:] != (6, 6) or covariance.shape[0] == 0:
+        raise ValueError("covariance must have shape (M, 6, 6) with M > 0.")
+    if not np.all(np.isfinite(covariance)):
+        raise ValueError("covariance must contain only finite values.")
+    for matrix in covariance:
+        scale = max(1.0, float(np.max(np.abs(matrix))))
+        if not np.allclose(matrix, matrix.T, rtol=0.0, atol=1.0e-12 * scale):
+            raise ValueError("covariance matrices must be symmetric.")
+        if np.min(np.linalg.eigvalsh(matrix)) < -1.0e-12 * scale:
+            raise ValueError("covariance matrices must be positive semidefinite.")
+    if covariance_t is None:
+        if covariance.shape[0] != elapsed.size:
+            raise ValueError("covariance_t is required when covariance does not have one sample per state epoch.")
+        covariance_t = elapsed.copy()
+    else:
+        covariance_t = np.asarray(covariance_t, dtype=float)
+        if covariance_t.shape != (covariance.shape[0],):
+            raise ValueError("covariance_t must have one epoch per covariance matrix.")
+    if not np.all(np.isfinite(covariance_t)) or (
+        covariance_t.size > 1 and not np.all(np.diff(covariance_t) > 0.0)
+    ):
+        raise ValueError("covariance_t must be finite and strictly increasing.")
+    if covariance_t[0] < elapsed[0] or covariance_t[-1] > elapsed[-1]:
+        raise ValueError("covariance_t must lie within the state time span.")
+    frame = str(covariance_reference_frame or default_frame).strip().upper()
+    if frame not in _SUPPORTED_COVARIANCE_FRAMES:
+        raise ValueError(f"unsupported OEM covariance reference frame {frame!r}.")
+    return covariance, covariance_t, frame
+
+
 def _epoch_utc(value: str | datetime) -> datetime:
     if isinstance(value, datetime):
         parsed = value
@@ -534,6 +751,9 @@ def _oem_text(
     center_name,
     reference_frame,
     precision,
+    covariance=None,
+    covariance_t=None,
+    covariance_reference_frame=None,
 ) -> str:
     start = _format_oem_epoch(epoch)
     stop = _format_oem_epoch(epoch + timedelta(seconds=float(elapsed[-1])))
@@ -542,7 +762,7 @@ def _oem_text(
         f"CREATION_DATE = {start}",
         "ORIGINATOR = SSATK",
         "META_START",
-        "COMMENT SSATK state-only reference ephemeris; positions in km and velocities in km/s.",
+        "COMMENT SSATK reference ephemeris; positions in km and velocities in km/s.",
         f"OBJECT_NAME = {case_name}",
         "OBJECT_ID = UNKNOWN",
         f"CENTER_NAME = {center_name}",
@@ -558,6 +778,18 @@ def _oem_text(
         sample_epoch = _format_oem_epoch(epoch + timedelta(seconds=float(offset)))
         state = [_number(value * 1.0e-3, precision) for value in (*position, *velocity)]
         lines.append(" ".join([sample_epoch, *state]))
+    if covariance is not None:
+        for offset, matrix in zip(covariance_t, covariance):
+            sample_epoch = _format_oem_epoch(epoch + timedelta(seconds=float(offset)))
+            lines.extend((
+                "COVARIANCE_START",
+                f"EPOCH = {sample_epoch}",
+                f"COV_REF_FRAME = {covariance_reference_frame}",
+            ))
+            matrix_km = matrix * 1.0e-6
+            for row in range(6):
+                lines.append(" ".join(_number(matrix_km[row, column], precision) for column in range(row + 1)))
+            lines.append("COVARIANCE_STOP")
     lines.append("")
     return "\n".join(lines)
 
