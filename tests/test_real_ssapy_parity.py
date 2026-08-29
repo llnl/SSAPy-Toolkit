@@ -40,10 +40,10 @@ def test_real_ssapy_scipy_propagator_matches_ssatk_two_body():
     r0 = np.array([7_000_000.0, 0.0, 0.0])
     v0 = np.array([0.0, 7_500.0, 0.0])
     times = np.linspace(0.0, 900.0, 10)
-    # SSAPy uses km and km/s; SSATK uses SI units.
-    orbit = Orbit(r0 / 1e3, v0 / 1e3, 0.0, mu=EARTH_MU / 1e9)
+    # SSAPy and SSATK both use SI units for numerical state vectors.
+    orbit = Orbit(r0, v0, 0.0, mu=EARTH_MU)
     expected = orbit.at(times, propagator=SciPyPropagator(
-        AccelKepler(EARTH_MU / 1e9), ode_kwargs={"rtol": 1e-11, "atol": 1e-9}
+        AccelKepler(EARTH_MU), ode_kwargs={"rtol": 1e-11, "atol": 1e-9}
     ))
     actual = propagate_6dof(
         times=times, r0=r0, v0=v0, q0=[1.0, 0.0, 0.0, 0.0],
@@ -51,5 +51,5 @@ def test_real_ssapy_scipy_propagator_matches_ssatk_two_body():
         rtol=1e-11, atol=1e-3,
     )
 
-    np.testing.assert_allclose(actual.r, expected.r * 1e3, rtol=2e-10, atol=2e-3)
-    np.testing.assert_allclose(actual.v, expected.v * 1e3, rtol=2e-10, atol=2e-6)
+    np.testing.assert_allclose(actual.r, expected.r, rtol=2e-10, atol=2e-3)
+    np.testing.assert_allclose(actual.v, expected.v, rtol=2e-10, atol=2e-6)

@@ -1046,6 +1046,20 @@ Continuous integration and release publishing run the reproducible gate as::
 
 The resulting ``benchmark_results.json`` is retained as a workflow artifact.
 
+External validation report
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The optional Orekit, GMAT, and Basilisk comparisons share a deterministic JSON
+reporter. It runs fixed short cases without downloading runtimes or generating
+figures, records each model, constant, residual, tolerance, and skip reason,
+and writes the report outside the source tree by default::
+
+   python scripts/external_validation_report.py
+
+Use ``--require-external`` in an environment that provides all three runtimes;
+the command then exits nonzero for a skipped runtime as well as for a failed
+residual gate. ``--full`` selects the longer fixed cases.
+
 For SSATK, the first performance table should compare:
 
 * fixed-step RK4,
