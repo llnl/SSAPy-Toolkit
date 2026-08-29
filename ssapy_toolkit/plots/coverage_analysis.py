@@ -37,26 +37,30 @@ Run interactively:
   python -m ssapy_toolkit.plots.coverage_analysis --lat 28.39 --lon -80.60 --name "Cape Canaveral"
 """
 
+import argparse
 import json
 import os
-import argparse
-import numpy as np
+
 import matplotlib
+import numpy as np
+
 matplotlib.use("Agg")
+import astropy.units as u
 import matplotlib.pyplot as plt
-from ..io.tle_updater import update_satellites_auto, load_satellites
+
 # No sys.path manipulation: this is package code, reached through normal
 # imports. It previously prepended ~/SSAPy and ~/SSAPy-Toolkit, which only
 # worked if the checkout happened to sit at those exact paths in the current
 # user's home directory.
-
 import ssapy
-import ssapy.compute as compute
+from astropy.coordinates import GCRS, ITRS, CartesianRepresentation
+from astropy.time import Time
+from ssapy import compute
 from ssapy.body import SunPosition
 
-from astropy.time import Time
-from astropy.coordinates import GCRS, ITRS, CartesianRepresentation
-import astropy.units as u
+from ..environment import solar_disk_visible_fraction
+from ..io.tle_updater import load_satellites, update_satellites_auto
+
 
 # Real continent rendering (same source as globe_plot.py/moon_plot_3d.py's
 # textures where available) — reused from groundtrack_enhanced.py so the
@@ -64,13 +68,13 @@ import astropy.units as u
 def _fallback_draw_continents(ax):
     """Self-contained fallback if groundtrack_enhanced.py isn't importable."""
     try:
-        from ssapy.utils import find_file
         from PIL import Image as _PILImage
+        from ssapy.utils import find_file
         tex = np.asarray(_PILImage.open(find_file("earth", ext=".png")).convert("RGB"))
         ax.imshow(tex, extent=[-180, 180, -90, 90], origin="upper",
                   aspect="auto", zorder=0.5, alpha=0.9)
         return "ssapy earth.png"
-    except Exception:
+    except Exception:  # noqa: BLE001, S110 - try the next optional map source.
         pass
     try:
         import cartopy.feature as cfeature
@@ -83,7 +87,7 @@ def _fallback_draw_continents(ax):
                 ax.fill(xs, ys, facecolor="#c8c8a0", edgecolor="none",
                         zorder=0.5, alpha=0.9)
         return "cartopy Natural Earth"
-    except Exception:
+    except Exception:  # noqa: BLE001 - map rendering is optional.
         return None
 
 
@@ -1166,10 +1170,10 @@ def _load_default_satellites():
     stale-but-present list is more useful here than an import error.
     """
     try:
-        from ..data import read_data_text, data_package_available
+        from ..data import data_package_available, read_data_text
         if data_package_available():
             return json.loads(read_data_text(_SATELLITES_ASSET)), "ssapy_data"
-    except Exception:
+    except Exception:  # noqa: BLE001, S110 - use the bundled fallback.
         pass
     return _BUNDLED_SATELLITES, "bundled"
 
@@ -1254,7 +1258,7 @@ def resolve_satellites():
     """
     try:
         pool = load_satellites()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - a stale local cache must not stop analysis.
         print(f"  Note: load_satellites() failed ({e}); using this file's "
               f"built-in SATELLITES list ({len(SATELLITES)} entries).")
         pool = SATELLITES
@@ -1420,10 +1424,10 @@ def elevation_from_site(r_ecef_sat, se):
 
 
 def compute_eclipse(r, r_sun):
-    r_sun_hat = r_sun / np.linalg.norm(r_sun, axis=1, keepdims=True)
-    proj      = np.einsum('ij,ij->i', r, -r_sun_hat)
-    perp_sq   = np.sum(r**2, axis=1) - proj**2
-    return (proj > 0) & (perp_sq < R_EARTH**2)
+    return np.array([
+        solar_disk_visible_fraction(position, sun_position) < 1.0
+        for position, sun_position in zip(r, r_sun)
+    ], dtype=bool)
 
 
 def compute_sun_positions(t):
@@ -1461,9 +1465,15 @@ def _pass_statistics(vis_mask, dt_s, total_s):
     n = len(vis_mask)
     total_days = total_s / 86400.0
     if not vis_mask.any():
-        return dict(mean_pass_min=0.0, max_pass_min=0.0, max_gap_min=total_s/60.0,
-                   n_passes=0, passes_per_day=0.0, cum_contact_min_per_day=0.0,
-                   time_to_first_min=np.inf)
+        return {
+            "mean_pass_min": 0.0,
+            "max_pass_min": 0.0,
+            "max_gap_min": total_s / 60.0,
+            "n_passes": 0,
+            "passes_per_day": 0.0,
+            "cum_contact_min_per_day": 0.0,
+            "time_to_first_min": np.inf,
+        }
 
     # Rising/falling edges of the boolean mask -> pass start/end indices
     padded = np.concatenate([[False], vis_mask, [False]])
@@ -1471,7 +1481,11 @@ def _pass_statistics(vis_mask, dt_s, total_s):
     starts = np.where(edges == 1)[0]
     ends = np.where(edges == -1)[0]  # exclusive
     pass_lengths_s = (ends - starts) * dt_s
-    gap_lengths_s = starts[1:] * dt_s - ends[:-1] * dt_s  # between consecutive passes only
+    gap_lengths_s = np.concatenate((
+        [starts[0] * dt_s],
+        starts[1:] * dt_s - ends[:-1] * dt_s,
+        [(n - ends[-1]) * dt_s],
+    ))
 
     mean_pass_min = pass_lengths_s.mean() / 60.0
     max_pass_min = pass_lengths_s.max() / 60.0
@@ -1479,13 +1493,15 @@ def _pass_statistics(vis_mask, dt_s, total_s):
     n_passes = len(starts)
     time_to_first_min = starts[0] * dt_s / 60.0
 
-    return dict(
-        mean_pass_min=mean_pass_min, max_pass_min=max_pass_min,
-        max_gap_min=max_gap_min, n_passes=n_passes,
-        passes_per_day=n_passes / total_days,
-        cum_contact_min_per_day=(pass_lengths_s.sum() / 60.0) / total_days,
-        time_to_first_min=time_to_first_min,
-    )
+    return {
+        "mean_pass_min": mean_pass_min,
+        "max_pass_min": max_pass_min,
+        "max_gap_min": max_gap_min,
+        "n_passes": n_passes,
+        "passes_per_day": n_passes / total_days,
+        "cum_contact_min_per_day": (pass_lengths_s.sum() / 60.0) / total_days,
+        "time_to_first_min": time_to_first_min,
+    }
 
 
 def _smooth_masked(grid, valid_mask, sigma=1.1):
@@ -1534,7 +1550,7 @@ def analyse_satellite(sat_name, orbit, site_name, lat, lon, alt_m,
     print(f"\n  Satellite: {sat_name}")
     print(f"  Orbit: {orbit.a/1e3:.0f} km  i={np.degrees(orbit.i):.1f} deg")
 
-    r, v, t = propagate(orbit, n_orbits=5, n_points=3000)
+    r, _v, t = propagate(orbit, n_orbits=5, n_points=3000)
     print(f"  Propagated {len(t)} steps over {(t[-1]-t[0])/3600:.1f} hours")
 
     r_ecef = gcrf_to_itrf(r, t)
@@ -1817,7 +1833,7 @@ def _analysis_output_dir(site_name, lat, lon):
     try:
         from .figpath import ssatk_path
         base = os.path.dirname(ssatk_path(f"demo_gallery/figures/{folder}/_placeholder"))
-    except Exception:
+    except Exception:  # noqa: BLE001 - preserve the historical output fallback.
         base = os.path.join(os.path.expanduser("~"), "ssatk_figures",
                             "demo_gallery", "figures", folder)
     os.makedirs(base, exist_ok=True)
@@ -1884,7 +1900,7 @@ def main():
                 out_dir     = out_dir,
             )
             results.append(res)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - report and continue other satellites.
             print(f"  ERROR with {sat_dict['name']}: {e}")
 
     print("\n-- All output files ------------------------------------")

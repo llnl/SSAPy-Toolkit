@@ -700,6 +700,12 @@ def test_data_assets_resolve_from_a_sibling_data_repo(tmp_path):
     import shutil, pathlib
     for name in ("starfield.py", "magnetosphere_core.py", "magfield_plot_3d.py"):
         shutil.copy(pathlib.Path(sf.__file__).parent / name, repo / name)
+    time_pkg = repo.parent / "time_functions"
+    time_pkg.mkdir()
+    (time_pkg / "__init__.py").write_text("")
+    for name in ("gmst.py", "julian_date.py"):
+        shutil.copy(pathlib.Path(sf.__file__).parents[1] / "time_functions" / name,
+                    time_pkg / name)
     (data / "bright_stars.csv").write_text("ra,dec,mag\n0,0,1\n")
     (data / "aep8_table.npz").write_bytes(b"x" * 32)
 
