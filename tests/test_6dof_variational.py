@@ -1,6 +1,7 @@
 import numpy as np
 
 import ssapy_toolkit as ssatk
+from ssapy_toolkit.accelerations_6dof import SpacecraftAccelConstNTW
 from ssapy_toolkit.coordinates.attitude import normalize_quaternion, rotate_vector
 from ssapy_toolkit.propagators_6dof import (
     attitude_error_stm,
@@ -44,6 +45,49 @@ def test_variational_stm_matches_terminal_finite_difference_response():
 
     assert result.stm.shape == (2, 13, 13)
     np.testing.assert_allclose(predicted, finite_difference, rtol=2e-4, atol=1e-12)
+
+
+def test_variational_constant_ntw_acceleration_uses_analytic_state_jacobian():
+    model = SpacecraftAccelConstNTW([1.0e-4, 2.0e-4, -0.5e-4])
+    calls = [0]
+    state_jacobian = model.state_jacobian
+
+    def counted_state_jacobian(**kwargs):
+        calls[0] += 1
+        return state_jacobian(**kwargs)
+
+    model.state_jacobian = counted_state_jacobian
+    kwargs = {
+        "times": np.array([0.0, 0.2]),
+        "r0": np.array([7_000_000.0, 0.0, 0.0]),
+        "v0": np.array([0.0, 7_500.0, 0.0]),
+        "q0": np.array([0.9, 0.1, -0.2, 0.3]),
+        "omega0": np.array([0.0, 0.0, 0.01]),
+        "inertia": np.diag([2.0, 3.0, 4.0]),
+        "acceleration": model,
+        "rtol": 1e-10,
+        "atol": 1e-12,
+    }
+    result = propagate_6dof_variational(**kwargs)
+    assert calls[0] > 0
+
+    delta = np.zeros(13)
+    delta[0] = 0.1
+    delta[3] = 1.0e-4
+    plus = propagate_6dof(
+        **{**kwargs, "r0": kwargs["r0"] + delta[:3], "v0": kwargs["v0"] + delta[3:6]}
+    )
+    minus = propagate_6dof(
+        **{**kwargs, "r0": kwargs["r0"] - delta[:3], "v0": kwargs["v0"] - delta[3:6]}
+    )
+    finite_difference = np.concatenate((
+        plus.r[-1] - minus.r[-1],
+        plus.v[-1] - minus.v[-1],
+        plus.q[-1] - minus.q[-1],
+        plus.omega[-1] - minus.omega[-1],
+    )) / 2.0
+
+    np.testing.assert_allclose(result.stm[-1] @ delta, finite_difference, rtol=2e-4, atol=1e-11)
 
 
 def test_attitude_error_stm_has_nonsingular_three_parameter_attitude_state():

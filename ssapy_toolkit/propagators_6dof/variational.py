@@ -2,9 +2,11 @@
 
 The state-transition matrix is integrated with the same ``sixdof_rhs`` used
 by the nominal propagator. The central-gravity, fixed-inertia rigid-body case
-uses analytic Jacobians, including gravity-gradient torque partials; all other
-model combinations retain central differences so every existing force, torque,
-mass, and wheel model stays in the loop.
+uses analytic Jacobians, including gravity-gradient torque partials.
+Acceleration models that expose a ``state_jacobian`` (such as constant NTW
+acceleration) are included analytically; other model combinations retain
+central differences so every existing force, torque, mass, and wheel model
+stays in the loop.
 """
 
 from __future__ import annotations
@@ -228,7 +230,7 @@ def propagate_6dof_variational(
         "inv_inertia": inv_inertia, "mass_state": state.mass is not None,
     }
     analytic_jacobian = (
-        acceleration is None
+        (acceleration is None or callable(getattr(acceleration, "state_jacobian", None)))
         and ntw_acceleration is None
         and (body_acceleration is None or hasattr(body_acceleration, "attitude_jacobian"))
         and torque is None
@@ -257,6 +259,8 @@ def propagate_6dof_variational(
                 jac[3:6, 6:10] = _body_acceleration_jacobian(
                     body_acceleration, t, y, q_raw=y[6:10]
                 )
+            if acceleration is not None:
+                jac[3:6, :13] += _acceleration_state_jacobian(acceleration, t, y)
         else:
             jac = np.empty((n, n))
             for column in range(n):
@@ -372,6 +376,24 @@ def _body_acceleration_jacobian(model, t, y, *, q_raw):
         _rotate_vector_jacobian(q_raw, body_acceleration)
         + rotate_vector_matrix(q) @ body_jacobian @ normalization_jacobian
     )
+
+
+def _acceleration_state_jacobian(model, t, y) -> np.ndarray:
+    q = normalize_quaternion(y[6:10])
+    jacobian = np.asarray(
+        model.state_jacobian(
+            t=t, r=y[:3], v=y[3:6], q=q, omega=y[10:13]
+        ),
+        dtype=float,
+    )
+    if jacobian.shape != (3, 13):
+        raise ValueError("state_jacobian must return a (3, 13) array.")
+    normalization_jacobian = (
+        np.eye(4) - np.outer(q, q)
+    ) / np.linalg.norm(y[6:10])
+    jacobian = jacobian.copy()
+    jacobian[:, 6:10] = jacobian[:, 6:10] @ normalization_jacobian
+    return jacobian
 
 
 def rotate_vector_matrix(q: np.ndarray) -> np.ndarray:

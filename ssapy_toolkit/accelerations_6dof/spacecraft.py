@@ -263,6 +263,49 @@ class SpacecraftAccelConstNTW(SpacecraftAccel):
     def acceleration(self, *, t, r, v, q, omega, spacecraft=None) -> _np.ndarray:
         return frame_to_gcrf_matrix("ntw", r=r, v=v) @ self.accelntw
 
+    def state_jacobian(self, *, t, r, v, q, omega) -> _np.ndarray:
+        """Return analytic acceleration partials in ``[r, v, q, omega]``."""
+
+        r = _as_vector3(r, "r")
+        v = _as_vector3(v, "v")
+        speed = _np.linalg.norm(v)
+        if speed == 0.0:
+            raise ValueError("v must be non-zero.")
+        angular_momentum = _np.cross(r, v)
+        momentum_norm = _np.linalg.norm(angular_momentum)
+        if momentum_norm == 0.0:
+            raise ValueError("r cross v must be non-zero.")
+
+        def skew(value):
+            x, y, z = value
+            return _np.array([[0.0, -z, y], [z, 0.0, -x], [-y, x, 0.0]])
+
+        transverse = v / speed
+        orbit_normal = angular_momentum / momentum_norm
+        d_transverse_dv = (_np.eye(3) - _np.outer(transverse, transverse)) / speed
+        d_momentum_dr = -skew(v)
+        d_momentum_dv = skew(r)
+        d_normal_dmomentum = (
+            _np.eye(3) - _np.outer(orbit_normal, orbit_normal)
+        ) / momentum_norm
+        d_orbit_normal_dr = d_normal_dmomentum @ d_momentum_dr
+        d_orbit_normal_dv = d_normal_dmomentum @ d_momentum_dv
+        d_normal_dr = skew(transverse) @ d_orbit_normal_dr
+        d_normal_dv = (
+            -skew(orbit_normal) @ d_transverse_dv
+            + skew(transverse) @ d_orbit_normal_dv
+        )
+
+        n_component, t_component, w_component = self.accelntw
+        jacobian = _np.zeros((3, 13))
+        jacobian[:, :3] = n_component * d_normal_dr + w_component * d_orbit_normal_dr
+        jacobian[:, 3:6] = (
+            n_component * d_normal_dv
+            + t_component * d_transverse_dv
+            + w_component * d_orbit_normal_dv
+        )
+        return jacobian
+
 
 class SpacecraftAccelConstBody(SpacecraftAccel):
     """Constant body-frame acceleration rotated by the spacecraft attitude."""
