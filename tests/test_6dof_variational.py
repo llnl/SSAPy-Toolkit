@@ -203,6 +203,19 @@ def test_covariance_transform_uses_stm_and_process_noise():
     np.testing.assert_allclose(covariance[-1], expected, atol=1e-12)
     np.testing.assert_allclose(covariance, np.swapaxes(covariance, -1, -2), atol=1e-12)
 
+    local_stm = result.attitude_error_stm
+    local_noise = np.broadcast_to(np.eye(12) * 1e-6, local_stm.shape).copy()
+    local_covariance = propagate_6dof_covariance(
+        result, np.eye(12), local_noise, coordinates="attitude_error"
+    )
+    local_expected = local_stm[-1] @ local_stm[-1].T + local_noise[-1]
+    np.testing.assert_allclose(local_covariance[-1], local_expected, atol=1e-12)
+    np.testing.assert_allclose(
+        local_covariance,
+        propagate_6dof_covariance(result, np.eye(12), local_noise),
+        atol=1e-12,
+    )
+
 
 def test_free_rigid_body_jacobian_matches_rhs_finite_difference():
     inertia = np.diag([2.0, 3.0, 4.0])

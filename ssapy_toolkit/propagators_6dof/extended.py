@@ -29,6 +29,7 @@ __all__ = [
     "HingedAppendage",
     "SloshMode",
     "propagate_6dof_extended",
+    "propagate_6dof_extended_variational",
 ]
 
 
@@ -126,17 +127,25 @@ class SloshMode:
 
 @dataclass(frozen=True)
 class Extended6DOFTrajectory:
+    """Integrated rigid and reduced-order body states.
+
+    ``stm`` is populated by :func:`propagate_6dof_extended_variational` and
+    uses the full state ordering ``[r, v, q, omega, [mass], modes]``.
+    """
+
     trajectory: SixDOFTrajectory
     hinge: np.ndarray | None = None
     flexible: np.ndarray | None = None
     slosh: np.ndarray | None = None
+    stm: np.ndarray | None = None
 
 
 def propagate_6dof_extended(*, times, inertia, hinge=None, flexible=None, slosh=None,
                             bus_mass=None, r0=None, v0=None, t0=None, q0=None, omega0=None,
                             mass0=None, mu=EARTH_MU, acceleration=None, torque=None,
                             gravity_gradient=False, rtol=1e-9, atol=1e-12, method="DOP853",
-                            max_step=np.inf, first_step=None):
+                            max_step=np.inf, first_step=None, with_stm=False, stm0=None,
+                            jacobian_step=1e-7):
     """Propagate rigid-body state plus hinge, flexible, and slosh modes.
 
     Each mode argument may be one mode or a sequence of modes. Extended arrays
@@ -164,6 +173,18 @@ def propagate_6dof_extended(*, times, inertia, hinge=None, flexible=None, slosh=
     for mode in sloshes: ext0 += [mode.displacement0, mode.velocity0]
     y0 = np.concatenate(([ *state.r, *state.v, *state.q, *state.omega] + ([] if mass0 is None else [mass0]), ext0))
     rigid_n = 14 if mass0 is not None else 13
+    n = y0.size
+    if with_stm:
+        if jacobian_step <= 0.0 or not np.isfinite(jacobian_step):
+            raise ValueError("jacobian_step must be finite and positive.")
+        if stm0 is None:
+            phi0 = np.eye(n)
+        else:
+            phi0 = np.asarray(stm0, dtype=float)
+            if phi0.shape != (n, n) or not np.all(np.isfinite(phi0)):
+                raise ValueError(f"stm0 must be finite with shape {(n, n)}.")
+    elif stm0 is not None:
+        raise ValueError("stm0 requires with_stm=True.")
 
     def rhs(t, y):
         rigid, z = y[:rigid_n], y[rigid_n:]
@@ -198,9 +219,27 @@ def propagate_6dof_extended(*, times, inertia, hinge=None, flexible=None, slosh=
             dz += [rate, -mode.natural_frequency**2 * disp - 2 * mode.damping_ratio * mode.natural_frequency * rate]
         return np.concatenate((base, dz))
 
-    sol = solve_ivp(rhs, (state.t, float(times[-1])), y0, t_eval=times, rtol=rtol, atol=atol, method=method, max_step=max_step, first_step=first_step)
+    if with_stm:
+        def combined_rhs(t, combined):
+            y = combined[:n]
+            phi = combined[n:].reshape(n, n)
+            jacobian = np.empty((n, n))
+            for column in range(n):
+                step = jacobian_step * max(1.0, abs(y[column]))
+                delta = np.zeros(n)
+                delta[column] = step
+                jacobian[:, column] = (rhs(t, y + delta) - rhs(t, y - delta)) / (2.0 * step)
+            return np.concatenate((rhs(t, y), (jacobian @ phi).ravel()))
+
+        y_initial = np.concatenate((y0, phi0.ravel()))
+        derivative = combined_rhs
+    else:
+        y_initial = y0
+        derivative = rhs
+    sol = solve_ivp(derivative, (state.t, float(times[-1])), y_initial, t_eval=times, rtol=rtol, atol=atol, method=method, max_step=max_step, first_step=first_step)
     if not sol.success: raise RuntimeError(sol.message)
-    y = sol.y.T
+    y = sol.y[:n].T
+    stm = None if not with_stm else sol.y[n:].T.reshape((-1, n, n))
     q = np.array([item / np.linalg.norm(item) for item in y[:, 6:10]])
     trajectory = SixDOFTrajectory(sol.t, y[:, :3], y[:, 3:6], q, y[:, 10:13], None if mass0 is None else y[:, 13], nfev=sol.nfev, message=sol.message, status=sol.status)
     j = rigid_n
@@ -212,4 +251,27 @@ def propagate_6dof_extended(*, times, inertia, hinge=None, flexible=None, slosh=
         values = y[:, j:j + 2 * len(modes)].reshape(len(times), len(modes), 2)
         arrays.append(values[:, 0, :] if len(modes) == 1 else values.transpose(0, 2, 1))
         j += 2 * len(modes)
-    return Extended6DOFTrajectory(trajectory, *arrays)
+    return Extended6DOFTrajectory(trajectory, *arrays, stm)
+
+
+def propagate_6dof_extended_variational(*, times, inertia, hinge=None, flexible=None, slosh=None,
+                                         bus_mass=None, r0=None, v0=None, t0=None, q0=None,
+                                         omega0=None, mass0=None, mu=EARTH_MU, acceleration=None,
+                                         torque=None, gravity_gradient=False, stm0=None,
+                                         jacobian_step=1e-7, rtol=1e-9, atol=1e-12,
+                                         method="DOP853", max_step=np.inf, first_step=None):
+    """Propagate extended 6-DoF states and their full finite-difference STM.
+
+    The STM state ordering is ``[r, v, q, omega, [mass], modes]``.  It can be
+    passed directly to :func:`propagate_6dof_covariance`; use
+    :func:`attitude_error_stm` for the non-redundant local attitude form.
+    ``jacobian_step`` is a relative central-difference perturbation because
+    the reduced-order coupling includes nonlinear hinge stiffness.
+    """
+    return propagate_6dof_extended(
+        times=times, inertia=inertia, hinge=hinge, flexible=flexible, slosh=slosh,
+        bus_mass=bus_mass, r0=r0, v0=v0, t0=t0, q0=q0, omega0=omega0, mass0=mass0,
+        mu=mu, acceleration=acceleration, torque=torque, gravity_gradient=gravity_gradient,
+        rtol=rtol, atol=atol, method=method, max_step=max_step, first_step=first_step,
+        with_stm=True, stm0=stm0, jacobian_step=jacobian_step,
+    )

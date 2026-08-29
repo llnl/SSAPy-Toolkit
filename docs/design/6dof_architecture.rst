@@ -391,10 +391,14 @@ numerical backbone:
 * ``ssapy_toolkit.propagators_6dof.propagate_6dof_variational`` propagates a
   coupled local-coordinate STM through the same rigid-body RHS, while
   ``propagate_6dof_covariance`` maps initial covariance and process-noise
-  contributions through it.
+  contributions through it. Covariances may use either the raw quaternion
+  coordinates or the three-parameter local attitude-error coordinates.
 * ``ssapy_toolkit.propagators_6dof.propagate_6dof_extended`` propagates one or
   more linearized hinged-appendage, flexible-mode, and propellant-slosh
   coordinates with reduced-order body force/torque coupling.
+* ``ssapy_toolkit.propagators_6dof.propagate_6dof_extended_variational``
+  propagates the same reduced-order states with a full finite-difference STM
+  for sensitivity and covariance workflows.
 * ``ssapy_toolkit.environment.SpaceEnvironment`` centralizes epoch-aware
   Sun/Moon position, atmosphere density/velocity, magnetic-field,
   eclipse-fraction, and environment-backed SSATK force-model construction,

@@ -111,20 +111,45 @@ def _quaternion_error_output_map(q: np.ndarray) -> np.ndarray:
     return 2.0 * np.hstack((-q[1:].reshape(3, 1), q[0] * np.eye(3) - _skew(q[1:])))
 
 
-def propagate_6dof_covariance(variational, covariance0, process_noise=None):
+def propagate_6dof_covariance(
+    variational, covariance0, process_noise=None, *, coordinates="auto"
+):
     """Map an initial covariance through a 6-DoF STM.
 
     ``process_noise`` is either one covariance contribution applied at every
     sample or an array with one contribution per sample. Contributions are in
     the propagated state coordinates and are added after the STM transform.
+    ``coordinates`` selects ``"quaternion"`` for the raw STM,
+    ``"attitude_error"`` for the local three-parameter attitude STM, or
+    ``"auto"`` to select from the shape of ``covariance0``.
     """
 
-    stm = np.asarray(getattr(variational, "stm", variational), dtype=float)
-    if stm.ndim != 3 or stm.shape[1] != stm.shape[2]:
+    raw_stm = np.asarray(getattr(variational, "stm", variational), dtype=float)
+    if raw_stm.ndim != 3 or raw_stm.shape[1] != raw_stm.shape[2]:
         raise ValueError("variational must contain an STM array with shape (samples, n, n).")
     covariance0 = np.asarray(covariance0, dtype=float)
-    if covariance0.shape != stm.shape[1:] or not np.all(np.isfinite(covariance0)):
-        raise ValueError(f"covariance0 must be finite with shape {stm.shape[1:]}.")
+    coordinates = str(coordinates).lower()
+    if coordinates not in {"auto", "quaternion", "attitude_error"}:
+        raise ValueError("coordinates must be 'auto', 'quaternion', or 'attitude_error'.")
+    raw_shape = raw_stm.shape[1:]
+    local_shape = (raw_shape[0] - 1, raw_shape[1] - 1)
+    if coordinates == "auto":
+        if covariance0.shape == raw_shape:
+            coordinates = "quaternion"
+        elif covariance0.shape == local_shape:
+            coordinates = "attitude_error"
+        else:
+            raise ValueError(f"covariance0 must be finite with shape {raw_shape} or {local_shape}.")
+    if coordinates == "attitude_error":
+        if covariance0.shape != local_shape:
+            raise ValueError(f"attitude-error covariance0 must have shape {local_shape}.")
+        stm = attitude_error_stm(variational)
+    else:
+        if covariance0.shape != raw_shape:
+            raise ValueError(f"quaternion covariance0 must have shape {raw_shape}.")
+        stm = raw_stm
+    if not np.all(np.isfinite(covariance0)):
+        raise ValueError("covariance0 must be finite.")
     covariance = np.einsum("...ij,jk,...lk->...il", stm, covariance0, stm)
     if process_noise is not None:
         process_noise = np.asarray(process_noise, dtype=float)

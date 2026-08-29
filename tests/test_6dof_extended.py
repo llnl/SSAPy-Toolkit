@@ -1,11 +1,17 @@
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
+import ssapy_toolkit as ssatk
 from ssapy_toolkit.propagators_6dof import (
     FlexibleMode,
     HingedAppendage,
     SloshMode,
+    attitude_error_stm,
+    propagate_6dof_covariance,
     propagate_6dof_extended,
+    propagate_6dof_extended_variational,
 )
 
 
@@ -84,3 +90,43 @@ def test_extended_propagation_honors_initial_epoch_before_first_sample():
     )
 
     np.testing.assert_allclose(result.trajectory.v[0], [50.0, 0.0, 0.0], atol=1e-10)
+
+
+def test_extended_variational_stm_covers_modes_and_covariance():
+    mode = HingedAppendage([0.0, 0.0, 1.0], 1.0, stiffness=2.0, angle0=0.1)
+    flexible = FlexibleMode([1.0, 0.0, 0.0], 1.0, 3.0, displacement0=0.02)
+    slosh = SloshMode([0.0, 1.0, 0.0], 1.0, 2.0, displacement0=0.03)
+    kwargs = {
+        "times": [0.0, 0.02],
+        "inertia": np.eye(3),
+        "mu": 0.0,
+        "r0": [1.0, 0.0, 0.0],
+        "v0": [0.0, 0.0, 0.0],
+        "q0": [1.0, 0.0, 0.0, 0.0],
+        "mass0": 10.0,
+        "hinge": mode,
+        "flexible": flexible,
+        "slosh": slosh,
+        "bus_mass": 10.0,
+        "rtol": 1e-10,
+        "atol": 1e-12,
+        "jacobian_step": 1e-6,
+    }
+    result = propagate_6dof_extended_variational(**kwargs)
+
+    assert ssatk.propagate_6dof_extended_variational is propagate_6dof_extended_variational
+    assert result.stm.shape == (2, 20, 20)
+    np.testing.assert_allclose(result.stm[0], np.eye(20), atol=1e-12)
+    np.testing.assert_allclose(attitude_error_stm(result)[0], np.eye(19), atol=1e-12)
+
+    perturbation = 1e-6
+    plus = propagate_6dof_extended(**{**kwargs, "hinge": replace(mode, angle0=mode.angle0 + perturbation)})
+    minus = propagate_6dof_extended(**{**kwargs, "hinge": replace(mode, angle0=mode.angle0 - perturbation)})
+    plus_state = np.concatenate((plus.trajectory.r[-1], plus.trajectory.v[-1], plus.trajectory.q[-1], plus.trajectory.omega[-1], [plus.trajectory.mass[-1]], plus.hinge[-1], plus.flexible[-1], plus.slosh[-1]))
+    minus_state = np.concatenate((minus.trajectory.r[-1], minus.trajectory.v[-1], minus.trajectory.q[-1], minus.trajectory.omega[-1], [minus.trajectory.mass[-1]], minus.hinge[-1], minus.flexible[-1], minus.slosh[-1]))
+    finite_difference = (plus_state - minus_state) / (2.0 * perturbation)
+    np.testing.assert_allclose(result.stm[-1, :, 14], finite_difference, rtol=2e-4, atol=1e-10)
+
+    covariance = propagate_6dof_covariance(result, np.eye(20))
+    assert covariance.shape == (2, 20, 20)
+    np.testing.assert_allclose(covariance, np.swapaxes(covariance, -1, -2), atol=1e-12)

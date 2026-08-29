@@ -156,6 +156,7 @@ _TOOLKIT_DUPLICATE_ALIASES = {
     "HingedAppendage": ".propagators_6dof",
     "SloshMode": ".propagators_6dof",
     "propagate_6dof_extended": ".propagators_6dof",
+    "propagate_6dof_extended_variational": ".propagators_6dof",
     "ReferenceCase": ".io",
     "compare_reference_case": ".io",
     "read_reference_case": ".io",

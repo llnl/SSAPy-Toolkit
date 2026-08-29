@@ -207,6 +207,9 @@ For coupled spacecraft covariance or sensitivity propagation, use
 ordering ``[r, v, δθ_body, omega, mass, wheel_momentum]``; ``δθ_body`` is the
 three-parameter body-frame error defined by
 ``q_perturbed = q_nominal ⊗ δq_body``.
+``propagate_6dof_covariance`` accepts either the raw quaternion covariance or
+the local covariance; use ``coordinates="attitude_error"`` to select the
+latter explicitly, or leave the default ``"auto"`` shape selection enabled.
 
 Export an independent-tool reference case with
 :func:`ssapy_toolkit.io.write_reference_case`. It writes a CCSDS Orbit
@@ -415,6 +418,12 @@ linear reduced-order couplings, not finite-element or computational-fluid-
 dynamics replacements. Each mode argument may be one mode or a sequence;
 single-mode results retain shape ``(samples, 2)`` and multi-mode results use
 ``(samples, 2, modes)``.
+For sensitivity or covariance propagation through those modes, use
+:func:`ssapy_toolkit.propagators_6dof.propagate_6dof_extended_variational`.
+Its ``stm`` uses the full ``[r, v, q, omega, mass, modes]`` state ordering and
+can be passed to :func:`ssapy_toolkit.propagators_6dof.propagate_6dof_covariance`.
+The extended STM uses relative central differences because hinge cubic
+stiffness is nonlinear.
 ``SpaceEnvironment.force_models(...)`` can assemble environment-backed drag,
 solar-radiation pressure, magnetic torque, and named third-body perturbations
 such as ``third_bodies=("moon", "sun")``. Use ``third_bodies=True`` for
