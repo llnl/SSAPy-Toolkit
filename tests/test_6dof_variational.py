@@ -1,7 +1,10 @@
 import numpy as np
 
 import ssapy_toolkit as ssatk
-from ssapy_toolkit.accelerations_6dof import SpacecraftAccelConstNTW
+from ssapy_toolkit.accelerations_6dof import (
+    SpacecraftAccelConstBody,
+    SpacecraftAccelConstNTW,
+)
 from ssapy_toolkit.coordinates.attitude import normalize_quaternion, rotate_vector
 from ssapy_toolkit.propagators_6dof import (
     attitude_error_stm,
@@ -11,6 +14,7 @@ from ssapy_toolkit.propagators_6dof import (
 )
 from ssapy_toolkit.propagators_6dof.sixdof import sixdof_rhs
 from ssapy_toolkit.propagators_6dof.variational import (
+    _acceleration_state_jacobian,
     _body_acceleration_jacobian,
     _free_rigid_body_jacobian,
     _gravity_gradient_jacobian,
@@ -88,6 +92,29 @@ def test_variational_constant_ntw_acceleration_uses_analytic_state_jacobian():
     )) / 2.0
 
     np.testing.assert_allclose(result.stm[-1] @ delta, finite_difference, rtol=2e-4, atol=1e-11)
+
+
+def test_constant_body_acceleration_state_jacobian_matches_finite_difference():
+    model = SpacecraftAccelConstBody([1.0e-3, -2.0e-3, 0.5e-3])
+    state = np.array([
+        7.0e6, -1.2e6, 0.8e6, 1.2e3, 7.3e3, -0.5e3,
+        0.9, 0.1, -0.2, 0.3, 0.01, -0.02, 0.03,
+    ])
+    jacobian = _acceleration_state_jacobian(model, 0.0, state)
+    finite_difference = np.empty((3, 13))
+
+    def acceleration(y):
+        return model(0.0, y[:3], y[3:6], normalize_quaternion(y[6:10]), y[10:13])
+
+    for column in range(state.size):
+        step = 1.0e-7 * max(1.0, abs(state[column]))
+        delta = np.zeros(state.size)
+        delta[column] = step
+        finite_difference[:, column] = (
+            acceleration(state + delta) - acceleration(state - delta)
+        ) / (2.0 * step)
+
+    np.testing.assert_allclose(jacobian, finite_difference, rtol=1e-6, atol=1e-12)
 
 
 def test_attitude_error_stm_has_nonsingular_three_parameter_attitude_state():
