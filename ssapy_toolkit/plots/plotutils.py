@@ -7,14 +7,13 @@ from numbers import Real
 from pathlib import Path
 
 # --- Third-party ---
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+from astropy.time import Time
+from erfa import gst94
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.colors import cnames, to_rgb, rgb2hex
 from PIL import Image as PILImage
-from pypdf import PdfWriter
-from astropy.time import Time
-from erfa import gst94
 
 # --- Local modules ---
 from ssapy.utils import find_file
@@ -713,6 +712,15 @@ def save_plot_to_pdf(figure, pdf_path):
         temp_pdf_path = re.sub(r"\.[^.]+$", "_temp.pdf", pdf_path)
     else:
         temp_pdf_path = f"{pdf_path}_temp.pdf"
+
+    if os.path.exists(pdf_path):
+        try:
+            from pypdf import PdfWriter
+        except ImportError as exc:
+            raise ImportError(
+                "Appending to an existing PDF requires pypdf; "
+                "install it with `pip install ssapy-toolkit[pdf]`."
+            ) from exc
 
     # Save the figure as a PNG in-memory using BytesIO
     png_buffer = io.BytesIO()

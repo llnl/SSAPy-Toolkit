@@ -59,9 +59,12 @@ GMAT, Orekit, STK, or FreeFlyer:
   controller.
 - **Launch & propulsion** — launch-pad definitions, gravity-turn ascent,
   engine catalogs, thrust profiles, and fuel/burn utilities.
-- **Data I/O** — HDF5 helpers (including dictionary/HDF5 conversion with array
-  handling and selective key loading), plus CSV, JSON, XML, and pickle I/O, and
-  TLE/3LE parsing.
+- **Data I/O** — CCSDS CDM KVN 1.0 and OMM XML 2.0 interoperability, HDF5
+  helpers (including dictionary/HDF5 conversion with array handling and
+  selective key loading), plus CSV, JSON, XML, pickle, and TLE/3LE parsing.
+  OMM XML support covers the `meanElements` and `tleParameters` data-block
+  subset; structured covariance and other structured data blocks are rejected
+  explicitly.
 - **SSAPy wrappers & HPC helpers** — convenience wrappers around SSAPy orbits,
   propagators, and satellite keyword arguments, plus utilities for HPC
   workflows.
@@ -85,11 +88,14 @@ This installs the package in editable mode along with development dependencies
 plotting dependencies support HTML, image, and GIF output through Plotly,
 Matplotlib, Pillow, imageio, and SSAPy-Data assets. Install
 `ssapy-toolkit[static]` for Plotly static-image export through Kaleido,
+`ssapy-toolkit[pdf]` for appending pages to existing PDF plots,
 `ssapy-toolkit[notebook]` for IPython display and ipyvolume Earth/Moon meshes,
 `ssapy-toolkit[video]` for OpenCV MP4 output and a bundled FFmpeg fallback, and
 `ssapy-toolkit[browser]` for Selenium browser capture. Node.js 20+ is used only to validate the
 self-contained JavaScript viewer sources; GitHub Actions installs it with
 `actions/setup-node`, and local developers can use system Node.js or `nodeenv`.
+Install `ssapy-toolkit[monitoring]` to enable the optional current-process RSS
+memory helper.
 
 SSAPy Toolkit builds on SSAPy; see the
 [SSAPy](https://github.com/llnl/SSAPy) repository for its installation details.
@@ -130,6 +136,21 @@ as `ssapy_toolkit.ssapy` when direct SSAPy module access is needed.
 Earth/Moon helpers formerly provided by `ssapy.plotUtils` are available as
 `ssapy_toolkit.draw_earth`, `draw_moon`, `load_earth_file`, and
 `load_moon_file`.
+
+CCSDS Conjunction Data Message (CDM) KVN 1.0 files use SI values in memory:
+
+```python
+from ssapy_toolkit.io.ccsds_cdm import read_cdm, write_cdm
+
+cdm = read_cdm("conjunction.cdm")
+object1_gcrf = cdm.object1.state_gcrf()
+write_cdm(cdm, "canonical.cdm")
+```
+
+The reader accepts calendar or ordinal Coordinated Universal Time (UTC), all
+three CDM 1.0 state frames (`GCRF`, `EME2000`, and `ITRF`), and the mandatory
+RTN covariance plus complete optional drag, solar-radiation-pressure, and
+thrust rows. Later alternate-covariance extensions are rejected explicitly.
 
 For workflow functions, import the specific Toolkit module you need:
 

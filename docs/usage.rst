@@ -13,10 +13,13 @@ Install in editable mode with development extras:
 Plotting installs the Python packages needed for HTML, image, and GIF outputs,
 including Plotly, Matplotlib, Pillow, imageio, and SSAPy-Data.
 Install ``ssapy-toolkit[static]`` for Plotly static-image export through Kaleido.
+Install ``ssapy-toolkit[pdf]`` to append pages to existing PDF plots.
 Install ``ssapy-toolkit[notebook]`` for IPython display and ipyvolume
 Earth/Moon meshes.
 Install ``ssapy-toolkit[video]`` for OpenCV MP4 output and a bundled FFmpeg
 fallback, and ``ssapy-toolkit[browser]`` for Selenium browser capture.
+Install ``ssapy-toolkit[monitoring]`` to enable the optional current-process RSS
+memory helper.
 Node.js 20+ is only needed for validating the JavaScript satellite-viewer source;
 GitHub Actions installs it with ``actions/setup-node``.
 
@@ -96,6 +99,27 @@ Earth/Moon helpers formerly provided by ``ssapy.plotUtils`` are available as
 Wildcard imports are intentionally unsupported; use ``import ssapy_toolkit as
 ssatk`` or import individual names explicitly.
 
+CCSDS conjunction messages
+---------------------------
+
+Read and write CCSDS 508.0-B-1 Conjunction Data Message (CDM) KVN 1.0 files
+with :func:`ssapy_toolkit.io.ccsds_cdm.read_cdm` and
+:func:`ssapy_toolkit.io.ccsds_cdm.write_cdm`:
+
+.. code-block:: python
+
+   from ssapy_toolkit.io.ccsds_cdm import read_cdm, write_cdm
+
+   cdm = read_cdm("conjunction.cdm")
+   object1_gcrf = cdm.object1.state_gcrf()
+   write_cdm(cdm, "canonical.cdm")
+
+States and covariances use SI units in memory. The KVN reader accepts calendar
+or ordinal Coordinated Universal Time (UTC), ``GCRF``, ``EME2000``, and
+``ITRF`` state frames, and the mandatory RTN covariance plus complete optional
+drag, solar-radiation-pressure, and thrust rows. Alternate XYZ covariance
+extensions from later message specifications are rejected explicitly.
+
 Satellite operation frames
 --------------------------
 
@@ -154,6 +178,9 @@ For coupled spacecraft covariance or sensitivity propagation, use
 ordering ``[r, v, δθ_body, omega, mass, wheel_momentum]``; ``δθ_body`` is the
 three-parameter body-frame error defined by
 ``q_perturbed = q_nominal ⊗ δq_body``.
+``propagate_6dof_covariance`` accepts either the raw quaternion covariance or
+the local covariance; use ``coordinates="attitude_error"`` to select the
+latter explicitly, or leave the default ``"auto"`` shape selection enabled.
 
 Export an independent-tool reference case with
 :func:`ssapy_toolkit.io.write_reference_case`. It writes a CCSDS Orbit
@@ -161,6 +188,13 @@ Ephemeris Message (OEM) in km and km/s plus a JSON sidecar in SI units with the
 epoch, frame, force-model labels, constants, integration settings, and numeric
 precision. GMAT, STK, Orekit, and similar tools can consume the OEM without
 guessing the SSATK conventions.
+Pass an SI ``covariance`` array with optional ``covariance_t`` and
+``covariance_reference_frame`` to include standard triangular OEM covariance
+blocks; covariance frames are preserved rather than implicitly rotated.
+Pass an SI ``acceleration`` array with shape ``(N, 3)`` to write standard
+nine-component OEM records (position, velocity, and acceleration); optional
+``acceleration_t`` must match the state epochs. The JSON sidecar records the
+acceleration count, epochs, and SI units.
 
 .. code-block:: python
 
@@ -180,6 +214,21 @@ Compare a trajectory against an OEM or JSON reference with
 :func:`ssapy_toolkit.io.compare_reference_case`. It evaluates the candidate at
 the reference epochs and returns maximum, root-mean-square, and final position
 and velocity residuals in SI units.
+
+Read a standalone CCSDS OEM 2.0 KVN message with
+:func:`ssapy_toolkit.io.read_oem`. The reader accepts standard multi-segment
+messages and legacy ``DATA_START``/``DATA_STOP`` wrappers, preserves each
+segment's metadata and comments, and converts the km/km/s state records to
+meters and meters per second. Standard triangular 6x6 OEM covariance blocks
+are preserved per epoch and covariance frame and converted to SI units; no
+implicit RTN/RIC/frame rotation is applied. Optional standard three-component
+acceleration records are preserved per epoch and segment and converted from
+km/s^2 to m/s^2. Incomplete, nonfinite, mixed, or out-of-order acceleration
+records, and inconsistent sidecar acceleration metadata, are rejected
+explicitly. Absolute UTC, TAI, TT, TDB, TCB, TCG, UT1, and GPS
+calendar or ordinal epochs are supported; mission-relative time systems such
+as MRT and SCLK require an external epoch or clock-correlation contract not
+represented by the current OEM API and are rejected explicitly.
 
 .. code-block:: python
 
@@ -350,7 +399,15 @@ For linearized appendage and propellant-slosh states, use
 :func:`ssapy_toolkit.propagators_6dof.propagate_6dof_extended` with
 ``HingedAppendage``, ``FlexibleMode``, and ``SloshMode``. These models are
 linear reduced-order couplings, not finite-element or computational-fluid-
-dynamics replacements.
+dynamics replacements. Each mode argument may be one mode or a sequence;
+single-mode results retain shape ``(samples, 2)`` and multi-mode results use
+``(samples, 2, modes)``.
+For sensitivity or covariance propagation through those modes, use
+:func:`ssapy_toolkit.propagators_6dof.propagate_6dof_extended_variational`.
+Its ``stm`` uses the full ``[r, v, q, omega, mass, modes]`` state ordering and
+can be passed to :func:`ssapy_toolkit.propagators_6dof.propagate_6dof_covariance`.
+The extended STM uses relative central differences because hinge cubic
+stiffness is nonlinear.
 ``SpaceEnvironment.force_models(...)`` can assemble environment-backed drag,
 solar-radiation pressure, magnetic torque, and named third-body perturbations
 such as ``third_bodies=("moon", "sun")``. Use ``third_bodies=True`` for

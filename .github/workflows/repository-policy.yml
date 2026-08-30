@@ -39,5 +39,9 @@ jobs:
               BASE_REF="$(git rev-list --max-parents=0 "$HEAD_REF")"
             fi
           fi
+          if ! git cat-file -e "$BASE_REF^{commit}" 2>/dev/null; then
+            echo "Base commit $BASE_REF is unavailable; checking the rewritten head against its parent."
+            BASE_REF="$(git rev-parse "$HEAD_REF^")"
+          fi
 
           python scripts/check_repository_policy.py --base-ref "$BASE_REF" --head-ref "$HEAD_REF"

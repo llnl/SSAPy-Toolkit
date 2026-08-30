@@ -75,8 +75,10 @@ def test_demo_compare_models():
 
 
 def test_demo_orbital_maneuvers():
-    demo_orbital_maneuvers = demo_main("demo_orbital_maneuvers")
-    out = demo_orbital_maneuvers(make_figures=False, fast=True)
+    from matplotlib import pyplot as plt
+
+    module = import_module(DEMO_MODULES["demo_orbital_maneuvers"])
+    out = module.main(make_figures=False, fast=True)
     assert set(out["results"]) == {"impulsive", "fixed_time", "continuous", "optimal", "staged_optimal", "split_plane_change", "elliptical_two_burn", "burn_conversion"}
     assert len(out["summary_delta_v"]) >= 24
     assert "burn_to_deltav" in out["results"]["burn_conversion"]
@@ -101,6 +103,9 @@ def test_demo_orbital_maneuvers():
         assert split[f"{name} split"]["delta_v_total"] < split[f"{name} all departure"]["delta_v_total"]
         assert split[f"{name} split"]["delta_v_total"] < split[f"{name} all arrival"]["delta_v_total"]
         assert 0.0 < split[f"{name} split"]["diagnostics"]["split_inclination"] < split[f"{name} split"]["diagnostics"]["inclination_change"]
+    figure = module._make_summary_figure(out["results"])
+    assert len(figure.axes) == 9
+    plt.close(figure)
 
 
 def test_demo_6dof_attitude_control():

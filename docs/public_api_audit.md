@@ -60,17 +60,17 @@ python3 scripts/audit_public_api_coverage.py \
 
 Current audited result from this branch (Python 3.13):
 
-- `617 passed, 18 skipped`
-- `public_functions=928`
-- `body_hit=883`
-- `body_unhit=45`
+- `796 passed, 18 skipped`
+- `public_functions=1012`
+- `body_hit=963`
+- `body_unhit=49`
 - `body_hit_pct=95.2`
-- `all_functions_including_nested=1994`
-- `all_functions_body_hit=1922`
-- `all_functions_body_unhit=72`
-- `all_functions_body_hit_pct=96.4`
-- `package_branches=8094`
-- `package_branch_hit_pct=72.1`
+- `all_functions_including_nested=2214`
+- `all_functions_body_hit=2128`
+- `all_functions_body_unhit=86`
+- `all_functions_body_hit_pct=96.1`
+- `package_branches=9404`
+- `package_branch_hit_pct=70.9`
 
 CI enforces the public audit at 95% body-hit and the exhaustive audit at 90%
 body-hit / 65% branch-hit on Python 3.13. Those thresholds are intentionally

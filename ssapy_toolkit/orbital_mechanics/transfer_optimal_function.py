@@ -818,7 +818,7 @@ def transfer_optimal(
 
     Parameters
     ----------
-    initial, target, orbit1, orbit2 : ssapy.orbit.Orbit or (r, v, t) tuple
+    initial, target, orbit1, orbit2 : ssapy.orbit.Orbit or tuple
         Departure and target orbits/states.  Epochs may be GPS seconds or
         ``astropy.time.Time``.
     r1, v1, r2, v2 : array_like, optional

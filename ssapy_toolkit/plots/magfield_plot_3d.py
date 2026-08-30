@@ -83,6 +83,12 @@ except ImportError:
 # rebind only this module's name while the physics kept using the old value,
 # silently producing wrong numbers. Use geomagnetics.set_external_model()
 # instead; `_EXTERNAL_MODEL` below is a read-only convenience via __getattr__.
+# geomagnetics is a sibling module in this package. It previously lived at the
+# ssapy_toolkit package root, which required a sys.path bootstrap here for
+# script mode and -- worse -- created a circular import: reaching it pulled in
+# ssapy_toolkit.plots, whose __init__ auto-imports this module, which imports
+# back into a half-initialised geomagnetics. A plain sibling import has neither
+# problem.
 try:
     from .. import geomagnetics as _geo
 except ImportError:
@@ -108,7 +114,7 @@ except ImportError:
 # absolute form works in script mode.
 try:
     from ..geomagnetics import (  # noqa: F401
-    _geo_to_gsm_matrix, _get_external, _enu_to_cartesian_batch,
+    _geo_to_gsm_matrix, _get_external, _get_t89, _enu_to_cartesian_batch,
     _bfield_batch, _bunit_batch, _field_magnitude_along, _surface_radius_km,
     _adaptive_step_km, _trace_batch_rk4, _trace_all_closed, _resample_curve,
     _make_seeds_lshell, _make_seeds_magnetic, _physics_fingerprint,
@@ -121,7 +127,7 @@ try:
 )
 except ImportError:
     from ssapy_toolkit.geomagnetics import (  # noqa: F401
-    _geo_to_gsm_matrix, _get_external, _enu_to_cartesian_batch,
+    _geo_to_gsm_matrix, _get_external, _get_t89, _enu_to_cartesian_batch,
     _bfield_batch, _bunit_batch, _field_magnitude_along, _surface_radius_km,
     _adaptive_step_km, _trace_batch_rk4, _trace_all_closed, _resample_curve,
     _make_seeds_lshell, _make_seeds_magnetic, _physics_fingerprint,

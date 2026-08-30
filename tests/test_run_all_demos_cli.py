@@ -1,8 +1,10 @@
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+import ssapy_toolkit
 import ssapy_toolkit.run_all_demos as gallery_cli
 from ssapy_toolkit.demo_gallery import discover_demo_files
 
@@ -45,7 +47,7 @@ def test_gallery_cli_distribution_fallback_errors_and_open(tmp_path, monkeypatch
     monkeypatch.setattr(gallery_cli, "_looks_like_demos_dir", lambda path: next(calls))
 
     class FakeDist:
-        files = [Path("demos/__init__.py")]
+        files = (Path("demos/__init__.py"),)
 
         def locate_file(self, file):
             return tmp_path / "site" / file
@@ -101,3 +103,13 @@ def test_pyproject_installs_demo_package_and_cli_script():
 
     assert 'include = ["ssapy_toolkit*", "demos*"]' in pyproject_text
     assert 'ssapy-demo-gallery = "ssapy_toolkit.run_all_demos:main"' in pyproject_text
+
+
+def test_release_version_metadata_is_consistent():
+    version = ssapy_toolkit.__version__
+
+    pyproject = Path("pyproject.toml").read_text(encoding="utf-8")
+    citation = Path("CITATION.cff").read_text(encoding="utf-8")
+    assert f'version = "{version}"' in pyproject
+    assert f'version: "{version}"' in citation
+    assert json.loads(Path("codemeta.json").read_text(encoding="utf-8"))["version"] == version

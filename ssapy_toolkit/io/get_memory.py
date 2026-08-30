@@ -1,4 +1,3 @@
-from psutil import Process
 import os
 
 
@@ -11,5 +10,13 @@ def get_memory_usage() -> str:
     str
         Formatted memory used by the process in gigabytes.
     """
+    try:
+        from psutil import Process
+    except ImportError:
+        return (
+            "Memory usage unavailable; install ssapy-toolkit[monitoring] "
+            "to enable it."
+        )
+
     memory_used = Process(os.getpid()).memory_info().rss / 1024 ** 3
     return f"Memory used: {memory_used:.2f} GB"

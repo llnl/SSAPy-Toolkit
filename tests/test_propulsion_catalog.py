@@ -48,6 +48,11 @@ def test_thruster_spec_aliases_scaled_selection_and_builders():
     assert hall_by_alias.nominal_thrust_n == pytest.approx(0.083)
     assert hall_by_alias.nominal_isp_s == pytest.approx(1604.0)
     assert hall_by_alias.nominal_power_w is not None
+    assert hall_by_alias.nominal_dry_mass_kg == pytest.approx(5.0)
+    assert hall_by_alias.exhaust_velocity_mps == pytest.approx(1604.0 * G0)
+    tuned = hall_by_alias.with_updates(nominal_isp_s=1700.0)
+    assert tuned.nominal_isp_s == pytest.approx(1700.0)
+    assert tuned.name == hall_by_alias.name
 
     thruster = build_thruster(
         "hall_effect",

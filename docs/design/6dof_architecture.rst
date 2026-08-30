@@ -391,10 +391,14 @@ numerical backbone:
 * ``ssapy_toolkit.propagators_6dof.propagate_6dof_variational`` propagates a
   coupled local-coordinate STM through the same rigid-body RHS, while
   ``propagate_6dof_covariance`` maps initial covariance and process-noise
-  contributions through it.
-* ``ssapy_toolkit.propagators_6dof.propagate_6dof_extended`` propagates
-  linearized hinged-appendage, flexible-mode, and propellant-slosh coordinates
-  with reduced-order body force/torque coupling.
+  contributions through it. Covariances may use either the raw quaternion
+  coordinates or the three-parameter local attitude-error coordinates.
+* ``ssapy_toolkit.propagators_6dof.propagate_6dof_extended`` propagates one or
+  more linearized hinged-appendage, flexible-mode, and propellant-slosh
+  coordinates with reduced-order body force/torque coupling.
+* ``ssapy_toolkit.propagators_6dof.propagate_6dof_extended_variational``
+  propagates the same reduced-order states with a full finite-difference STM
+  for sensitivity and covariance workflows.
 * ``ssapy_toolkit.environment.SpaceEnvironment`` centralizes epoch-aware
   Sun/Moon position, atmosphere density/velocity, magnetic-field,
   eclipse-fraction, and environment-backed SSATK force-model construction,
@@ -465,13 +469,14 @@ articulated-facet SRP case. Optimization work should preserve the public API,
 avoid duplicated solver logic, and move shared math into reusable helpers rather
 than copying code between force models, propagators, demos, and tests.
 
-The remaining major gaps are higher-fidelity reduced-order body modeling and
-independent external-tool validation. SSATK now provides linear propagated
-hinge, flexible-mode, and propellant-slosh states, bounded multi-segment
-targeting, and coupled STM/covariance utilities. The extended models do not
-replace nonlinear multibody, finite-element, or computational-fluid-dynamics
-solvers. GMAT, STK/Astrogator, FreeFlyer, Orekit, Basilisk, and Tudat reference
-runs still require an environment with those tools and their force-model data.
+The remaining major gap is higher-fidelity reduced-order body modeling. SSATK
+now provides linear propagated hinge, flexible-mode, and propellant-slosh
+states, bounded multi-segment targeting, coupled STM/covariance utilities, and
+deterministic external-validation reporting through
+``scripts/external_validation_report.py``. The extended models do not replace
+nonlinear multibody, finite-element, or computational-fluid-dynamics solvers.
+GMAT, STK/Astrogator, FreeFlyer, Orekit, Basilisk, and Tudat reference runs
+still require an environment with those tools and their force-model data.
 
 Recommended Direction
 ---------------------

@@ -31,7 +31,6 @@ classifiers = [
 
 dependencies = [
   "astropy",
-  "global-land-mask",
   "h5py",
   "imageio",
   "llnl-ssapy-data>=0.1.5",
@@ -41,15 +40,16 @@ dependencies = [
   "pandas",
   "pillow",
   "plotly",
-  "psutil",
   "pyerfa",
-  "pypdf",
   "rebound",
   "scipy",
-  "tqdm",
 ]
 
 [project.optional-dependencies]
+monitoring = [
+  "psutil",
+]
+
 notebook = [
   "ipython",
   "ipyvolume",
@@ -61,6 +61,10 @@ static = [
 
 browser = [
   "selenium",
+]
+
+pdf = [
+  "pypdf",
 ]
 
 video = [
@@ -94,6 +98,8 @@ dev = [
   "nodeenv",
   "imageio-ffmpeg",
   "opencv-python",
+  "pypdf",
+  "psutil",
   "ruff",
   "selenium",
   "build",

@@ -4,7 +4,6 @@ from .guess_delimiter import guess_csv_delimiter
 import numpy as np
 import csv
 import os
-from .get_memory import get_memory_usage
 from .io_utils import exists
 from ssapy_toolkit._paths import ensure_file_parent
 
@@ -155,7 +154,7 @@ def append_csv(file_names: List[str], save_path: str = 'combined_data.csv', sep:
         save_path (str): The path to the output CSV file. If not specified, the output will be saved to the current working directory.
         sep (Optional[str]): The delimiter used in the CSV files. If None, delimiter will be guessed.
         dtypes (Optional[Dict[str, Union[str, np.dtype]]]): A dictionary specifying data types for columns.
-        progress (Optional[callable]): A function that can be used to track progress (e.g., printing memory usage).
+        progress (Optional[callable]): When provided, print progress for each input file.
 
     Returns:
         None
@@ -169,7 +168,6 @@ def append_csv(file_names: List[str], save_path: str = 'combined_data.csv', sep:
             df = pd_read_csv(file, sep=guess_csv_delimiter(file))
             dataframes.append(df)
             if progress is not None:
-                get_memory_usage()
                 print(f"Appended {i+1} of {len(file_names)}. File: {file}")
         except (FileNotFoundError, errors.EmptyDataError, errors.ParserError) as e:
             error_files.append(file)

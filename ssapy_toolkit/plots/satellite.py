@@ -125,7 +125,6 @@ class Satellite3D:
         Draw Δv arrow for each BurnEvent.
     ntw_scale  : float
         Length of the NTW/LVLH axis arrows, km.
-    burns      : list[BurnEvent]
     """
 
     # ── construction ─────────────────────────────────────────────────────────

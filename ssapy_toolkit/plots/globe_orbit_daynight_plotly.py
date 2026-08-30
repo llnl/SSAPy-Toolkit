@@ -143,7 +143,7 @@ def _smooth(field, sigma=1.0):
 
 
 def _land_mask(n_lat, n_lon, seed=7):
-    """Real land/ocean mask (global_land_mask, smoothed) shared between
+    """Optional real land/ocean mask (global_land_mask, smoothed) shared between
     the procedural continent coloring and the night-side city-light
     speckle below — one source of truth instead of two separate blob
     generators that could disagree with each other."""
@@ -239,10 +239,9 @@ def _city_lights(n_lat, n_lon, land, Lat, Lon, seed=13):
 
 def _procedural_continents(n_lat, n_lon, seed=7):
     """
-    Real continent shapes via the `global_land_mask` package (a bundled
-    real land/ocean mask, not guessed blobs) — used whenever the ssapy
-    texture isn't found. Falls back to the old random-blob generator only
-    if that package genuinely isn't installed either.
+    Real continent shapes via the optional `global_land_mask` package are
+    used whenever the ssapy texture isn't found. Falls back to the old
+    random-blob generator when that package is unavailable.
     """
     lat = np.linspace(90, -90, n_lat)
     lon = np.linspace(-180, 180, n_lon, endpoint=False)

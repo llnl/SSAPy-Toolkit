@@ -176,6 +176,29 @@ def test_figsave_save_plot_display_and_theme_helpers(tmp_path, monkeypatch, caps
     plt.close(fig)
 
 
+def test_pdf_creation_does_not_require_pypdf(tmp_path, monkeypatch):
+    monkeypatch.setitem(sys.modules, "pypdf", None)
+    output = tmp_path / "new.pdf"
+
+    plotutils.figsave(plt.figure(), save_path=output)
+
+    assert output.exists()
+    assert not (tmp_path / "new_temp.pdf").exists()
+
+
+def test_pdf_append_requires_optional_pypdf_before_temp_creation(tmp_path, monkeypatch):
+    output = tmp_path / "existing.pdf"
+    plotutils.figsave(plt.figure(), save_path=output)
+    monkeypatch.setitem(sys.modules, "pypdf", None)
+    figure = plt.figure()
+
+    with pytest.raises(ImportError, match=r"pip install ssapy-toolkit\[pdf\]"):
+        plotutils.figsave(figure, save_path=output)
+
+    plt.close(figure)
+    assert not (tmp_path / "existing_temp.pdf").exists()
+
+
 def test_auto_log_scale_uses_meaningful_lower_bound():
     fig, ax = plt.subplots()
     values = [

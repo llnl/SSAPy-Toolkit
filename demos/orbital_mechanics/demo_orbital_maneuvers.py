@@ -1074,7 +1074,7 @@ def _make_summary_figure(results):
         ("Hohmann lower", results["impulsive"]["Hohmann lower"], "3d", None),
         ("Bi-elliptic raise", results["impulsive"]["Bi-elliptic raise"], "3d", None),
         ("Bi-elliptic lower", results["impulsive"]["Bi-elliptic lower"], "3d", None),
-        ("Fixed-time Lambert", results["fixed_time"]["transfer_ssapy"], "3d", None),
+        ("Fixed-time Lambert", results["fixed_time"]["Fixed-time Lambert"], "3d", None),
         ("Optimized transfer", results["optimal"]["Optimal total Δv"], "3d", None),
         (
             "Continuous tangential burn",

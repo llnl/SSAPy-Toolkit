@@ -130,6 +130,7 @@ def test_gcrf_rtn_covariance_rotation_and_immutable_arrays():
     message = read_cdm(_fixture())
     obj = message.object1
 
+    assert obj.covariance_ref_frame == "RTN"
     rotated = obj.position_covariance_gcrf()
     assert np.allclose(rotated, rotated.T, atol=1e-12)
     assert np.allclose(np.linalg.eigvalsh(rotated), [1.0, 4.0, 9.0], atol=1e-12)
@@ -218,6 +219,20 @@ def test_invalid_messages_are_rejected(change, error):
     else:
         text = text.replace("CR_R                          = 1.0 [m**2]", change, 1)
     with pytest.raises(ValueError, match=error):
+        read_cdm(text)
+
+
+@pytest.mark.parametrize(
+    "key", ["CX_X", "CY_X", "CZ_X", "ALT_COV_TYPE", "ALT_COV_REF_FRAME"]
+)
+def test_alternate_covariance_fields_are_rejected(key):
+    text = _fixture().replace(
+        "CNDOT_NDOT                    = 0.09 [m**2/s**2]\n",
+        "CNDOT_NDOT                    = 0.09 [m**2/s**2]\n"
+        f"{key} = unsupported\n",
+        1,
+    )
+    with pytest.raises(ValueError, match="unsupported CDM covariance field"):
         read_cdm(text)
 
 

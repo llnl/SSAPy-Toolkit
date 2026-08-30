@@ -44,10 +44,13 @@ def test_screen_and_refine_constant_relative_motion():
     candidates = coarse_conjunction_screen(first, second, 0.1)
     assert len(candidates) == 1
     assert candidates[0].t_min == pytest.approx(5.0)
+    assert candidates[0].miss_distance == pytest.approx(candidates[0].minimum_distance)
     refined = refine_closest_approach(first, second, candidates[0])
     assert isinstance(refined, ClosestApproach)
     assert refined.tca == pytest.approx(5.0, abs=1e-8)
     assert refined.miss_distance == pytest.approx(0.0, abs=1e-8)
+    assert refined.time == pytest.approx(refined.tca)
+    assert refined.distance == pytest.approx(refined.miss_distance)
     np.testing.assert_allclose(refined.relative_position, 0.0, atol=1e-8)
     np.testing.assert_allclose(refined.relative_velocity, [-1, 0, 0])
 

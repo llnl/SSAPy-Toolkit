@@ -2,9 +2,11 @@
 
 The state-transition matrix is integrated with the same ``sixdof_rhs`` used
 by the nominal propagator. The central-gravity, fixed-inertia rigid-body case
-uses analytic Jacobians, including gravity-gradient torque partials; all other
-model combinations retain central differences so every existing force, torque,
-mass, and wheel model stays in the loop.
+uses analytic Jacobians, including gravity-gradient torque partials.
+Force and torque models that expose a ``state_jacobian`` (such as constant
+NTW, inertial, body-frame, and body-torque models) are included analytically;
+other model combinations retain central differences so every existing force,
+torque, mass, and wheel model stays in the loop.
 """
 
 from __future__ import annotations
@@ -109,20 +111,45 @@ def _quaternion_error_output_map(q: np.ndarray) -> np.ndarray:
     return 2.0 * np.hstack((-q[1:].reshape(3, 1), q[0] * np.eye(3) - _skew(q[1:])))
 
 
-def propagate_6dof_covariance(variational, covariance0, process_noise=None):
+def propagate_6dof_covariance(
+    variational, covariance0, process_noise=None, *, coordinates="auto"
+):
     """Map an initial covariance through a 6-DoF STM.
 
     ``process_noise`` is either one covariance contribution applied at every
     sample or an array with one contribution per sample. Contributions are in
     the propagated state coordinates and are added after the STM transform.
+    ``coordinates`` selects ``"quaternion"`` for the raw STM,
+    ``"attitude_error"`` for the local three-parameter attitude STM, or
+    ``"auto"`` to select from the shape of ``covariance0``.
     """
 
-    stm = np.asarray(getattr(variational, "stm", variational), dtype=float)
-    if stm.ndim != 3 or stm.shape[1] != stm.shape[2]:
+    raw_stm = np.asarray(getattr(variational, "stm", variational), dtype=float)
+    if raw_stm.ndim != 3 or raw_stm.shape[1] != raw_stm.shape[2]:
         raise ValueError("variational must contain an STM array with shape (samples, n, n).")
     covariance0 = np.asarray(covariance0, dtype=float)
-    if covariance0.shape != stm.shape[1:] or not np.all(np.isfinite(covariance0)):
-        raise ValueError(f"covariance0 must be finite with shape {stm.shape[1:]}.")
+    coordinates = str(coordinates).lower()
+    if coordinates not in {"auto", "quaternion", "attitude_error"}:
+        raise ValueError("coordinates must be 'auto', 'quaternion', or 'attitude_error'.")
+    raw_shape = raw_stm.shape[1:]
+    local_shape = (raw_shape[0] - 1, raw_shape[1] - 1)
+    if coordinates == "auto":
+        if covariance0.shape == raw_shape:
+            coordinates = "quaternion"
+        elif covariance0.shape == local_shape:
+            coordinates = "attitude_error"
+        else:
+            raise ValueError(f"covariance0 must be finite with shape {raw_shape} or {local_shape}.")
+    if coordinates == "attitude_error":
+        if covariance0.shape != local_shape:
+            raise ValueError(f"attitude-error covariance0 must have shape {local_shape}.")
+        stm = attitude_error_stm(variational)
+    else:
+        if covariance0.shape != raw_shape:
+            raise ValueError(f"quaternion covariance0 must have shape {raw_shape}.")
+        stm = raw_stm
+    if not np.all(np.isfinite(covariance0)):
+        raise ValueError("covariance0 must be finite.")
     covariance = np.einsum("...ij,jk,...lk->...il", stm, covariance0, stm)
     if process_noise is not None:
         process_noise = np.asarray(process_noise, dtype=float)
@@ -228,10 +255,10 @@ def propagate_6dof_variational(
         "inv_inertia": inv_inertia, "mass_state": state.mass is not None,
     }
     analytic_jacobian = (
-        acceleration is None
+        (acceleration is None or callable(getattr(acceleration, "state_jacobian", None)))
         and ntw_acceleration is None
         and (body_acceleration is None or hasattr(body_acceleration, "attitude_jacobian"))
-        and torque is None
+        and (torque is None or callable(getattr(torque, "state_jacobian", None)))
         and mass_flow_rate is None
         and wheel_torque is None
         and not callable(inertia)
@@ -256,6 +283,12 @@ def propagate_6dof_variational(
             if body_acceleration is not None:
                 jac[3:6, 6:10] = _body_acceleration_jacobian(
                     body_acceleration, t, y, q_raw=y[6:10]
+                )
+            if acceleration is not None:
+                jac[3:6, :13] += _model_state_jacobian(acceleration, t, y)
+            if torque is not None:
+                jac[10:13, :13] += np.linalg.solve(
+                    inertia_arg, _model_state_jacobian(torque, t, y)
                 )
         else:
             jac = np.empty((n, n))
@@ -372,6 +405,24 @@ def _body_acceleration_jacobian(model, t, y, *, q_raw):
         _rotate_vector_jacobian(q_raw, body_acceleration)
         + rotate_vector_matrix(q) @ body_jacobian @ normalization_jacobian
     )
+
+
+def _model_state_jacobian(model, t, y) -> np.ndarray:
+    q = normalize_quaternion(y[6:10])
+    jacobian = np.asarray(
+        model.state_jacobian(
+            t=t, r=y[:3], v=y[3:6], q=q, omega=y[10:13]
+        ),
+        dtype=float,
+    )
+    if jacobian.shape != (3, 13):
+        raise ValueError("state_jacobian must return a (3, 13) array.")
+    normalization_jacobian = (
+        np.eye(4) - np.outer(q, q)
+    ) / np.linalg.norm(y[6:10])
+    jacobian = jacobian.copy()
+    jacobian[:, 6:10] = jacobian[:, 6:10] @ normalization_jacobian
+    return jacobian
 
 
 def rotate_vector_matrix(q: np.ndarray) -> np.ndarray:

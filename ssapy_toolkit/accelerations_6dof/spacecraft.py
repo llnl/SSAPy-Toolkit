@@ -253,6 +253,9 @@ class SpacecraftAccelConstInertial(SpacecraftAccel):
     def acceleration(self, *, t, r, v, q, omega, spacecraft=None) -> _np.ndarray:
         return self.value
 
+    def state_jacobian(self, *, t, r, v, q, omega) -> _np.ndarray:
+        return _np.zeros((3, 13))
+
 
 class SpacecraftAccelConstNTW(SpacecraftAccel):
     """Constant SSAPy-order ``[N, T, W]`` acceleration rotated into GCRF."""
@@ -263,6 +266,45 @@ class SpacecraftAccelConstNTW(SpacecraftAccel):
     def acceleration(self, *, t, r, v, q, omega, spacecraft=None) -> _np.ndarray:
         return frame_to_gcrf_matrix("ntw", r=r, v=v) @ self.accelntw
 
+    def state_jacobian(self, *, t, r, v, q, omega) -> _np.ndarray:
+        """Return analytic acceleration partials in ``[r, v, q, omega]``."""
+
+        r = _as_vector3(r, "r")
+        v = _as_vector3(v, "v")
+        speed = _np.linalg.norm(v)
+        if speed == 0.0:
+            raise ValueError("v must be non-zero.")
+        angular_momentum = _np.cross(r, v)
+        momentum_norm = _np.linalg.norm(angular_momentum)
+        if momentum_norm == 0.0:
+            raise ValueError("r cross v must be non-zero.")
+
+        transverse = v / speed
+        orbit_normal = angular_momentum / momentum_norm
+        d_transverse_dv = (_np.eye(3) - _np.outer(transverse, transverse)) / speed
+        d_momentum_dr = -_skew(v)
+        d_momentum_dv = _skew(r)
+        d_normal_dmomentum = (
+            _np.eye(3) - _np.outer(orbit_normal, orbit_normal)
+        ) / momentum_norm
+        d_orbit_normal_dr = d_normal_dmomentum @ d_momentum_dr
+        d_orbit_normal_dv = d_normal_dmomentum @ d_momentum_dv
+        d_normal_dr = _skew(transverse) @ d_orbit_normal_dr
+        d_normal_dv = (
+            -_skew(orbit_normal) @ d_transverse_dv
+            + _skew(transverse) @ d_orbit_normal_dv
+        )
+
+        n_component, t_component, w_component = self.accelntw
+        jacobian = _np.zeros((3, 13))
+        jacobian[:, :3] = n_component * d_normal_dr + w_component * d_orbit_normal_dr
+        jacobian[:, 3:6] = (
+            n_component * d_normal_dv
+            + t_component * d_transverse_dv
+            + w_component * d_orbit_normal_dv
+        )
+        return jacobian
+
 
 class SpacecraftAccelConstBody(SpacecraftAccel):
     """Constant body-frame acceleration rotated by the spacecraft attitude."""
@@ -272,6 +314,24 @@ class SpacecraftAccelConstBody(SpacecraftAccel):
 
     def acceleration(self, *, t, r, v, q, omega, spacecraft=None) -> _np.ndarray:
         return _rotate_vector(q, self.value)
+
+    def state_jacobian(self, *, t, r, v, q, omega) -> _np.ndarray:
+        q = _normalize_quaternion(q)
+        w = q[0]
+        vector = q[1:]
+        derivative = _np.empty((3, 4))
+        derivative[:, 0] = 2.0 * (w * _np.eye(3) + _skew(vector)) @ self.value
+        for index in range(3):
+            basis = _np.eye(3)[:, index]
+            derivative[:, index + 1] = (
+                -2.0 * vector[index] * _np.eye(3)
+                + 2.0 * _np.outer(basis, vector)
+                + 2.0 * _np.outer(vector, basis)
+                + 2.0 * w * _skew(basis)
+            ) @ self.value
+        jacobian = _np.zeros((3, 13))
+        jacobian[:, 6:10] = derivative
+        return jacobian
 
 
 class SpacecraftAccelSum(SpacecraftAccel):
@@ -1380,8 +1440,13 @@ def constant_body_thrust(thrust: ArrayLike, mass: float):
 
 
 def constant_body_torque(torque: ArrayLike):
-    torque = _as_vector3(torque, "torque")
-    return lambda t, r, v, q, omega: torque
+    value = _as_vector3(torque, "torque")
+
+    def torque_model(t, r, v, q, omega):
+        return value
+
+    torque_model.state_jacobian = lambda **kwargs: _np.zeros((3, 13))
+    return torque_model
 
 
 def sum_accelerations(*models):
@@ -1435,6 +1500,11 @@ def _as_vector3(value: ArrayLike, name: str) -> _np.ndarray:
     if vector.shape != (3,):
         raise ValueError(f"{name} must be a 3-vector.")
     return vector
+
+
+def _skew(value: ArrayLike) -> _np.ndarray:
+    x, y, z = value
+    return _np.array([[0.0, -z, y], [z, 0.0, -x], [-y, x, 0.0]])
 
 
 def _inertia_matrix(inertia: ArrayLike) -> _np.ndarray:

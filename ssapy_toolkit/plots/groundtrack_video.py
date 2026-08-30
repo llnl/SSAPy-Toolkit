@@ -26,14 +26,6 @@ def _try_load_earth():
     except (FileNotFoundError, OSError):
         return None
 
-# Optional pretty progress
-try:
-    from tqdm import tqdm
-    _HAS_TQDM = True
-except ImportError:
-    _HAS_TQDM = False
-
-
 def _ensure_ffmpeg_path():
     """
     Return a usable ffmpeg executable path, or None if not found.
@@ -87,7 +79,8 @@ def groundtrack_video(
         (lat_deg, lon_deg) rows. Used in "map" and "surface3d" modes.
     save_path : str, required, must end with '.mp4'
     start_end_markers : bool
-    fps, bitrate, max_frames, progress : controls
+    fps, bitrate, max_frames : int
+    progress : bool
     mode : "map" | "surface3d" | "eci3d"
     """
     save_path, save_kwargs = _pop_save_path_aliases(save_kwargs, save_path=save_path)
@@ -198,32 +191,25 @@ def groundtrack_video(
                 base.append(Line2D([0], [0], marker='o', color='red', linestyle='None', markersize=8, label='Ground Station'))
             ax.legend(handles=base, loc='lower left', fontsize=fontsize-2)
 
-        # Progress iterator
-        if progress and _HAS_TQDM:
-            frame_iter = tqdm(range(L), desc="Rendering MP4 (map)", unit="frame")
-            ascii_mode = False
-        else:
-            frame_iter = range(L)
-            ascii_mode = progress
         bar_len = 28
         update_every = max(1, L // 100)
 
         # Animate
         with writer.saving(fig, save_path, dpi=150):
-            for k in frame_iter:
+            for k in range(L):
                 for i in range(len(r_list)):
                     kk = min(k, len(lon_all[i]) - 1)
                     heads[i].set_data([lon_all[i][kk]], [lat_all[i][kk]])
                 writer.grab_frame()
 
-                if ascii_mode and (k % update_every == 0 or k == L - 1):
+                if progress and (k % update_every == 0 or k == L - 1):
                     pct = (k + 1) / float(L)
                     filled = int(bar_len * pct)
                     bar = "#" * filled + "." * (bar_len - filled)
                     sys.stdout.write("\rRendering MP4 (map): [{}] {:3d}% ({}/{})".format(bar, int(pct * 100), k + 1, L))
                     sys.stdout.flush()
 
-        if ascii_mode:
+        if progress:
             sys.stdout.write("\n"); sys.stdout.flush()
 
         plt.close(fig)
