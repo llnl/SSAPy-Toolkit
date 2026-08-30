@@ -49,11 +49,13 @@ class ReferenceCase:
     covariance_t: np.ndarray | None = None
     covariance: np.ndarray | None = None
     covariance_reference_frame: str | None = None
+    acceleration_t: np.ndarray | None = None
+    acceleration: np.ndarray | None = None
 
 
 @dataclass(frozen=True)
 class ReferenceCaseSegment:
-    """One CCSDS OEM segment with SI states, covariance, and KVN metadata."""
+    """One CCSDS OEM segment with SI states, acceleration, and KVN metadata."""
 
     t: np.ndarray
     r: np.ndarray
@@ -63,6 +65,8 @@ class ReferenceCaseSegment:
     covariance_t: np.ndarray | None = None
     covariance: np.ndarray | None = None
     covariance_reference_frame: str | None = None
+    acceleration_t: np.ndarray | None = None
+    acceleration: np.ndarray | None = None
 
 
 def read_reference_case(source) -> ReferenceCase:
@@ -120,6 +124,36 @@ def read_reference_case(source) -> ReferenceCase:
             covariance_epochs, oem.covariance_t, rtol=0.0, atol=1.0e-9
         ):
             raise ValueError("OEM covariance epochs do not match reference-case metadata.")
+    acceleration_count = metadata.get("acceleration_count")
+    actual_acceleration_count = 0 if oem.acceleration_t is None else len(oem.acceleration_t)
+    if acceleration_count not in (None, actual_acceleration_count):
+        raise ValueError("OEM acceleration count does not match reference-case metadata.")
+    acceleration_units = metadata.get("acceleration_units")
+    if acceleration_units is not None:
+        if oem.acceleration_t is None:
+            raise ValueError("reference-case metadata declares acceleration units but OEM has none.")
+        if str(acceleration_units).strip().lower() != "m/s^2":
+            raise ValueError("reference-case acceleration units must be m/s^2.")
+    acceleration_order = metadata.get("acceleration_order")
+    if acceleration_order is not None and list(acceleration_order) != ["ax", "ay", "az"]:
+        raise ValueError("reference-case acceleration order must be [ax, ay, az].")
+    acceleration_epochs = metadata.get("acceleration_epochs_s")
+    if acceleration_epochs is not None:
+        if oem.acceleration_t is None:
+            raise ValueError("reference-case metadata declares acceleration epochs but OEM has none.")
+        acceleration_epochs = np.asarray(acceleration_epochs, dtype=float)
+        if acceleration_epochs.shape != oem.acceleration_t.shape or not np.allclose(
+            acceleration_epochs, oem.acceleration_t, rtol=0.0, atol=1.0e-9
+        ):
+            raise ValueError("OEM acceleration epochs do not match reference-case metadata.")
+    acceleration_segment_counts = metadata.get("acceleration_segment_counts")
+    if acceleration_segment_counts is not None:
+        actual_segment_counts = [
+            0 if segment.acceleration_t is None else len(segment.acceleration_t)
+            for segment in oem.segments
+        ]
+        if acceleration_segment_counts != actual_segment_counts:
+            raise ValueError("OEM acceleration segment counts do not match reference-case metadata.")
     if not np.all(np.diff(times) > 0.0) and len(times) > 1:
         raise ValueError("OEM epochs must be strictly increasing.")
     covariance_t = None if oem.covariance_t is None else oem.covariance_t + time_origin + epoch_offset
@@ -133,17 +167,20 @@ def read_reference_case(source) -> ReferenceCase:
                 segment,
                 t=segment.t + time_origin + epoch_offset,
                 covariance_t=None if segment.covariance_t is None else segment.covariance_t + time_origin + epoch_offset,
+                acceleration_t=None if segment.acceleration_t is None else segment.acceleration_t + time_origin + epoch_offset,
             )
             for segment in oem.segments
         ),
         covariance_t=covariance_t,
         covariance=oem.covariance,
         covariance_reference_frame=oem.covariance_reference_frame,
+        acceleration_t=None if oem.acceleration_t is None else oem.acceleration_t + time_origin + epoch_offset,
+        acceleration=oem.acceleration,
     )
 
 
 def read_oem(source) -> ReferenceCase:
-    """Read a CCSDS OEM 2.0 KVN message into SI state and covariance arrays."""
+    """Read a CCSDS OEM 2.0 KVN message into SI state and optional acceleration arrays."""
 
     text = _oem_text_source(source)
     header, parsed_segments = _parse_oem(text)
@@ -182,7 +219,9 @@ def read_oem(source) -> ReferenceCase:
     covariance_times = []
     covariances = []
     covariance_frames = set()
-    for metadata, comments, (epochs, states, covariance_epochs, covariance_values, covariance_frame) in zip(
+    acceleration_arrays = []
+    acceleration_times = []
+    for metadata, comments, (epochs, states, covariance_epochs, covariance_values, covariance_frame, accelerations) in zip(
         (item[0] for item in parsed_segments),
         (item[1] for item in parsed_segments),
         segments,
@@ -202,6 +241,8 @@ def read_oem(source) -> ReferenceCase:
                 ),
                 covariance=None if covariance_values is None else covariance_values * 1.0e6,
                 covariance_reference_frame=covariance_frame,
+                acceleration_t=None if accelerations is None else segment_times.copy(),
+                acceleration=None if accelerations is None else accelerations * 1.0e3,
             )
         )
         positions.append(states[:, :3])
@@ -210,6 +251,9 @@ def read_oem(source) -> ReferenceCase:
             covariance_times.extend(float((epoch - first_epoch).sec) for epoch in covariance_epochs)
             covariances.append(covariance_values)
             covariance_frames.add(covariance_frame)
+        if accelerations is not None:
+            acceleration_arrays.append(accelerations)
+            acceleration_times.extend(segment_times)
     if len(covariance_times) > 1 and not np.all(np.diff(covariance_times) > 0.0):
         raise ValueError("OEM covariance epochs must be strictly increasing across segments.")
 
@@ -233,6 +277,16 @@ def read_oem(source) -> ReferenceCase:
         aggregate["covariance_reference_frame"] = (
             next(iter(covariance_frames)) if len(covariance_frames) == 1 else "MIXED"
         )
+    if acceleration_arrays:
+        aggregate.update({
+            "acceleration_count": int(sum(len(values) for values in acceleration_arrays)),
+            "acceleration_units": "m/s^2",
+            "acceleration_epochs_s": acceleration_times,
+            "acceleration_segment_counts": [
+                0 if segment.acceleration_t is None else len(segment.acceleration_t)
+                for segment in segment_objects
+            ],
+        })
     return ReferenceCase(
         t=times,
         r=np.vstack(positions) * 1.0e3,
@@ -246,6 +300,8 @@ def read_oem(source) -> ReferenceCase:
             if not covariance_frames
             else next(iter(covariance_frames)) if len(covariance_frames) == 1 else "MIXED"
         ),
+        acceleration_t=None if not acceleration_arrays else np.asarray(acceleration_times),
+        acceleration=None if not acceleration_arrays else np.vstack(acceleration_arrays) * 1.0e3,
     )
 
 
@@ -304,6 +360,8 @@ def write_reference_case(
     covariance: np.ndarray | None = None,
     covariance_t: np.ndarray | None = None,
     covariance_reference_frame: str | None = None,
+    acceleration: np.ndarray | None = None,
+    acceleration_t: np.ndarray | None = None,
     overwrite: bool = False,
 ) -> ReferenceCaseFiles:
     """Write a trajectory as CCSDS OEM 2.0 plus a JSON case description.
@@ -311,6 +369,9 @@ def write_reference_case(
     ``trajectory`` must expose ``t``, ``r``, and ``v`` arrays. Times are
     interpreted as seconds from the first sample; OEM positions and velocities
     are written in km and km/s, while the JSON sidecar records SI states too.
+    Optional ``acceleration`` values use SI units and shape ``(N, 3)``; they
+    are written as the optional three acceleration components on each OEM
+    state record. ``acceleration_t`` must match the state epochs.
     Optional ``covariance`` values use SI state units and shape ``(M, 6, 6)``;
     ``covariance_t`` is measured from the first state sample and
     ``covariance_reference_frame`` is preserved without frame rotation.
@@ -331,6 +392,8 @@ def write_reference_case(
         raise ValueError("precision must be an integer from 1 through 17.")
     if covariance is None:
         covariance = getattr(trajectory, "covariance", None)
+    if acceleration is None:
+        acceleration = getattr(trajectory, "acceleration", None)
     elapsed = times - times[0]
     covariance, covariance_t, covariance_reference_frame = _normalize_oem_covariance(
         covariance,
@@ -339,6 +402,7 @@ def write_reference_case(
         elapsed,
         reference_frame,
     )
+    acceleration, acceleration_t = _normalize_oem_acceleration(acceleration, acceleration_t, elapsed)
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -376,6 +440,14 @@ def write_reference_case(
             "covariance_units": "km^2 for the canonical [km, km/s] state covariance",
             "covariance_epochs_s": covariance_t.tolist(),
         })
+    if acceleration is not None:
+        metadata.update({
+            "acceleration_count": int(acceleration.shape[0]),
+            "acceleration_units": "m/s^2",
+            "acceleration_epochs_s": acceleration_t.tolist(),
+            "acceleration_order": ["ax", "ay", "az"],
+            "acceleration_segment_counts": [int(acceleration.shape[0])],
+        })
     metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     ephemeris_path.write_text(
         _oem_text(
@@ -390,6 +462,7 @@ def write_reference_case(
             covariance=covariance,
             covariance_t=covariance_t,
             covariance_reference_frame=covariance_reference_frame,
+            acceleration=acceleration,
         ),
         encoding="utf-8",
     )
@@ -525,15 +598,17 @@ def _parse_oem(text):
 
         if section == "data":
             fields = line.replace("D", "E").replace("d", "e").split()
-            if len(fields) != 7:
-                raise ValueError("CCSDS OEM state records must contain one epoch and six state components.")
+            if len(fields) not in (7, 10):
+                raise ValueError(
+                    "CCSDS OEM state records must contain one epoch and six or nine components."
+                )
             try:
-                state = np.asarray(fields[1:], dtype=float)
+                values = np.asarray(fields[1:], dtype=float)
             except (TypeError, ValueError) as exc:
                 raise ValueError(f"invalid CCSDS OEM state record: {line!r}") from exc
-            if not np.all(np.isfinite(state)):
-                raise ValueError("CCSDS OEM state records must be finite.")
-            records.append((fields[0], state))
+            if not np.all(np.isfinite(values)):
+                raise ValueError("CCSDS OEM state and acceleration records must be finite.")
+            records.append((fields[0], values[:6], None if len(values) == 6 else values[6:]))
             continue
 
         key, value = _oem_key_value(line)
@@ -566,14 +641,22 @@ def _parse_oem_segment(metadata, comments, records, covariance_records=()):
         raise ValueError("OEM STOP_TIME must not precede START_TIME.")
     epochs = []
     states = []
-    for epoch_text, state in records:
+    accelerations = []
+    acceleration_presence = None
+    for epoch_text, state, acceleration in records:
         epoch = _oem_epoch(epoch_text, scale)
         if epoch < start or epoch > stop:
             raise ValueError("OEM state epoch is outside the segment START_TIME/STOP_TIME span.")
         if epochs and epoch <= epochs[-1]:
             raise ValueError("OEM state epochs must be strictly increasing within a segment.")
+        has_acceleration = acceleration is not None
+        if acceleration_presence is not None and has_acceleration != acceleration_presence:
+            raise ValueError("OEM acceleration records must be present for every state epoch in a segment.")
+        acceleration_presence = has_acceleration
         epochs.append(epoch)
         states.append(state)
+        if acceleration is not None:
+            accelerations.append(acceleration)
     covariance_epochs = []
     covariance_values = []
     covariance_frame = None
@@ -596,6 +679,7 @@ def _parse_oem_segment(metadata, comments, records, covariance_records=()):
         covariance_epochs,
         None if not covariance_values else np.stack(covariance_values),
         covariance_frame,
+        None if acceleration_presence is not True else np.vstack(accelerations),
     )
 
 
@@ -714,6 +798,31 @@ def _normalize_oem_covariance(covariance, covariance_t, covariance_reference_fra
     return covariance, covariance_t, frame
 
 
+def _normalize_oem_acceleration(acceleration, acceleration_t, elapsed):
+    if acceleration is None:
+        if acceleration_t is not None:
+            raise ValueError("acceleration_t requires acceleration.")
+        return None, None
+    acceleration = np.asarray(acceleration, dtype=float)
+    if acceleration.shape != (elapsed.size, 3):
+        raise ValueError("acceleration must have shape (N, 3) matching the state epochs.")
+    if not np.all(np.isfinite(acceleration)):
+        raise ValueError("acceleration must contain only finite values.")
+    if acceleration_t is None:
+        acceleration_t = elapsed.copy()
+    else:
+        acceleration_t = np.asarray(acceleration_t, dtype=float)
+        if acceleration_t.shape != (elapsed.size,):
+            raise ValueError("acceleration_t must have one epoch per acceleration vector.")
+        if not np.all(np.isfinite(acceleration_t)) or (
+            acceleration_t.size > 1 and not np.all(np.diff(acceleration_t) > 0.0)
+        ):
+            raise ValueError("acceleration_t must be finite and strictly increasing.")
+        if not np.allclose(acceleration_t, elapsed, rtol=0.0, atol=1.0e-12):
+            raise ValueError("acceleration_t must match the state epochs.")
+    return acceleration, acceleration_t
+
+
 def _epoch_utc(value: str | datetime) -> datetime:
     if isinstance(value, datetime):
         parsed = value
@@ -754,6 +863,7 @@ def _oem_text(
     covariance=None,
     covariance_t=None,
     covariance_reference_frame=None,
+    acceleration=None,
 ) -> str:
     start = _format_oem_epoch(epoch)
     stop = _format_oem_epoch(epoch + timedelta(seconds=float(elapsed[-1])))
@@ -762,7 +872,12 @@ def _oem_text(
         f"CREATION_DATE = {start}",
         "ORIGINATOR = SSATK",
         "META_START",
-        "COMMENT SSATK reference ephemeris; positions in km and velocities in km/s.",
+        (
+            "COMMENT SSATK reference ephemeris; positions in km, velocities in km/s, "
+            "and accelerations in km/s^2."
+            if acceleration is not None
+            else "COMMENT SSATK reference ephemeris; positions in km and velocities in km/s."
+        ),
         f"OBJECT_NAME = {case_name}",
         "OBJECT_ID = UNKNOWN",
         f"CENTER_NAME = {center_name}",
@@ -774,9 +889,11 @@ def _oem_text(
         f"USEABLE_STOP_TIME = {stop}",
         "META_STOP",
     ]
-    for offset, position, velocity in zip(elapsed, positions, velocities):
+    for index, (offset, position, velocity) in enumerate(zip(elapsed, positions, velocities)):
         sample_epoch = _format_oem_epoch(epoch + timedelta(seconds=float(offset)))
         state = [_number(value * 1.0e-3, precision) for value in (*position, *velocity)]
+        if acceleration is not None:
+            state.extend(_number(value * 1.0e-3, precision) for value in acceleration[index])
         lines.append(" ".join([sample_epoch, *state]))
     if covariance is not None:
         for offset, matrix in zip(covariance_t, covariance):

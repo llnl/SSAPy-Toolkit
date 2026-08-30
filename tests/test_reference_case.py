@@ -147,6 +147,7 @@ def test_read_oem_supports_inline_orekit_style_multi_segment_and_si_conversion()
     np.testing.assert_allclose(loaded.t, [0.0, 1.0, 2.0, 3.0])
     np.testing.assert_allclose(loaded.r[:, 0], [1.0e6, 1.001e6, 1.002e6, 1.003e6])
     np.testing.assert_allclose(loaded.v[0], [4.0e3, 5.0e3, 6.0e3])
+    assert loaded.acceleration is None
 
 
 def test_read_reference_case_preserves_standalone_oem_metadata(tmp_path):
@@ -285,6 +286,137 @@ def test_write_reference_case_round_trips_covariance_and_sidecar_offsets(tmp_pat
     metadata = json.loads(files.metadata_path.read_text())
     assert metadata["covariance_count"] == 2
     assert metadata["covariance_reference_frame"] == "RIC"
+
+
+def _acceleration_multi_segment_oem():
+    return _multi_segment_oem().replace(" 4 5 6", " 4 5 6 1e-3 2e-3 3e-3")
+
+
+def test_read_oem_preserves_acceleration_across_segments_in_si_units():
+    loaded = read_oem(_acceleration_multi_segment_oem())
+
+    np.testing.assert_allclose(loaded.acceleration_t, [0.0, 1.0, 2.0, 3.0])
+    np.testing.assert_allclose(loaded.acceleration, np.tile([1.0, 2.0, 3.0], (4, 1)))
+    np.testing.assert_allclose(loaded.segments[0].acceleration_t, [0.0, 1.0])
+    np.testing.assert_allclose(loaded.segments[1].acceleration, [[1.0, 2.0, 3.0]] * 2)
+    assert loaded.metadata["acceleration_count"] == 4
+
+
+def test_read_oem_preserves_acceleration_when_only_some_segments_include_it():
+    source = _acceleration_multi_segment_oem()
+    source = source.replace(
+        "2025-001T00:00:02.000000 1.002D+03 2 3 4 5 6 1e-3 2e-3 3e-3",
+        "2025-001T00:00:02.000000 1.002D+03 2 3 4 5 6",
+    ).replace(
+        "2025-001T00:00:03.000000 1.003D+03 2 3 4 5 6 1e-3 2e-3 3e-3",
+        "2025-001T00:00:03.000000 1.003D+03 2 3 4 5 6",
+    )
+    loaded = read_oem(source)
+
+    np.testing.assert_allclose(loaded.acceleration_t, [0.0, 1.0])
+    np.testing.assert_allclose(loaded.acceleration, [[1.0, 2.0, 3.0]] * 2)
+    assert loaded.segments[0].acceleration is not None
+    assert loaded.segments[1].acceleration is None
+
+
+def test_write_reference_case_round_trips_acceleration_and_sidecar_metadata(tmp_path):
+    trajectory = SimpleNamespace(
+        t=np.array([10.0, 12.5]),
+        r=np.array([[7_000_000.0, 0.0, 0.0], [7_000_001.0, 10.0, 20.0]]),
+        v=np.array([[0.0, 7_500.0, 0.0], [-1.0, 7_500.5, 2.0]]),
+    )
+    acceleration = np.array([[1.0e-3, -2.0e-3, 3.0e-3], [4.0e-3, 5.0e-3, -6.0e-3]])
+    files = write_reference_case(
+        trajectory,
+        tmp_path,
+        epoch="2025-01-01T00:00:00Z",
+        acceleration=acceleration,
+    )
+
+    data_lines = [
+        line for line in files.ephemeris_path.read_text().splitlines()
+        if line.startswith("2025-01-01T")
+    ]
+    assert all(len(line.split()) == 10 for line in data_lines)
+    loaded = read_reference_case(files.metadata_path)
+    np.testing.assert_allclose(loaded.acceleration_t, [10.0, 12.5])
+    np.testing.assert_allclose(loaded.acceleration, acceleration)
+    metadata = json.loads(files.metadata_path.read_text())
+    assert metadata["acceleration_count"] == 2
+    assert metadata["acceleration_units"] == "m/s^2"
+    assert metadata["acceleration_epochs_s"] == [0.0, 2.5]
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        _acceleration_multi_segment_oem().replace(" 6 1e-3 2e-3 3e-3", " 6 1e-3 2e-3"),
+        _acceleration_multi_segment_oem().replace(" 6 1e-3 2e-3 3e-3", " 6 1e-3 2e-3 nan"),
+        _acceleration_multi_segment_oem().replace(
+            "2025-001T00:00:01.000000 1.001D+03",
+            "2025-001T00:00:00.000000 1.001D+03",
+        ),
+        _multi_segment_oem().replace(
+            "2025-001T00:00:00.000000 1.0D+03 2 3 4 5 6",
+            "2025-001T00:00:00.000000 1.0D+03 2 3 4 5 6 1e-3 2e-3 3e-3",
+        ),
+        _acceleration_multi_segment_oem().replace(
+            "2025-001T00:00:02.000000 1.002D+03 2 3 4 5 6 1e-3 2e-3 3e-3",
+            "2025-001T00:00:02.000000 1.002D+03 2 3 4 5 6",
+        ),
+    ],
+)
+def test_read_oem_rejects_invalid_acceleration_records(bad):
+    with pytest.raises(ValueError):
+        read_oem(bad)
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("acceleration_count", 99),
+        ("acceleration_epochs_s", [0.0, 3.0]),
+        ("acceleration_segment_counts", [1, 1]),
+        ("acceleration_order", ["ax", "az", "ay"]),
+    ],
+)
+def test_read_reference_case_rejects_acceleration_sidecar_mismatches(tmp_path, key, value):
+    trajectory = SimpleNamespace(
+        t=np.array([0.0, 1.0]),
+        r=np.zeros((2, 3)),
+        v=np.zeros((2, 3)),
+    )
+    files = write_reference_case(
+        trajectory,
+        tmp_path,
+        epoch="2025-01-01T00:00:00Z",
+        acceleration=np.ones((2, 3)),
+    )
+    metadata = json.loads(files.metadata_path.read_text())
+    metadata[key] = value
+    files.metadata_path.write_text(json.dumps(metadata))
+    with pytest.raises(ValueError, match="acceleration"):
+        read_reference_case(files.metadata_path)
+
+
+def test_write_reference_case_rejects_invalid_acceleration_epochs(tmp_path):
+    trajectory = SimpleNamespace(t=[0.0, 1.0], r=np.zeros((2, 3)), v=np.zeros((2, 3)))
+    with pytest.raises(ValueError, match="strictly increasing"):
+        write_reference_case(
+            trajectory,
+            tmp_path,
+            epoch="2025-01-01T00:00:00Z",
+            acceleration=np.ones((2, 3)),
+            acceleration_t=[1.0, 0.0],
+        )
+    with pytest.raises(ValueError, match="match the state epochs"):
+        write_reference_case(
+            trajectory,
+            tmp_path,
+            epoch="2025-01-01T00:00:00Z",
+            acceleration=np.ones((2, 3)),
+            acceleration_t=[0.0, 2.0],
+        )
 
 
 @pytest.mark.parametrize(

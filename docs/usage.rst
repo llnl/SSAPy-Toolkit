@@ -220,6 +220,10 @@ guessing the SSATK conventions.
 Pass an SI ``covariance`` array with optional ``covariance_t`` and
 ``covariance_reference_frame`` to include standard triangular OEM covariance
 blocks; covariance frames are preserved rather than implicitly rotated.
+Pass an SI ``acceleration`` array with shape ``(N, 3)`` to write standard
+nine-component OEM records (position, velocity, and acceleration); optional
+``acceleration_t`` must match the state epochs. The JSON sidecar records the
+acceleration count, epochs, and SI units.
 
 .. code-block:: python
 
@@ -246,8 +250,11 @@ messages and legacy ``DATA_START``/``DATA_STOP`` wrappers, preserves each
 segment's metadata and comments, and converts the km/km/s state records to
 meters and meters per second. Standard triangular 6x6 OEM covariance blocks
 are preserved per epoch and covariance frame and converted to SI units; no
-implicit RTN/RIC/frame rotation is applied. Extra state components remain
-rejected explicitly. Absolute UTC, TAI, TT, TDB, TCB, TCG, UT1, and GPS
+implicit RTN/RIC/frame rotation is applied. Optional standard three-component
+acceleration records are preserved per epoch and segment and converted from
+km/s^2 to m/s^2. Incomplete, nonfinite, mixed, or out-of-order acceleration
+records, and inconsistent sidecar acceleration metadata, are rejected
+explicitly. Absolute UTC, TAI, TT, TDB, TCB, TCG, UT1, and GPS
 calendar or ordinal epochs are supported; mission-relative time systems such
 as MRT require an external epoch and are rejected.
 
