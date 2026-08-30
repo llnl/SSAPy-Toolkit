@@ -438,6 +438,7 @@ def test_read_oem_rejects_invalid_covariance_blocks(replacement):
     _multi_segment_oem().replace("ORIGINATOR = OREKIT\n", ""),
     _multi_segment_oem().replace("ORIGINATOR = OREKIT", "ORIGINATOR = OREKIT\nORIGINATOR = DUPLICATE"),
     _multi_segment_oem().replace("TIME_SYSTEM = UTC", "TIME_SYSTEM = MRT"),
+    _multi_segment_oem().replace("TIME_SYSTEM = UTC", "TIME_SYSTEM = SCLK"),
     _multi_segment_oem().replace(
         "2025-001T00:00:01.000000 1.001D+03",
         "2025-001T00:00:60.000000 1.001D+03",

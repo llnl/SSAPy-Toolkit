@@ -256,7 +256,8 @@ km/s^2 to m/s^2. Incomplete, nonfinite, mixed, or out-of-order acceleration
 records, and inconsistent sidecar acceleration metadata, are rejected
 explicitly. Absolute UTC, TAI, TT, TDB, TCB, TCG, UT1, and GPS
 calendar or ordinal epochs are supported; mission-relative time systems such
-as MRT require an external epoch and are rejected.
+as MRT and SCLK require an external epoch or clock-correlation contract not
+represented by the current OEM API and are rejected explicitly.
 
 .. code-block:: python
 
