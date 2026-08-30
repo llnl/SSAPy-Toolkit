@@ -222,6 +222,20 @@ def test_invalid_messages_are_rejected(change, error):
         read_cdm(text)
 
 
+@pytest.mark.parametrize(
+    "key", ["CX_X", "CY_X", "CZ_X", "ALT_COV_TYPE", "ALT_COV_REF_FRAME"]
+)
+def test_alternate_covariance_fields_are_rejected(key):
+    text = _fixture().replace(
+        "CNDOT_NDOT                    = 0.09 [m**2/s**2]\n",
+        "CNDOT_NDOT                    = 0.09 [m**2/s**2]\n"
+        f"{key} = unsupported\n",
+        1,
+    )
+    with pytest.raises(ValueError, match="unsupported CDM covariance field"):
+        read_cdm(text)
+
+
 def test_comments_and_covariance_extensions_follow_flattened_cdm_layout():
     text = _fixture().replace(
         "OBJECT                        = OBJECT1\n",

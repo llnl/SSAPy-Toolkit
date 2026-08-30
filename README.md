@@ -62,6 +62,9 @@ GMAT, Orekit, STK, or FreeFlyer:
 - **Data I/O** — CCSDS CDM KVN 1.0 and OMM XML 2.0 interoperability, HDF5
   helpers (including dictionary/HDF5 conversion with array handling and
   selective key loading), plus CSV, JSON, XML, pickle, and TLE/3LE parsing.
+  OMM XML support covers the `meanElements` and `tleParameters` data-block
+  subset; structured covariance and other structured data blocks are rejected
+  explicitly.
 - **SSAPy wrappers & HPC helpers** — convenience wrappers around SSAPy orbits,
   propagators, and satellite keyword arguments, plus utilities for HPC
   workflows.

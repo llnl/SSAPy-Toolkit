@@ -29,20 +29,16 @@ Benchmark references (all independent of the model code)
 
 from __future__ import annotations
 
-import os
 import importlib
-from pathlib import Path
+import os
 import sys
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import numpy as np
-import pytest
-from astropy.time import Time
-
-pytest.importorskip("ssapy")
 import ssapy
 
 
@@ -277,6 +273,7 @@ def _demo_figures():
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+
     from ssapy_toolkit.plots import figsave
 
     os.makedirs("tests", exist_ok=True)
