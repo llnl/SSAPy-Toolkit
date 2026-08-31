@@ -137,7 +137,16 @@ def import_module_from_path(path: Path):
     if spec is None or spec.loader is None:
         raise RuntimeError(f"Could not load module from {path}")
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # Register before execution. dataclasses resolves annotations through
+    # sys.modules[cls.__module__], so a module defining a dataclass under
+    # "from __future__ import annotations" raises AttributeError on a module
+    # that is not registered first.
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        sys.modules.pop(spec.name, None)
+        raise
     return module
 
 

@@ -212,3 +212,40 @@ def test_import_module_from_path_error(monkeypatch, tmp_path):
     monkeypatch.setattr(module.importlib.util, "spec_from_file_location", lambda *args, **kwargs: None)
     with pytest.raises(RuntimeError, match="Could not load"):
         module.import_module_from_path(tmp_path / "demo.py")
+
+
+def test_import_module_from_path_supports_dataclasses(tmp_path):
+    """dataclasses resolve annotations via sys.modules[cls.__module__]."""
+
+    import sys
+
+    module = importlib.import_module("ssapy_toolkit.demo_gallery")
+    demo = tmp_path / "demo_dataclass_under_future_annotations.py"
+    demo.write_text(
+        "from __future__ import annotations\n"
+        "from dataclasses import dataclass, field\n"
+        "GALLERY_INCLUDE = True\n"
+        "@dataclass(frozen=True)\n"
+        "class Thing:\n"
+        "    values: dict = field(default_factory=dict)\n"
+        "def main():\n"
+        "    return Thing({'a': 1})\n",
+        encoding="utf-8",
+    )
+
+    loaded = module.import_module_from_path(demo)
+    assert loaded.main().values == {"a": 1}
+    assert sys.modules.get(demo.stem) is loaded
+    del sys.modules[demo.stem]
+
+
+def test_import_module_from_path_does_not_leave_a_broken_module_registered(tmp_path):
+    import sys
+
+    module = importlib.import_module("ssapy_toolkit.demo_gallery")
+    demo = tmp_path / "demo_raises_on_import.py"
+    demo.write_text("raise RuntimeError('boom')\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        module.import_module_from_path(demo)
+    assert demo.stem not in sys.modules
