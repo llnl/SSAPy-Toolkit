@@ -146,6 +146,6 @@ docs/generated/
 .DS_Store
 *~
 
-# Local Codex/agent instructions
-AGENTS.md
-agents.md
+# Local per-session agent notes (durable guidance lives in the tracked AGENTS.md)
+AGENTS.local.md
+agents.local.md
