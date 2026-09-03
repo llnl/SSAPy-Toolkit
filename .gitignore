@@ -13,6 +13,29 @@ gallery_output/
 site/
 graphify-out/
 
+
+# Credentials and local secrets. These carry ordinary .py and .json
+# extensions, so none of the rules below catch them, and this repository has
+# a public remote. A single `git add .` would publish them irreversibly.
+*_credentials_local.py
+tle_credentials_local.py
+secrets.json
+
+# Generated reports written by ssapy-eclipse and the analysis scripts. JSON
+# is not ignored wholesale because the package ships real JSON assets, so
+# these are listed individually.
+data_audit.json
+ssapy_runtime_audit.json
+ssapy_data_asset_audit.json
+ssapy_promotion_report.json
+eclipse_validation.json
+eclipse_corpus_validation.json
+l2_orbits_*.json
+
+# Scratch copies extracted from git history during recovery work.
+orig_*.py
+recovered_*.py
+
 # Generated media and bulky artifacts should be created by demos/docs workflows,
 # not committed to the repository.
 *.png
@@ -144,8 +167,19 @@ docs/generated/
 ##########################
 
 .DS_Store
+desktop.ini
+Thumbs.db
+ehthumbs.db
 *~
 
 # Local per-session agent notes (durable guidance lives in the tracked AGENTS.md)
 AGENTS.local.md
 agents.local.md
+
+*.bsp
+
+gggrx_1200a_sha.*
+
+full.txt
+parity_fail.txt
+*_out.txt

@@ -1,342 +1,541 @@
-"""
-moon_render.py — shared, high-quality Moon mesh for Plotly scenes
-======================================================================
-Used by eclipse_space_view_plotly.py (and anything else that needs a Moon:
-globe_orbit_daynight_plotly.py's future lunar-orbit views, moon_plot_3d.py,
-etc). Split out on its own so there's exactly one Moon renderer in the
-toolkit instead of a slightly-different copy in every file that draws one.
+"""High-fidelity Moon renderer shared by the eclipse scenes.
 
-What actually changes visual quality vs. the old _moon_mesh_plotly():
-
-1. REAL TEXTURE FIRST, same pattern as globe_orbit_daynight_plotly's
-   _load_real_earth_texture: try ssapy.utils.find_file("moon", ext=".png")
-   before falling back to anything procedural. This is the single biggest
-   quality jump when a real asset is present — no amount of procedural
-   crater-painting matches an actual lunar photomosaic.
-
-2. REAL PER-VERTEX DIFFUSE LIGHTING, not flat ambient=1/diffuse=0 over a
-   painted albedo. The old version made craters *look* like paint swatches
-   because only color changed, never brightness-by-surface-angle. This
-   computes an actual outward normal at every vertex (from the displaced,
-   bumpy sphere, via finite differences across the lat/lon grid — not the
-   undisplaced sphere normal, so the bumps themselves cast the shading)
-   and shades each point by max(0, normal . sun_hat). That's what makes
-   craters read as 3D relief with a lit rim and a shadowed bowl, the way
-   every real Moon photo looks, instead of a flat texture.
-
-3. MARIA vs HIGHLANDS, not just "some albedo dips". The real Moon's most
-   recognizable feature from Earth is the dark basaltic maria (Sea of
-   Tranquility etc.) against brighter cratered highlands — large-scale
-   low-frequency blobs, distinct from the small high-frequency craters.
-   Previously there was only one texture scale (craters), so the disk
-   read as uniformly grey rather than having the familiar patchy look.
-
-4. Same real per-vertex Earth-shadow eclipse shading as before for lunar
-   mode (illumination_fraction evaluated at each vertex's true physical
-   position), just layered on top of the new base shading multiplicatively
-   instead of being the only source of brightness variation.
-
-Usage
------
-::
-
-    from moon_render import moon_mesh_plotly
-    fig.add_trace(moon_mesh_plotly(center, radius, sun_hat=sun_hat,
-                                   real_center_km=moon_r_km, mode="lunar"))
+The renderer uses the current SSAPy-Data lunar photomosaic when available,
+keeps the Moon synchronously oriented toward Earth, shades in linear light,
+and applies the same finite-distance apparent-disc overlap model used by the
+eclipse calculations.  The mesh has one vertex at each pole and a periodic
+longitude seam, so it contains no degenerate pole triangles or open seam.
 """
 from __future__ import annotations
+
+from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
+import os
+import warnings
+
 import numpy as np
 import plotly.graph_objects as go
 
-from ssapy_toolkit.constants import AU_KM, EARTH_RADIUS_KM, MOON_MEAN_RADIUS_KM, SUN_NOMINAL_RADIUS_KM
-
 try:
-    from .scene_primitives import stabilize_sphere_poles
+    from ssapy_toolkit.io.eclipse_asset_resolver import asset_candidates
 except ImportError:
-    from scene_primitives import stabilize_sphere_poles
+    from ssapy_toolkit.io.eclipse_asset_resolver import asset_candidates
 
 try:
-    from .eclipse_brightness_plot import illumination_fraction, R_SUN_KM, AU_KM
+    from ssapy_toolkit.compute.eclipse_brightness import illumination_fraction, irradiance_fraction, R_SUN_KM, AU_KM
 except ImportError:
     try:
-        from eclipse_brightness_plot import illumination_fraction, R_SUN_KM, AU_KM
+        from ssapy_toolkit.compute.eclipse_brightness import illumination_fraction, irradiance_fraction, R_SUN_KM, AU_KM
     except ImportError:
         illumination_fraction = None
-        R_SUN_KM = SUN_NOMINAL_RADIUS_KM
+        irradiance_fraction = None
+        R_SUN_KM, AU_KM = 695_700.0, 149_597_870.7
 
-R_MOON_KM = MOON_MEAN_RADIUS_KM
+R_MOON_KM = 1_737.4
+RE_KM = 6_378.137
 
-_moon_texture_cache = None
+_moon_texture_cache: dict[tuple[str, int, int, int, int], np.ndarray] = {}
+_moon_texture_source_cache: dict[tuple[str, int, int, int, int], str] = {}
+_moon_base_printed: set[tuple[str, int, int]] = set()
+_moon_albedo_cache: dict[tuple[tuple[int, ...], int], np.ndarray] = {}
+_moon_relief_cache: dict[tuple[tuple[int, ...], int], np.ndarray] = {}
 
 
-def _display_lunar_albedo(rgb):
-    """Map a dark lunar photomosaic into a readable display albedo.
+def _normalize(v, *, name="vector"):
+    arr = np.asarray(v, dtype=float)
+    norm = np.linalg.norm(arr)
+    if not np.isfinite(norm) or norm <= 0.0:
+        raise ValueError(f"{name} must be a finite, non-zero vector")
+    return arr / norm
 
-    Some packaged Moon textures are stored as low-exposure imagery.  Using those
-    RGB values directly makes even an almost-full Moon render nearly black in
-    Plotly.  Percentile-stretch the luminance, then remap it to a lunar-grey
-    diagnostic albedo while preserving maria/crater contrast.
+
+def _srgb_to_linear(rgb):
+    x = np.clip(np.asarray(rgb, dtype=float), 0.0, 1.0)
+    return np.where(x <= 0.04045, x / 12.92, ((x + 0.055) / 1.055) ** 2.4)
+
+
+def _linear_to_srgb(rgb):
+    x = np.clip(np.asarray(rgb, dtype=float), 0.0, 1.0)
+    return np.where(x <= 0.0031308, 12.92*x, 1.055*x**(1.0/2.4)-0.055)
+
+
+def _moon_texture_candidates(texture_path=None):
+    """Yield lunar images through the shared SSAPy-Data resolver."""
+    for path, _source, _root in asset_candidates(
+        "moon_albedo", explicit=texture_path, policy="data-first"
+    ):
+        yield path
+
+
+def _periodic_resize_rgb(image, n_lat, n_lon):
+    """Resize an equirectangular texture with periodic longitude support."""
+    from PIL import Image
+
+    resampling = getattr(Image, "Resampling", Image).LANCZOS
+    if image.size == (n_lon, n_lat):
+        return image
+    width, height = image.size
+    tiled = Image.new("RGB", (3*width, height))
+    for k in range(3):
+        tiled.paste(image, (k*width, 0))
+    tiled = tiled.resize((3*n_lon, n_lat), resampling)
+    return tiled.crop((n_lon, 0, 2*n_lon, n_lat))
+
+
+def _load_real_moon_texture(n_lat, n_lon, texture_path=None, *, return_source=False):
+    """Load a north-up, -180..+180 SSAPy lunar equirectangular texture.
+
+    No half-width roll is applied.  SSAPy's Moon texture already follows the
+    same longitude convention as the renderer; the former roll moved the
+    familiar near-side maria to the wrong hemisphere.
     """
-    rgb = np.asarray(rgb, dtype=float) / 255.0
-    luminance = rgb @ np.array([0.2126, 0.7152, 0.0722])
-    low, high = np.nanpercentile(luminance, [1.0, 99.5])
-    if not np.isfinite(high - low) or high <= low:
-        stretched = np.clip(luminance, 0.0, 1.0)
+    from PIL import Image
+
+    n_lat, n_lon = int(n_lat), int(n_lon)
+    if n_lat < 4 or n_lon < 8:
+        raise ValueError("Moon texture resolution must be at least 4 x 8")
+
+    if texture_path is not None:
+        explicit = Path(texture_path).expanduser().resolve()
+        if not explicit.is_file():
+            raise FileNotFoundError(f"Moon texture does not exist: {explicit}")
+        candidates = (explicit,)
     else:
-        stretched = np.clip((luminance - low) / (high - low), 0.0, 1.0)
-    albedo = 0.34 + 0.58 * stretched
-    return np.repeat(albedo[..., None], 3, axis=-1) * np.array([1.0, 0.985, 0.955])
+        candidates = tuple(_moon_texture_candidates())
 
+    last_error = None
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        try:
+            stat = candidate.stat()
+            key = (str(candidate), int(stat.st_mtime_ns), int(stat.st_size), n_lat, n_lon)
+            if key not in _moon_texture_cache:
+                with Image.open(candidate) as image:
+                    image = image.convert("RGB")
+                    image = _periodic_resize_rgb(image, n_lat, n_lon)
+                    array = np.asarray(image, dtype=np.uint8)
+                    array.setflags(write=False)
+                    _moon_texture_cache[key] = array
+                    _moon_texture_source_cache[key] = str(candidate)
+            result = _moon_texture_cache[key]
+            source = _moon_texture_source_cache[key]
+            return (result, source) if return_source else result
+        except Exception as ex:
+            last_error = ex
 
-def _load_real_moon_texture(n_lat, n_lon):
-    """
-    Real lunar photomosaic, same discovery pattern as the Earth texture in
-    globe_orbit_daynight_plotly.py: ssapy.utils.find_file + PIL. This is
-    what the checkpoint's Section 6 flagged as unconfirmed on the real
-    machine — this is that check, applied to the Moon instead of Earth.
-    """
-    global _moon_texture_cache
-    if _moon_texture_cache is not None and _moon_texture_cache.shape[:2] == (n_lat, n_lon):
-        return _moon_texture_cache
-    try:
-        from ssapy.utils import find_file
-        from PIL import Image
-        img = Image.open(find_file("moon", ext=".png")).convert("RGB")
-        img = img.resize((n_lon, n_lat), Image.LANCZOS)
-        _moon_texture_cache = np.array(img)
-        print("[moon_render] Moon base: real ssapy texture found")
-        return _moon_texture_cache
-    except Exception as ex:
-        print(f"[moon_render] Real Moon texture not found ({ex}) — "
-              f"using procedural maria+crater model instead.")
-        return None
+    if last_error is not None:
+        warnings.warn(f"Moon texture could not be loaded: {last_error}", RuntimeWarning)
+    return (None, "procedural fallback") if return_source else None
 
 
 def _smooth(field, sigma=1.4):
-    """Light Gaussian smoothing (wrapping in longitude) so procedural
-    albedo/relief never shows hard tile/facet edges once displaced and
-    lit — this is what turns a blocky, grid-like sphere (visible facet
-    boundaries wherever two adjacent random blotches meet head-on) into
-    a continuous, photographic-looking surface. Falls back to an
-    unsmoothed field if scipy isn't available."""
     try:
         from scipy.ndimage import gaussian_filter
-        return gaussian_filter(field, sigma=sigma, mode="wrap")
+        # Latitude does not wrap, longitude does.
+        return gaussian_filter(field, sigma=sigma, mode=("nearest", "wrap"))
     except Exception:
         return field
 
 
 def _procedural_moon_albedo(Lat, Lon, seed=3):
-    """Two-scale albedo: large dark maria + small bright/dark crater fields,
-    matching how the real Moon's near side actually looks patchy rather
-    than uniformly grey."""
+    """Deterministic maria/highland fallback used only without a real map."""
+    key = (Lat.shape, int(seed))
+    if key in _moon_albedo_cache:
+        return _moon_albedo_cache[key]
     rng = np.random.default_rng(seed)
-
-    # --- Maria: a handful of large, soft, irregular dark blobs, mostly
-    # confined to one hemisphere (real maria are lopsided — concentrated
-    # on the historically Earth-facing side) ---
-    albedo = np.full_like(Lat, 0.78)
-    n_maria = 8
-    for _ in range(n_maria):
+    albedo = np.full_like(Lat, 0.72, dtype=float)
+    for _ in range(10):
         clat = rng.uniform(-45, 45)
-        clon = rng.uniform(-60, 60)          # biased to one hemisphere
-        spread_lat = rng.uniform(10, 26)
-        spread_lon = rng.uniform(14, 32)
-        dlat = (Lat - clat)
-        dlon = (Lon - clon + 180) % 360 - 180
-        d2 = (dlat / spread_lat) ** 2 + (dlon / spread_lon) ** 2
-        albedo -= 0.22 * np.exp(-d2 / 2)
-
-    # --- Crater fields on top: large + medium, then many small ---
-    for _ in range(60):
-        clat, clon = rng.uniform(-85, 85), rng.uniform(-180, 180)
-        rad = rng.uniform(4, 11)
-        d = np.sqrt((Lat - clat) ** 2 + ((Lon - clon + 180) % 360 - 180) ** 2)
-        bowl = np.clip(1 - d / rad, 0, 1)
-        albedo -= 0.12 * bowl ** 3
-    for _ in range(500):
-        clat, clon = rng.uniform(-85, 85), rng.uniform(-180, 180)
-        rad = rng.uniform(0.4, 2.2)
-        d = np.sqrt((Lat - clat) ** 2 + ((Lon - clon + 180) % 360 - 180) ** 2)
-        bowl = np.clip(1 - d / rad, 0, 1)
-        albedo -= 0.10 * bowl ** 3
-
-    albedo += rng.normal(0, 0.01, Lat.shape)  # fine regolith speckle
-    albedo = _smooth(albedo, sigma=0.45)       # just enough to kill hard blotch edges
-    return np.clip(albedo, 0.30, 1.0)
+        clon = rng.uniform(-70, 70)
+        slat, slon = rng.uniform(9, 24), rng.uniform(13, 34)
+        dlat = (Lat-clat)/slat
+        dlon = ((Lon-clon+180) % 360-180)/slon
+        albedo -= rng.uniform(0.10, 0.22)*np.exp(-0.5*(dlat*dlat+dlon*dlon))
+    for count, rmin, rmax, depth in ((70, 3.5, 10.0, 0.10), (450, 0.5, 2.4, 0.065)):
+        for _ in range(count):
+            clat, clon = rng.uniform(-85, 85), rng.uniform(-180, 180)
+            rad = rng.uniform(rmin, rmax)
+            d = np.sqrt((Lat-clat)**2 + (((Lon-clon+180) % 360)-180)**2)
+            albedo -= depth*np.clip(1-d/rad, 0, 1)**3
+    albedo += rng.normal(0, 0.008, Lat.shape)
+    result = np.clip(_smooth(albedo, 0.45), 0.27, 0.95)
+    result.setflags(write=False)
+    _moon_albedo_cache[key] = result
+    return result
 
 
 def _procedural_moon_relief(Lat, Lon, seed=3):
-    """Radial bump field: bright rim + dark bowl per crater, at two size
-    scales, plus fine roughness noise — this is what gets displaced into
-    actual 3D geometry (not just painted) so the lighting step below has
-    real bumps to shade."""
+    """Deterministic crater relief for the procedural fallback only."""
+    key = (Lat.shape, int(seed))
+    if key in _moon_relief_cache:
+        return _moon_relief_cache[key]
     rng = np.random.default_rng(seed)
-    relief = np.zeros_like(Lat)
-    for _ in range(60):
-        clat, clon = rng.uniform(-85, 85), rng.uniform(-180, 180)
-        rad = rng.uniform(4, 11)
-        d = np.sqrt((Lat - clat) ** 2 + ((Lon - clon + 180) % 360 - 180) ** 2)
-        bowl = np.clip(1 - d / rad, 0, 1)
-        relief -= 0.65 * bowl ** 3
-        rim = np.clip(1 - np.abs(d - rad * 0.92) / (rad * 0.1), 0, 1)
-        relief += 0.45 * rim
-    for _ in range(500):
-        clat, clon = rng.uniform(-85, 85), rng.uniform(-180, 180)
-        rad = rng.uniform(0.4, 2.2)
-        d = np.sqrt((Lat - clat) ** 2 + ((Lon - clon + 180) % 360 - 180) ** 2)
-        bowl = np.clip(1 - d / rad, 0, 1)
-        relief -= 0.5 * bowl ** 3
-        rim = np.clip(1 - np.abs(d - rad * 0.9) / (rad * 0.2), 0, 1)
-        relief += 0.35 * rim
-    fine_noise = np.zeros_like(Lat)
-    for _ in range(25):
-        clat, clon = rng.uniform(-90, 90), rng.uniform(-180, 180)
-        spread = rng.uniform(2, 6)
-        d = np.sqrt((Lat - clat) ** 2 + ((Lon - clon + 180) % 360 - 180) ** 2)
-        fine_noise += rng.uniform(-0.15, 0.15) * np.exp(-(d ** 2) / (2 * spread ** 2))
-    relief += fine_noise
-    # Smooth before displacement — this is what removes any visible
-    # facet/grid pattern from the mesh: unsmoothed relief has sharp
-    # per-blotch edges that, once turned into real geometry and lit,
-    # show up as a faint quad grid across the sphere (exactly the
-    # artifact in the reference screenshot). A touch of blur keeps the
-    # crater shapes but rounds their edges into the surrounding terrain.
-    return _smooth(relief, sigma=0.4)
+    relief = np.zeros_like(Lat, dtype=float)
+    for count, rmin, rmax, bowl_scale, rim_scale in (
+        (65, 3.5, 10.0, 0.55, 0.38),
+        (450, 0.55, 2.5, 0.35, 0.25),
+    ):
+        for _ in range(count):
+            clat, clon = rng.uniform(-85, 85), rng.uniform(-180, 180)
+            rad = rng.uniform(rmin, rmax)
+            d = np.sqrt((Lat-clat)**2 + (((Lon-clon+180) % 360)-180)**2)
+            bowl = np.clip(1-d/rad, 0, 1)
+            rim = np.clip(1-np.abs(d-0.9*rad)/(0.18*rad), 0, 1)
+            relief -= bowl_scale*bowl**3
+            relief += rim_scale*rim**2
+    result = _smooth(relief, 0.42)
+    result.setflags(write=False)
+    _moon_relief_cache[key] = result
+    return result
 
 
-def _vertex_normals(X, Y, Z, center=None):
-    """Return outward normals of a displaced grid.
+@lru_cache(maxsize=32)
+def _moon_unit_mesh_cached(n_lat, n_lon):
+    n_lat, n_lon = int(n_lat), int(n_lon)
+    if n_lat < 5 or n_lon < 8:
+        raise ValueError("Moon mesh resolution must be at least 5 x 8")
+    if n_lat % 2 == 0:
+        n_lat += 1
 
-    Finite differences are translation-invariant, but the final outward-facing
-    orientation test must use body-local coordinates.  A Moon plotted hundreds
-    of thousands of kilometres from Earth otherwise orients normals using the
-    Earth-centered position vector and can render an almost-full Moon as dark.
-    """
+    lat_rows = np.linspace(90.0, -90.0, n_lat)
+    ring_lat = lat_rows[1:-1]
+    lon = np.linspace(-180.0, 180.0, n_lon, endpoint=False)
+    Lon, Lat = np.meshgrid(lon, ring_lat)
+    phi, lam = np.radians(Lat), np.radians(Lon)
+    ring_dirs = np.stack([
+        np.cos(phi)*np.cos(lam),
+        np.cos(phi)*np.sin(lam),
+        np.sin(phi),
+    ], axis=-1).reshape(-1, 3)
+    dirs = np.vstack([ring_dirs, [0.0, 0.0, 1.0], [0.0, 0.0, -1.0]])
+    lat_v = np.concatenate([Lat.ravel(), [90.0, -90.0]])
+    lon_v = np.concatenate([Lon.ravel(), [0.0, 0.0]])
+
+    ring_count = n_lat-2
+    cols = np.arange(n_lon, dtype=np.int32)
+    next_cols = (cols+1) % n_lon
+    blocks = []
+    for row in range(ring_count-1):
+        top, bottom = row*n_lon, (row+1)*n_lon
+        blocks.append(np.column_stack([top+cols, bottom+cols, bottom+next_cols]))
+        blocks.append(np.column_stack([top+cols, bottom+next_cols, top+next_cols]))
+    north_idx, south_idx = ring_count*n_lon, ring_count*n_lon+1
+    blocks.append(np.column_stack([np.full(n_lon, north_idx), next_cols, cols]))
+    last = (ring_count-1)*n_lon
+    blocks.append(np.column_stack([np.full(n_lon, south_idx), last+cols, last+next_cols]))
+    faces = np.vstack(blocks).astype(np.int32)
+
+    p0, p1, p2 = dirs[faces[:, 0]], dirs[faces[:, 1]], dirs[faces[:, 2]]
+    orient = np.einsum("ij,ij->i", np.cross(p1-p0, p2-p0), (p0+p1+p2)/3.0)
+    flip = orient < 0
+    faces[flip, 1], faces[flip, 2] = faces[flip, 2].copy(), faces[flip, 1].copy()
+
+    for array in (dirs, faces, lat_rows, lat_v, lon_v):
+        array.setflags(write=False)
+    return dirs, faces, lat_rows, lat_v, lon_v
+
+
+def _moon_unit_mesh(n_lat, n_lon):
+    return _moon_unit_mesh_cached(int(n_lat), int(n_lon))
+
+
+def _mesh_vertex_normals(vertices, faces):
+    vertices = np.asarray(vertices, dtype=float)
+    faces = np.asarray(faces, dtype=np.int32)
+    tri = vertices[faces]
+    face_normals = np.cross(tri[:, 1]-tri[:, 0], tri[:, 2]-tri[:, 0])
+    normals = np.zeros_like(vertices)
+    for col in range(3):
+        np.add.at(normals, faces[:, col], face_normals)
+    norm = np.linalg.norm(normals, axis=1, keepdims=True)
+    normals /= np.maximum(norm, 1e-15)
+    flip = np.einsum("ij,ij->i", normals, vertices) < 0
+    normals[flip] *= -1
+    return normals
+
+
+def _vertex_normals(X, Y, Z, center=(0.0, 0.0, 0.0)):
+    """Backward-compatible grid-normal helper used by older callers/tests."""
     Xu = np.gradient(X, axis=1); Yu = np.gradient(Y, axis=1); Zu = np.gradient(Z, axis=1)
     Xv = np.gradient(X, axis=0); Yv = np.gradient(Y, axis=0); Zv = np.gradient(Z, axis=0)
-    nx = Yu * Zv - Zu * Yv
-    ny = Zu * Xv - Xu * Zv
-    nz = Xu * Yv - Yu * Xv
-    norm = np.sqrt(nx ** 2 + ny ** 2 + nz ** 2) + 1e-12
-    nx, ny, nz = nx / norm, ny / norm, nz / norm
-    # Orient outward (dot with the sphere's own radial direction should be
-    # positive; flip any that came out pointing inward from the cross
-    # product's arbitrary handedness)
-    if center is None:
-        Xr, Yr, Zr = X, Y, Z
+    nx = Yu*Zv-Zu*Yv
+    ny = Zu*Xv-Xu*Zv
+    nz = Xu*Yv-Yu*Xv
+    norm = np.sqrt(nx*nx+ny*ny+nz*nz)+1e-15
+    nx, ny, nz = nx/norm, ny/norm, nz/norm
+    center = np.asarray(center, dtype=float)
+    Xr, Yr, Zr = X-center[0], Y-center[1], Z-center[2]
+    flip = nx*Xr+ny*Yr+nz*Zr < 0
+    return np.where(flip, -nx, nx), np.where(flip, -ny, ny), np.where(flip, -nz, nz)
+
+
+def _synchronous_body_axes(real_center_km):
+    """Approximate tidally locked lunar axes; body +X faces Earth."""
+    if real_center_km is None:
+        return np.eye(3)
+    r = np.asarray(real_center_km, dtype=float)
+    x_axis = -_normalize(r, name="Moon geocentric position")
+    north = np.array([0.0, 0.0, 1.0])
+    z_axis = north-x_axis*np.dot(north, x_axis)
+    if np.linalg.norm(z_axis) < 1e-10:
+        north = np.array([0.0, 1.0, 0.0])
+        z_axis = north-x_axis*np.dot(north, x_axis)
+    z_axis = _normalize(z_axis)
+    y_axis = _normalize(np.cross(z_axis, x_axis))
+    z_axis = np.cross(x_axis, y_axis)
+    return np.stack([x_axis, y_axis, z_axis], axis=1)
+
+
+@dataclass
+class MoonSurfaceData:
+    display_vertices: np.ndarray
+    physical_vertices_gcrf_km: np.ndarray
+    normals_gcrf: np.ndarray
+    faces: np.ndarray
+    base_rgb_srgb: np.ndarray
+    shaded_rgb_srgb: np.ndarray
+    eclipse_visibility: np.ndarray
+    latitude_deg: np.ndarray
+    longitude_deg: np.ndarray
+    texture_source: str
+    body_axes: np.ndarray
+    n_lat_effective: int
+    n_lon_effective: int
+    used_relief: bool
+
+
+def _flatten_texture_rows(texture):
+    ring = texture[1:-1].reshape(-1, 3).astype(float)/255.0
+    north = texture[0].mean(axis=0, keepdims=True).astype(float)/255.0
+    south = texture[-1].mean(axis=0, keepdims=True).astype(float)/255.0
+    return np.vstack([ring, north, south])
+
+
+def _flatten_scalar_rows(field):
+    ring = field[1:-1].reshape(-1)
+    return np.concatenate([ring, [float(np.mean(field[0])), float(np.mean(field[-1]))]])
+
+
+def _moon_surface_data(
+    center,
+    radius,
+    sun_hat=None,
+    seed=3,
+    real_center_km=None,
+    mode="lunar",
+    eclipse_tint=True,
+    n_lat=181,
+    n_lon=360,
+    real_sun_position_km=None,
+    relief_exaggeration=0.0,
+    ambient_floor=0.008,
+    texture_path=None,
+    view_hat=None,
+    exposure=1.08,
+    eclipse_occluder_radius_km=RE_KM,
+):
+    """Compute Moon geometry and linear-light surface colors."""
+    center = np.asarray(center, dtype=float).reshape(3)
+    radius = float(radius)
+    if not np.isfinite(radius) or radius <= 0:
+        raise ValueError("radius must be finite and positive")
+    if mode not in ("lunar", "solar", "normal"):
+        raise ValueError("mode must be 'lunar', 'solar', or 'normal'")
+
+    dirs_body, faces, lat_rows, lat_v, lon_v = _moon_unit_mesh(n_lat, n_lon)
+    n_lat_effective = len(lat_rows)
+    n_lon_effective = int(n_lon)
+    body_axes = _synchronous_body_axes(real_center_km)
+
+    texture, source = _load_real_moon_texture(
+        n_lat_effective, n_lon_effective, texture_path=texture_path, return_source=True,
+    )
+    use_real_texture = texture is not None
+    Lon, Lat = np.meshgrid(
+        np.linspace(-180.0, 180.0, n_lon_effective, endpoint=False),
+        lat_rows,
+    )
+    if use_real_texture:
+        base_rgb = _flatten_texture_rows(texture)
+        # Do not place random crater geometry beneath a real photomosaic: the
+        # relief shadows would not line up with the mapped craters.
+        relief_v = np.zeros(len(dirs_body), dtype=float)
+        used_relief = False
     else:
-        cx, cy, cz = np.asarray(center, dtype=float)
-        Xr, Yr, Zr = X - cx, Y - cy, Z - cz
-    R = np.sqrt(Xr ** 2 + Yr ** 2 + Zr ** 2) + 1e-12
-    rad_dot = (nx * Xr + ny * Yr + nz * Zr) / R
-    flip = rad_dot < 0
-    nx, ny, nz = np.where(flip, -nx, nx), np.where(flip, -ny, ny), np.where(flip, -nz, nz)
-    return nx, ny, nz
-
-
-def moon_mesh_plotly(center, radius, sun_hat=None, seed=3,
-                     real_center_km=None, mode="lunar",
-                     eclipse_tint=True, n_lat=180, n_lon=360):
-    """
-    Real-texture-first, properly-lit Moon mesh.
-
-    center, radius : display-space sphere placement (km, display units —
-                      same size_boost convention as the rest of the toolkit)
-    sun_hat         : unit vector toward the Sun, for real diffuse shading
-                      and (mode="lunar") the Earth-shadow eclipse check
-    real_center_km  : TRUE physical Moon-center position relative to Earth
-                      (only needed for mode="lunar" eclipse shading)
-    mode            : "lunar" (Moon may be in Earth's shadow) or "solar"
-                      (Moon is just normally sunlit; it's Earth being
-                      shadowed elsewhere in the scene)
-    eclipse_tint    : apply the warm/red multiplicative bias during deep
-                      shadow (mode="lunar" only) — set False if the caller
-                      wants to apply its own tint instead
-    """
-    lat = np.linspace(90, -90, n_lat)
-    lon = np.linspace(-180, 180, n_lon, endpoint=False)
-    Lon, Lat = np.meshgrid(lon, lat)
-    latr, lonr = np.radians(Lat), np.radians(Lon)
-    nx0, ny0, nz0 = np.cos(latr) * np.cos(lonr), np.cos(latr) * np.sin(lonr), np.sin(latr)
-
-    tex = _load_real_moon_texture(n_lat, n_lon)
-    if tex is not None:
-        tex = np.roll(tex, n_lon // 2, axis=1)  # same antimeridian fix as Earth
-        base_rgb = _display_lunar_albedo(tex)
-        # Still add a light procedural relief for lighting, even with a
-        # real texture — real texture gives *color*, but most Moon photo
-        # textures are pre-shaded/flat-lit, so without geometric bumps the
-        # sphere would look like a printed ball, not a rocky one.
-        relief = _procedural_moon_relief(Lat, Lon, seed=seed) * 0.5
-    else:
-        base_rgb = None
-        relief = _procedural_moon_relief(Lat, Lon, seed=seed)
-
-    R_disp = stabilize_sphere_poles(radius * (1 + relief * 0.009))
-    X = center[0] + R_disp * nx0
-    Y = center[1] + R_disp * ny0
-    Z = center[2] + R_disp * nz0
-    nxr, nyr, nzr = _vertex_normals(X, Y, Z, center=center)
-
-    if base_rgb is None:
         albedo = _procedural_moon_albedo(Lat, Lon, seed=seed)
-        base_rgb = np.repeat(albedo[..., None], 3, axis=-1) * np.array([1.0, 0.98, 0.94])
+        procedural_rgb = np.repeat(albedo[..., None], 3, axis=-1)*np.array([1.00, 0.98, 0.94])
+        base_rgb = _flatten_texture_rows(np.rint(np.clip(procedural_rgb, 0, 1)*255).astype(np.uint8))
+        relief = _procedural_moon_relief(Lat, Lon, seed=seed)
+        relief_v = _flatten_scalar_rows(relief)
+        used_relief = bool(abs(float(relief_exaggeration)) > 0)
 
-    # Real per-vertex diffuse lighting from the bumpy normals — this is
-    # what makes craters look sculpted instead of painted. Ambient floor
-    # so the unlit portion of a gibbous/crescent Moon isn't pure black.
-    if sun_hat is not None:
-        diffuse = np.clip(nxr * sun_hat[0] + nyr * sun_hat[1] + nzr * sun_hat[2], 0, 1)
-        shading = np.clip(0.14 + 0.86 * diffuse ** 0.80, 0.14, 1.0)
-        # Opposition effect: real regolith backscatters extra strongly
-        # right where the viewer, Sun, and surface point are nearly
-        # aligned (why a full Moon looks noticeably brighter overall
-        # than the diffuse-only model predicts, not just "more lit
-        # area"). Approximated with the same fixed view-ish reference
-        # used for the Sun's limb darkening elsewhere in the toolkit —
-        # imperfect (doesn't track the actual camera), but keeps the lit
-        # face from looking flat and grey the way a pure Lambertian
-        # sphere does.
-        opp = np.clip(diffuse - 0.92, 0, 1) / 0.08
-        shading = np.clip(shading + 0.18 * opp, 0.14, 1.15)
+    print_key = (source, n_lat_effective, n_lon_effective)
+    if print_key not in _moon_base_printed:
+        print(f"[moon_render] Moon base: {source}")
+        _moon_base_printed.add(print_key)
+
+    radial_factor = 1.0+relief_v*float(relief_exaggeration)
+    local_body = dirs_body*radial_factor[:, None]
+    local_normals_body = _mesh_vertex_normals(local_body, faces) if used_relief else dirs_body
+    world_dirs = dirs_body@body_axes.T
+    world_local = local_body@body_axes.T
+    world_normals = local_normals_body@body_axes.T
+    world_normals /= np.linalg.norm(world_normals, axis=1, keepdims=True)
+    display_vertices = center+radius*world_local
+
+    if real_center_km is None:
+        physical_center = np.zeros(3)
     else:
-        shading = np.ones_like(Lat)
+        physical_center = np.asarray(real_center_km, dtype=float).reshape(3)
+    physical_vertices = physical_center+R_MOON_KM*world_dirs
 
-    rgb = np.clip(base_rgb * shading[..., None], 0, 1)
+    if real_sun_position_km is not None:
+        sun_position = np.asarray(real_sun_position_km, dtype=float).reshape(3)
+        light_hat = _normalize(sun_position-physical_center, name="Sun relative to Moon")
+    elif sun_hat is not None:
+        light_hat = _normalize(sun_hat, name="sun_hat")
+        sun_position = physical_center+light_hat*AU_KM
+    else:
+        light_hat = None
+        sun_position = None
 
-    if mode == "lunar" and real_center_km is not None and sun_hat is not None \
-            and illumination_fraction is not None:
-        real_surface = np.stack([nx0, ny0, nz0], axis=-1) * R_MOON_KM
-        real_positions = real_center_km[None, None, :] + real_surface
-        flat_pos = real_positions.reshape(-1, 3)
-        flat_sun = np.tile(sun_hat, (flat_pos.shape[0], 1))
-        illum = illumination_fraction(flat_pos, flat_sun, R_body_km=EARTH_RADIUS_KM,
-                                      R_sun_km=R_SUN_KM, D_km=AU_KM).reshape(Lat.shape)
-        floor = 0.12
-        eclipse_brightness = np.clip(floor + (1 - floor) * illum, floor, 1.0)
-        rgb = rgb * eclipse_brightness[..., None]
-        if eclipse_tint:
-            red_mix = np.clip((0.35 - illum) / 0.35, 0, 1) ** 1.5
-            warm = np.array([1.15, 0.55, 0.42])
-            tint = (1 - red_mix[..., None]) + warm[None, None, :] * red_mix[..., None]
-            rgb = np.clip(rgb * tint, 0, 1)
+    if view_hat is None:
+        if real_center_km is not None:
+            view_hat = -_normalize(real_center_km, name="Moon geocentric position")
+        elif light_hat is not None:
+            view_hat = light_hat
+        else:
+            view_hat = np.array([1.0, 0.0, 0.0])
+    view_hat = _normalize(view_hat, name="view_hat")
 
-    rgb = stabilize_sphere_poles(rgb)
+    ambient_floor = float(np.clip(ambient_floor, 0.0, 0.08))
+    direct_reflectance = np.zeros(len(world_normals), dtype=float)
+    if light_hat is not None:
+        mu0 = np.clip(world_normals@light_hat, 0.0, 1.0)
+        mu = np.clip(world_normals@view_hat, 0.0, 1.0)
+        # Lunar regolith is better represented by a Lommel-Seeliger response
+        # than by a pure Lambert sphere.  A small Lambert term keeps the limb
+        # stable as the interactive camera moves.
+        ls = np.where(mu0 > 0, 2.0*mu0/np.maximum(mu0+mu, 1e-6), 0.0)
+        direct_reflectance = np.clip(0.78*ls+0.22*mu0, 0.0, 1.18)
+        phase = np.arccos(np.clip(np.dot(light_hat, view_hat), -1.0, 1.0))
+        opposition = 1.0+0.14*np.exp(-(phase/np.radians(5.0))**2)
+        direct_reflectance *= opposition
 
-    vertexcolor = [f"rgb({int(rgb[r, c, 0]*255)},{int(rgb[r, c, 1]*255)},{int(rgb[r, c, 2]*255)})"
-                  for r in range(n_lat) for c in range(n_lon)]
+    eclipse_visibility = np.ones(len(world_normals), dtype=float)
+    geom = None
+    if (mode == "lunar" and real_center_km is not None and sun_position is not None
+            and irradiance_fraction is not None):
+        eclipse_visibility, geom = irradiance_fraction(
+            physical_vertices,
+            R_body_km=float(eclipse_occluder_radius_km),
+            R_sun_km=R_SUN_KM,
+            sun_position_km=np.broadcast_to(sun_position, physical_vertices.shape),
+            return_geometry=True,
+            photometry="quadratic-visible",
+            quadrature_order=48,
+        )
+        eclipse_visibility = np.clip(np.asarray(eclipse_visibility, dtype=float), 0.0, 1.0)
+        direct_reflectance *= eclipse_visibility
 
-    ii, jj, kk = [], [], []
-    for r in range(n_lat - 1):
-        for c in range(n_lon):
-            cn = (c + 1) % n_lon
-            v0 = r * n_lon + c; v1 = r * n_lon + cn; v2 = (r + 1) * n_lon + c; v3 = (r + 1) * n_lon + cn
-            ii += [v0, v1]; jj += [v1, v3]; kk += [v2, v2]
+    base_linear = _srgb_to_linear(base_rgb)
+    # A modest gain compensates for the albedo map being displayed under a
+    # physical BRDF instead of as an already-lit photograph.
+    base_linear *= float(np.clip(exposure, 0.25, 3.0))
+    rgb_linear = base_linear*(ambient_floor+0.992*direct_reflectance[:, None])
 
+    # Earthshine is strongest near solar eclipse/new Moon geometry, when the
+    # Earth-facing lunar hemisphere sees an almost full Earth.  It reveals the
+    # real texture without pretending the dark side is directly sunlit.
+    if real_center_km is not None and light_hat is not None:
+        earthward = -_normalize(real_center_km, name="Moon geocentric position")
+        moon_from_earth = -earthward
+        earth_fullness = 0.5*(1.0+np.clip(np.dot(light_hat, moon_from_earth), -1.0, 1.0))
+        mu_e = np.clip(world_normals@earthward, 0.0, 1.0)**0.65
+        earthshine = 0.036*earth_fullness*mu_e
+        rgb_linear += base_linear*earthshine[:, None]*np.array([0.72, 0.84, 1.00])
+
+    if geom is not None and eclipse_tint:
+        a_occ = np.asarray(geom.occluder_angular_radius_rad)
+        a_sun = np.asarray(geom.sun_angular_radius_rad)
+        sep = np.asarray(geom.separation_rad)
+        umbra_depth = np.clip((a_occ-a_sun-sep)/np.maximum(2.0*a_sun, 1e-12), 0.0, 1.0)
+        blocked = (1.0-eclipse_visibility)**1.55
+        # Refracted sunlight is brighter near the umbral edge and red-dominant
+        # throughout.  This is an intentionally simple atmosphere model, but
+        # it preserves the exact geometric boundary and the mapped albedo.
+        refracted = blocked*(0.045+0.14*np.exp(-2.5*umbra_depth))
+        rgb_linear += base_linear*refracted[:, None]*np.array([1.00, 0.16, 0.035])
+
+    shaded = _linear_to_srgb(np.clip(rgb_linear, 0.0, 1.0))
+    return MoonSurfaceData(
+        display_vertices=display_vertices,
+        physical_vertices_gcrf_km=physical_vertices,
+        normals_gcrf=world_normals,
+        faces=faces,
+        base_rgb_srgb=base_rgb,
+        shaded_rgb_srgb=shaded,
+        eclipse_visibility=eclipse_visibility,
+        latitude_deg=lat_v,
+        longitude_deg=lon_v,
+        texture_source=source,
+        body_axes=body_axes,
+        n_lat_effective=n_lat_effective,
+        n_lon_effective=n_lon_effective,
+        used_relief=used_relief,
+    )
+
+
+def _rgb_strings(rgb):
+    rgb8 = np.rint(np.clip(rgb, 0.0, 1.0)*255).astype(np.uint8)
+    return [f"rgb({r},{g},{b})" for r, g, b in rgb8]
+
+
+def moon_mesh_plotly(
+    center,
+    radius,
+    sun_hat=None,
+    seed=3,
+    real_center_km=None,
+    mode="lunar",
+    eclipse_tint=True,
+    n_lat=181,
+    n_lon=360,
+    real_sun_position_km=None,
+    relief_exaggeration=0.0,
+    ambient_floor=0.008,
+    texture_path=None,
+    view_hat=None,
+    exposure=1.08,
+    eclipse_occluder_radius_km=RE_KM,
+):
+    """Return a high-quality, texture-mapped Plotly Moon mesh."""
+    data = _moon_surface_data(
+        center=center,
+        radius=radius,
+        sun_hat=sun_hat,
+        seed=seed,
+        real_center_km=real_center_km,
+        mode=mode,
+        eclipse_tint=eclipse_tint,
+        n_lat=n_lat,
+        n_lon=n_lon,
+        real_sun_position_km=real_sun_position_km,
+        relief_exaggeration=relief_exaggeration,
+        ambient_floor=ambient_floor,
+        texture_path=texture_path,
+        view_hat=view_hat,
+        exposure=exposure,
+        eclipse_occluder_radius_km=eclipse_occluder_radius_km,
+    )
+    v, f = data.display_vertices, data.faces
     return go.Mesh3d(
-        x=X.ravel(), y=Y.ravel(), z=Z.ravel(), i=ii, j=jj, k=kk,
-        vertexcolor=vertexcolor, flatshading=False,
+        x=v[:, 0], y=v[:, 1], z=v[:, 2],
+        i=f[:, 0], j=f[:, 1], k=f[:, 2],
+        vertexcolor=_rgb_strings(data.shaded_rgb_srgb),
+        flatshading=False,
         lighting=dict(ambient=1.0, diffuse=0.0, specular=0.0, roughness=1.0, fresnel=0.0),
         name="Moon", hoverinfo="skip", showlegend=False,
     )

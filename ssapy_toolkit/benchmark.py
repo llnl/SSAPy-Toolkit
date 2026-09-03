@@ -29,8 +29,25 @@ from typing import Any, Callable, Iterable
 
 import numpy as np
 
+from importlib import metadata as _metadata
+
 from ssapy_toolkit import __version__
 from ssapy_toolkit.plots.figpath import figpath
+
+
+def _distribution_version(distribution: str) -> str | None:
+    """Version string from installed package metadata, or None.
+
+    ssapy does not define ``__version__``, so reading it as a module
+    attribute silently recorded null for every benchmark report. The
+    distribution name (llnl-ssapy) also differs from the import name
+    (ssapy), so only the metadata lookup can resolve it. This matches
+    compute.eclipse_runtime._version.
+    """
+    try:
+        return _metadata.version(distribution)
+    except _metadata.PackageNotFoundError:
+        return None
 
 CallFactory = Callable[["BenchmarkContext"], Callable[[], Any]]
 ValidationScalar = int | float | str | bool
@@ -1358,7 +1375,7 @@ def environment_metadata() -> dict[str, Any]:
         "node": platform.node(),
         "pid": os.getpid(),
         "ssapy_toolkit_version": __version__,
-        "ssapy_version": getattr(ssapy, "__version__", None),
+        "ssapy_version": _distribution_version("llnl-ssapy"),
         "scipy_version": scipy.__version__,
         "numpy_version": np.__version__,
     }

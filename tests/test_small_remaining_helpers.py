@@ -1,5 +1,5 @@
 import importlib
-
+from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
@@ -80,8 +80,12 @@ def test_list_files_natural_sort_deduplicates_and_expands_home(tmp_path, monkeyp
     nested.mkdir()
     (nested / "frame1.png").write_text("x")
     monkeypatch.setenv("HOME", str(tmp_path))
-
-    files = [path.split("/")[-1] for path in list_files(str(tmp_path / "frame*.png"), str(tmp_path / "frame2.png"))]
+    # os.path.expanduser prefers USERPROFILE over HOME on Windows, so setting
+    # HOME alone leaves "~" pointing at the real profile directory.
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    # list_files returns native paths; take the basename portably rather than
+    # splitting on "/", which only works on POSIX.
+    files = [Path(path).name for path in list_files(str(tmp_path / "frame*.png"), str(tmp_path / "frame2.png"))]
     assert files == ["frame2.png", "frame10.png"]
     unsorted_files = list_files(str(tmp_path / "frame*.png"), sort=False)
     assert len(unsorted_files) == 2

@@ -37,6 +37,15 @@ import calendar
 
 import numpy as np
 
+if __name__ == "__main__" and not __package__:
+    import os as _os, sys as _sys
+    _sys.path.insert(
+        0, _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+    )
+    __package__ = "ssapy_toolkit.plots"
+
+# Imported after the bootstrap above: in script mode sys.path does not yet
+# contain the repository root on the line before it.
 from ssapy_toolkit._paths import output_root
 
 try:
@@ -166,7 +175,7 @@ class _GuardedModule(_types.ModuleType):
         if name == "_EXTERNAL_MODEL":
             raise AttributeError(
                 "Assigning magfield_plot_3d._EXTERNAL_MODEL has no effect on the "
-                "physics -- the state lives in ssapy_toolkit.geomagnetics. Use "
+                "physics -- the state lives in ssapy_toolkit.plots.geomagnetics. Use "
                 "geomagnetics.set_external_model(value), which returns the "
                 "previous model so you can restore it in a finally block."
             )

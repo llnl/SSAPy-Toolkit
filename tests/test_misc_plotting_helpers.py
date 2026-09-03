@@ -262,22 +262,18 @@ def test_offset_moon_uses_local_normals_and_stays_readable():
 
 
 
-def test_earth_city_lights_are_not_latitude_bands():
-    from ssapy_toolkit.plots.globe_orbit_daynight_plotly import _city_lights
+def test_earth_city_lights_are_refused_rather_than_synthesised():
+    """Synthetic city lights were removed, not replaced.
 
-    n_lat, n_lon = 60, 120
-    lat = np.linspace(90.0, -90.0, n_lat)
-    lon = np.linspace(-180.0, 180.0, n_lon, endpoint=False)
-    lon_grid, lat_grid = np.meshgrid(lon, lat)
-    land = np.ones_like(lat_grid)
+    ``_city_lights`` generated a night-light layer from a random land mask that
+    did not align with the SSAPy texture, so the lights sat in the wrong places.
+    The mesh now refuses the request loudly instead of drawing something wrong;
+    this asserts the refusal rather than the old layer's statistics.
+    """
+    from ssapy_toolkit.plots.globe_orbit_daynight_plotly import _earth_mesh
 
-    lights = _city_lights(n_lat, n_lon, land, lat_grid, lon_grid)
-    residual = lights - lights.mean(axis=1, keepdims=True)
-
-    assert lights.shape == (n_lat, n_lon)
-    assert np.isfinite(lights).all()
-    assert residual.std() > 0.035
-    assert np.mean(np.std(lights, axis=1) > 0.004) > 0.50
+    with pytest.warns(RuntimeWarning, match="city lights"):
+        _earth_mesh([1.0, 0.0, 0.0], n_lat=8, n_lon=16, show_city_lights=True)
 
 
 def test_earth_mesh_keeps_native_earth_texture_longitudes(monkeypatch):
@@ -290,16 +286,23 @@ def test_earth_mesh_keeps_native_earth_texture_longitudes(monkeypatch):
     tex = np.zeros((n_lat, n_lon, 3), dtype=np.uint8)
     tex[..., 2] = 240
     # The mesh uses endpoint=False longitudes [-180, -135, ..., 0, 45, ...];
-    # column 4 is 0° longitude in SSAPy's native earth.png convention.
+    # column 4 is 0 deg longitude in SSAPy's native earth.png convention.
     tex[:, 4, :] = [240, 0, 0]
-    monkeypatch.setattr(daynight, "_load_real_earth_texture", lambda lat, lon: tex.copy())
+    monkeypatch.setattr(
+        daynight, "_load_real_earth_texture",
+        lambda lat, lon, texture_path=None, return_source=False: (
+            (tex.copy(), "test") if return_source else tex.copy()),
+    )
 
     trace = daynight._earth_mesh([1.0, 0.0, 0.0], n_lat=n_lat, n_lon=n_lon, rotation_deg=0.0)
-    color = trace.vertexcolor[2 * n_lon + 4]
-    red, green, blue = map(int, re.match(r"rgb\((\d+),(\d+),(\d+)\)", color).groups())
+    # Find the lat 0, lon 0 vertex by geometry rather than by index: the mesh
+    # stores one vertex per pole instead of n_lon duplicates, so a fixed
+    # row-major offset no longer identifies a known latitude row.
+    idx = int(np.argmax(np.asarray(trace.x)))
+    red, green, blue = map(
+        int, re.match(r"rgb\((\d+),(\d+),(\d+)\)", trace.vertexcolor[idx]).groups())
     assert red > blue
     assert green < red
-
 
 def test_earth_layer_plotly_keeps_native_longitudes_and_time(tmp_path):
     from PIL import Image
@@ -406,7 +409,12 @@ def test_earth_mesh_dark_side_has_no_latitude_band_artifact():
         match = re.match(r"rgb\((\d+),(\d+),(\d+)\)", color)
         assert match is not None
         colors.append(tuple(map(int, match.groups())))
-    colors = np.asarray(colors, dtype=float).reshape(n_lat, n_lon, 3)
+    # Vertex layout is (n_lat_odd - 2) latitude rings of n_lon, then a single
+    # north and south pole vertex. An even n_lat is bumped odd so an exact
+    # equatorial ring exists.
+    n_rings = (n_lat + (n_lat % 2 == 0)) - 2
+    assert len(colors) == n_rings * n_lon + 2
+    colors = np.asarray(colors[: n_rings * n_lon], dtype=float).reshape(n_rings, n_lon, 3)
     brightness = colors.mean(axis=2)
 
     lon = np.linspace(-180.0, 180.0, n_lon, endpoint=False)
@@ -417,33 +425,32 @@ def test_earth_mesh_dark_side_has_no_latitude_band_artifact():
     assert residual.std() > 1.0
     assert np.nanmax(np.abs(np.diff(night.mean(axis=1)))) < 90.0
 
-
 def test_earth_and_moon_pole_vertices_are_stable():
-    import re
+    """Poles are single vertices, not n_lon coincident duplicates.
 
+    The old mesh stored one pole vertex per longitude; if a texture or relief
+    field gave those coincident vertices different values, Plotly interpolated
+    degenerate polar triangles into streaks. The mesh now stores exactly one
+    vertex per pole, which makes the failure impossible by construction rather
+    than by the duplicates happening to agree.
+    """
     from ssapy_toolkit.plots.globe_orbit_daynight_plotly import _earth_mesh
     from ssapy_toolkit.plots.moon_render import moon_mesh_plotly
 
-    def color_grid(trace, n_lat, n_lon):
-        values = []
-        for color in trace.vertexcolor:
-            match = re.match(r"rgb\((\d+),(\d+),(\d+)\)", color)
-            assert match is not None
-            values.append(tuple(map(int, match.groups())))
-        return np.asarray(values, dtype=float).reshape(n_lat, n_lon, 3)
-
     n_lat, n_lon = 18, 36
     earth = _earth_mesh([1.0, 0.0, 0.0], n_lat=n_lat, n_lon=n_lon)
-    moon = moon_mesh_plotly([0.0, 0.0, 0.0], 1_000.0, sun_hat=[1.0, 0.0, 0.0], n_lat=n_lat, n_lon=n_lon)
+    moon = moon_mesh_plotly([0.0, 0.0, 0.0], 1_000.0, sun_hat=[1.0, 0.0, 0.0],
+                            n_lat=n_lat, n_lon=n_lon)
 
     for trace in (earth, moon):
-        colors = color_grid(trace, n_lat, n_lon)
-        assert np.std(colors[0], axis=0).max() == 0.0
-        assert np.std(colors[-1], axis=0).max() == 0.0
-        z = np.asarray(trace.z).reshape(n_lat, n_lon)
-        assert np.std(z[0]) < 1e-9
-        assert np.std(z[-1]) < 1e-9
-
+        z = np.asarray(trace.z, dtype=float)
+        top, bottom = z.max(), z.min()
+        # exactly one vertex at each extreme, and nothing else within a metre
+        assert np.count_nonzero(np.isclose(z, top, atol=1e-3)) == 1
+        assert np.count_nonzero(np.isclose(z, bottom, atol=1e-3)) == 1
+        # and no interior vertex reaches the poles
+        interior = z[(z < top - 1e-3) & (z > bottom + 1e-3)]
+        assert interior.size == z.size - 2
 
 def test_earth_and_moon_meshes_close_longitude_seams():
     from ssapy_toolkit.plots.globe_orbit_daynight_plotly import _earth_mesh

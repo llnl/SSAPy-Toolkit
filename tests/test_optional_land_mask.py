@@ -12,12 +12,20 @@ def test_plotting_fallbacks_work_without_global_land_mask(monkeypatch):
     from ssapy_toolkit.plots import eclipse_space_view_plotly as eclipse
     from ssapy_toolkit.plots import globe_orbit_daynight_plotly as globe
 
-    land, lat, lon = globe._land_mask(8, 16)
-    assert land.shape == lat.shape == lon.shape == (8, 16)
-    assert np.isfinite(land).all()
-    assert np.all((0.0 <= land) & (land <= 1.0))
-
-    assert globe._procedural_continents(8, 16).shape == (8, 16, 3)
+    # _land_mask and _procedural_continents were replaced by one deterministic
+    # fallback texture, used only when no real SSAPy Earth image is available.
+    # It still prefers global_land_mask for continent shapes and drops to a
+    # low-frequency field when the package is missing, which is the path this
+    # test exercises. The cache is keyed on resolution, so clear it or an
+    # earlier call can return a texture built while the package was importable.
+    globe._procedural_earth_texture_cached.cache_clear()
+    texture = globe._procedural_earth_texture(8, 16)
+    assert texture.shape == (8, 16, 3)
+    assert texture.dtype == np.uint8
+    assert np.all((0 <= texture) & (texture <= 255))
+    # A usable fallback has to vary: a single flat colour would render as a
+    # blank sphere and still satisfy the checks above.
+    assert texture.reshape(-1, 3).std(axis=0).max() > 1.0
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")

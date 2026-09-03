@@ -183,18 +183,26 @@ def light_direction_from_sun(*, target_km=None, sun_position_km=None, sun_hat=No
 
 def earth_trace(*, sun_hat=None, sun_position_km=None, n_lat=120, n_lon=240,
                 radius_scale=1.0, center=(0.0, 0.0, 0.0), rotation_deg=None,
-                time=None, show_city_lights=False, night_lift_strength=0.0,
-                name="Earth"):
+                time=None, show_city_lights=False, night_lift_strength=None,
+                night_floor=0.003, name="Earth"):
     """Return a textured, day/night shaded Earth mesh.
 
-    The implementation wraps the real-texture/procedural-continent mesh used by
-    the day/night globe plot.  It is intentionally exposed here as a stable
-    building block so other plots do not fall back to arbitrary blue spheres.
+    The implementation wraps the real-texture mesh used by the day/night globe
+    plot.  It is intentionally exposed here as a stable building block so other
+    plots do not fall back to arbitrary blue spheres.
+
+    ``night_lift_strength`` is retained only so existing callers keep working.
+    The mesh now shades in linear light, which replaced the global
+    highlight-lifting curve that parameter drove; the residual night-side
+    brightness is set by ``night_floor`` instead. A non-zero value is mapped
+    onto ``night_floor`` rather than ignored, so the visual intent survives.
     """
     from .globe_orbit_daynight_plotly import _earth_mesh
 
     if rotation_deg is None:
         rotation_deg = earth_rotation_deg_from_time(time)
+    if night_lift_strength:
+        night_floor = max(float(night_floor), float(night_lift_strength) * 0.01)
     trace = _earth_mesh(
         light_direction_from_sun(target_km=center, sun_position_km=sun_position_km, sun_hat=sun_hat),
         n_lat=int(n_lat),
@@ -203,7 +211,7 @@ def earth_trace(*, sun_hat=None, sun_position_km=None, n_lat=120, n_lon=240,
         center=center,
         rotation_deg=float(rotation_deg),
         show_city_lights=bool(show_city_lights),
-        night_lift_strength=float(night_lift_strength),
+        night_floor=float(night_floor),
     )
     trace.name = name
     return trace

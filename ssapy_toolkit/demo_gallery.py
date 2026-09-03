@@ -173,7 +173,13 @@ def changed_files(before: dict[Path, float], after: dict[Path, float], slack: fl
 
 
 def relpath_for_report(target: Path, report_root: Path) -> str:
-    return os.path.relpath(str(target), str(report_root))
+    """Relative path for the HTML report, always POSIX-separated.
+
+    os.path.relpath returns backslashes on Windows, which a browser reads as
+    literal characters rather than path separators, so the generated gallery
+    links do not resolve.
+    """
+    return Path(os.path.relpath(str(target), str(report_root))).as_posix()
 
 
 def _filter_console_text(text: str, max_lines: int = 120) -> str:

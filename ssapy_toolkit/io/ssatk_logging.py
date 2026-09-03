@@ -35,7 +35,22 @@ def build_logging(id, log_dir):
     """
     os.makedirs(log_dir, exist_ok=True)
     log_filename = f"id_{id}.log"
-    log_filepath = f"{log_dir}/{log_filename}"
+    log_filepath = os.path.join(log_dir, log_filename)
+
+    # Detach and close any handler still holding this file before unlinking
+    # it. logging.basicConfig(force=True) below does close existing handlers,
+    # but it runs after this point, so calling build_logging twice for the
+    # same id left the first call's FileHandler open across the os.remove.
+    # POSIX allows unlinking an open file; Windows raises PermissionError
+    # (WinError 32). The handler leaked on every platform either way.
+    root = logging.getLogger()
+    target = os.path.abspath(log_filepath)
+    for handler in list(root.handlers):
+        base = getattr(handler, "baseFilename", None)
+        if base is not None and os.path.abspath(base) == target:
+            root.removeHandler(handler)
+            handler.close()
+
     if os.path.exists(log_filepath):
         os.remove(log_filepath)
 

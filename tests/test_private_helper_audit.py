@@ -414,10 +414,14 @@ def test_plot_private_mesh_and_math_helpers(monkeypatch, tmp_path):
     assert shrunk.frames[0].data[0]["x"].dtype == np.float32
     assert shrunk.data[0]["label"] == "keep"
 
-    continents = globe_orbit_daynight_plotly._procedural_continents(8, 16, seed=2)
-    assert continents.shape == (8, 16, 3)
-    assert continents.dtype == np.uint8
-    assert np.all((0 <= continents) & (continents <= 255))
+    # _procedural_continents was removed: the mesh now always uses the real
+    # SSAPy texture instead of a synthetic land mask whose random continents
+    # never aligned with it. Audit the loader that replaced it, with the same
+    # three checks.
+    texture = globe_orbit_daynight_plotly._load_real_earth_texture(8, 16)
+    assert texture.shape == (8, 16, 3)
+    assert texture.dtype == np.uint8
+    assert np.all((0 <= texture) & (texture <= 255))
 
     monkeypatch.setattr(groundtrack_enhanced, "_HAS_SSAPY_ASSETS", False)
     groundtrack_enhanced._earth_texture_cache = None
