@@ -183,3 +183,7 @@ gggrx_1200a_sha.*
 full.txt
 parity_fail.txt
 *_out.txt
+
+ssapy_toolkit/debris/
+tests/test_debris.py
+scripts/run_debris_smoke_test.py
