@@ -997,6 +997,17 @@ def _event_in_elapsed_time(event, t_ref: float):
     return shifted
 
 
+def _rhs_in_elapsed_time(rhs, t_ref: float):
+    """Present an absolute-epoch right-hand side to an elapsed-time integrator."""
+    if t_ref == 0.0:
+        return rhs
+
+    def shifted(t, y):
+        return rhs(t_ref + t, y)
+
+    return shifted
+
+
 def _solution_in_absolute_time(solution, t_ref: float):
     """Wrap a dense solution so callers keep querying it with absolute epochs."""
     if solution is None or t_ref == 0.0:

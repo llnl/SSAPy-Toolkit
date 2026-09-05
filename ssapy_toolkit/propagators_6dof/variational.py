@@ -28,6 +28,8 @@ from .sixdof import (
     SixDOFTrajectory,
     _inertia_matrix,
     _initial_state,
+    _rhs_in_elapsed_time,
+    _solution_in_absolute_time,
     _times,
     _validate_time_direction,
     _wheel_axes_from_body,
@@ -299,9 +301,14 @@ def propagate_6dof_variational(
                 jac[:, column] = (nominal_rhs(t, y + delta) - nominal_rhs(t, y - delta)) / (2.0 * step)
         return np.concatenate((f, (jac @ phi).ravel()))
 
+    # Integrate in seconds since state.t; SciPy's minimum step is 10 * ulp(t),
+    # which on absolute GPS seconds is coarse enough to abort on a
+    # discontinuity. See propagate_6dof for the measured floors.
+    t_ref = float(state.t)
     sol = solve_ivp(
-        combined_rhs, (state.t, float(times[-1])), np.concatenate((y0, phi0.ravel())),
-        t_eval=times, rtol=rtol, atol=atol, method=method,
+        _rhs_in_elapsed_time(combined_rhs, t_ref),
+        (0.0, float(times[-1]) - t_ref), np.concatenate((y0, phi0.ravel())),
+        t_eval=times - t_ref, rtol=rtol, atol=atol, method=method,
         max_step=max_step, first_step=first_step,
     )
     if not sol.success:
@@ -312,7 +319,7 @@ def propagate_6dof_variational(
     mass = y[:, 13] if state.mass is not None else None
     wheel_start = 14 if state.mass is not None else 13
     wheels = None if wheel_momentum is None else y[:, wheel_start:]
-    trajectory = SixDOFTrajectory(sol.t, y[:, :3], y[:, 3:6], q, y[:, 10:13], mass, wheels, int(sol.nfev), str(sol.message), int(sol.status), solution=sol.sol)
+    trajectory = SixDOFTrajectory(sol.t + t_ref, y[:, :3], y[:, 3:6], q, y[:, 10:13], mass, wheels, int(sol.nfev), str(sol.message), int(sol.status), solution=_solution_in_absolute_time(sol.sol, t_ref))
     return SixDOFVariationalTrajectory(trajectory, sol.y[n:].T.reshape((-1, n, n)))
 
 
