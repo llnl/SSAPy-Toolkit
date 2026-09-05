@@ -5,7 +5,6 @@ from dataclasses import dataclass
 import numpy as np
 
 from ..coordinates.satellite_frames import frame_to_gcrf_matrix
-<<<<<<< HEAD
 from .sixdof import (
     SixDOFTrajectory,
     Spacecraft,

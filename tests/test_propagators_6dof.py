@@ -460,23 +460,23 @@ def test_attitude_quaternion_helpers_use_satellite_frame_matrices():
         quaternion_from_matrix(np.diag([1.0, 2.0, 1.0]))
 
 
-def test_segment_impulse_applies_body_frame_delta_v_at_exact_epoch():
+def test_segment_impulse_applies_body_frame_delta_v_at_exact_epoch(gps_epoch):
     import ssapy_toolkit as ssatk
 
     assert ssatk.ImpulseManeuver is ImpulseManeuver
     spacecraft = Spacecraft(
-        r=[1.0, 0.0, 0.0], v=[0.0, 0.0, 0.0], inertia=np.eye(3),
+        r=[1.0, 0.0, 0.0], v=[0.0, 0.0, 0.0], t=gps_epoch, inertia=np.eye(3),
         q=[np.sqrt(0.5), 0.0, 0.0, np.sqrt(0.5)],
         mass=10.0,
     )
     trajectory = propagate_spacecraft_segments(spacecraft, [
-        {"times": [0.0, 1.0], "mu": 0.0},
-        {"times": [1.0, 2.0], "mu": 0.0,
+        {"times": [gps_epoch + 0.0, gps_epoch + 1.0], "mu": 0.0},
+        {"times": [gps_epoch + 1.0, gps_epoch + 2.0], "mu": 0.0,
          "impulses": ImpulseManeuver(
              [1.0, 0.0, 0.0], frame="body", mass_change=-2.0,
              q_reset=[1.0, 0.0, 0.0, 0.0], omega_reset=[0.0, 0.0, 0.25]),},
     ])
-    boundary = np.flatnonzero(np.isclose(trajectory.t, 1.0))
+    boundary = np.flatnonzero(trajectory.t == gps_epoch + 1.0)
     assert boundary.size == 2
     np.testing.assert_allclose(trajectory.r[boundary[0]], trajectory.r[boundary[1]], atol=1e-12)
     np.testing.assert_allclose(trajectory.v[boundary[0]], [0.0, 0.0, 0.0], atol=1e-12)
@@ -499,17 +499,19 @@ def test_cubesat_preset_bodies_expose_valid_mass_properties():
         assert body.area > 0.0
 
 
-def test_mass_only_impulse_updates_tank_body_and_preserves_mass_jump():
+def test_mass_only_impulse_updates_tank_body_and_preserves_mass_jump(gps_epoch):
     body = SpacecraftBody.box(name="bus", mass=10.0, size=(1.0, 1.0, 1.0)).with_tanks(
         Tank(propellant_mass=2.0, dry_mass=1.0, name="main")
     )
-    spacecraft = Spacecraft(r=[1.0, 0.0, 0.0], v=[0.0, 0.0, 0.0], body=body)
+    spacecraft = Spacecraft(
+        r=[1.0, 0.0, 0.0], v=[0.0, 0.0, 0.0], t=gps_epoch, body=body
+    )
     trajectory = propagate_spacecraft_segments(spacecraft, [
-        {"times": [0.0, 1.0], "mu": 0.0},
-        {"times": [1.0, 2.0], "mu": 0.0,
+        {"times": [gps_epoch + 0.0, gps_epoch + 1.0], "mu": 0.0},
+        {"times": [gps_epoch + 1.0, gps_epoch + 2.0], "mu": 0.0,
          "impulses": ImpulseManeuver([0.0, 0.0, 0.0], mass_change=-1.0)},
     ])
-    boundary = np.flatnonzero(np.isclose(trajectory.t, 1.0))
+    boundary = np.flatnonzero(trajectory.t == gps_epoch + 1.0)
     assert boundary.size == 2
     np.testing.assert_allclose(trajectory.mass[boundary], [13.0, 12.0])
     assert trajectory.spacecraft(boundary[1], body=body).body.current_mass == pytest.approx(12.0)
@@ -1426,20 +1428,25 @@ def test_maneuver_acceleration_factories_return_physical_acceleration_models():
         )
 
 
-def test_spacecraft_maneuver_accel_propagates_variable_finite_burn():
+def test_spacecraft_maneuver_accel_propagates_variable_finite_burn(gps_epoch):
     spacecraft = Spacecraft(
         r=[0.0, 0.0, 0.0],
         v=[0.0, 0.0, 0.0],
+        t=gps_epoch,
         inertia=np.eye(3),
         mass=100.0,
     )
+    # thrust_profile_constant gates on the absolute epoch, so its window moves
+    # with the grid.
     burn = SpacecraftManeuverAccel(
-        thrust_profile_constant(2.0, start=0.0, stop=10.0),
+        thrust_profile_constant(2.0, start=gps_epoch + 0.0, stop=gps_epoch + 10.0),
         frame="gcrf",
         direction=[1.0, 0.0, 0.0],
     )
 
-    traj = spacecraft.propagate(times=[0.0, 10.0], mu=0.0, acceleration=burn)
+    traj = spacecraft.propagate(
+        times=[gps_epoch + 0.0, gps_epoch + 10.0], mu=0.0, acceleration=burn
+    )
 
     np.testing.assert_allclose(traj.v[-1], [0.2, 0.0, 0.0], rtol=1e-10, atol=1e-12)
     np.testing.assert_allclose(traj.r[-1], [1.0, 0.0, 0.0], rtol=1e-10, atol=1e-12)
@@ -1449,10 +1456,12 @@ def test_spacecraft_maneuver_accel_propagates_variable_finite_burn():
         frame="gcrf",
         direction=[1.0, 0.0, 0.0],
         isp=200.0,
-        start=0.0,
-        stop=10.0,
+        start=gps_epoch + 0.0,
+        stop=gps_epoch + 10.0,
     )
-    mass_traj = spacecraft.propagate(times=[0.0, 10.0], mu=0.0, acceleration=burn_with_isp)
+    mass_traj = spacecraft.propagate(
+        times=[gps_epoch + 0.0, gps_epoch + 10.0], mu=0.0, acceleration=burn_with_isp
+    )
 
     assert mass_traj.mass is not None
     assert mass_traj.mass[-1] == pytest.approx(100.0 - 2.0 * 10.0 / (200.0 * STANDARD_GRAVITY))
@@ -1704,11 +1713,11 @@ def test_propellant_empty_event_stops_at_body_dry_mass():
         propellant_empty_event(object())
 
 
-def test_spacecraft_propagate_preserves_user_events_and_dry_mass_stop():
+def test_spacecraft_propagate_preserves_user_events_and_dry_mass_stop(gps_epoch):
     body = SpacecraftBody.box(name="bus", mass=10.0, size=(1.0, 1.0, 1.0)).with_tanks(
         Tank(propellant_mass=5.0, dry_mass=1.0)
     )
-    spacecraft = Spacecraft(r=[0, 0, 0], v=[0, 0, 0], body=body)
+    spacecraft = Spacecraft(r=[0, 0, 0], v=[0, 0, 0], t=gps_epoch, body=body)
 
     def late_user_event(_t, y):
         return y[0] - 100.0
@@ -1717,18 +1726,22 @@ def test_spacecraft_propagate_preserves_user_events_and_dry_mass_stop():
     late_user_event.direction = 1
 
     trajectory = spacecraft.propagate(
-        times=[0.0, 10.0],
+        times=[gps_epoch + 0.0, gps_epoch + 10.0],
         mu=0.0,
         mass_flow_rate=lambda t, r, v, q, omega: 2.0,
         events=late_user_event,
         stop_at_dry_mass=True,
     )
 
-    assert trajectory.t[-1] == pytest.approx(2.5)
+    # Epoch comparisons need an absolute tolerance; pytest.approx defaults to
+    # rel=1e-6, which is 1400 s at GPS 1.4e9.
+    assert trajectory.t[-1] == pytest.approx(gps_epoch + 2.5, rel=0.0, abs=1.0e-6)
     assert trajectory.mass[-1] == pytest.approx(body.dry_mass_total)
     assert len(trajectory.t_events) == 2
     assert len(trajectory.t_events[0]) == 0
-    assert trajectory.t_events[1][0] == pytest.approx(2.5)
+    assert trajectory.t_events[1][0] == pytest.approx(
+        gps_epoch + 2.5, rel=0.0, abs=1.0e-6
+    )
 
 
 def test_spacecraft_propagate_coasts_without_propulsive_acceleration_after_depletion():
@@ -1934,7 +1947,7 @@ def test_constant_torque_changes_principal_axis_spin():
     np.testing.assert_allclose(traj.omega[:, 1:], 0.0, atol=1e-12)
 
 
-def test_propagate_6dof_supports_terminal_events_and_dense_output():
+def test_propagate_6dof_supports_terminal_events_and_dense_output(gps_epoch):
     def reaches_half_meter(_t, y):
         return y[0] - 0.5
 
@@ -1944,7 +1957,8 @@ def test_propagate_6dof_supports_terminal_events_and_dense_output():
     traj = propagate_6dof(
         r0=[0.0, 0.0, 0.0],
         v0=[1.0, 0.0, 0.0],
-        times=[0.0, 0.25, 0.75, 1.0],
+        t0=gps_epoch,
+        times=gps_epoch + np.array([0.0, 0.25, 0.75, 1.0]),
         inertia=np.eye(3),
         mu=0.0,
         events=reaches_half_meter,
@@ -1954,27 +1968,31 @@ def test_propagate_6dof_supports_terminal_events_and_dense_output():
     assert traj.status == 1
     assert traj.t_events is not None
     assert traj.y_events is not None
-    assert traj.t[-1] == pytest.approx(0.5)
+    assert traj.t[-1] == pytest.approx(gps_epoch + 0.5, rel=0.0, abs=1.0e-6)
     assert traj.r[-1, 0] == pytest.approx(0.5)
-    assert traj.t_events[0][0] == pytest.approx(0.5)
+    assert traj.t_events[0][0] == pytest.approx(gps_epoch + 0.5, rel=0.0, abs=1.0e-6)
     assert traj.y_events[0][0, 0] == pytest.approx(0.5)
     assert traj.solution is not None
-    assert traj.solution(0.25)[0] == pytest.approx(0.25)
+    # Dense output is queried in absolute time.
+    assert traj.solution(gps_epoch + 0.25)[0] == pytest.approx(0.25)
 
 
-def test_physical_event_helpers_stop_radius_altitude_and_mass_crossings():
+def test_physical_event_helpers_stop_radius_altitude_and_mass_crossings(gps_epoch):
     radius_event = radius_crossing_event(0.5, direction=1)
     radius_traj = propagate_6dof(
         r0=[0.0, 0.0, 0.0],
         v0=[1.0, 0.0, 0.0],
-        times=[0.0, 0.25, 0.75, 1.0],
+        t0=gps_epoch,
+        times=gps_epoch + np.array([0.0, 0.25, 0.75, 1.0]),
         inertia=np.eye(3),
         mu=0.0,
         events=radius_event,
     )
     assert radius_traj.status == 1
-    assert radius_traj.t[-1] == pytest.approx(0.5)
-    assert radius_traj.t_events[0][0] == pytest.approx(0.5)
+    assert radius_traj.t[-1] == pytest.approx(gps_epoch + 0.5, rel=0.0, abs=1.0e-6)
+    assert radius_traj.t_events[0][0] == pytest.approx(
+        gps_epoch + 0.5, rel=0.0, abs=1.0e-6
+    )
 
     altitude_event = altitude_crossing_event(1.0, earth_radius=10.0, direction=1)
     assert altitude_event(0.0, np.r_[11.0, 0.0, 0.0, np.zeros(10)]) == pytest.approx(0.0)
