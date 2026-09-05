@@ -599,6 +599,61 @@ def _piecewise_solution(first, second, split):
     return solution
 
 
+def _piecewise_solution_sequence(solutions, breakpoints):
+    """Dispatch across N dense solutions with one searchsorted.
+
+    ``solutions[k]`` covers the epochs between ``breakpoints[k - 1]`` and
+    ``breakpoints[k]``. A breakpoint itself resolves to the segment that ends
+    there, matching :func:`_piecewise_solution`, whose pairwise
+    ``values <= split`` sends the split epoch to the earlier segment. An
+    impulsive discontinuity therefore still reads as the pre-impulse state.
+
+    Folding :func:`_piecewise_solution` over N segments would nest N-1
+    closures, so evaluating M epochs would cost O(N*M) and N Python frames.
+    Here each call is one ``np.searchsorted`` plus one call per segment the
+    query actually touches.
+
+    Returns ``None`` when any segment lacks dense output, or when the
+    breakpoints are not sorted, rather than returning a solution that would
+    silently map epochs to the wrong segment.
+    """
+    solutions = tuple(solutions)
+    if not solutions or any(item is None for item in solutions):
+        return None
+    if len(solutions) == 1:
+        return solutions[0]
+
+    breakpoints = np.asarray(breakpoints, dtype=float)
+    if breakpoints.shape != (len(solutions) - 1,):
+        raise ValueError(
+            "breakpoints must hold one epoch per interior segment boundary."
+        )
+    if np.any(np.diff(breakpoints) < 0.0):
+        return None
+
+    def solution(t):
+        values = np.asarray(t, dtype=float)
+        index = np.searchsorted(breakpoints, values, side="left")
+        if values.ndim == 0:
+            return solutions[int(index)](t)
+        flat = values.reshape(-1)
+        index = np.asarray(index).reshape(-1)
+        if flat.size == 0:
+            # breakpoints[0] is inside the first segment's span by construction.
+            probe = np.asarray(solutions[0](float(breakpoints[0])), dtype=float)
+            return np.empty((probe.shape[0], 0), dtype=float)
+        result = None
+        for segment in np.unique(index):
+            selected = index == segment
+            block = np.asarray(solutions[int(segment)](flat[selected]), dtype=float)
+            if result is None:
+                result = np.empty((block.shape[0], flat.size), dtype=float)
+            result[:, selected] = block
+        return result
+
+    return solution
+
+
 def gravity_gradient_torque(
     r_inertial: ArrayLike,
     q: ArrayLike,
