@@ -854,7 +854,7 @@ def propagate_6dof(
         ]
         if events_with_state:
             event_t, event_y = min(events_with_state, key=lambda item: item[0])
-            if not len(t) or not np.isclose(t[-1], event_t):
+            if not len(t) or not _epochs_close(t[-1], event_t):
                 t = np.append(t, event_t)
                 y = np.vstack([y, event_y])
     q = np.array([normalize_quaternion(item) for item in y[:, 6:10]])
@@ -904,6 +904,25 @@ def _initial_state(*, orbit0, r0, v0, t0, q0, omega0, mass0=None, wheel_momentum
         mass=None if mass0 is None else float(mass0),
         wheel_momentum=None if wheel_momentum0 is None else _as_vector(wheel_momentum0, "wheel_momentum0"),
     )
+
+
+def _epochs_close(first: float, second: float) -> bool:
+    """Compare two epoch values without a scale-dependent relative tolerance.
+
+    ``np.isclose`` defaults to ``rtol=1e-5``, which on absolute GPS seconds is
+    a tolerance of hours: 1.4e4 s at GPS 1.4e9 (2024) and 3.8e4 s at GPS 3.8e9
+    (2100). Epochs are compared on an absolute floor instead.
+
+    The floor is 1 us, widened to 8 ULP of the larger operand where float64
+    cannot resolve that. 1 us is only 4.2 ULP at GPS 1.4e9 and 2.1 ULP at GPS
+    3.8e9, and SciPy locates events with ``brentq(xtol=4*EPS, rtol=4*EPS)``,
+    whose stopping bound is 1.24 us at GPS 1.4e9 and 3.4 us at GPS 3.8e9 --
+    already wider than the fixed floor. Without the ULP term a root SciPy
+    resolved as well as it can would be treated as a distinct epoch and
+    appended as a duplicate sample.
+    """
+    tolerance = max(1.0e-6, 8.0 * np.spacing(max(abs(first), abs(second))))
+    return bool(np.isclose(first, second, rtol=0.0, atol=tolerance))
 
 
 def _times(times: ArrayLike) -> np.ndarray:
