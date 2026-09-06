@@ -599,6 +599,61 @@ def _piecewise_solution(first, second, split):
     return solution
 
 
+def _piecewise_solution_sequence(solutions, breakpoints):
+    """Dispatch across N dense solutions with one searchsorted.
+
+    ``solutions[k]`` covers the epochs between ``breakpoints[k - 1]`` and
+    ``breakpoints[k]``. A breakpoint itself resolves to the segment that ends
+    there, matching :func:`_piecewise_solution`, whose pairwise
+    ``values <= split`` sends the split epoch to the earlier segment. An
+    impulsive discontinuity therefore still reads as the pre-impulse state.
+
+    Folding :func:`_piecewise_solution` over N segments would nest N-1
+    closures, so evaluating M epochs would cost O(N*M) and N Python frames.
+    Here each call is one ``np.searchsorted`` plus one call per segment the
+    query actually touches.
+
+    Returns ``None`` when any segment lacks dense output, or when the
+    breakpoints are not sorted, rather than returning a solution that would
+    silently map epochs to the wrong segment.
+    """
+    solutions = tuple(solutions)
+    if not solutions or any(item is None for item in solutions):
+        return None
+    if len(solutions) == 1:
+        return solutions[0]
+
+    breakpoints = np.asarray(breakpoints, dtype=float)
+    if breakpoints.shape != (len(solutions) - 1,):
+        raise ValueError(
+            "breakpoints must hold one epoch per interior segment boundary."
+        )
+    if np.any(np.diff(breakpoints) < 0.0):
+        return None
+
+    def solution(t):
+        values = np.asarray(t, dtype=float)
+        index = np.searchsorted(breakpoints, values, side="left")
+        if values.ndim == 0:
+            return solutions[int(index)](t)
+        flat = values.reshape(-1)
+        index = np.asarray(index).reshape(-1)
+        if flat.size == 0:
+            # breakpoints[0] is inside the first segment's span by construction.
+            probe = np.asarray(solutions[0](float(breakpoints[0])), dtype=float)
+            return np.empty((probe.shape[0], 0), dtype=float)
+        result = None
+        for segment in np.unique(index):
+            selected = index == segment
+            block = np.asarray(solutions[int(segment)](flat[selected]), dtype=float)
+            if result is None:
+                result = np.empty((block.shape[0], flat.size), dtype=float)
+            result[:, selected] = block
+        return result
+
+    return solution
+
+
 def gravity_gradient_torque(
     r_inertial: ArrayLike,
     q: ArrayLike,
@@ -812,9 +867,18 @@ def propagate_6dof(
         y_parts.append(wheel_momentum)
     y0 = np.concatenate(y_parts)
 
+    # Integrate in seconds since ``state.t``. SciPy's Runge-Kutta steppers bound
+    # the minimum step at ``10 * ulp(t)``, which on absolute GPS seconds is
+    # 2.4e-6 s at GPS 1.4e9 and 4.8e-6 s at GPS 3.8e9, against ~5e-322 s at
+    # zero. A discontinuity needing a finer step -- tank depletion, a thrust
+    # cut-out -- then aborts the run outright. The force, torque and event
+    # callbacks still see absolute epochs, and every returned epoch is absolute.
+    t_ref = float(state.t)
+    times_elapsed = times - t_ref
+
     sol = solve_ivp(
         lambda t, y: sixdof_rhs(
-            t,
+            t_ref + t,
             y,
             inertia=inertia_arg,
             mu=mu,
@@ -830,15 +894,15 @@ def propagate_6dof(
             inv_inertia=inv_inertia,
             mass_state=state.mass is not None,
         ),
-        (state.t, float(times[-1])),
+        (0.0, float(times_elapsed[-1])),
         y0,
-        t_eval=times,
+        t_eval=times_elapsed,
         rtol=rtol,
         atol=atol,
         method=method,
         max_step=max_step,
         first_step=first_step,
-        events=events,
+        events=_events_in_elapsed_time(events, t_ref),
         dense_output=dense_output,
     )
     if not sol.success:
@@ -854,9 +918,10 @@ def propagate_6dof(
         ]
         if events_with_state:
             event_t, event_y = min(events_with_state, key=lambda item: item[0])
-            if not len(t) or not np.isclose(t[-1], event_t):
+            if not len(t) or not _epochs_close(t[-1], event_t):
                 t = np.append(t, event_t)
                 y = np.vstack([y, event_y])
+    t = t + t_ref
     q = np.array([normalize_quaternion(item) for item in y[:, 6:10]])
     mass = y[:, 13] if state.mass is not None else None
     wheel_start = 14 if state.mass is not None else 13
@@ -874,9 +939,13 @@ def propagate_6dof(
         nfev=int(getattr(sol, "nfev", 0)),
         message=str(getattr(sol, "message", "")),
         status=int(getattr(sol, "status", 0)),
-        t_events=None if getattr(sol, "t_events", None) is None else tuple(sol.t_events),
+        t_events=(
+            None
+            if getattr(sol, "t_events", None) is None
+            else tuple(np.asarray(item, dtype=float) + t_ref for item in sol.t_events)
+        ),
         y_events=None if getattr(sol, "y_events", None) is None else tuple(sol.y_events),
-        solution=getattr(sol, "sol", None),
+        solution=_solution_in_absolute_time(getattr(sol, "sol", None), t_ref),
     )
 
 
@@ -904,6 +973,69 @@ def _initial_state(*, orbit0, r0, v0, t0, q0, omega0, mass0=None, wheel_momentum
         mass=None if mass0 is None else float(mass0),
         wheel_momentum=None if wheel_momentum0 is None else _as_vector(wheel_momentum0, "wheel_momentum0"),
     )
+
+
+def _events_in_elapsed_time(events, t_ref: float):
+    """Re-express absolute-epoch event callables in seconds since ``t_ref``."""
+    if events is None or t_ref == 0.0:
+        return events
+    single = callable(events)
+    shifted = tuple(
+        _event_in_elapsed_time(event, t_ref)
+        for event in ((events,) if single else tuple(events))
+    )
+    return shifted[0] if single else shifted
+
+
+def _event_in_elapsed_time(event, t_ref: float):
+    def shifted(t, y):
+        return event(t + t_ref, y)
+
+    for attribute in ("terminal", "direction"):
+        if hasattr(event, attribute):
+            setattr(shifted, attribute, getattr(event, attribute))
+    return shifted
+
+
+def _rhs_in_elapsed_time(rhs, t_ref: float):
+    """Present an absolute-epoch right-hand side to an elapsed-time integrator."""
+    if t_ref == 0.0:
+        return rhs
+
+    def shifted(t, y):
+        return rhs(t_ref + t, y)
+
+    return shifted
+
+
+def _solution_in_absolute_time(solution, t_ref: float):
+    """Wrap a dense solution so callers keep querying it with absolute epochs."""
+    if solution is None or t_ref == 0.0:
+        return solution
+
+    def shifted(t):
+        return solution(np.asarray(t, dtype=float) - t_ref)
+
+    return shifted
+
+
+def _epochs_close(first: float, second: float) -> bool:
+    """Compare two epoch values without a scale-dependent relative tolerance.
+
+    ``np.isclose`` defaults to ``rtol=1e-5``, which on absolute GPS seconds is
+    a tolerance of hours: 1.4e4 s at GPS 1.4e9 (2024) and 3.8e4 s at GPS 3.8e9
+    (2100). Epochs are compared on an absolute floor instead.
+
+    The floor is 1 us, widened to 8 ULP of the larger operand where float64
+    cannot resolve that. 1 us is only 4.2 ULP at GPS 1.4e9 and 2.1 ULP at GPS
+    3.8e9, and SciPy locates events with ``brentq(xtol=4*EPS, rtol=4*EPS)``,
+    whose stopping bound is 1.24 us at GPS 1.4e9 and 3.4 us at GPS 3.8e9 --
+    already wider than the fixed floor. Without the ULP term a root SciPy
+    resolved as well as it can would be treated as a distinct epoch and
+    appended as a duplicate sample.
+    """
+    tolerance = max(1.0e-6, 8.0 * np.spacing(max(abs(first), abs(second))))
+    return bool(np.isclose(first, second, rtol=0.0, atol=tolerance))
 
 
 def _times(times: ArrayLike) -> np.ndarray:

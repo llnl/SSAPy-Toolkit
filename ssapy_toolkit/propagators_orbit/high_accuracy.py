@@ -72,11 +72,16 @@ def propagate_orbit_state(
     models = _models(acceleration)
     y0 = np.concatenate([r0, v0])
 
+    # Integrate in seconds since t0. SciPy bounds the minimum step at
+    # 10 * ulp(t), which on absolute GPS seconds is 1.5e-7 s at GPS 1e8 and
+    # 2.4e-6 s at GPS 1.4e9; a step-discontinuous acceleration then aborts the
+    # run. Acceleration models still receive the absolute epoch.
+    t_ref = float(t0)
     sol = solve_ivp(
-        lambda t, y: _rhs(t, y, mu=mu, models=models),
-        (t0, float(times[-1])),
+        lambda t, y: _rhs(t_ref + t, y, mu=mu, models=models),
+        (0.0, float(times[-1]) - t_ref),
         y0,
-        t_eval=times,
+        t_eval=times - t_ref,
         method=method,
         rtol=rtol,
         atol=atol,
@@ -87,7 +92,7 @@ def propagate_orbit_state(
 
     y = sol.y.T
     return OrbitPropagation(
-        t=sol.t,
+        t=sol.t + t_ref,
         r=y[:, :3],
         v=y[:, 3:],
         nfev=int(sol.nfev),
@@ -132,20 +137,25 @@ def propagate_orbit_state_with_stm(
     models = _models(acceleration)
     y0 = np.concatenate([r0, v0, initial_stm.ravel()])
 
+    # See propagate_orbit_state: integrate in seconds since t0 so the step
+    # floor stays at zero-epoch resolution, and hand models the absolute epoch.
+    t_ref = float(t0)
+
     def rhs(t, y):
+        epoch = t_ref + t
         state = y[:6]
         matrix = y[6:].reshape(6, 6)
-        derivative = _rhs(t, state, mu=mu, models=models)
+        derivative = _rhs(epoch, state, mu=mu, models=models)
         jacobian = _state_jacobian(
-            t, state, mu=mu, models=models, relative_step=fd_step
+            epoch, state, mu=mu, models=models, relative_step=fd_step
         )
         return np.concatenate([derivative, (jacobian @ matrix).ravel()])
 
     sol = solve_ivp(
         rhs,
-        (t0, float(times[-1])),
+        (0.0, float(times[-1]) - t_ref),
         y0,
-        t_eval=times,
+        t_eval=times - t_ref,
         method=method,
         rtol=rtol,
         atol=atol,
@@ -156,7 +166,7 @@ def propagate_orbit_state_with_stm(
 
     state = sol.y[:6].T
     return OrbitPropagationWithSTM(
-        t=sol.t,
+        t=sol.t + t_ref,
         r=state[:, :3],
         v=state[:, 3:],
         stm=sol.y[6:].T.reshape(-1, 6, 6),

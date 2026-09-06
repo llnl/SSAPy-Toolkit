@@ -5,7 +5,12 @@ from dataclasses import dataclass
 import numpy as np
 
 from ..coordinates.satellite_frames import frame_to_gcrf_matrix
-from .sixdof import SixDOFTrajectory, Spacecraft
+from .sixdof import (
+    SixDOFTrajectory,
+    Spacecraft,
+    _epochs_close,
+    _piecewise_solution_sequence,
+)
 from .sixdof import propagate_6dof as _propagate_6dof
 
 __all__ = [
@@ -167,7 +172,7 @@ def _propagate_spacecraft_segment(spacecraft, segment, *, tracks_mass=False):
     times = np.asarray(options["times"], dtype=float)
     if times.ndim != 1 or times.size < 2:
         raise ValueError("each segment times must be a 1-D array with at least two entries.")
-    if not np.isclose(times[0], spacecraft.t):
+    if not _epochs_close(times[0], spacecraft.t):
         raise ValueError("each segment must start at the current spacecraft epoch.")
     impulses = options.pop("impulses", ())
     if isinstance(impulses, ImpulseManeuver):
@@ -253,6 +258,13 @@ def _combine_trajectories(trajectories, preserve_boundaries=None) -> SixDOFTraje
     )
     t_events = tuple(event for trajectory in trajectories for event in (trajectory.t_events or ()))
     y_events = tuple(event for trajectory in trajectories for event in (trajectory.y_events or ()))
+    # Segments are contiguous, so each interior boundary is the next
+    # trajectory's first epoch. Dropping this left dense output unavailable on
+    # every segmented run, however each segment was configured.
+    solution = _piecewise_solution_sequence(
+        [trajectory.solution for trajectory in trajectories],
+        [float(trajectory.t[0]) for trajectory in trajectories[1:]],
+    )
     return SixDOFTrajectory(
         t=t,
         r=r,
@@ -262,6 +274,7 @@ def _combine_trajectories(trajectories, preserve_boundaries=None) -> SixDOFTraje
         mass=mass,
         wheel_momentum=wheel_momentum,
         nfev=sum(trajectory.nfev for trajectory in trajectories),
+        solution=solution,
         message="; ".join(trajectory.message for trajectory in trajectories if trajectory.message),
         status=trajectories[-1].status,
         t_events=t_events or None,

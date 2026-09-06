@@ -259,56 +259,59 @@ def test_high_accuracy_environment_preset_avoids_ssapy_force_double_counting(mon
     assert captured["include_solar_radiation"] is False
 
 
-def test_high_accuracy_spacecraft_segments_chain_state_and_mass():
+def test_high_accuracy_spacecraft_segments_chain_state_and_mass(gps_epoch):
     import ssapy_toolkit as ssatk
 
     assert ssatk.propagate_spacecraft_segments is propagate_spacecraft_segments
     spacecraft = Spacecraft(
         r=[0.0, 0.0, 0.0],
         v=[0.0, 0.0, 0.0],
+        t=gps_epoch,
         inertia=np.eye(3),
         mass=100.0,
     )
+    # The burn window is an absolute-epoch quantity, like the segment times.
     burn = SpacecraftManeuverAccel(
         1.0,
         frame="gcrf",
         direction=[1.0, 0.0, 0.0],
         isp=100.0,
-        start=1.0,
-        stop=2.0,
+        start=gps_epoch + 1.0,
+        stop=gps_epoch + 2.0,
     )
 
     trajectory = propagate_spacecraft_segments(
         spacecraft,
         [
-            {"times": [0.0, 1.0], "mu": 0.0},
-            {"times": [1.0, 2.0], "models": [burn], "mu": 0.0},
+            {"times": [gps_epoch + 0.0, gps_epoch + 1.0], "mu": 0.0},
+            {"times": [gps_epoch + 1.0, gps_epoch + 2.0], "models": [burn], "mu": 0.0},
         ],
     )
 
-    np.testing.assert_allclose(trajectory.t, [0.0, 1.0, 2.0])
+    np.testing.assert_allclose(trajectory.t, gps_epoch + np.array([0.0, 1.0, 2.0]))
     assert trajectory.v[-1, 0] > 0.0
     assert trajectory.mass is not None
     assert trajectory.mass[-1] < trajectory.mass[0]
     assert trajectory.nfev > 0
 
 
-def test_high_accuracy_spacecraft_segments_preserve_wheel_momentum():
+def test_high_accuracy_spacecraft_segments_preserve_wheel_momentum(gps_epoch):
     body = SpacecraftBody.cubesat(1, mass=10.0).with_reaction_wheels(
         *reaction_wheel_triplet(max_torque=0.1)
     )
     spacecraft = Spacecraft(
         r=[0.0, 0.0, 0.0],
         v=[0.0, 0.0, 0.0],
+        t=gps_epoch,
         body=body,
     )
 
     trajectory = propagate_spacecraft_segments(
         spacecraft,
         [
-            {"times": [0.0, 1.0], "mu": 0.0},
+            {"times": [gps_epoch + 0.0, gps_epoch + 1.0], "mu": 0.0},
             {
-                "times": [1.0, 2.0],
+                "times": [gps_epoch + 1.0, gps_epoch + 2.0],
                 "models": [SpacecraftReactionWheelTorque([0.0, 0.0, 0.03])],
                 "mu": 0.0,
             },
@@ -320,14 +323,16 @@ def test_high_accuracy_spacecraft_segments_preserve_wheel_momentum():
     assert trajectory.wheel_momentum[-1, 2] < 0.0
 
 
-def test_high_accuracy_spacecraft_segments_validate_continuity():
-    spacecraft = Spacecraft(r=[0.0, 0.0, 0.0], v=[0.0, 0.0, 0.0], inertia=np.eye(3))
+def test_high_accuracy_spacecraft_segments_validate_continuity(gps_epoch):
+    spacecraft = Spacecraft(
+        r=[0.0, 0.0, 0.0], v=[0.0, 0.0, 0.0], t=gps_epoch, inertia=np.eye(3)
+    )
 
     with pytest.raises(ValueError, match="current spacecraft epoch"):
         propagate_spacecraft_segments(
             spacecraft,
             [
-                {"times": [0.0, 1.0], "mu": 0.0},
-                {"times": [2.0, 3.0], "mu": 0.0},
+                {"times": [gps_epoch + 0.0, gps_epoch + 1.0], "mu": 0.0},
+                {"times": [gps_epoch + 2.0, gps_epoch + 3.0], "mu": 0.0},
             ],
         )

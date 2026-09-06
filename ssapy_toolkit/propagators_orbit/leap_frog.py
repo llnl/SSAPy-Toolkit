@@ -42,7 +42,9 @@ def leapfrog(
     accels : callable or list[callable] or None
         Optional additional acceleration models to add each step.
         Each function may have signature f(r), f(r,t), f(r,v), or f(r,v,t)
-        and must return a (3,) acceleration vector [m/s^2].
+        and must return a (3,) acceleration vector [m/s^2]. ``t`` is the
+        absolute GPS epoch, not seconds since ``t[0]``, so ephemeris-backed
+        models such as ``accel_point_moon`` can be passed directly.
     stop_altitude_m : float
         Stop integration if ||r|| < EARTH_RADIUS + stop_altitude_m [104].
     verbose : bool
@@ -53,23 +55,27 @@ def leapfrog(
     r, v : ndarray (n,3)
         State history up to (and including) the first impact step, or full length.
     """
-    # ---- time array (seconds since t[0]) ----
-    t_arr = np.array(to_gps(t), dtype=float, copy=True)
-    t_arr -= t_arr[0]
-    n_steps = len(t_arr)
+    # ---- time arrays ----
+    # Absolute GPS epochs go to the ``accels`` callbacks, which may resolve an
+    # ephemeris from them; elapsed seconds key the thrust profiles, which is
+    # what build_profile has always been given here.
+    t_abs = np.array(to_gps(t), dtype=float, copy=True)
+    n_steps = len(t_abs)
 
     if n_steps < 2:
         raise ValueError("t must contain at least 2 time samples")
 
-    dt_vals = np.diff(t_arr)
+    t_elapsed = t_abs - t_abs[0]
+
+    dt_vals = np.diff(t_abs)
     if not np.allclose(dt_vals, dt_vals[0]):
         raise ValueError("Non-uniform Δt not supported")
     dt = float(dt_vals[0])
 
     # ---- burn profiles ----
-    r_th = build_profile(radial,      t_arr)
-    v_th = build_profile(velocity,    t_arr)
-    i_th = build_profile(inclination, t_arr)
+    r_th = build_profile(radial,      t_elapsed)
+    v_th = build_profile(velocity,    t_elapsed)
+    i_th = build_profile(inclination, t_elapsed)
 
     # ---- normalize accels -> list ----
     if accels is None:
@@ -119,7 +125,7 @@ def leapfrog(
     for i in range(n_steps - 1):
         if np.linalg.norm(r[i]) < r_stop:
             if verbose:
-                print(f"Impact at step {i}, t = {t_arr[i]:.2f} s")
+                print(f"Impact at step {i}, t = {t_elapsed[i]:.2f} s")
             return r[: i + 1], v[: i + 1]
 
         # first half-kick
@@ -128,7 +134,7 @@ def leapfrog(
             + accel_radial(r[i],            r_th[i])         # [65]
             + accel_velocity(v[i],          v_th[i])         # [68]
             + accel_inclination(r[i], v[i], i_th[i])         # [61]
-            + _eval_extra_accels(r[i], v[i], t_arr[i])
+            + _eval_extra_accels(r[i], v[i], t_abs[i])
         )
         v_half = v[i] + 0.5 * dt * a0  # [104]
 
@@ -141,7 +147,7 @@ def leapfrog(
             + accel_radial(r[i + 1],            r_th[i + 1])     # [65]
             + accel_velocity(v_half,            v_th[i + 1])     # [68]
             + accel_inclination(r[i + 1], v_half, i_th[i + 1])   # [61]
-            + _eval_extra_accels(r[i + 1], v_half, t_arr[i + 1])
+            + _eval_extra_accels(r[i + 1], v_half, t_abs[i + 1])
         )
         v[i + 1] = v_half + 0.5 * dt * a1  # [104]
 

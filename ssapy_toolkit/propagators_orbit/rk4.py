@@ -21,13 +21,41 @@ def rk4(
     inclination=None,
     accel_gravity=lambda r: -EARTH_MU * r / np.linalg.norm(r) ** 3,
 ):
-    t_arr = to_gps(t)
-    t_arr = t_arr - t_arr[0]
-    n_steps = len(t_arr)
+    """
+    Fixed-step RK4 propagation with point-mass gravity, lunar and solar
+    third-body terms, and optional thrust profiles.
 
-    r_th = build_profile(radial, t_arr)
-    v_th = build_profile(velocity, t_arr)
-    i_th = build_profile(inclination, t_arr)
+    Parameters
+    ----------
+    r0, v0 : array_like, shape (3,)
+        Initial position (m) and velocity (m/s) in GCRF.
+    t : array_like
+        Time grid (anything ``to_gps`` accepts).
+    radial, velocity, inclination : profile spec or None
+        Thrust-acceleration profiles (m/s^2). See ``build_profile``.
+    accel_gravity : callable
+        ``f(r) -> (3,)`` central-body acceleration (m/s^2).
+
+    Returns
+    -------
+    r, v : ndarray, shape (n, 3)
+        State history on ``t``.
+
+    Notes
+    -----
+    Two time bases are in play and they are not interchangeable.
+    ``accel_point_moon`` and ``accel_point_sun`` resolve an ephemeris from
+    the epoch they are handed, so they receive **absolute GPS seconds**.
+    Thrust profiles are indexed against **elapsed seconds since ``t[0]``**,
+    which is what ``build_profile`` has always been given here.
+    """
+    t_abs = np.asarray(to_gps(t), dtype=float)
+    t_elapsed = t_abs - t_abs[0]
+    n_steps = len(t_abs)
+
+    r_th = build_profile(radial, t_elapsed)
+    v_th = build_profile(velocity, t_elapsed)
+    i_th = build_profile(inclination, t_elapsed)
 
     r = np.empty((n_steps, 3))
     v = np.empty((n_steps, 3))
@@ -35,7 +63,7 @@ def rk4(
     v[0] = np.asarray(v0, float)
 
     for i in range(n_steps - 1):
-        dt = t_arr[i + 1] - t_arr[i]
+        dt = t_abs[i + 1] - t_abs[i]
 
         def a_total(r_i, v_i, t_i, i_thrust):
             a = accel_gravity(r_i)
@@ -51,16 +79,16 @@ def rk4(
             return a
 
         # RK4 steps
-        k1_v = a_total(r[i], v[i], t_arr[i], i)
+        k1_v = a_total(r[i], v[i], t_abs[i], i)
         k1_r = v[i]
 
-        k2_v = a_total(r[i] + 0.5 * dt * k1_r, v[i] + 0.5 * dt * k1_v, t_arr[i] + 0.5 * dt, i)
+        k2_v = a_total(r[i] + 0.5 * dt * k1_r, v[i] + 0.5 * dt * k1_v, t_abs[i] + 0.5 * dt, i)
         k2_r = v[i] + 0.5 * dt * k1_v
 
-        k3_v = a_total(r[i] + 0.5 * dt * k2_r, v[i] + 0.5 * dt * k2_v, t_arr[i] + 0.5 * dt, i)
+        k3_v = a_total(r[i] + 0.5 * dt * k2_r, v[i] + 0.5 * dt * k2_v, t_abs[i] + 0.5 * dt, i)
         k3_r = v[i] + 0.5 * dt * k2_v
 
-        k4_v = a_total(r[i] + dt * k3_r, v[i] + dt * k3_v, t_arr[i] + dt, i)
+        k4_v = a_total(r[i] + dt * k3_r, v[i] + dt * k3_v, t_abs[i] + dt, i)
         k4_r = v[i] + dt * k3_v
 
         r[i + 1] = r[i] + (dt / 6.0) * (k1_r + 2 * k2_r + 2 * k3_r + k4_r)

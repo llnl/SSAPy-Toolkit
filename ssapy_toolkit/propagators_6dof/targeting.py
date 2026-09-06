@@ -15,7 +15,7 @@ from .high_accuracy import (
     _propagate_spacecraft_segment,
     propagate_spacecraft_segments,
 )
-from .sixdof import SixDOFState, SixDOFTrajectory, Spacecraft, _body_at_state
+from .sixdof import SixDOFState, SixDOFTrajectory, Spacecraft, _body_at_state, _epochs_close
 
 __all__ = [
     "SixDOFMultiSegmentTargetResult",
@@ -503,7 +503,7 @@ def _controlled_segment(spec, control, frame):
 
 
 def _require_complete_segment(trajectory, times):
-    if trajectory.status != 0 or not np.isclose(trajectory.t[-1], np.asarray(times, dtype=float)[-1]):
+    if trajectory.status != 0 or not _epochs_close(trajectory.t[-1], np.asarray(times, dtype=float)[-1]):
         raise RuntimeError("multiple shooting requires every segment to reach its final epoch.")
 
 

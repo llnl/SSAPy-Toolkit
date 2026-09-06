@@ -17,6 +17,7 @@ from ..constants import EARTH_MU
 from .sixdof import (
     SixDOFTrajectory,
     _initial_state,
+    _rhs_in_elapsed_time,
     _times,
     _validate_time_direction,
     rotate_vector,
@@ -236,12 +237,16 @@ def propagate_6dof_extended(*, times, inertia, hinge=None, flexible=None, slosh=
     else:
         y_initial = y0
         derivative = rhs
-    sol = solve_ivp(derivative, (state.t, float(times[-1])), y_initial, t_eval=times, rtol=rtol, atol=atol, method=method, max_step=max_step, first_step=first_step)
+    # Integrate in seconds since state.t. See propagate_6dof: SciPy's minimum
+    # step is 10 * ulp(t), which is 2.4e-6 s at GPS 1.4e9 against ~5e-322 s at
+    # zero, and a discontinuity needing a finer step aborts the run.
+    t_ref = float(state.t)
+    sol = solve_ivp(_rhs_in_elapsed_time(derivative, t_ref), (0.0, float(times[-1]) - t_ref), y_initial, t_eval=times - t_ref, rtol=rtol, atol=atol, method=method, max_step=max_step, first_step=first_step)
     if not sol.success: raise RuntimeError(sol.message)
     y = sol.y[:n].T
     stm = None if not with_stm else sol.y[n:].T.reshape((-1, n, n))
     q = np.array([item / np.linalg.norm(item) for item in y[:, 6:10]])
-    trajectory = SixDOFTrajectory(sol.t, y[:, :3], y[:, 3:6], q, y[:, 10:13], None if mass0 is None else y[:, 13], nfev=sol.nfev, message=sol.message, status=sol.status)
+    trajectory = SixDOFTrajectory(sol.t + t_ref, y[:, :3], y[:, 3:6], q, y[:, 10:13], None if mass0 is None else y[:, 13], nfev=sol.nfev, message=sol.message, status=sol.status)
     j = rigid_n
     arrays = []
     for modes in (hinges, flexibles, sloshes):
