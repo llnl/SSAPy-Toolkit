@@ -1,9 +1,54 @@
 # ssapy_toolkit/propagators_orbit/int_utils.py
 
+import inspect
+
 import numpy as np
 from scipy.interpolate import interp1d
 
 from ..time_functions import to_gps
+
+
+def acceleration_adapter(model, signature=None):
+    """Adapt a declared acceleration callback to ``(t, r, v)`` calls.
+
+    Signature resolution happens once, before integration. Exceptions raised
+    inside a callback are therefore never mistaken for an argument mismatch.
+    """
+    if not callable(model):
+        raise TypeError("acceleration model must be callable")
+    if signature is None:
+        signature = getattr(model, "acceleration_signature", None)
+    if signature is None and getattr(model, "spacecraft_acceleration_model", False):
+        def spacecraft_model(t, r, v):
+            return model(t, r, v, [1.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0])
+        spacecraft_model.acceleration_signature = "trv"
+        return spacecraft_model
+    try:
+        parameters = inspect.signature(model)
+    except (TypeError, ValueError):
+        parameters = None
+    if signature is None:
+        if parameters is None:
+            raise TypeError("non-inspectable model requires acceleration_signature")
+        roles = {"r": "r", "v": "v", "t": "t", "time": "t", "epoch": "t"}
+        positional = [p for p in parameters.parameters.values()
+                      if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)]
+        if (any(p.kind == p.VAR_POSITIONAL for p in parameters.parameters.values())
+                or any(p.name.lstrip('_') not in roles for p in positional)):
+            raise TypeError("ambiguous model requires acceleration_signature; bind force parameters first")
+        signature = ''.join(roles[p.name.lstrip('_')] for p in positional)
+    if signature not in ("r", "v", "rt", "tr", "rv", "rvt", "trv"):
+        raise ValueError("unsupported acceleration_signature")
+    if parameters is not None:
+        parameters.bind(*([None] * len(signature)))
+    indices = tuple({"t": 0, "r": 1, "v": 2}[role] for role in signature)
+
+    def evaluate(t, r, v):
+        values = (t, r, v)
+        return model(*(values[index] for index in indices))
+
+    evaluate.acceleration_signature = "trv"
+    return evaluate
 
 
 def precompute_third_body_positions(t, body_name):

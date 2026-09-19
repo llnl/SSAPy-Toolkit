@@ -10,6 +10,7 @@ from collections.abc import Callable as _Callable
 
 import numpy as _np
 
+from .._callables import call_with_variants as _call_with_variants
 from ..constants import (
     AU,
     EARTH_MU,
@@ -1649,19 +1650,15 @@ def _inertia_from(value, spacecraft) -> _np.ndarray:
 def _call_optional(value, t, r, v, q, omega, spacecraft):
     if not callable(value):
         return value
-    try:
-        return value(t, r, v, q, omega, spacecraft)
-    except TypeError:
-        return value(t, r, v, q, omega)
+    args = (t, r, v, q, omega)
+    return _call_with_variants(value, (((*args, spacecraft), {}), (args, {})))
 
 
 def _call_density(value, altitude, t, r, v, q, omega, spacecraft) -> float:
     if not callable(value):
         return value
-    try:
-        return value(altitude)
-    except TypeError:
-        return _call_optional(value, t, r, v, q, omega, spacecraft)
+    args = (t, r, v, q, omega)
+    return _call_with_variants(value, (((altitude,), {}), ((*args, spacecraft), {}), (args, {})))
 
 
 def _vector_or_model(value, t, r, v, q, omega, spacecraft, name: str) -> _np.ndarray:

@@ -6,7 +6,7 @@ from scipy.optimize import brentq
 from ..constants import EARTH_RADIUS
 from ..time_functions import to_gps
 
-from .int_utils import build_profile
+from .int_utils import acceleration_adapter, build_profile  # thrust-profile helper [104]
 
 from ..accelerations_orbit.accel_point_earth import accel_point_earth  # [64]
 from ..accelerations_orbit.accel_radial import accel_radial            # [65]
@@ -94,9 +94,9 @@ def leapfrog(
     if accels is None:
         accel_list = []
     elif callable(accels):
-        accel_list = [accels]
+        accel_list = [acceleration_adapter(accels)]
     else:
-        accel_list = list(accels)
+        accel_list = [acceleration_adapter(model) for model in accels]
 
     def _eval_extra_accels(r_i, v_i, t_i):
         """Sum extra accelerations, supporting several common call signatures."""
@@ -105,24 +105,10 @@ def leapfrog(
 
         a = np.zeros(3, dtype=float)
         for f in accel_list:
-            # Preserve the existing callback compatibility contract here;
-            # callback dispatch is reviewed separately from impact handling.
-            try:
-                a += np.asarray(f(r_i, v_i, t_i), dtype=float).reshape(3)
-                continue
-            except TypeError:
-                pass
-            try:
-                a += np.asarray(f(r_i, t_i), dtype=float).reshape(3)
-                continue
-            except TypeError:
-                pass
-            try:
-                a += np.asarray(f(r_i, v_i), dtype=float).reshape(3)
-                continue
-            except TypeError:
-                pass
-            a += np.asarray(f(r_i), dtype=float).reshape(3)
+            value = np.asarray(f(t_i, r_i, v_i), dtype=float)
+            if value.shape != (3,) or not np.all(np.isfinite(value)):
+                raise ValueError("acceleration must be a finite 3-vector")
+            a += value
 
         return a
 
