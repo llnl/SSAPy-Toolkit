@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import inspect
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
@@ -10,6 +9,7 @@ import numpy as np
 from scipy.integrate import solve_ivp
 
 from ..constants import EARTH_MU
+from .int_utils import acceleration_adapter
 
 ArrayLike = np.ndarray | list[float] | tuple[float, ...]
 AccelerationModel = Callable[..., ArrayLike]
@@ -61,7 +61,10 @@ def propagate_orbit_state(
 
     ``acceleration`` is an inertial perturbing acceleration in m/s². It may be a
     single callable or an iterable of callables accepting ``(t, r, v)``,
-    ``(r, v, t)``, ``(r, t)``, ``(r, v)``, or ``(r)``.
+    ``(r, v, t)``, ``(r, t)``, ``(r, v)``, or ``(r)``. Canonical parameter
+    names declare argument roles; other names require
+    ``acceleration_adapter(model, signature)`` or ``model.acceleration_signature``.
+    All callback epochs are absolute GPS seconds.
     """
 
     times = _times(times)
@@ -181,7 +184,7 @@ def _rhs(t: float, y: np.ndarray, *, mu: float, models: tuple[AccelerationModel,
     radius = np.linalg.norm(r)
     a = np.zeros(3) if mu == 0.0 or radius == 0.0 else -mu * r / radius**3
     for model in models:
-        a = a + _call_acceleration(model, t, r, v)
+        a = a + _vector3(model(t, r, v), "acceleration")
     return np.concatenate([v, a])
 
 
@@ -237,55 +240,15 @@ def _kepler_jacobian(r: np.ndarray, mu: float) -> np.ndarray:
 
 
 def _call_acceleration(model: AccelerationModel, t: float, r: np.ndarray, v: np.ndarray) -> np.ndarray:
-    if getattr(model, "spacecraft_acceleration_model", False):
-        return _vector3(model(t, r, v, [1.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0]), "acceleration")
-
-    three_arg_orders = (
-        ((t, r, v), (r, v, t))
-        if _expects_time_first(model)
-        else ((r, v, t), (t, r, v))
-    )
-    candidates = (*three_arg_orders, (r, t), (r, v), (r,))
-    try:
-        signature = inspect.signature(model)
-    except (TypeError, ValueError):
-        signature = None
-    if signature is not None:
-        for args in candidates:
-            try:
-                signature.bind(*args)
-            except TypeError:
-                continue
-            return _vector3(model(*args), "acceleration")
-        raise TypeError("acceleration model does not accept a supported signature")
-    for args in candidates:
-        try:
-            return _vector3(model(*args), "acceleration")
-        except TypeError:
-            continue
-    return _vector3(model(r), "acceleration")
-
-
-def _expects_time_first(model: AccelerationModel) -> bool:
-    try:
-        parameters = list(inspect.signature(model).parameters.values())
-    except (TypeError, ValueError):
-        return False
-    positional = [
-        parameter
-        for parameter in parameters
-        if parameter.kind
-        in (parameter.POSITIONAL_ONLY, parameter.POSITIONAL_OR_KEYWORD)
-    ]
-    return bool(positional) and positional[0].name.lower() in {"t", "time", "epoch"}
+    return _vector3(acceleration_adapter(model)(t, r, v), "acceleration")
 
 
 def _models(acceleration) -> tuple[AccelerationModel, ...]:
     if acceleration is None:
         return ()
     if callable(acceleration):
-        return (acceleration,)
-    return tuple(model for model in acceleration if model is not None)
+        acceleration = (acceleration,)
+    return tuple(acceleration_adapter(model) for model in acceleration if model is not None)
 
 
 def _initial_orbit_state(*, orbit0, r0, v0, t0) -> tuple[np.ndarray, np.ndarray, float]:

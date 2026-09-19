@@ -23,6 +23,7 @@ from ..coordinates.attitude import (
     rotate_vector,
 )
 from ..propagators_orbit.high_accuracy import _kepler_jacobian
+from ._constraints import projected_solver
 from .sixdof import (
     ArrayLike,
     SixDOFTrajectory,
@@ -32,10 +33,12 @@ from .sixdof import (
     _solution_in_absolute_time,
     _times,
     _validate_time_direction,
+    _validate_initial_wheel_momentum,
     _wheel_axes_from_body,
     _wheel_axes_matrix,
     _wheel_capacity_from_body,
     _wheel_capacity_vector,
+    _wheel_state_projector,
     sixdof_rhs,
 )
 
@@ -168,6 +171,8 @@ def propagate_6dof_variational(
     *,
     times: ArrayLike,
     inertia: ArrayLike,
+    inertia_rate=None,
+    angular_momentum_flux=None,
     orbit0=None,
     r0: ArrayLike | None = None,
     v0: ArrayLike | None = None,
@@ -200,6 +205,17 @@ def propagate_6dof_variational(
     result uses the solver's quaternion coordinates; quaternion normalization
     in ``sixdof_rhs`` therefore makes this a local STM, not a globally valid
     six-parameter attitude error state.
+
+    With commanded wheels and finite momentum limits, the continuous RHS
+    Jacobian alone misses the change in saturation time. In that case the STM
+    is computed by differencing complete constrained trajectories (up to
+    ``2*n + 1`` nominal integrations), using ``jacobian_step`` on initial
+    states. Initial wheel limits use inward, one-sided differences. This is
+    more expensive, and solver errors must be small relative to the chosen
+    perturbation. At a grazing contact or exactly at a switching epoch a
+    unique two-sided derivative need not exist.
+
+    ``inertia_rate`` and ``angular_momentum_flux`` follow ``propagate_6dof``.
     """
     times = _times(times)
     if wheel_axes_body is None and orbit0 is not None:
@@ -225,6 +241,7 @@ def propagate_6dof_variational(
             wheel_momentum = np.zeros(wheel_axes.shape[1])
         if wheel_momentum.shape != (wheel_axes.shape[1],):
             raise ValueError("wheel_momentum0 must match the number of wheel axes.")
+        _validate_initial_wheel_momentum(wheel_momentum, wheel_capacity)
     y_parts = [state.r, state.v, state.q, state.omega]
     if state.mass is not None:
         y_parts.append([state.mass])
@@ -250,6 +267,7 @@ def propagate_6dof_variational(
 
     rhs_kwargs = {
         "inertia": inertia_arg, "mu": mu, "acceleration": acceleration,
+        "inertia_rate": inertia_rate, "angular_momentum_flux": angular_momentum_flux,
         "ntw_acceleration": ntw_acceleration, "body_acceleration": body_acceleration,
         "torque": torque, "gravity_gradient": gravity_gradient,
         "mass_flow_rate": mass_flow_rate, "wheel_axes_body": wheel_axes,
@@ -264,6 +282,8 @@ def propagate_6dof_variational(
         and mass_flow_rate is None
         and wheel_torque is None
         and not callable(inertia)
+        and inertia_rate is None
+        and angular_momentum_flux is None
     )
 
     def nominal_rhs(t, y):
@@ -305,12 +325,30 @@ def propagate_6dof_variational(
     # which on absolute GPS seconds is coarse enough to abort on a
     # discontinuity. See propagate_6dof for the measured floors.
     t_ref = float(state.t)
-    sol = solve_ivp(
-        _rhs_in_elapsed_time(combined_rhs, t_ref),
-        (0.0, float(times[-1]) - t_ref), np.concatenate((y0, phi0.ravel())),
-        t_eval=times - t_ref, rtol=rtol, atol=atol, method=method,
-        max_step=max_step, first_step=first_step,
+    solver_options = dict(t_eval=times - t_ref, rtol=rtol, atol=atol, method=method,
+                          max_step=max_step, first_step=first_step)
+    finite_wheel_limits = (
+        wheel_torque is not None and wheel_capacity is not None
+        and np.any(np.isfinite(wheel_capacity))
     )
+    if finite_wheel_limits:
+        project = _wheel_state_projector(
+            inertia_arg, wheel_axes, wheel_capacity, state.mass is not None,
+            t_ref=t_ref, mass_floor=getattr(mass_flow_rate, "mass_floor", None),
+        )
+        solver_options["method"] = projected_solver(method, project)
+        sol, stm = _constrained_variational_solution(
+            _rhs_in_elapsed_time(nominal_rhs, t_ref), (0.0, float(times[-1]) - t_ref),
+            y0, phi0, wheel_capacity, 14 if state.mass is not None else 13,
+            jacobian_step, solver_options,
+        )
+    else:
+        sol = solve_ivp(
+            _rhs_in_elapsed_time(combined_rhs, t_ref),
+            (0.0, float(times[-1]) - t_ref), np.concatenate((y0, phi0.ravel())),
+            **solver_options,
+        )
+        stm = sol.y[n:].T.reshape((-1, n, n)) if sol.success else None
     if not sol.success:
         raise RuntimeError(f"6-DoF variational propagation failed: {sol.message}")
 
@@ -320,7 +358,49 @@ def propagate_6dof_variational(
     wheel_start = 14 if state.mass is not None else 13
     wheels = None if wheel_momentum is None else y[:, wheel_start:]
     trajectory = SixDOFTrajectory(sol.t + t_ref, y[:, :3], y[:, 3:6], q, y[:, 10:13], mass, wheels, int(sol.nfev), str(sol.message), int(sol.status), solution=_solution_in_absolute_time(sol.sol, t_ref))
-    return SixDOFVariationalTrajectory(trajectory, sol.y[n:].T.reshape((-1, n, n)))
+    return SixDOFVariationalTrajectory(trajectory, stm)
+
+
+def _constrained_variational_solution(rhs, span, y0, phi0, capacity, wheel_start, step, options):
+    """Differentiate the constrained flow, including changes in hit times."""
+    options = dict(options)
+    n = y0.size
+    # The smooth augmented solver accepts tolerances for state plus STM.
+    # Only state entries are relevant to the individual constrained solves.
+    for key in ("atol", "rtol"):
+        value = np.asarray(options[key], dtype=float)
+        if value.ndim == 1 and value.size == n + n*n:
+            options[key] = value[:n]
+
+    evaluations = 0
+
+    def integrate(initial):
+        nonlocal evaluations
+        result = solve_ivp(rhs, span, initial, **options)
+        evaluations += result.nfev
+        if not result.success:
+            raise RuntimeError(f"6-DoF constrained variational propagation failed: {result.message}")
+        return result
+
+    nominal = integrate(y0)
+    jacobian = np.empty((len(nominal.t), n, n))
+    for column in range(n):
+        plus, minus = y0.copy(), y0.copy()
+        delta = step * max(1.0, abs(y0[column]))
+        plus[column] += delta
+        minus[column] -= delta
+        if column >= wheel_start:
+            limit = capacity[column - wheel_start]
+            plus[column] = min(plus[column], limit)
+            minus[column] = max(minus[column], -limit)
+        upper = nominal if plus[column] == y0[column] else integrate(plus)
+        lower = nominal if minus[column] == y0[column] else integrate(minus)
+        denominator = plus[column] - minus[column]
+        if denominator == 0.0:
+            raise ValueError("jacobian_step cannot resolve an initial-state perturbation.")
+        jacobian[:, :, column] = (upper.y - lower.y).T / denominator
+    nominal.nfev = evaluations
+    return nominal, jacobian @ phi0
 
 
 def _free_rigid_body_jacobian(

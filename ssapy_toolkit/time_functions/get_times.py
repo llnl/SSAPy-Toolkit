@@ -4,6 +4,25 @@ import astropy.units as u
 import warnings
 
 
+def _interval_count(dur_seconds, freq_seconds):
+    """Number of whole steps of ``freq_seconds`` spanning ``dur_seconds``.
+
+    ``duration / freq`` is an exact integer whenever a caller derives the step
+    from a sample count, but the quotient of two binary floats lands one unit
+    in the last place below that integer often enough to matter: for
+    ``duration = 23288.287991979163`` and ``freq = 195.6998990922619`` it is
+    118.99999999999999, so truncation drops the final sample and returns a
+    grid one element shorter than the caller asked for. Snap the quotient to a
+    neighbouring integer when it is within a relative 1e-9 of one, then
+    truncate, so an intended whole number of steps survives the division.
+    """
+    ratio = dur_seconds / freq_seconds
+    nearest = round(ratio)
+    if nearest > 0 and abs(ratio - nearest) <= 1e-9 * nearest:
+        return int(nearest)
+    return int(ratio)
+
+
 def get_times(
     duration,
     freq=(1, 's'),
@@ -144,7 +163,7 @@ def get_times(
         if dur_seconds == 0:
             return Time([tf_obj])
 
-        timesteps = int(dur_seconds / freq_seconds) + 1
+        timesteps = _interval_count(dur_seconds, freq_seconds) + 1
         start_offset = -dur_seconds
         end_offset = 0.0
         anchor = tf_obj
@@ -154,7 +173,7 @@ def get_times(
         if dur_seconds == 0:
             return Time([t0_obj])
 
-        timesteps = int(dur_seconds / freq_seconds) + 1
+        timesteps = _interval_count(dur_seconds, freq_seconds) + 1
         start_offset = 0.0
         end_offset = dur_seconds
         anchor = t0_obj

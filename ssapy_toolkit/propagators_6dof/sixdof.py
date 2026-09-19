@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import numpy as np
 from scipy.integrate import solve_ivp
 
+from .._callables import call_with_variants
 from ..constants import EARTH_MU, EARTH_RADIUS
 from ..coordinates.attitude import (
     attitude_quaternion_from_frame,
@@ -17,6 +18,7 @@ from ..coordinates.attitude import (
     rotate_vector,
 )
 from ..coordinates.satellite_frames import frame_to_gcrf_matrix
+from ._constraints import projected_solver
 
 ArrayLike = np.ndarray | list[float] | tuple[float, ...]
 AccelerationModel = Callable[
@@ -79,6 +81,7 @@ class SixDOFTrajectory:
     t_events: tuple[np.ndarray, ...] | None = None
     y_events: tuple[np.ndarray, ...] | None = None
     solution: Callable | None = None
+    event_functions: tuple[Callable | None, ...] | None = None
 
     def spacecraft(
         self,
@@ -91,8 +94,13 @@ class SixDOFTrajectory:
         cr: float | None = None,
         center_of_pressure: ArrayLike | None = None,
         body: object | None = None,
+        tank_name: str | None = None,
     ) -> Spacecraft:
-        """Return one trajectory sample as a :class:`Spacecraft` state."""
+        """Return one trajectory sample as a :class:`Spacecraft` state.
+
+        Set ``tank_name`` when all mass lost from ``body`` came from that tank.
+        Scalar mass history alone cannot reconstruct a mixed-tank burn history.
+        """
 
         sample_mass = (
             mass
@@ -102,7 +110,7 @@ class SixDOFTrajectory:
         sample_wheel_momentum = (
             None if self.wheel_momentum is None else self.wheel_momentum[index]
         )
-        sample_body = _body_at_state(body, sample_mass, sample_wheel_momentum)
+        sample_body = _body_at_state(body, sample_mass, sample_wheel_momentum, tank_name)
         return Spacecraft(
             r=self.r[index],
             v=self.v[index],
@@ -286,7 +294,15 @@ class Spacecraft:
         Models with ``mass_flow_rate`` deplete propagated mass whether they are
         passed through ``models=[...]`` or directly as ``acceleration=...``.
         Tanked bodies coast at dry mass by default; set ``stop_at_dry_mass=True``
-        to terminate when propellant is exhausted.
+        to terminate when propellant is exhausted. A named tank stops the burn
+        when that tank empties, retaining propellant in the other tanks.
+
+        The automatic tank inertia model uses analytic mass-property rates
+        and corotating point-mass removal at each tank's fixed position. Its
+        default net inward angular-momentum flux is ``I_dot @ omega``. Override
+        ``angular_momentum_flux`` explicitly for a different exhaust convention;
+        a zero vector specifies no angular momentum carried away. Tank-to-nozzle
+        transport, swirl and slosh are not inferred from the tank geometry.
         """
 
         spacecraft = self.with_body(body) if body is not None else self
@@ -330,8 +346,9 @@ class Spacecraft:
         body_wheel_axes = _wheel_axes_from_body(spacecraft.body)
         if body_wheel_axes is not None:
             kwargs.setdefault("wheel_axes_body", body_wheel_axes)
-            kwargs.setdefault("wheel_momentum0", spacecraft.wheel_momentum)
             kwargs.setdefault("wheel_momentum_capacity", _wheel_capacity_from_body(spacecraft.body))
+        if spacecraft.wheel_momentum is not None:
+            kwargs.setdefault("wheel_momentum0", spacecraft.wheel_momentum)
         if models is not None and _any_wheel_torque_model(models) and "wheel_torque" not in kwargs:
             kwargs["wheel_torque"] = _bind_spacecraft_wheel_torque(
                 _sum_model_wheel_torques(models),
@@ -342,7 +359,9 @@ class Spacecraft:
         if "mass_flow_rate" in kwargs:
             kwargs["mass_flow_rate"] = _bind_spacecraft_mass_flow_rate(kwargs["mass_flow_rate"], spacecraft)
             if _supports_body_mass_update(spacecraft.body):
-                kwargs["mass_flow_rate"] = _coast_mass_flow_rate(kwargs["mass_flow_rate"], spacecraft)
+                kwargs["mass_flow_rate"] = _coast_mass_flow_rate(
+                    kwargs["mass_flow_rate"], spacecraft, tank_name=tank_name
+                )
             kwargs.setdefault("mass0", spacecraft.mass)
         if (
             stop_at_dry_mass
@@ -351,8 +370,14 @@ class Spacecraft:
         ):
             kwargs["events"] = _append_solve_ivp_event(
                 kwargs.get("events"),
-                propellant_empty_event(spacecraft),
+                propellant_empty_event(spacecraft, tank_name=tank_name),
             )
+            # As in the burn/coast path, extend burn forces through solver
+            # trial stages. The event defines the endpoint; cutting forces
+            # off inside a trial step biases its interpolated terminal state.
+            for name in ("acceleration", "torque"):
+                if name in kwargs:
+                    kwargs[name] = _allow_depleted_model(kwargs[name], spacecraft, name)
         if (
             not stop_at_dry_mass
             and "mass_flow_rate" in kwargs
@@ -416,14 +441,23 @@ def mass_floor_event(min_mass: float, *, terminal: bool = True, direction: float
     return event
 
 
-def propellant_empty_event(body_or_spacecraft, *, terminal: bool = True, direction: float = -1.0):
-    """Return an event that stops mass propagation at body dry mass."""
+def propellant_empty_event(body_or_spacecraft, *, terminal: bool = True, direction: float = -1.0,
+                           tank_name: str | None = None):
+    """Stop at dry mass, or when the selected tank alone is exhausted."""
 
     body = getattr(body_or_spacecraft, "body", body_or_spacecraft)
-    dry_mass = getattr(body, "dry_mass_total", None)
-    if dry_mass is None:
+    if getattr(body, "dry_mass_total", None) is None:
         raise ValueError("propellant_empty_event requires a SpacecraftBody or Spacecraft with a body.")
-    return mass_floor_event(dry_mass, terminal=terminal, direction=direction)
+    return mass_floor_event(_propellant_mass_floor(body, tank_name), terminal=terminal, direction=direction)
+
+
+def _propellant_mass_floor(body, tank_name=None):
+    if tank_name is None:
+        return float(body.dry_mass_total)
+    matches = [tank for tank in body.tanks if tank.name == tank_name]
+    if len(matches) != 1:
+        raise ValueError(f"expected exactly one tank named {tank_name!r}.")
+    return float(body.current_mass - matches[0].propellant_mass)
 
 
 def _append_solve_ivp_event(events, event):
@@ -453,13 +487,17 @@ def _propagate_spacecraft_with_dry_mass_coast(spacecraft, times, inertia, kwargs
     """Stop at dry mass internally, then continue with propulsive models off."""
 
     user_events = _event_tuple(kwargs.get("events"))
-    if _propellant_depleted(spacecraft):
-        coast_kwargs = dict(kwargs)
-        coast_kwargs.pop("mass_flow_rate", None)
-        coast_kwargs["events"] = user_events or None
+    tank_name = getattr(kwargs.get("mass_flow_rate"), "tank_name", None)
+    coast_kwargs = dict(kwargs)
+    coast_kwargs.pop("mass_flow_rate", None)
+    coast_kwargs["events"] = user_events or None
+    for name in ("ntw_acceleration", "body_acceleration"):
+        if _is_propulsive_model(coast_kwargs.get(name)):
+            coast_kwargs.pop(name)
+    if _propellant_depleted(spacecraft, tank_name):
         return _propagate_spacecraft_once(spacecraft, times, inertia, coast_kwargs)
 
-    dry_event = propellant_empty_event(spacecraft)
+    dry_event = propellant_empty_event(spacecraft, tank_name=tank_name)
     burn_kwargs = dict(kwargs)
     burn_kwargs["events"] = user_events + (dry_event,)
     for name in ("acceleration", "torque"):
@@ -477,9 +515,6 @@ def _propagate_spacecraft_with_dry_mass_coast(spacecraft, times, inertia, kwargs
     if not len(remaining_times):
         return _drop_event_slot(burn, len(user_events))
 
-    coast_kwargs = dict(kwargs)
-    coast_kwargs.pop("mass_flow_rate", None)
-    coast_kwargs["events"] = user_events or None
     coast_times = np.concatenate(([event_t], remaining_times))
     coast = _propagate_state_once(event_y, event_t, coast_times, inertia, coast_kwargs)
     return _combine_trajectory_segments(
@@ -524,6 +559,7 @@ def _drop_event_slot(trajectory, index):
         trajectory,
         t_events=trajectory.t_events[:index],
         y_events=None if trajectory.y_events is None else trajectory.y_events[:index],
+        event_functions=None if trajectory.event_functions is None else trajectory.event_functions[:index],
     )
 
 
@@ -581,22 +617,7 @@ def _merge_event_arrays(first, second, count):
 
 
 def _piecewise_solution(first, second, split):
-    if first is None or second is None:
-        return None
-
-    def solution(t):
-        values = np.asarray(t)
-        if values.ndim == 0:
-            return first(t) if values <= split else second(t)
-        result = np.empty((first(values.flat[0]).shape[0], values.size))
-        before = values <= split
-        if np.any(before):
-            result[:, before] = first(values[before])
-        if np.any(~before):
-            result[:, ~before] = second(values[~before])
-        return result
-
-    return solution
+    return _piecewise_solution_sequence((first, second), (split,))
 
 
 def _piecewise_solution_sequence(solutions, breakpoints):
@@ -610,8 +631,8 @@ def _piecewise_solution_sequence(solutions, breakpoints):
 
     Folding :func:`_piecewise_solution` over N segments would nest N-1
     closures, so evaluating M epochs would cost O(N*M) and N Python frames.
-    Here each call is one ``np.searchsorted`` plus one call per segment the
-    query actually touches.
+    Here one ``np.searchsorted`` and a stable grouping of query indices give one
+    call per touched segment without N full-length boolean masks.
 
     Returns ``None`` when any segment lacks dense output, or when the
     breakpoints are not sorted, rather than returning a solution that would
@@ -643,9 +664,11 @@ def _piecewise_solution_sequence(solutions, breakpoints):
             probe = np.asarray(solutions[0](float(breakpoints[0])), dtype=float)
             return np.empty((probe.shape[0], 0), dtype=float)
         result = None
-        for segment in np.unique(index):
-            selected = index == segment
-            block = np.asarray(solutions[int(segment)](flat[selected]), dtype=float)
+        order = np.argsort(index, kind="stable")
+        boundaries = np.flatnonzero(np.diff(index[order])) + 1
+        for selected in np.split(order, boundaries):
+            segment = int(index[selected[0]])
+            block = np.asarray(solutions[segment](flat[selected]), dtype=float)
             if result is None:
                 result = np.empty((block.shape[0], flat.size), dtype=float)
             result[:, selected] = block
@@ -685,6 +708,8 @@ def sixdof_rhs(
     y: ArrayLike,
     *,
     inertia: ArrayLike,
+    inertia_rate=None,
+    angular_momentum_flux=None,
     mu: float = EARTH_MU,
     acceleration: AccelerationModel | None = None,
     ntw_acceleration: NTWAccelerationModel | None = None,
@@ -698,6 +723,9 @@ def sixdof_rhs(
     inv_inertia: ArrayLike | None = None,
     mass_state: bool | None = None,
 ) -> np.ndarray:
+    """Evaluate the physical state derivative; see ``propagate_6dof`` for
+    the inertia-rate and net inward angular-momentum-flux conventions.
+    """
     y = np.asarray(y, dtype=float)
     wheel_axes = _wheel_axes_matrix(wheel_axes_body)
     n_wheels = 0 if wheel_axes is None else wheel_axes.shape[1]
@@ -714,6 +742,11 @@ def sixdof_rhs(
         mass = max(mass, float(mass_floor))
     elif mass is not None and mass <= 0.0:
         raise ValueError("mass state must remain positive.")
+    inertia_model = inertia
+    if inertia_rate is None:
+        inertia_rate = getattr(inertia_model, "inertia_rate", None)
+    if angular_momentum_flux is None:
+        angular_momentum_flux = getattr(inertia_model, "angular_momentum_flux", None)
     if inv_inertia is None:
         inertia = _inertia_at_state(inertia, t, r, v, q, omega, mass)
         inv_inertia = np.linalg.inv(inertia)
@@ -764,16 +797,38 @@ def sixdof_rhs(
                 wheel_capacity,
             )
             torque_body = torque_body + wheel_axes @ wheel_torque_scalars
-    omega_dot = inv_inertia @ (torque_body - np.cross(omega, inertia @ omega + wheel_h_body))
+    mass_rate = (
+        0.0 if mass is None or mass_flow_rate is None else
+        -_evaluate_mass_flow_rate(mass_flow_rate, t, r, v, q, omega, mass, wheel_momentum)
+    )
+    if angular_momentum_flux is not None:
+        flux = _mass_property_value(
+            angular_momentum_flux, t, r, v, q, omega, mass, mass_rate
+        )
+        flux = _as_vector3(flux, "angular_momentum_flux")
+        if not np.all(np.isfinite(flux)):
+            raise ValueError("angular_momentum_flux must contain finite values.")
+        torque_body = torque_body + flux
+    angular_rhs = torque_body - np.cross(omega, inertia @ omega + wheel_h_body)
+    if inertia_rate is not None:
+        rate = _inertia_rate_matrix(_mass_property_value(
+            inertia_rate, t, r, v, q, omega, mass, mass_rate
+        ))
+        omega_dot = inv_inertia @ (angular_rhs - rate @ omega)
+    elif callable(inertia_model) and np.any(omega):
+        rate = _inertia_directional_rate(
+            inertia_model, t, r, v, q, omega, mass, v, a, q_dot, mass_rate
+        )
+        # If I depends on omega, d(I omega)/d(omega) is the effective
+        # angular mass matrix. Omitting this part also drops I_dot omega.
+        angular_mass = _angular_mass_matrix(inertia_model, inertia, t, r, v, q, omega, mass)
+        omega_dot = np.linalg.solve(angular_mass, angular_rhs - rate @ omega)
+    else:
+        omega_dot = inv_inertia @ angular_rhs
 
     derivative = [v, a, q_dot, omega_dot]
     if mass is not None:
-        mdot = (
-            0.0
-            if mass_flow_rate is None
-            else _evaluate_mass_flow_rate(mass_flow_rate, t, r, v, q, omega, mass, wheel_momentum)
-        )
-        derivative.append([-mdot])
+        derivative.append([mass_rate])
     if n_wheels:
         derivative.append(-wheel_torque_scalars)
     return np.concatenate(derivative)
@@ -783,6 +838,8 @@ def propagate_6dof(
     *,
     times: ArrayLike,
     inertia: ArrayLike,
+    inertia_rate=None,
+    angular_momentum_flux=None,
     orbit0=None,
     r0: ArrayLike | None = None,
     v0: ArrayLike | None = None,
@@ -818,8 +875,30 @@ def propagate_6dof(
     body-frame N m. Use ``gravity_gradient=True`` to add the standard
     rigid-body gravity-gradient torque. Without attitude-dependent
     acceleration, attitude does not affect the orbit trajectory.
-    ``events`` and ``dense_output`` are passed directly to SciPy ``solve_ivp``
-    for event-driven propagation segments.
+    A callable ``inertia(t, r, v, q, omega, *, mass=None)`` describes the
+    instantaneous tensor about the center of mass in body coordinates.
+    ``inertia_rate`` optionally supplies its **total** body-coordinate time
+    derivative in kg m²/s, as a matrix or a callable with the same arguments
+    and optional ``mass_rate`` (signed kg/s). It can also be attached as
+    ``inertia.inertia_rate``. Without it, smooth custom inertia is differentiated
+    numerically along the state derivative, including omega dependence. These
+    local central differences evaluate nearby states/epochs; provide an
+    analytic rate for domain-limited models or precision-sensitive work.
+
+    The angular balance is ``d(I omega + A h)/dt + omega × (I omega + A h)
+    = torque + angular_momentum_flux``. The flux is **net inward** angular
+    momentum per second, expressed about the instantaneous center of mass in
+    body coordinates (N m). Supply a vector or a callable with the same
+    optional mass keywords as ``inertia_rate``. The default is zero, or
+    ``inertia.angular_momentum_flux`` when present. Thrust torque already
+    included in ``torque`` must not also be included in this flux.
+
+    ``events`` and ``dense_output`` use SciPy ``solve_ivp`` conventions.
+    Finite reaction-wheel capacities constrain every reported state, including
+    event and dense states. Accepted-step projection transfers any numerical
+    wheel-momentum excess into body rotation while preserving ``I omega + A h``;
+    the solver restarts after a correction. Force/torque callbacks see the same
+    constrained state, and inward commands can immediately desaturate a wheel.
     """
 
     times = _times(times)
@@ -876,11 +955,21 @@ def propagate_6dof(
     t_ref = float(state.t)
     times_elapsed = times - t_ref
 
+    if wheel_capacity is not None and np.any(np.isfinite(wheel_capacity)):
+        project = _wheel_state_projector(
+            inertia_arg, wheel_axes, wheel_capacity, state.mass is not None,
+            t_ref=t_ref, mass_floor=getattr(mass_flow_rate, "mass_floor", None),
+        )
+        method = projected_solver(method, project)
+
+    events = _event_tuple(events) if events is not None else None
     sol = solve_ivp(
         lambda t, y: sixdof_rhs(
             t_ref + t,
             y,
             inertia=inertia_arg,
+            inertia_rate=inertia_rate,
+            angular_momentum_flux=angular_momentum_flux,
             mu=mu,
             acceleration=acceleration,
             ntw_acceleration=ntw_acceleration,
@@ -908,17 +997,36 @@ def propagate_6dof(
     if not sol.success:
         raise RuntimeError(f"6-DoF propagation failed: {sol.message}")
 
-    y = sol.y.T
-    t = sol.t
+    # With t_eval starting after a terminal event, SciPy returns empty lists.
+    y = np.asarray(sol.y, dtype=float).reshape(y0.size, -1).T
+    t = np.asarray(sol.t, dtype=float)
     if getattr(sol, "status", 0) == 1 and getattr(sol, "t_events", None) is not None:
         events_with_state = [
-            (float(event_times[0]), y_event[0])
+            (float(event_times[-1]), y_event[-1])
             for event_times, y_event in zip(sol.t_events, sol.y_events)
             if len(event_times) and len(y_event)
         ]
         if events_with_state:
-            event_t, event_y = min(events_with_state, key=lambda item: item[0])
-            if not len(t) or not _epochs_close(t[-1], event_t):
+            # Integration is forward-only. The last recorded occurrence is the
+            # stopping point, including when terminal is an occurrence count.
+            event_t, event_y = max(events_with_state, key=lambda item: item[0])
+            # Resolution is measured on the absolute epoch the sample will
+            # carry, not on the elapsed solver variable. Elapsed seconds
+            # resolve far finer than GPS seconds, so a root that is one ULP
+            # past a sample in absolute time looks like a resolvable 2.4e-7 s
+            # gap here and would be appended as a separate epoch that no
+            # consumer can distinguish after t_ref is added back.
+            resolution = 8.0 * np.spacing(abs(event_t + t_ref))
+            if len(t) and abs(event_t - float(t[-1])) <= resolution:
+                # Collapse onto the stopping epoch and state: that is the
+                # endpoint the event defines, not the requested sample beside
+                # it. The tolerance is float resolution alone, not
+                # _epochs_close, whose 1 us absolute floor would discard a
+                # requested sample 5e-7 s before the root at small epochs,
+                # where 5e-7 s is 2.3e9 ULP and plainly distinct.
+                t[-1] = event_t
+                y[-1] = event_y
+            else:
                 t = np.append(t, event_t)
                 y = np.vstack([y, event_y])
     t = t + t_ref
@@ -946,6 +1054,7 @@ def propagate_6dof(
         ),
         y_events=None if getattr(sol, "y_events", None) is None else tuple(sol.y_events),
         solution=_solution_in_absolute_time(getattr(sol, "sol", None), t_ref),
+        event_functions=events,
     )
 
 
@@ -959,7 +1068,8 @@ def _initial_state(*, orbit0, r0, v0, t0, q0, omega0, mass0=None, wheel_momentum
         q0 = getattr(orbit0, "q", q0) if q0 is None else q0
         omega0 = getattr(orbit0, "omega", omega0) if omega0 is None else omega0
         mass0 = getattr(orbit0, "mass", None) if mass0 is None else mass0
-        wheel_momentum0 = getattr(orbit0, "wheel_momentum", wheel_momentum0)
+        if wheel_momentum0 is None:
+            wheel_momentum0 = getattr(orbit0, "wheel_momentum", None)
     if r0 is None or v0 is None:
         raise ValueError("r0 and v0 are required when orbit0 is not provided.")
     if mass0 is not None and mass0 <= 0.0:
@@ -1010,11 +1120,14 @@ def _rhs_in_elapsed_time(rhs, t_ref: float):
 
 def _solution_in_absolute_time(solution, t_ref: float):
     """Wrap a dense solution so callers keep querying it with absolute epochs."""
-    if solution is None or t_ref == 0.0:
+    if solution is None:
         return solution
 
     def shifted(t):
-        return solution(np.asarray(t, dtype=float) - t_ref)
+        values = np.asarray(t, dtype=float) - t_ref
+        if values.ndim == 1 and values.size == 0:
+            return np.empty((np.asarray(solution(0.0)).size, 0))
+        return solution(values)
 
     return shifted
 
@@ -1151,6 +1264,45 @@ def _apply_wheel_capacity(command: np.ndarray, momentum: np.ndarray, capacity: n
     return command
 
 
+def _wheel_state_projector(inertia, axes, capacity, has_mass, *, t_ref=0.0, mass_floor=None):
+    wheel_start = 14 if has_mass else 13
+
+    def project(t, y):
+        momentum = y[wheel_start:wheel_start + len(capacity)]
+        clipped = np.clip(momentum, -capacity, capacity)
+        if np.array_equal(clipped, momentum):
+            return y
+        result = np.array(y, copy=True)
+        r, v, q, omega = y[:3], y[3:6], normalize_quaternion(y[6:10]), y[10:13]
+        mass = float(y[13]) if has_mass else None
+        if mass is not None and mass_floor is not None:
+            mass = max(mass, mass_floor)
+        epoch = t_ref + t
+        matrix = _inertia_at_state(inertia, epoch, r, v, q, omega, mass)
+        transfer = axes @ (momentum - clipped)
+        target = matrix @ omega + transfer
+        corrected = omega + np.linalg.solve(matrix, transfer)
+        scale = max(np.linalg.norm(target), np.linalg.norm(matrix @ omega),
+                    np.linalg.norm(transfer), np.finfo(float).tiny)
+        if callable(inertia):
+            # A user inertia tensor may itself depend on omega. Preserve the
+            # same angular momentum through that constitutive relation too.
+            for _ in range(8):
+                updated = _inertia_at_state(inertia, epoch, r, v, q, corrected, mass)
+                residual = updated @ corrected - target
+                if np.linalg.norm(residual) <= 32 * np.finfo(float).eps * scale:
+                    break
+                jacobian = _angular_mass_matrix(inertia, updated, epoch, r, v, q, corrected, mass)
+                corrected -= np.linalg.solve(jacobian, residual)
+            else:
+                raise RuntimeError("wheel projection could not conserve angular momentum for this inertia model.")
+        result[10:13] = corrected
+        result[wheel_start:wheel_start + len(capacity)] = clipped
+        return result
+
+    return project
+
+
 def _initial_wheel_momentum(value, body) -> np.ndarray | None:
     wheels = tuple(getattr(body, "reaction_wheels", ()))
     if value is not None:
@@ -1188,16 +1340,18 @@ def _nonnegative_float(value: float, name: str) -> float:
 
 
 def _bind_spacecraft_acceleration(model, spacecraft, *, suppress_depleted=True):
-    if getattr(model, "spacecraft_acceleration_model", False):
+    if getattr(model, "spacecraft_acceleration_model", False) or _is_propulsive_model(model):
         def acceleration(t, r, v, q, omega, *, mass=None, wheel_momentum=None):
             state = _spacecraft_at_state(spacecraft, t, r, v, q, omega, mass, wheel_momentum, getattr(model, "tank_name", None))
             if (
                 suppress_depleted
                 and _is_propulsive_model(model)
                 and not getattr(model, "_depletion_handled", False)
-                and _propellant_depleted(state)
+                and _propellant_depleted(state, getattr(model, "tank_name", None))
             ):
                 return np.zeros(3)
+            if not getattr(model, "spacecraft_acceleration_model", False):
+                return _evaluate_acceleration(model, t, r, v, q, omega, mass, wheel_momentum)
             return model(
                 spacecraft=state,
                 t=t,
@@ -1215,7 +1369,7 @@ def _bind_spacecraft_acceleration(model, spacecraft, *, suppress_depleted=True):
 
 
 def _bind_spacecraft_torque(model, spacecraft, *, suppress_depleted=True):
-    if getattr(model, "spacecraft_torque_model", False):
+    if getattr(model, "spacecraft_torque_model", False) or _is_propulsive_model(model):
         evaluator = model.torque if hasattr(model, "torque") else model
         def torque(t, r, v, q, omega, *, mass=None, wheel_momentum=None):
             state = _spacecraft_at_state(spacecraft, t, r, v, q, omega, mass, wheel_momentum, getattr(model, "tank_name", None))
@@ -1223,9 +1377,11 @@ def _bind_spacecraft_torque(model, spacecraft, *, suppress_depleted=True):
                 suppress_depleted
                 and _is_propulsive_model(model)
                 and not getattr(model, "_depletion_handled", False)
-                and _propellant_depleted(state)
+                and _propellant_depleted(state, getattr(model, "tank_name", None))
             ):
                 return np.zeros(3)
+            if not getattr(model, "spacecraft_torque_model", False):
+                return _evaluate_torque(model, t, r, v, q, omega, mass, wheel_momentum)
             return evaluator(
                 spacecraft=state,
                 t=t,
@@ -1283,13 +1439,14 @@ def _bind_spacecraft_mass_flow_rate(model, spacecraft):
     return model
 
 
-def _coast_mass_flow_rate(model, spacecraft):
+def _coast_mass_flow_rate(model, spacecraft, *, tank_name=None):
     def mass_flow_rate(t, r, v, q, omega, *, mass=None, wheel_momentum=None):
         return _evaluate_mass_flow_rate(model, t, r, v, q, omega, mass, wheel_momentum)
 
     mass_flow_rate.accepts_mass = True
     mass_flow_rate.accepts_wheel_momentum = True
-    mass_flow_rate.mass_floor = float(spacecraft.body.dry_mass_total)
+    mass_flow_rate.mass_floor = _propellant_mass_floor(spacecraft.body, tank_name)
+    mass_flow_rate.tank_name = tank_name
     return mass_flow_rate
 
 
@@ -1422,11 +1579,47 @@ def _body_at_wheel_momentum(body, wheel_momentum):
 
 
 def _body_inertia_model(spacecraft, *, tank_name=None):
+    """Fixed tank locations with corotating point-mass propellant removal.
+
+    Inertia is about the current center of mass. The derivative of that
+    center cancels from the sum of parallel-axis terms. A tank's supplied
+    intrinsic inertia is constant in ``Tank.inertia_about`` and has no rate.
+    """
     def inertia(t, r, v, q, omega, *, mass=None):
         state_body = _body_at_mass(spacecraft.body, mass, tank_name)
         return _body_value(state_body, "current_inertia", "inertia", default=spacecraft.inertia)
 
+    def inertia_rate(t, r, v, q, omega, *, mass=None, mass_rate=0.0):
+        state_body = _body_at_mass(spacecraft.body, mass, tank_name)
+        rate = np.zeros((3, 3))
+        if mass_rate == 0.0:
+            return rate
+        original_tanks = tuple(spacecraft.body.tanks)
+        total = sum(tank.propellant_mass for tank in original_tanks)
+        for original, tank in zip(original_tanks, state_body.tanks):
+            fraction = (
+                float(tank.name == tank_name) if tank_name is not None else
+                original.propellant_mass / total if total else 0.0
+            )
+            # Solver trial stages can lie beyond the depletion surface, where
+            # _body_at_mass has clamped the exhausted tank to zero.
+            if tank.propellant_mass <= 0.0 and mass_rate < 0.0:
+                continue
+            offset = tank.position_body - state_body.current_center_of_mass
+            rate += mass_rate * fraction * (
+                np.dot(offset, offset) * np.eye(3) - np.outer(offset, offset)
+            )
+        return rate
+
+    def flux(t, r, v, q, omega, *, mass=None, mass_rate=0.0):
+        # Removed point masses carry their corotating angular momentum.
+        # Users modeling transport to a nozzle or swirl can override this
+        # entire flux explicitly at propagate_6dof/Spacecraft.propagate.
+        return inertia_rate(t, r, v, q, omega, mass=mass, mass_rate=mass_rate) @ omega
+
     inertia.accepts_mass = True
+    inertia.inertia_rate = inertia_rate
+    inertia.angular_momentum_flux = flux
     return inertia
 
 
@@ -1434,11 +1627,71 @@ def _inertia_at_state(inertia, t, r, v, q, omega, mass=None):
     if callable(inertia):
         if getattr(inertia, "accepts_mass", False):
             return _inertia_matrix(inertia(t, r, v, q, omega, mass=mass))
-        try:
-            return _inertia_matrix(inertia(t, r, v, q, omega, mass=mass))
-        except TypeError:
-            return _inertia_matrix(inertia(t, r, v, q, omega))
+        args = (t, r, v, q, omega)
+        return _inertia_matrix(call_with_variants(inertia, ((args, {"mass": mass}), (args, {}))))
     return _inertia_matrix(inertia)
+
+
+def _mass_property_value(model, t, r, v, q, omega, mass, mass_rate):
+    if not callable(model):
+        return np.asarray(model, dtype=float)
+    args = (t, r, v, q, omega)
+    return call_with_variants(model, (
+        (args, {"mass": mass, "mass_rate": mass_rate}),
+        (args, {"mass": mass}),
+        (args, {"mass_rate": mass_rate}),
+        (args, {}),
+    ))
+
+
+def _inertia_rate_matrix(value):
+    matrix = np.asarray(value, dtype=float)
+    if (matrix.shape != (3, 3) or not np.all(np.isfinite(matrix))
+            or not np.allclose(matrix, matrix.T, rtol=1e-12, atol=1e-15)):
+        raise ValueError("inertia_rate must be a finite symmetric 3x3 matrix.")
+    return matrix
+
+
+def _inertia_directional_rate(model, t, r, v, q, omega, mass, r_dot, v_dot, q_dot, mass_rate):
+    """Derivative along the known state rates, holding omega fixed."""
+    relative_rate = max(
+        1.0, np.linalg.norm(r_dot) / max(1.0, np.linalg.norm(r)),
+        np.linalg.norm(v_dot) / max(1.0, np.linalg.norm(v)),
+        np.linalg.norm(q_dot),
+        0.0 if mass is None else abs(mass_rate) / max(1.0, abs(mass)),
+    )
+    step = np.cbrt(np.finfo(float).eps) / relative_rate
+    after = max(t + step, np.nextafter(t, np.inf))
+    before = min(t - step, np.nextafter(t, -np.inf))
+
+    def at(epoch):
+        delta = epoch - t
+        return _inertia_at_state(
+            model, epoch, r + delta * r_dot, v + delta * v_dot,
+            normalize_quaternion(q + delta * q_dot), omega,
+            None if mass is None else mass + delta * mass_rate,
+        )
+
+    # Use represented epoch differences, not nominal step lengths at GPS epochs.
+    return (at(after) - at(before)) / (after - before)
+
+
+def _angular_mass_matrix(model, inertia, t, r, v, q, omega, mass):
+    """Jacobian of I(omega) omega with respect to body angular velocity."""
+    matrix = np.array(inertia, copy=True)
+    if not callable(model) or not np.any(omega):
+        return matrix
+    for column in range(3):
+        step = np.cbrt(np.finfo(float).eps) * max(1.0, abs(omega[column]))
+        plus, minus = omega.copy(), omega.copy()
+        plus[column] += step
+        minus[column] -= step
+        difference = (
+            _inertia_at_state(model, t, r, v, q, plus, mass)
+            - _inertia_at_state(model, t, r, v, q, minus, mass)
+        ) / (plus[column] - minus[column])
+        matrix[:, column] += difference @ omega
+    return matrix
 
 
 def _sum_model_accelerations(models, *, suppress_depleted=True):
@@ -1449,7 +1702,8 @@ def _sum_model_accelerations(models, *, suppress_depleted=True):
         spacecraft, t, r, v, q, omega = _model_call_state(args, kwargs)
         total = np.zeros(3)
         for model in models:
-            if suppress_depleted and _is_propulsive_model(model) and _propellant_depleted(spacecraft):
+            if (suppress_depleted and _is_propulsive_model(model)
+                    and _propellant_depleted(spacecraft, getattr(model, "tank_name", None))):
                 continue
             if getattr(model, "spacecraft_acceleration_model", False):
                 total = total + _as_vector3(
@@ -1476,7 +1730,8 @@ def _sum_model_torques(models, *, suppress_depleted=True):
         spacecraft, t, r, v, q, omega = _model_call_state(args, kwargs)
         total = np.zeros(3)
         for model in models:
-            if suppress_depleted and _is_propulsive_model(model) and _propellant_depleted(spacecraft):
+            if (suppress_depleted and _is_propulsive_model(model)
+                    and _propellant_depleted(spacecraft, getattr(model, "tank_name", None))):
                 continue
             if getattr(model, "spacecraft_torque_model", False) and not getattr(model, "spacecraft_wheel_torque_model", False):
                 evaluator = model.torque if hasattr(model, "torque") else model
@@ -1596,14 +1851,14 @@ def _is_propulsive_model(model) -> bool:
     )
 
 
-def _propellant_depleted(spacecraft) -> bool:
+def _propellant_depleted(spacecraft, tank_name=None) -> bool:
     body = getattr(spacecraft, "body", None)
     mass = getattr(spacecraft, "mass", None)
     return bool(
         body is not None
         and getattr(body, "tanks", ())
         and mass is not None
-        and float(mass) <= float(body.dry_mass_total)
+        and float(mass) <= _propellant_mass_floor(body, tank_name)
     )
 
 

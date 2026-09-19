@@ -288,7 +288,13 @@ def test_high_accuracy_spacecraft_segments_chain_state_and_mass(gps_epoch):
         ],
     )
 
-    np.testing.assert_allclose(trajectory.t, gps_epoch + np.array([0.0, 1.0, 2.0]))
+    # assert_allclose defaults to rtol=1e-7, which on absolute GPS seconds
+    # admits 140 s at GPS 1.4e9 and 380 s at GPS 3.8e9. The segment chain
+    # reproduces these epochs exactly, so compare on an absolute floor.
+    np.testing.assert_allclose(
+        trajectory.t, gps_epoch + np.array([0.0, 1.0, 2.0]),
+        rtol=0.0, atol=1.0e-6,
+    )
     assert trajectory.v[-1, 0] > 0.0
     assert trajectory.mass is not None
     assert trajectory.mass[-1] < trajectory.mass[0]

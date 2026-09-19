@@ -292,6 +292,98 @@ SSATK should implement a small, composable 6-DoF layer with these boundaries:
     environment, then returns inertial force, body-frame torque, and optional
     mass-flow contributions.
 
+Rotational Dynamics Conventions
+-------------------------------
+
+Rotational balance and changing inertia
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The propagated rotational momentum about the current center of mass is
+``H = I @ omega + A @ h`` in body coordinates, where the columns of ``A`` are
+fixed reaction-wheel axes and ``h`` contains wheel momenta. Its balance is
+``H_dot + cross(omega, H) = torque + angular_momentum_flux``. Consequently the
+body-rate equation contains ``-I_dot @ omega`` as well as the wheel reaction
+torque. This model assumes no additional internal relative angular momentum
+beyond the wheel states; slosh and articulated appendages need their own model.
+
+``propagate_6dof``, ``sixdof_rhs`` and ``propagate_6dof_variational`` accept:
+
+* ``inertia_rate``: a symmetric 3-by-3 matrix in kg m²/s, or a callback returning
+  the **total** derivative of the body-coordinate inertia tensor. The callback
+  takes ``(t, r, v, q, omega)`` with optional ``mass`` and ``mass_rate`` keywords.
+  ``mass_rate`` is signed: a positive outflow of 1 kg/s gives ``mass_rate=-1``.
+  A callable inertia can supply the same callback as ``inertia.inertia_rate``.
+* ``angular_momentum_flux``: a body-coordinate 3-vector in N m, or a callback
+  with the same optional mass keywords. Positive means **net inward** angular
+  momentum. The default is zero unless the inertia model defines an
+  ``angular_momentum_flux`` attribute. An explicit argument overrides that
+  attribute. Do not include thrust torque twice through both torque and flux.
+
+For smooth custom inertia without an analytic rate, local central differences
+include time, translation, attitude, mass, and angular-rate dependence. Epoch
+differences use their represented values so absolute GPS epochs do not distort
+the finite-difference denominator. Angular-rate dependence requires solving
+with ``d(I @ omega)/d(omega)``; that matrix must be nonsingular. Numerical
+differentiation requires nearby states and epochs to be valid inputs. Supply
+an analytic rate for domain-limited callbacks or work requiring tighter control
+of differentiation error. Keep inertia callbacks free of side effects.
+
+For example, this prescribed changing inertia conserves closed-system axial
+angular momentum, with ``omega_z(t) = 0.1 / (1+t)``:
+
+.. code-block:: python
+
+   import numpy as np
+   from ssapy_toolkit.propagators_6dof.sixdof import propagate_6dof
+
+   def inertia(t, r, v, q, omega):
+       return (1.0 + t) * np.eye(3)
+
+   trajectory = propagate_6dof(
+       r0=[7e6, 0, 0], v0=[0, 7500, 0], t0=0,
+       times=np.linspace(0, 1, 11), omega0=[0, 0, 0.1], mu=0,
+       inertia=inertia, inertia_rate=np.eye(3),
+       angular_momentum_flux=np.zeros(3),
+   )
+
+The automatic ``SpacecraftBody`` tank model has a narrower, explicit convention:
+propellant is removed as corotating point mass at the tank's fixed body-frame
+location. The exact parallel-axis inertia derivative uses the current center
+of mass. Corotating removal carries momentum away, giving net inward flux
+``I_dot @ omega``; those two terms cancel in the rate equation for this model.
+The tank's optional intrinsic ``inertia`` remains constant, matching
+``Tank.inertia_about``. Zero-dry-mass empty tanks contribute zero point-mass
+inertia. A named-tank burn stops at that tank's exhaustion and retains fuel in
+other tanks. Otherwise propellant is removed proportionally.
+
+Nozzle transport, exhaust swirl, or internal fluid angular momentum are not
+inferred from this point-mass model. Supply a consistent custom flux (and, when
+needed, inertia model) for those effects. Setting the flux to a zero vector is
+an explicit different physical assumption, not a general rocket-exhaust model.
+
+Reaction-wheel constraints
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Finite wheel capacities use the selected SciPy integrator with an accepted-step
+constraint. Any numerical wheel excess transfers to body rotation while
+preserving instantaneous ``I @ omega + A @ h``. For angular-rate-dependent
+inertia, a local solve enforces the same momentum relation. The underlying
+solver restarts after a correction so stored derivatives and multistep history
+refer to the corrected state. RHS callbacks, dense interpolation and event
+states use that same projection. The returned wheel states respect the bounds
+and can be reused as initial conditions; inward commands can desaturate them.
+Physical accuracy still depends on integration tolerances and resolving command
+changes. This does not promise an exact saturation epoch beyond solver accuracy.
+
+With commanded finite-capacity wheels, variational propagation differences
+complete constrained trajectories. This includes how perturbations move the
+saturation time, which a smooth RHS Jacobian alone does not represent. It can
+cost up to ``2*n + 1`` nominal integrations for ``n`` states. The existing
+``jacobian_step`` controls initial-state perturbations; choose solver tolerances
+small enough relative to them. Initial wheel limits use inward one-sided
+differences. At a grazing contact or switching epoch, a unique two-sided STM
+need not exist. Other cases retain the existing coupled variational solver.
+
 Near-Term Implementation Plan
 -----------------------------
 
