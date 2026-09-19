@@ -168,6 +168,8 @@ def propagate_6dof_variational(
     *,
     times: ArrayLike,
     inertia: ArrayLike,
+    inertia_rate=None,
+    angular_momentum_flux=None,
     orbit0=None,
     r0: ArrayLike | None = None,
     v0: ArrayLike | None = None,
@@ -250,6 +252,7 @@ def propagate_6dof_variational(
 
     rhs_kwargs = {
         "inertia": inertia_arg, "mu": mu, "acceleration": acceleration,
+        "inertia_rate": inertia_rate, "angular_momentum_flux": angular_momentum_flux,
         "ntw_acceleration": ntw_acceleration, "body_acceleration": body_acceleration,
         "torque": torque, "gravity_gradient": gravity_gradient,
         "mass_flow_rate": mass_flow_rate, "wheel_axes_body": wheel_axes,
