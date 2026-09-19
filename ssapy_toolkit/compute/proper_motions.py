@@ -34,8 +34,8 @@ def proper_motion(x: np.ndarray, y: np.ndarray, z: np.ndarray, vx: np.ndarray, v
     v_ast_earth = np.array([vx_rot, vy_rot, vz_rot])
     los_vector = np.array([x_rot, y_rot, z_rot])
 
-    v_los = np.linalg.norm((np.dot(v_ast_earth, los_vector) / np.linalg.norm(los_vector)))
-    v_transverse = np.sqrt(np.linalg.norm(v_ast_earth)**2 - v_los**2)
+    # Avoid subtracting nearly equal squared speeds for mostly radial motion.
+    v_transverse = np.linalg.norm(np.cross(v_ast_earth, los_vector / d_earth_mag))
 
     if input_unit == 'si':
         return v_transverse / d_earth_mag * 206265
