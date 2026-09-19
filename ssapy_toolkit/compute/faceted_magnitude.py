@@ -38,6 +38,7 @@ import numpy as np
 
 from ..accelerations_6dof.spacecraft import _facet_is_shadowed
 from ..propagators_6dof import normalize_quaternion, quaternion_conjugate, rotate_vector
+from ._visibility import line_of_sight_blocked
 from .lambertian_magnitude import (
     ALBEDO_EARTH,
     ALBEDO_MOON,
@@ -152,34 +153,6 @@ def facet_scattering_area(
     return total
 
 
-def line_of_sight_blocked(r_object, r_observer, r_earth=R_EARTH) -> bool:
-    """Return whether the Earth occults the observer-to-object sightline.
-
-    Tests the segment between the two positions against a sphere of radius
-    ``r_earth`` at the geocentre. This is the check the sphere module's
-    ``_setup`` performs only for topocentric observers, via its
-    ``below_horizon`` flag; for a bare position vector, and therefore for every
-    space-based observer, it hardcodes ``below_horizon = False``.
-    """
-
-    r_object = np.asarray(r_object, dtype=float).ravel()
-    r_observer = np.asarray(r_observer, dtype=float).ravel()
-    # A topocentric observer on the geoid sits below the equatorial radius at
-    # any nonzero latitude, so testing against r_earth alone would report every
-    # ground station as occulting itself. Shrink the sphere to the nearer
-    # endpoint when that happens.
-    r_earth = min(
-        float(r_earth), float(np.linalg.norm(r_observer)), float(np.linalg.norm(r_object))
-    )
-    segment = r_object - r_observer
-    length_squared = float(np.dot(segment, segment))
-    if length_squared == 0.0:
-        return False
-    parameter = float(np.clip(-np.dot(r_observer, segment) / length_squared, 0.0, 1.0))
-    closest = r_observer + parameter * segment
-    return bool(np.linalg.norm(closest) < float(r_earth))
-
-
 def faceted_reflection(
     obj_pos_gcrs_m,
     quaternion,
@@ -226,6 +199,7 @@ def faceted_reflection(
     g = _geo or _setup(
         obj_pos_gcrs_m, observer, time, band, k_extinction,
         lon, lat, elevation, r_earth, atmosphere_top_m,
+        check_line_of_sight=False,
     )
     r_obj, r_obs = g["r_obj"], g["r_obs"]
     r_sun, r_moon_v = g["r_sun"], g["r_moon"]
