@@ -18,6 +18,7 @@ from ..coordinates.attitude import (
     rotate_vector,
 )
 from ..coordinates.satellite_frames import frame_to_gcrf_matrix
+from ._constraints import projected_solver
 
 ArrayLike = np.ndarray | list[float] | tuple[float, ...]
 AccelerationModel = Callable[
@@ -333,8 +334,9 @@ class Spacecraft:
         body_wheel_axes = _wheel_axes_from_body(spacecraft.body)
         if body_wheel_axes is not None:
             kwargs.setdefault("wheel_axes_body", body_wheel_axes)
-            kwargs.setdefault("wheel_momentum0", spacecraft.wheel_momentum)
             kwargs.setdefault("wheel_momentum_capacity", _wheel_capacity_from_body(spacecraft.body))
+        if spacecraft.wheel_momentum is not None:
+            kwargs.setdefault("wheel_momentum0", spacecraft.wheel_momentum)
         if models is not None and _any_wheel_torque_model(models) and "wheel_torque" not in kwargs:
             kwargs["wheel_torque"] = _bind_spacecraft_wheel_torque(
                 _sum_model_wheel_torques(models),
@@ -939,6 +941,12 @@ def propagate_6dof(
     t_ref = float(state.t)
     times_elapsed = times - t_ref
     events = _event_tuple(events) if events is not None else None
+    if wheel_capacity is not None and np.any(np.isfinite(wheel_capacity)):
+        project = _wheel_state_projector(
+            inertia_arg, wheel_axes, wheel_capacity, state.mass is not None,
+            t_ref=t_ref, mass_floor=getattr(mass_flow_rate, "mass_floor", None),
+        )
+        method = projected_solver(method, project)
 
     sol = solve_ivp(
         lambda t, y: sixdof_rhs(
@@ -1032,7 +1040,8 @@ def _initial_state(*, orbit0, r0, v0, t0, q0, omega0, mass0=None, wheel_momentum
         q0 = getattr(orbit0, "q", q0) if q0 is None else q0
         omega0 = getattr(orbit0, "omega", omega0) if omega0 is None else omega0
         mass0 = getattr(orbit0, "mass", None) if mass0 is None else mass0
-        wheel_momentum0 = getattr(orbit0, "wheel_momentum", wheel_momentum0)
+        if wheel_momentum0 is None:
+            wheel_momentum0 = getattr(orbit0, "wheel_momentum", None)
     if r0 is None or v0 is None:
         raise ValueError("r0 and v0 are required when orbit0 is not provided.")
     if mass0 is not None and mass0 <= 0.0:
@@ -1093,6 +1102,61 @@ def _solution_in_absolute_time(solution, t_ref: float):
         return solution(values)
 
     return shifted
+
+
+def _wheel_state_projector(inertia, axes, capacity, has_mass, *, t_ref=0.0, mass_floor=None):
+    wheel_start = 14 if has_mass else 13
+
+    def project(t, y):
+        momentum = y[wheel_start:wheel_start + len(capacity)]
+        clipped = np.clip(momentum, -capacity, capacity)
+        if np.array_equal(clipped, momentum):
+            return y
+        result = np.array(y, copy=True)
+        r, v, q, omega = y[:3], y[3:6], normalize_quaternion(y[6:10]), y[10:13]
+        mass = float(y[13]) if has_mass else None
+        if mass is not None and mass_floor is not None:
+            mass = max(mass, mass_floor)
+        epoch = t_ref + t
+        matrix = _inertia_at_state(inertia, epoch, r, v, q, omega, mass)
+        transfer = axes @ (momentum - clipped)
+        target = matrix @ omega + transfer
+        corrected = omega + np.linalg.solve(matrix, transfer)
+        scale = max(np.linalg.norm(target), np.linalg.norm(matrix @ omega),
+                    np.linalg.norm(transfer), np.finfo(float).tiny)
+        if callable(inertia):
+            for _ in range(8):
+                updated = _inertia_at_state(inertia, epoch, r, v, q, corrected, mass)
+                residual = updated @ corrected - target
+                if np.linalg.norm(residual) <= 32 * np.finfo(float).eps * scale:
+                    break
+                jacobian = _angular_mass_matrix(inertia, updated, epoch, r, v, q, corrected, mass)
+                corrected -= np.linalg.solve(jacobian, residual)
+            else:
+                raise RuntimeError("wheel projection could not conserve angular momentum for this inertia model.")
+        result[10:13] = corrected
+        result[wheel_start:wheel_start + len(capacity)] = clipped
+        return result
+
+    return project
+
+
+def _angular_mass_matrix(model, inertia, t, r, v, q, omega, mass):
+    """Jacobian of ``I(omega) omega`` for nonlinear inertia projection."""
+    matrix = np.array(inertia, copy=True)
+    if not callable(model) or not np.any(omega):
+        return matrix
+    for column in range(3):
+        step = np.cbrt(np.finfo(float).eps) * max(1.0, abs(omega[column]))
+        plus, minus = omega.copy(), omega.copy()
+        plus[column] += step
+        minus[column] -= step
+        difference = (
+            _inertia_at_state(model, t, r, v, q, plus, mass)
+            - _inertia_at_state(model, t, r, v, q, minus, mass)
+        ) / (plus[column] - minus[column])
+        matrix[:, column] += difference @ omega
+    return matrix
 
 
 def _epochs_close(first: float, second: float) -> bool:
