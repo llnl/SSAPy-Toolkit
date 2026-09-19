@@ -389,9 +389,12 @@ def encounter_frame(relative_position, relative_velocity, *, speed_tolerance: fl
     if speed <= speed_tolerance:
         raise ValueError("relative speed is too small to define an encounter plane.")
     normal = velocity / speed
-    projected = position - normal * float(np.dot(normal, position))
+    # The double cross product stays perpendicular near collinearity.
+    projected = np.cross(normal, np.cross(position, normal))
     projected_norm = float(np.linalg.norm(projected))
-    if projected_norm > np.finfo(float).eps:
+    # A projection at roundoff scale does not define a reliable miss direction.
+    projection_tolerance = 8.0 * np.finfo(float).eps * max(1.0, float(np.linalg.norm(position)))
+    if projected_norm > projection_tolerance:
         first = projected / projected_norm
     else:
         axis = np.eye(3)[int(np.argmin(np.abs(normal)))]
