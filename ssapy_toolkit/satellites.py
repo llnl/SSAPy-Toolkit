@@ -553,9 +553,9 @@ def rectangular_prism_inertia(mass: float, size: ArrayLike) -> np.ndarray:
 
 
 def point_mass_inertia(mass: float, position: ArrayLike) -> np.ndarray:
-    """Return point-mass inertia about the origin for a body-frame position."""
+    """Return point-mass inertia; zero mass gives zero inertia."""
 
-    mass = _positive(mass, "mass")
+    mass = _nonnegative(mass, "mass")
     offset = _vector3(position, "position")
     return mass * ((offset @ offset) * np.eye(3) - np.outer(offset, offset))
 
