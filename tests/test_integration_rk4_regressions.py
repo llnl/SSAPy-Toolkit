@@ -1,3 +1,4 @@
+import importlib
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -8,11 +9,14 @@ from ssapy_toolkit.propagators_orbit.rk4 import rk4
 from ssapy_toolkit.propagators_orbit.int_utils import precompute_third_body_positions
 
 
+rk4_module = importlib.import_module("ssapy_toolkit.propagators_orbit.rk4")
+
+
 class RK4InputTests(unittest.TestCase):
     def test_cached_gravity_result_is_not_mutated_by_third_body_addition(self):
         gravity = np.zeros(3)
-        with patch('ssapy_toolkit.propagators_orbit.rk4.accel_point_moon', return_value=np.array([1., 0, 0])), \
-             patch('ssapy_toolkit.propagators_orbit.rk4.accel_point_sun', return_value=np.zeros(3)):
+        with patch.object(rk4_module, 'accel_point_moon', return_value=np.array([1., 0, 0])), \
+             patch.object(rk4_module, 'accel_point_sun', return_value=np.zeros(3)):
             r, v = rk4([7e6, 0, 0], [0, 7500, 0], [0, 1], accel_gravity=lambda r: gravity)
         np.testing.assert_array_equal(gravity, np.zeros(3))
         np.testing.assert_allclose(r[-1], [7e6 + 0.5, 7500, 0], rtol=0, atol=1e-9)
