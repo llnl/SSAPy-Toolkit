@@ -174,6 +174,10 @@ def _propagate_spacecraft_segment(spacecraft, segment, *, tracks_mass=False):
         raise ValueError("each segment times must be a 1-D array with at least two entries.")
     if not _epochs_close(times[0], spacecraft.t):
         raise ValueError("each segment must start at the current spacecraft epoch.")
+    # Preserve the caller's array while making the shared boundary exact.
+    times = times.copy()
+    times[0] = spacecraft.t
+    options["times"] = times
     impulses = options.pop("impulses", ())
     if isinstance(impulses, ImpulseManeuver):
         impulses = (impulses,)
@@ -256,8 +260,7 @@ def _combine_trajectories(trajectories, preserve_boundaries=None) -> SixDOFTraje
         if all(trajectory.wheel_momentum is not None for trajectory in trajectories)
         else None
     )
-    t_events = tuple(event for trajectory in trajectories for event in (trajectory.t_events or ()))
-    y_events = tuple(event for trajectory in trajectories for event in (trajectory.y_events or ()))
+    t_events, y_events, event_functions = _combine_event_results(trajectories)
     # Segments are contiguous, so each interior boundary is the next
     # trajectory's first epoch. Dropping this left dense output unavailable on
     # every segmented run, however each segment was configured.
@@ -279,4 +282,46 @@ def _combine_trajectories(trajectories, preserve_boundaries=None) -> SixDOFTraje
         status=trajectories[-1].status,
         t_events=t_events or None,
         y_events=y_events or None,
+        event_functions=event_functions,
+    )
+
+
+def _combine_event_results(trajectories):
+    """Merge event occurrences by callable identity across segments."""
+    functions, times, states = [], [], []
+    known = {}
+    have_states = True
+    for trajectory in trajectories:
+        for local_index, event_times in enumerate(trajectory.t_events or ()):
+            function = (
+                None if trajectory.event_functions is None
+                else trajectory.event_functions[local_index]
+            )
+            key = None if function is None else id(function)
+            if key is None or key not in known:
+                index = len(functions)
+                functions.append(function)
+                times.append([])
+                states.append([])
+                if key is not None:
+                    known[key] = index
+            else:
+                index = known[key]
+            if trajectory.y_events is None:
+                event_states = [None] * len(event_times)
+                have_states = False
+            else:
+                event_states = trajectory.y_events[local_index]
+                if len(event_states) != len(event_times):
+                    raise ValueError("event epochs and states must have matching lengths")
+            for epoch, state in zip(event_times, event_states):
+                if (state is not None and times[index] and epoch == times[index][-1]
+                        and np.array_equal(state, states[index][-1])):
+                    continue
+                times[index].append(float(epoch))
+                states[index].append(state)
+    return (
+        tuple(np.asarray(items, dtype=float) for items in times),
+        tuple(np.asarray(items, dtype=float) for items in states) if have_states else None,
+        tuple(functions) if functions else None,
     )
