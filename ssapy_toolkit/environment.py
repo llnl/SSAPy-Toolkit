@@ -8,6 +8,7 @@ from datetime import datetime
 
 import numpy as np
 
+from ._callables import call_with_variants
 from .constants import (
     EARTH_DIPOLE_EQUATOR_FIELD,
     EARTH_GEOMAGNETIC_REFERENCE_RADIUS,
@@ -190,10 +191,7 @@ class SpaceEnvironment:
                 raise ValueError("NRLMSISE-00 density requires time and inertial position inputs.")
             return self.nrlmsise00_density(args[0], args[1])
         if callable(model):
-            try:
-                return float(model(altitude_m, *args))
-            except TypeError:
-                return float(model(altitude_m))
+            return float(call_with_variants(model, (((altitude_m, *args), {}), ((altitude_m,), {}))))
         return float(model)
 
     def nrlmsise00_density(
@@ -698,10 +696,8 @@ def _occulting_body_position_radius(environment, name, time, r, v, q, omega, spa
 
 def _vector_or_model(model, time, r_inertial, v_inertial, q_body_to_inertial, omega_body, spacecraft, name: str) -> np.ndarray:
     if callable(model):
-        try:
-            value = model(time, r_inertial, v_inertial, q_body_to_inertial, omega_body, spacecraft)
-        except TypeError:
-            value = model(time)
+        args = (time, r_inertial, v_inertial, q_body_to_inertial, omega_body, spacecraft)
+        value = call_with_variants(model, ((args, {}), ((time,), {})))
     else:
         value = model
     return _vector3(value, name)
