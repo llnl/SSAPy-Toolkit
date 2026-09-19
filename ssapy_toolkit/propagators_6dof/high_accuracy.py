@@ -9,6 +9,10 @@ from .sixdof import (
     SixDOFTrajectory,
     Spacecraft,
     _epochs_close,
+    _direct_mass_flow_models,
+    _inertia_at_state,
+    _supports_body_mass_update,
+    _tank_name_for_models,
     _piecewise_solution_sequence,
 )
 from .sixdof import propagate_6dof as _propagate_6dof
@@ -145,6 +149,8 @@ def propagate_spacecraft_segments(spacecraft, segments, **defaults):
                                if isinstance(segment.get("impulses"), ImpulseManeuver)
                                else (segment.get("impulses") or ())))
         or any(hasattr(model, "mass_flow_rate") for model in (segment.get("models") or ()))
+        or bool(_direct_mass_flow_models(*(segment.get(name) for name in
+                ("acceleration", "torque", "body_acceleration", "ntw_acceleration"))))
         for segment in segments
     )
     trajectories = []
@@ -189,16 +195,30 @@ def _propagate_spacecraft_segment(spacecraft, segment, *, tracks_mass=False):
     if tracks_mass:
         options.setdefault("mass0", current.mass)
     trajectory = propagate_spacecraft_high_accuracy(current, **options)
+    final_inertia = (
+        None if trajectory.mass is not None and _supports_body_mass_update(current.body)
+        else current.inertia
+    )
+    if options.get("inertia") is not None:
+        final_inertia = _inertia_at_state(
+            options["inertia"], trajectory.t[-1], trajectory.r[-1], trajectory.v[-1],
+            trajectory.q[-1], trajectory.omega[-1],
+            current.mass if trajectory.mass is None else trajectory.mass[-1],
+        )
     return (
         trajectory,
         trajectory.spacecraft(
-            inertia=current.inertia,
+            inertia=final_inertia,
             mass=current.mass if trajectory.mass is None else None,
             area=current.area,
             cd=current.cd,
             cr=current.cr,
             center_of_pressure=current.center_of_pressure,
             body=current.body,
+            tank_name=_tank_name_for_models(
+                *(options.get(name) for name in ("acceleration", "torque", "mass_flow_rate")),
+                *(options.get("models") or ()),
+            ),
         ),
         bool(impulses),
     )
