@@ -50,6 +50,8 @@ def rk4(
     which is what ``build_profile`` has always been given here.
     """
     t_abs = np.asarray(to_gps(t), dtype=float)
+    if t_abs.ndim != 1 or t_abs.size == 0 or not np.all(np.isfinite(t_abs)):
+        raise ValueError("t must be a nonempty finite 1-D time grid")
     t_elapsed = t_abs - t_abs[0]
     n_steps = len(t_abs)
 
@@ -66,7 +68,8 @@ def rk4(
         dt = t_abs[i + 1] - t_abs[i]
 
         def a_total(r_i, v_i, t_i, i_thrust):
-            a = accel_gravity(r_i)
+            # Callers may reuse a cached/read-only acceleration vector.
+            a = np.array(accel_gravity(r_i), dtype=float, copy=True)
 
             # third-body point-mass terms (Earth-centered inertial)
             a += accel_point_moon(r_i, t_i)
