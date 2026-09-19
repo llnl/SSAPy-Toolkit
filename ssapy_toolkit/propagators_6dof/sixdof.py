@@ -18,6 +18,7 @@ from ..coordinates.attitude import (
     rotate_vector,
 )
 from ..coordinates.satellite_frames import frame_to_gcrf_matrix
+from ._constraints import projected_solver
 
 ArrayLike = np.ndarray | list[float] | tuple[float, ...]
 AccelerationModel = Callable[
@@ -80,6 +81,7 @@ class SixDOFTrajectory:
     t_events: tuple[np.ndarray, ...] | None = None
     y_events: tuple[np.ndarray, ...] | None = None
     solution: Callable | None = None
+    event_functions: tuple[Callable | None, ...] | None = None
 
     def spacecraft(
         self,
@@ -332,8 +334,9 @@ class Spacecraft:
         body_wheel_axes = _wheel_axes_from_body(spacecraft.body)
         if body_wheel_axes is not None:
             kwargs.setdefault("wheel_axes_body", body_wheel_axes)
-            kwargs.setdefault("wheel_momentum0", spacecraft.wheel_momentum)
             kwargs.setdefault("wheel_momentum_capacity", _wheel_capacity_from_body(spacecraft.body))
+        if spacecraft.wheel_momentum is not None:
+            kwargs.setdefault("wheel_momentum0", spacecraft.wheel_momentum)
         if models is not None and _any_wheel_torque_model(models) and "wheel_torque" not in kwargs:
             kwargs["wheel_torque"] = _bind_spacecraft_wheel_torque(
                 _sum_model_wheel_torques(models),
@@ -548,6 +551,7 @@ def _drop_event_slot(trajectory, index):
         trajectory,
         t_events=trajectory.t_events[:index],
         y_events=None if trajectory.y_events is None else trajectory.y_events[:index],
+        event_functions=None if trajectory.event_functions is None else trajectory.event_functions[:index],
     )
 
 
@@ -567,6 +571,7 @@ def _combine_trajectory_segments(first, second, event_count):
         wheel_momentum = np.vstack((first.wheel_momentum[first_slice], second.wheel_momentum[second_slice]))
     t_events = _merge_event_arrays(first.t_events, second.t_events, event_count)
     y_events = _merge_event_arrays(first.y_events, second.y_events, event_count)
+    event_functions = _merge_event_functions(first.event_functions, second.event_functions, event_count)
     solution = _piecewise_solution(first.solution, second.solution, first.t[-1])
     return replace(
         first,
@@ -582,6 +587,7 @@ def _combine_trajectory_segments(first, second, event_count):
         status=second.status,
         t_events=t_events,
         y_events=y_events,
+        event_functions=event_functions,
         solution=solution,
     )
 
@@ -604,23 +610,21 @@ def _merge_event_arrays(first, second, count):
     return tuple(merged)
 
 
-def _piecewise_solution(first, second, split):
-    if first is None or second is None:
+def _merge_event_functions(first, second, count):
+    """Preserve callable metadata while joining burn/coast event slots."""
+    if count == 0:
         return None
+    first = () if first is None else first
+    second = () if second is None else second
+    return tuple(
+        (first[index] if index < len(first) else
+         second[index] if index < len(second) else None)
+        for index in range(count)
+    )
 
-    def solution(t):
-        values = np.asarray(t)
-        if values.ndim == 0:
-            return first(t) if values <= split else second(t)
-        result = np.empty((first(values.flat[0]).shape[0], values.size))
-        before = values <= split
-        if np.any(before):
-            result[:, before] = first(values[before])
-        if np.any(~before):
-            result[:, ~before] = second(values[~before])
-        return result
 
-    return solution
+def _piecewise_solution(first, second, split):
+    return _piecewise_solution_sequence((first, second), (split,))
 
 
 def _piecewise_solution_sequence(solutions, breakpoints):
@@ -634,8 +638,8 @@ def _piecewise_solution_sequence(solutions, breakpoints):
 
     Folding :func:`_piecewise_solution` over N segments would nest N-1
     closures, so evaluating M epochs would cost O(N*M) and N Python frames.
-    Here each call is one ``np.searchsorted`` plus one call per segment the
-    query actually touches.
+    Here one ``np.searchsorted`` and a stable grouping of query indices give
+    one call per touched segment without N full-length boolean masks.
 
     Returns ``None`` when any segment lacks dense output, or when the
     breakpoints are not sorted, rather than returning a solution that would
@@ -667,9 +671,11 @@ def _piecewise_solution_sequence(solutions, breakpoints):
             probe = np.asarray(solutions[0](float(breakpoints[0])), dtype=float)
             return np.empty((probe.shape[0], 0), dtype=float)
         result = None
-        for segment in np.unique(index):
-            selected = index == segment
-            block = np.asarray(solutions[int(segment)](flat[selected]), dtype=float)
+        order = np.argsort(index, kind="stable")
+        boundaries = np.flatnonzero(np.diff(index[order])) + 1
+        for selected in np.split(order, boundaries):
+            segment = int(index[selected[0]])
+            block = np.asarray(solutions[segment](flat[selected]), dtype=float)
             if result is None:
                 result = np.empty((block.shape[0], flat.size), dtype=float)
             result[:, selected] = block
@@ -934,6 +940,13 @@ def propagate_6dof(
     # callbacks still see absolute epochs, and every returned epoch is absolute.
     t_ref = float(state.t)
     times_elapsed = times - t_ref
+    events = _event_tuple(events) if events is not None else None
+    if wheel_capacity is not None and np.any(np.isfinite(wheel_capacity)):
+        project = _wheel_state_projector(
+            inertia_arg, wheel_axes, wheel_capacity, state.mass is not None,
+            t_ref=t_ref, mass_floor=getattr(mass_flow_rate, "mass_floor", None),
+        )
+        method = projected_solver(method, project)
 
     sol = solve_ivp(
         lambda t, y: sixdof_rhs(
@@ -969,17 +982,23 @@ def propagate_6dof(
     if not sol.success:
         raise RuntimeError(f"6-DoF propagation failed: {sol.message}")
 
-    y = sol.y.T
-    t = sol.t
+    # With t_eval starting after a terminal event, SciPy returns empty lists.
+    y = np.asarray(sol.y, dtype=float).reshape(y0.size, -1).T
+    t = np.asarray(sol.t, dtype=float)
     if getattr(sol, "status", 0) == 1 and getattr(sol, "t_events", None) is not None:
         events_with_state = [
-            (float(event_times[0]), y_event[0])
+            (float(event_times[-1]), y_event[-1])
             for event_times, y_event in zip(sol.t_events, sol.y_events)
             if len(event_times) and len(y_event)
         ]
         if events_with_state:
-            event_t, event_y = min(events_with_state, key=lambda item: item[0])
-            if not len(t) or not _epochs_close(t[-1], event_t):
+            # Integration is forward-only; the last root is the stopping point.
+            event_t, event_y = max(events_with_state, key=lambda item: item[0])
+            resolution = 8.0 * np.spacing(abs(event_t + t_ref))
+            if len(t) and abs(event_t - float(t[-1])) <= resolution:
+                t[-1] = event_t
+                y[-1] = event_y
+            else:
                 t = np.append(t, event_t)
                 y = np.vstack([y, event_y])
     t = t + t_ref
@@ -1007,6 +1026,7 @@ def propagate_6dof(
         ),
         y_events=None if getattr(sol, "y_events", None) is None else tuple(sol.y_events),
         solution=_solution_in_absolute_time(getattr(sol, "sol", None), t_ref),
+        event_functions=events,
     )
 
 
@@ -1020,7 +1040,8 @@ def _initial_state(*, orbit0, r0, v0, t0, q0, omega0, mass0=None, wheel_momentum
         q0 = getattr(orbit0, "q", q0) if q0 is None else q0
         omega0 = getattr(orbit0, "omega", omega0) if omega0 is None else omega0
         mass0 = getattr(orbit0, "mass", None) if mass0 is None else mass0
-        wheel_momentum0 = getattr(orbit0, "wheel_momentum", wheel_momentum0)
+        if wheel_momentum0 is None:
+            wheel_momentum0 = getattr(orbit0, "wheel_momentum", None)
     if r0 is None or v0 is None:
         raise ValueError("r0 and v0 are required when orbit0 is not provided.")
     if mass0 is not None and mass0 <= 0.0:
@@ -1071,13 +1092,71 @@ def _rhs_in_elapsed_time(rhs, t_ref: float):
 
 def _solution_in_absolute_time(solution, t_ref: float):
     """Wrap a dense solution so callers keep querying it with absolute epochs."""
-    if solution is None or t_ref == 0.0:
+    if solution is None:
         return solution
 
     def shifted(t):
-        return solution(np.asarray(t, dtype=float) - t_ref)
+        values = np.asarray(t, dtype=float) - t_ref
+        if values.ndim == 1 and values.size == 0:
+            return np.empty((np.asarray(solution(0.0)).size, 0))
+        return solution(values)
 
     return shifted
+
+
+def _wheel_state_projector(inertia, axes, capacity, has_mass, *, t_ref=0.0, mass_floor=None):
+    wheel_start = 14 if has_mass else 13
+
+    def project(t, y):
+        momentum = y[wheel_start:wheel_start + len(capacity)]
+        clipped = np.clip(momentum, -capacity, capacity)
+        if np.array_equal(clipped, momentum):
+            return y
+        result = np.array(y, copy=True)
+        r, v, q, omega = y[:3], y[3:6], normalize_quaternion(y[6:10]), y[10:13]
+        mass = float(y[13]) if has_mass else None
+        if mass is not None and mass_floor is not None:
+            mass = max(mass, mass_floor)
+        epoch = t_ref + t
+        matrix = _inertia_at_state(inertia, epoch, r, v, q, omega, mass)
+        transfer = axes @ (momentum - clipped)
+        target = matrix @ omega + transfer
+        corrected = omega + np.linalg.solve(matrix, transfer)
+        scale = max(np.linalg.norm(target), np.linalg.norm(matrix @ omega),
+                    np.linalg.norm(transfer), np.finfo(float).tiny)
+        if callable(inertia):
+            for _ in range(8):
+                updated = _inertia_at_state(inertia, epoch, r, v, q, corrected, mass)
+                residual = updated @ corrected - target
+                if np.linalg.norm(residual) <= 32 * np.finfo(float).eps * scale:
+                    break
+                jacobian = _angular_mass_matrix(inertia, updated, epoch, r, v, q, corrected, mass)
+                corrected -= np.linalg.solve(jacobian, residual)
+            else:
+                raise RuntimeError("wheel projection could not conserve angular momentum for this inertia model.")
+        result[10:13] = corrected
+        result[wheel_start:wheel_start + len(capacity)] = clipped
+        return result
+
+    return project
+
+
+def _angular_mass_matrix(model, inertia, t, r, v, q, omega, mass):
+    """Jacobian of ``I(omega) omega`` for nonlinear inertia projection."""
+    matrix = np.array(inertia, copy=True)
+    if not callable(model) or not np.any(omega):
+        return matrix
+    for column in range(3):
+        step = np.cbrt(np.finfo(float).eps) * max(1.0, abs(omega[column]))
+        plus, minus = omega.copy(), omega.copy()
+        plus[column] += step
+        minus[column] -= step
+        difference = (
+            _inertia_at_state(model, t, r, v, q, plus, mass)
+            - _inertia_at_state(model, t, r, v, q, minus, mass)
+        ) / (plus[column] - minus[column])
+        matrix[:, column] += difference @ omega
+    return matrix
 
 
 def _epochs_close(first: float, second: float) -> bool:

@@ -10,15 +10,22 @@ def precompute_third_body_positions(t, body_name):
     """
     Precompute an interpolated position function for a third body (Moon/Sun/etc.).
     Returns a callable pos(t_query) -> (N,3) position array.
+    Use at least two strictly increasing epochs. Interpolation is cubic for
+    four or more samples, quadratic for three and linear for two.
     """
     from ssapy import get_body
 
-    body = get_body(body_name)
-    r_body = body.position(t).T  # (n,3)
     t_gps = np.asarray(to_gps(t), dtype=float)
+    if (t_gps.ndim != 1 or t_gps.size < 2 or not np.all(np.isfinite(t_gps))
+            or np.any(np.diff(t_gps) <= 0)):
+        raise ValueError("ephemeris grid must contain at least two finite increasing epochs")
+    body = get_body(body_name)
+    r_body = np.asarray(body.position(t_gps), dtype=float).T
+    if r_body.shape != (len(t_gps), 3) or not np.all(np.isfinite(r_body)):
+        raise ValueError("body.position must return finite positions with shape (3, n)")
 
     interp_funcs = [
-        interp1d(t_gps, r_body[:, i], kind="cubic", fill_value="extrapolate")
+        interp1d(t_gps, r_body[:, i], kind=min(3, len(t_gps) - 1), fill_value="extrapolate")
         for i in range(3)
     ]
 

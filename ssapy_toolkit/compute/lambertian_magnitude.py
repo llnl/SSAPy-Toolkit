@@ -64,6 +64,7 @@ from astropy.coordinates import (
 )
 
 from ssapy_toolkit.constants import SOLAR_FLUX_1_AU
+from ._visibility import line_of_sight_blocked
 
 # ----------------------------------------------------------------------
 # Fundamental constants (SI; not model parameters)
@@ -251,6 +252,7 @@ def airmass_kasten_young(zenith_deg):
 def _setup(
     obj_pos_gcrs_m, observer, time, band, k_extinction,
     lon, lat, elevation, r_earth, atmosphere_top_m,
+    *, check_line_of_sight=True,
 ):
     """Resolve observer, ephemerides, band, airmass.  Returns a dict."""
     r_obj = np.asarray(obj_pos_gcrs_m, dtype=float)
@@ -297,7 +299,7 @@ def _setup(
         r_obs = np.asarray(observer, dtype=float)
         observer_alt_m = np.linalg.norm(r_obs) - r_earth
         zenith_deg = np.degrees(_angle_between(r_obs, r_obj - r_obs))
-        below_horizon = False
+        below_horizon = check_line_of_sight and line_of_sight_blocked(r_obj, r_obs, r_earth)
 
     if observer_alt_m < atmosphere_top_m and not below_horizon:
         X = airmass_kasten_young(zenith_deg)
@@ -322,7 +324,7 @@ def _setup(
         "lam_lo": lam_lo, "lam_hi": lam_hi,
         "band_name": band if isinstance(band, str) else "custom",
         "airmass": X, "extinction_mag": extinction_mag,
-        "trans": 10 ** (-0.4 * extinction_mag),
+        "trans": 0.0 if below_horizon else 10 ** (-0.4 * extinction_mag),
         "below_horizon": bool(below_horizon),
     }
 
@@ -341,6 +343,7 @@ def _package(g, comp_bolo, comp_band, angles, time, f_nu_ab_zero):
     F_band_total = sum(comp_band.values())
     mag = lambda F: _ab_mag(F, g["lam_lo"], g["lam_hi"], f_nu_ab_zero)
     m_ab = mag(F_band_total)
+    observed_flux = 0.0 if g["below_horizon"] else F_band_total * g["trans"]
     return {
         "time": time.isot,
         "band": {"name": g["band_name"],
@@ -353,10 +356,10 @@ def _package(g, comp_bolo, comp_band, angles, time, f_nu_ab_zero):
         "irradiance_bolometric_total_W_m2": F_bolo_total,
         "irradiance_inband_W_m2": comp_band,
         "irradiance_inband_total_W_m2": F_band_total,
-        "irradiance_inband_total_at_observer_W_m2": F_band_total * g["trans"],
+        "irradiance_inband_total_at_observer_W_m2": observed_flux,
         "ab_mag_components": {k: mag(v) for k, v in comp_band.items()},
         "ab_mag_exoatmospheric": m_ab,
-        "ab_mag_observed": m_ab + g["extinction_mag"],
+        "ab_mag_observed": mag(observed_flux),
         "angles_deg": angles,
     }
 

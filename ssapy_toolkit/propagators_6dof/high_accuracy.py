@@ -9,6 +9,10 @@ from .sixdof import (
     SixDOFTrajectory,
     Spacecraft,
     _epochs_close,
+    _direct_mass_flow_models,
+    _inertia_at_state,
+    _supports_body_mass_update,
+    _tank_name_for_models,
     _piecewise_solution_sequence,
 )
 from .sixdof import propagate_6dof as _propagate_6dof
@@ -145,6 +149,8 @@ def propagate_spacecraft_segments(spacecraft, segments, **defaults):
                                if isinstance(segment.get("impulses"), ImpulseManeuver)
                                else (segment.get("impulses") or ())))
         or any(hasattr(model, "mass_flow_rate") for model in (segment.get("models") or ()))
+        or bool(_direct_mass_flow_models(*(segment.get(name) for name in
+                ("acceleration", "torque", "body_acceleration", "ntw_acceleration"))))
         for segment in segments
     )
     trajectories = []
@@ -174,6 +180,10 @@ def _propagate_spacecraft_segment(spacecraft, segment, *, tracks_mass=False):
         raise ValueError("each segment times must be a 1-D array with at least two entries.")
     if not _epochs_close(times[0], spacecraft.t):
         raise ValueError("each segment must start at the current spacecraft epoch.")
+    # Preserve the caller's array while making the shared boundary exact.
+    times = times.copy()
+    times[0] = spacecraft.t
+    options["times"] = times
     impulses = options.pop("impulses", ())
     if isinstance(impulses, ImpulseManeuver):
         impulses = (impulses,)
@@ -185,16 +195,30 @@ def _propagate_spacecraft_segment(spacecraft, segment, *, tracks_mass=False):
     if tracks_mass:
         options.setdefault("mass0", current.mass)
     trajectory = propagate_spacecraft_high_accuracy(current, **options)
+    final_inertia = (
+        None if trajectory.mass is not None and _supports_body_mass_update(current.body)
+        else current.inertia
+    )
+    if options.get("inertia") is not None:
+        final_inertia = _inertia_at_state(
+            options["inertia"], trajectory.t[-1], trajectory.r[-1], trajectory.v[-1],
+            trajectory.q[-1], trajectory.omega[-1],
+            current.mass if trajectory.mass is None else trajectory.mass[-1],
+        )
     return (
         trajectory,
         trajectory.spacecraft(
-            inertia=current.inertia,
+            inertia=final_inertia,
             mass=current.mass if trajectory.mass is None else None,
             area=current.area,
             cd=current.cd,
             cr=current.cr,
             center_of_pressure=current.center_of_pressure,
             body=current.body,
+            tank_name=_tank_name_for_models(
+                *(options.get(name) for name in ("acceleration", "torque", "mass_flow_rate")),
+                *(options.get("models") or ()),
+            ),
         ),
         bool(impulses),
     )
@@ -256,8 +280,7 @@ def _combine_trajectories(trajectories, preserve_boundaries=None) -> SixDOFTraje
         if all(trajectory.wheel_momentum is not None for trajectory in trajectories)
         else None
     )
-    t_events = tuple(event for trajectory in trajectories for event in (trajectory.t_events or ()))
-    y_events = tuple(event for trajectory in trajectories for event in (trajectory.y_events or ()))
+    t_events, y_events, event_functions = _combine_event_results(trajectories)
     # Segments are contiguous, so each interior boundary is the next
     # trajectory's first epoch. Dropping this left dense output unavailable on
     # every segmented run, however each segment was configured.
@@ -279,4 +302,46 @@ def _combine_trajectories(trajectories, preserve_boundaries=None) -> SixDOFTraje
         status=trajectories[-1].status,
         t_events=t_events or None,
         y_events=y_events or None,
+        event_functions=event_functions,
+    )
+
+
+def _combine_event_results(trajectories):
+    """Merge event occurrences by callable identity across segments."""
+    functions, times, states = [], [], []
+    known = {}
+    have_states = True
+    for trajectory in trajectories:
+        for local_index, event_times in enumerate(trajectory.t_events or ()):
+            function = (
+                None if trajectory.event_functions is None
+                else trajectory.event_functions[local_index]
+            )
+            key = None if function is None else id(function)
+            if key is None or key not in known:
+                index = len(functions)
+                functions.append(function)
+                times.append([])
+                states.append([])
+                if key is not None:
+                    known[key] = index
+            else:
+                index = known[key]
+            if trajectory.y_events is None:
+                event_states = [None] * len(event_times)
+                have_states = False
+            else:
+                event_states = trajectory.y_events[local_index]
+                if len(event_states) != len(event_times):
+                    raise ValueError("event epochs and states must have matching lengths")
+            for epoch, state in zip(event_times, event_states):
+                if (state is not None and times[index] and epoch == times[index][-1]
+                        and np.array_equal(state, states[index][-1])):
+                    continue
+                times[index].append(float(epoch))
+                states[index].append(state)
+    return (
+        tuple(np.asarray(items, dtype=float) for items in times),
+        tuple(np.asarray(items, dtype=float) for items in states) if have_states else None,
+        tuple(functions) if functions else None,
     )
