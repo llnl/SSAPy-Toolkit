@@ -89,23 +89,19 @@ CACHE_MAX_AGE_SECONDS = 7200   # 2 hours
 # satellites -- see save_satellites()'s docstring for why.
 PY_MIRROR_MAX_SATELLITES = 500
 
-# Path to local TLE cache file — lives next to coverage_analysis.py in
-# ssapy_toolkit/plots/, computed relative to this file's own location so
-# it's correct regardless of the working directory this is run from.
-# (Previously pointed at ~/tle_cache.json, a home-directory path that
-# nothing else in the repo ever actually read from or wrote to.)
+# coverage_analysis.py still lives in plots; generated data does not.
 _PLOTS_DIR = os.path.join(_REPO_ROOT, "ssapy_toolkit", "plots")
 
 
 def _data_file(name):
-    """Generated data goes to ~/ssatk_data, not into the source tree."""
-    try:
-        from .ssatk_data import datapath
-        return str(datapath(name))
-    except Exception:
-        base = os.path.join(os.path.expanduser("~"), "ssatk_data")
-        os.makedirs(base, exist_ok=True)
-        return os.path.join(base, name)
+    """Reuse an existing SSATK data file, else use the configured output."""
+    legacy_path = os.path.join(os.path.expanduser("~"), "ssatk_data", name)
+    if os.path.isfile(legacy_path):
+        return legacy_path
+
+    from .ssatk_data import datapath
+
+    return str(datapath(name))
 
 
 CACHE_FILE = _data_file("tle_cache.json")

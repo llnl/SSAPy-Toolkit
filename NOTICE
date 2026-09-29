@@ -12,3 +12,7 @@ Third-party JavaScript assets included for the optional satellite viewer:
 
 - three.min.js: Three.js r128, Copyright 2010-2021 Three.js Authors, MIT License.
 - satellite.min.js: satellite-js v4.1.4, Copyright 2013 Shashwat Kandadai and UCSC, MIT License.
+- hdf5.js: jsfive v0.4.2, Brian B. Maranville, public domain; based on pyfive,
+  Copyright 2016 Jonathan J. Helmus, BSD 3-Clause License. Its bundled pako
+  v2.1.0 dependency is Copyright 2014-2017 Vitaly Puzrin and Andrei Tuputcyn,
+  MIT and Zlib Licenses.

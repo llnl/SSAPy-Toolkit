@@ -15,11 +15,11 @@
 // for exactly this use case).
 // ============================================================================
 
-const R_EARTH_KM = 6378.137;
-const R_MOON_KM = 1737.4;
-const R_SUN_KM = 695700.0;
-const AU_KM = 149597870.7;
-const MOON_MEAN_DISTANCE_KM = 384400.0;
+const R_EARTH_KM = SSAPY_CONSTANTS.R_EARTH_KM;
+const R_MOON_KM = SSAPY_CONSTANTS.R_MOON_KM;
+const R_SUN_KM = SSAPY_CONSTANTS.R_SUN_KM;
+const AU_KM = SSAPY_CONSTANTS.AU_KM;
+const MOON_MEAN_DISTANCE_KM = SSAPY_CONSTANTS.MOON_MEAN_DISTANCE_KM;
 // Render the Sun and Moon at physical Earth-centered distances and radii. This
 // preserves their nearly equal angular diameters (~0.5 deg) instead of using
 // oversized nearby markers that look like scene props.
@@ -28,13 +28,12 @@ const SUN_RENDER_RADIUS_KM = R_SUN_KM;
 const SUN_GLOW_RADIUS_KM = R_SUN_KM * 1.15;
 const MOON_RENDER_DISTANCE_KM = MOON_MEAN_DISTANCE_KM;
 const MOON_RENDER_RADIUS_KM = R_MOON_KM;
-const STARFIELD_INNER_RADIUS_KM = AU_KM * 1.35;
-const STARFIELD_OUTER_RADIUS_KM = AU_KM * 1.50;
-const CAMERA_FAR_KM = STARFIELD_OUTER_RADIUS_KM * 1.08;
-const MU_EARTH = 398600.4418;
+const STARFIELD_RADIUS_KM = AU_KM * 1.45;
+const CAMERA_FAR_KM = STARFIELD_RADIUS_KM * 1.08;
+const MU_EARTH = SSAPY_CONSTANTS.MU_EARTH_KM3_S2;
 
 // ---------------------------------------------------------------------------
-// Real TLE catalog -- these are genuine published element sets (CelesTrak/
+// Real TLE catalog -- these are genuine published element sets (Space-Track/
 // NORAD), not synthetic data. TLEs age: SGP4 stays numerically valid but
 // accumulates real position error the further you propagate from the
 // element set's own epoch. Each entry below is propagated relative to ITS
@@ -44,7 +43,7 @@ const MU_EARTH = 398600.4418;
 //
 // This covers every base category in tle_updater.py's SATELLITE_GROUPS (the
 // same taxonomy that project already uses for TLE fetching), not just a
-// handful. Each entry has one of three `mode`s:
+// handful. Each entry has one of these `mode`s:
 //
 //   mode: 'tle'        -- real SGP4 propagation from an actual sourced TLE.
 //   mode: 'keplerian'  -- no literal TLE text was efficiently found for this
@@ -69,19 +68,21 @@ const MU_EARTH = 398600.4418;
 //                         a full Sun-Earth-Moon gravitational model, not
 //                         TLE/SGP4). Shown at a fixed, clearly-labeled
 //                         illustrative position instead of a fabricated orbit.
+//   mode: 'state'      -- supplied r/v/t samples, plus optional q attitude
+//                         samples, interpolated without browser propagation.
 // ---------------------------------------------------------------------------
 const SATELLITE_CATALOG = {
   iss: {
     name: 'ISS (ZARYA)', type: 'ISS', mode: 'tle',
-    tle1: '1 25544U 98067A   26133.42450843  .00004829  00000+0  95080-4 0  9993',
-    tle2: '2 25544  51.6310 112.1825 0007522  54.1994 305.9693 15.49203550566361',
-    note: 'Real TLE, epoch 2026-05-13 (CelesTrak).',
+    tle1: '1 25544U 98067A   26268.17397659  .00011139  00000-0  20797-3 0  9994',
+    tle2: '2 25544  51.6316 165.2379 0004773 179.0895 181.0103 15.49282084587251',
+    note: 'Current TLE, refreshed from Space-Track on 2026-09-25.',
   },
   hst: {
     name: 'Hubble Space Telescope', type: 'HUBBLE', mode: 'tle',
-    tle1: '1 20580U 90037B   22010.54856767  .00000893  00000-0  42745-4 0  9993',
-    tle2: '2 20580  28.4696 134.5382 0002786 129.9204 289.6315 15.09931360542325',
-    note: 'Real TLE, epoch 2022-01-10. Hubble has had no reboosts since the ' +
+    tle1: '1 20580U 90037B   26266.94713825  .00005513  00000-0  16734-3 0  9993',
+    tle2: '2 20580  28.4727 125.0661 0001663 151.6515 208.4172 15.31734421803723',
+    note: 'Current TLE, refreshed from Space-Track on 2026-09-25. Hubble has had no reboosts since the ' +
           'Shuttle retired; its altitude/inclination have barely changed since.',
   },
   jwst: {
@@ -94,23 +95,23 @@ const SATELLITE_CATALOG = {
   },
   gps: {
     name: 'GPS BIIA-10 (PRN 32)', type: 'GPS', mode: 'tle',
-    tle1: '1 20959U 90103A   13018.84945698  .00000048  00000-0  10000-3 0  8427',
-    tle2: '2 20959  54.4303 229.9128 0117665 335.2539  24.2342  2.00550891162214',
-    note: 'Real TLE, epoch 2013-01-18. This specific Block IIA satellite has ' +
+    tle1: '1 20959U 90103A   26267.02163321 -.00000025  00000-0  00000-0 0  9997',
+    tle2: '2 20959  56.2913  48.3107 0022955  92.9475 267.3218  1.88155149257729',
+    note: 'Current TLE, refreshed from Space-Track on 2026-09-25. This specific Block IIA satellite has ' +
           'likely since been retired, but the element set is real and gives an ' +
           'accurate semi-synchronous MEO orbit shape for the GPS constellation.',
   },
   galileo: {
     name: 'GALILEO 7 (GSAT0203)', type: 'GALILEO', mode: 'tle',
-    tle1: '1 40544U 15017A   19284.43409211 -.00000061  00000-0  00000+0 0  9996',
-    tle2: '2 40544  56.2559  48.3427 0003736 223.0231 136.9337 1.70475323 28252',
-    note: 'Real TLE, epoch 2019-10-11.',
+    tle1: '1 40544U 15017A   26264.99894767 -.00000080  00000-0  00000-0 0  9999',
+    tle2: '2 40544  56.7471 338.9565 0005184 256.0270 103.9736  1.70476324 70851',
+    note: 'Current TLE, refreshed from Space-Track on 2026-09-25.',
   },
   glonass: {
     name: 'COSMOS 2492 (GLONASS-M)', type: 'GLONASS', mode: 'tle',
-    tle1: '1 39620U 14012A   19285.51719791 -.00000065  00000-0  10000-3 0  9999',
-    tle2: '2 39620  65.6759  35.9755 0011670 324.9338 289.9534 2.13103291 43246',
-    note: 'Real TLE, epoch 2019-10-12.',
+    tle1: '1 39620U 14012A   26266.41332101 -.00000003  00000-0  00000-0 0  9999',
+    tle2: '2 39620  65.2351 310.5929 0012191 306.7991  53.1703  2.13103605 97334',
+    note: 'Current TLE, refreshed from Space-Track on 2026-09-25.',
   },
   beidou: {
     name: 'BeiDou MEO (representative)', type: 'BEIDOU', mode: 'keplerian',
@@ -176,15 +177,15 @@ const SATELLITE_CATALOG = {
   },
   css: {
     name: 'CSS Tiangong (Tianhe)', type: 'CSS', mode: 'tle',
-    tle1: '1 48274U 21035A   26195.18938242  .00000775  00000-0  14292-4 0  9997',
-    tle2: '2 48274  41.4690 157.9320 0002447 303.4143  56.6460 15.58062507297388',
-    note: 'Real TLE, epoch 2026-07-14 (satcat.com/CelesTrak) -- the Tianhe core module.',
+    tle1: '1 48274U 21035A   26268.14703992  .00015428  00000-0  18724-3 0  9990',
+    tle2: '2 48274  41.4679  75.0253 0002138 306.5316  53.5325 15.60268422308772',
+    note: 'Current TLE, refreshed from Space-Track on 2026-09-25 -- the Tianhe core module.',
   },
   starlink: {
     name: 'STARLINK-30477', type: 'STARLINK', mode: 'tle',
-    tle1: '1 57912U 23146X   24099.49439401  .00006757  00000+0  51475-3 0  9997',
-    tle2: '2 57912  43.0018 157.5807 0001420 272.5369  87.5310 15.02537576 31746',
-    note: 'Real TLE, epoch 2024-04-08.',
+    tle1: '1 57912U 23146X   26267.36613404 -.00000017  00000-0  89137-5 0  9992',
+    tle2: '2 57912  43.0011 268.5671 0001315 273.6011  86.4690 15.27573368167486',
+    note: 'Current TLE, refreshed from Space-Track on 2026-09-25.',
   },
   tess: {
     name: 'TESS (representative)', type: 'TESS', mode: 'keplerian', noradId: 43435,
@@ -203,11 +204,9 @@ const SATELLITE_CATALOG = {
   },
 };
 
-const DEFAULT_DEMO_SATELLITES = ['iss', 'gps', 'weather_goes', 'cislunar_demo'];
-
 // ---------------------------------------------------------------------------
 // Support for searching/selecting from a user's full local satellite
-// database (loaded from tle_updater.py's ssapy_satellites.json), not just
+// database (JSON, CSV, or HDF5), not just
 // the curated entries above. Any of those ~31,000 real satellites can be
 // searched and added -- but only the curated examples above have a bespoke or archetype
 // model built for them specifically. For everything else, this classifies
@@ -250,21 +249,67 @@ function classifyByName(name) {
   return 'GENERIC_PAYLOAD';
 }
 
+const EMBEDDED_STATE_VECTOR_TRACKS =
+  (typeof STATE_VECTOR_TRACKS !== 'undefined' && Array.isArray(STATE_VECTOR_TRACKS))
+    ? STATE_VECTOR_TRACKS : [];
+const ACTIVE_PROPAGATOR =
+  (typeof PROPAGATOR !== 'undefined' && typeof PROPAGATOR === 'string')
+    ? PROPAGATOR : 'sgp4';
+const STATE_VECTOR_CATALOG = {};
+for (let index = 0; index < EMBEDDED_STATE_VECTOR_TRACKS.length; index++) {
+  const track = EMBEDDED_STATE_VECTOR_TRACKS[index];
+  const key = `state_${index}`;
+  STATE_VECTOR_CATALOG[key] = {
+    name: track.name || `State vector track ${index + 1}`,
+    type: classifyByName(track.name || ''), mode: 'state',
+    stateVector: track,
+    note: 'Propagated state vectors supplied by ssapy.rv; no browser propagation is applied.',
+  };
+}
+Object.assign(SATELLITE_CATALOG, STATE_VECTOR_CATALOG);
+const DEFAULT_DEMO_SATELLITES = EMBEDDED_STATE_VECTOR_TRACKS.length
+  ? Object.keys(STATE_VECTOR_CATALOG) : ['iss'];
+
 // Resolves one record from the loaded database into an { key, entry } pair
 // ready for addSatellite(). Reuses a curated key/entry (bespoke model, real
 // note) when the NORAD ID matches one of the 20 above.
 function resolveDbRecord(record) {
-  const nid = noradFromTle(record.line1);
+  const nid = record._nid != null ? record._nid :
+    (record.line1 ? noradFromTle(record.line1) : record.noradId);
   if (nid !== null && CURATED_NORAD_TO_KEY[nid]) {
     const key = CURATED_NORAD_TO_KEY[nid];
     return { key, entry: SATELLITE_CATALOG[key] };
+  }
+  if (record.mode === 'metadata' || record.type === 'metadata') {
+    const matchingTle = loadedDatabase && loadedDatabase.find(item =>
+      item.mode === 'tle' && item._nid === nid);
+    if (matchingTle) {
+      const key = 'db_' + nid;
+      return {
+        key,
+        entry: {
+          name: record.name, type: classifyByName(record.name), mode: 'tle',
+          tle1: matchingTle.line1, tle2: matchingTle.line2,
+          note: 'DISCOS metadata matched to a TLE record with the same NORAD ID.',
+        },
+      };
+    }
+    const key = 'db_' + (nid !== null ? nid : record.name);
+    return {
+      key,
+      entry: {
+        name: record.name, type: classifyByName(record.name), mode: 'metadata',
+        noradId: nid, metadata: record.metadata,
+        note: 'DISCOS metadata record. A current TLE or state vector is required to plot this object.',
+      },
+    };
   }
   const type = classifyByName(record.name);
   const key = 'db_' + (nid !== null ? nid : record.name);
   const entry = {
     name: record.name, type, mode: 'tle',
     tle1: record.line1, tle2: record.line2,
-    note: 'From your local satellite database (tle_updater.py) -- not one ' +
+    note: 'From your loaded satellite database -- not one ' +
           'of the curated types above, so this uses a generic model ' +
           `classified by name as "${type.toLowerCase().replace('_', ' ')}".`,
   };
@@ -299,10 +344,11 @@ const activeSatellites = new Map(); // key -> { entry, satrec, model, orbitLine,
 // keeping every active satellite reading off the same clock.
 // ---------------------------------------------------------------------------
 let simTimeScale = 1;
-let simClockAnchorRealMs = Date.now();
+let simClockAnchorRealMs = INITIAL_SIM_TIME_MS == null ? Date.now() : INITIAL_SIM_TIME_MS;
 let simClockAnchorPerfMs = performance.now();
 let cloudDriftAccumulator = 0; // clouds drift slowly relative to the surface, on top of GMST-tracked Earth rotation
 let lastClockDisplayUpdateMs = 0;
+let labelsEnabled = true;
 
 function getCurrentSimMs() {
   return simClockAnchorRealMs + (performance.now() - simClockAnchorPerfMs) * simTimeScale;
@@ -342,7 +388,7 @@ function togglePause() {
     if (btn) btn.textContent = 'Pause';
   }
 }
-let loadedDatabase = null; // array of {name, type, line1, line2} once the user loads their JSON file
+let loadedDatabase = null; // normalized {name, type, line1, line2} records from JSON, CSV, or HDF5
 const MAX_ACTIVE_SATELLITES = 1000; // raised from 300. Detailed multi-mesh models don't scale to this many, so LOD kicks in automatically -- see SIMPLE_MODEL_ABOVE / ORBIT_LINE_ABOVE below.
 // Satellite models are deliberately stylized display glyphs, but their size is
 // fixed across LEO/MEO/GEO/cislunar regimes so a distant orbit does not turn
@@ -367,6 +413,7 @@ let _labelsDecluttered = false;
 // Toggled globally for all active satellites. Distinct cyan so a track reads
 // apart from the white orbit lines and the yellow labels.
 let groundTracksEnabled = false;
+let quaternionAttitudeEnabled = false;
 const GROUND_TRACK_COLOR = 0x5fd6e6;
 const GROUND_TRACK_SAMPLES = 180;       // vertices along the painted trail
 const GROUND_TRACK_MAX_SPAN_MIN = 24 * 60; // cap the trailing window (one full period for LEO/MEO; keeps GEO/HEO to <=1 sidereal day)
@@ -416,6 +463,9 @@ function init() {
   setupTimeControls();
   setupDatabaseSearch();
   setupAnalysisControls();
+  if (EMBEDDED_STATE_VECTOR_TRACKS.length && EMBEDDED_STATE_VECTOR_TRACKS[0].t.length) {
+    setSimTime(EMBEDDED_STATE_VECTOR_TRACKS[0].t[0]);
+  }
   DEFAULT_DEMO_SATELLITES.forEach(key => addSatellite(key));
   reframeCamera();
   updateInfoPanel();
@@ -424,15 +474,17 @@ function init() {
 }
 
 // ---------------------------------------------------------------------------
-// Search across a user-loaded satellite database (tle_updater.py's
-// ssapy_satellites.json) -- this is now the only selection mechanism (the
+// Search across a user-loaded satellite database. This is now the only
+// selection mechanism (the
 // original curated dropdown was removed once search could resolve
 // those examples by NORAD ID/name -- see CURATED_NORAD_TO_KEY and
 // classifyByName above -- plus everything else in the loaded database).
-// above. A standalone HTML file can't fetch() a local file directly, so
-// this uses a file picker + FileReader instead.
+// A standalone HTML file cannot fetch a local file directly, so this uses a
+// file picker and parses the selected file in the browser.
 // ---------------------------------------------------------------------------
 const SEARCH_RESULTS_LIMIT = 60; // cap rendered rows -- don't build 31,000 DOM nodes for a broad query
+const CELESTRAK_ACTIVE_TLE_URL =
+  'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=JSON';
 
 function formatDateForInput(date) {
   const pad = n => String(n).padStart(2, '0');
@@ -474,7 +526,7 @@ function setupTimeControls() {
 }
 
 // ---------------------------------------------------------------------------
-// Flexible satellite-record parsing -- accepts multiple real-world JSON
+// Flexible satellite-record parsing -- accepts multiple real-world record
 // shapes, not just this project's own {name,line1,line2} format, so an
 // analyst or intern can drop in a file from CelesTrak, the Unified Data
 // Library (UDL), or a similar source and have it "just work" without
@@ -507,6 +559,26 @@ function pickField(obj, candidates) {
   return null;
 }
 
+const TLE_LINE1_FIELDS = ['line1', 'TLE_LINE1', 'tleLine1', 'LINE1'];
+const TLE_LINE2_FIELDS = ['line2', 'TLE_LINE2', 'tleLine2', 'LINE2'];
+const TLE_NAME_FIELDS = ['name', 'OBJECT_NAME', 'objectName', 'satNo',
+  'satno', 'idOnOrbit', 'origObjectId', 'NORAD_CAT_ID', 'noradId'];
+
+function recordAttributes(raw) {
+  if (!raw || typeof raw !== 'object') return {};
+  // ESA DISCOS uses JSON:API records: the useful catalog fields live under
+  // `attributes`, while ordinary TLE catalogs put them at the top level.
+  return raw.attributes && typeof raw.attributes === 'object'
+    ? Object.assign({}, raw, raw.attributes) : raw;
+}
+
+function noradFromRecord(raw) {
+  const fields = recordAttributes(raw);
+  const value = pickField(fields, ['noradId', 'NORAD_CAT_ID', 'satno', 'satNo']);
+  const nid = Number(value);
+  return Number.isInteger(nid) && nid > 0 ? nid : null;
+}
+
 // Normalizes one raw record (any recognized shape) into this project's
 // internal {name, line1, line2} form, or returns null if it has no usable
 // TLE. Only TLE/elset data is handled here -- state vectors are a separate,
@@ -514,25 +586,37 @@ function pickField(obj, candidates) {
 // than silently dropped (see loadSatelliteDatabase()).
 function normalizeSatelliteRecord(raw) {
   if (!raw || typeof raw !== 'object') return null;
+  const fields = recordAttributes(raw);
 
   // TLE line 1 / line 2, across known and plausible field names:
   //   this project:     line1 / line2
   //   CelesTrak JSON:   TLE_LINE1 / TLE_LINE2
   //   UDL elset (plausible variants): line1/line2, tleLine1/tleLine2
-  const line1 = pickField(raw, ['line1', 'TLE_LINE1', 'tleLine1', 'LINE1']);
-  const line2 = pickField(raw, ['line2', 'TLE_LINE2', 'tleLine2', 'LINE2']);
-  if (typeof line1 !== 'string' || typeof line2 !== 'string') return null;
-  if (line1.length < 60 || line2.length < 60) return null; // not a plausible TLE line
+  const line1 = pickField(fields, TLE_LINE1_FIELDS);
+  const line2 = pickField(fields, TLE_LINE2_FIELDS);
+  const noradId = noradFromRecord(fields);
+  if (typeof line1 !== 'string' || typeof line2 !== 'string' ||
+      line1.length < 60 || line2.length < 60) {
+    // Metadata-only DISCOS records remain searchable. They can be plotted
+    // when their NORAD ID matches a curated TLE; otherwise the UI reports
+    // that an orbit source is still required.
+    if (noradId === null) return null;
+    const metadataName = pickField(fields, TLE_NAME_FIELDS) || `NORAD ${noradId}`;
+    return {
+      name: String(metadataName), type: 'metadata', mode: 'metadata',
+      noradId, metadata: fields,
+    };
+  }
 
   // Name, across known/plausible variants (fall back to a catalog-number
   // label if no name field is present, which real elset feeds sometimes omit)
-  let name = pickField(raw, ['name', 'OBJECT_NAME', 'objectName', 'satNo',
-    'idOnOrbit', 'origObjectId', 'NORAD_CAT_ID']);
+  let name = pickField(fields, TLE_NAME_FIELDS);
   if (name == null) {
     const nid = noradFromTle(line1);
     name = nid != null ? ('NORAD ' + nid) : 'Unknown object';
   }
-  return { name: String(name), type: 'tle', line1, line2 };
+  return { name: String(name), type: 'tle', mode: 'tle', line1, line2,
+    noradId: noradId === null ? noradFromTle(line1) : noradId };
 }
 
 // Unwraps the top-level structure to an array of records, tolerating the
@@ -553,85 +637,339 @@ function extractRecordArray(data) {
 // Used only to give an accurate skip reason, not to process them.
 function looksLikeStateVector(raw) {
   if (!raw || typeof raw !== 'object') return false;
-  return pickField(raw, ['xpos', 'x', 'posX', 'xPos']) != null &&
-         pickField(raw, ['xvel', 'xdot', 'velX', 'xVel']) != null;
+  const fields = recordAttributes(raw);
+  return pickField(fields, ['xpos', 'x', 'posX', 'xPos']) != null &&
+         pickField(fields, ['xvel', 'xdot', 'velX', 'xVel']) != null;
+}
+
+function parseCsvDatabase(text) {
+  const rows = [];
+  let row = [], field = '', quoted = false;
+  text = text.replace(/^\uFEFF/, '');
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"' && text[i + 1] === '"') { field += '"'; i++; }
+      else if (ch === '"') quoted = false;
+      else field += ch;
+    } else if (ch === '"' && field === '') {
+      quoted = true;
+    } else if (ch === ',') {
+      row.push(field); field = '';
+    } else if (ch === '\n') {
+      row.push(field); field = '';
+      if (row.some(value => value.trim() !== '')) rows.push(row);
+      row = [];
+    } else if (ch !== '\r') {
+      field += ch;
+    }
+  }
+  if (quoted) throw new Error('CSV has an unterminated quoted field');
+  if (field !== '' || row.length) {
+    row.push(field);
+    if (row.some(value => value.trim() !== '')) rows.push(row);
+  }
+  if (rows.length === 0) return [];
+  const headers = rows.shift().map(value => value.trim());
+  if (headers.some(header => !header)) throw new Error('CSV has an empty column name');
+  return rows.map(values => Object.fromEntries(
+    headers.map((header, index) => [header, values[index] == null ? '' : values[index]])
+  ));
+}
+
+function hdf5DatasetValues(dataset) {
+  const value = dataset.value;
+  const values = (Array.isArray(value) || ArrayBuffer.isView(value))
+    ? Array.from(value) : [value];
+  const clean = item => {
+    if (typeof item === 'string') return item.replace(/\0+$/, '').trimEnd();
+    if (item && typeof item === 'object' && !Array.isArray(item)) {
+      return Object.fromEntries(Object.entries(item).map(([key, field]) => [key, clean(field)]));
+    }
+    return item;
+  };
+  return values.map(clean);
+}
+
+function hdf5RecordsFromGroup(root) {
+  const records = [];
+  const fields = [...TLE_NAME_FIELDS, ...TLE_LINE1_FIELDS, ...TLE_LINE2_FIELDS];
+  const fieldNames = new Set(fields.map(field => field.toLowerCase()));
+  const isGroup = child => child && Array.isArray(child.keys);
+
+  function collectCompound(dataset) {
+    if (!dataset) return;
+    let dtype;
+    try { dtype = dataset.dtype; } catch (_) { return; }
+    if (!Array.isArray(dtype) || dtype[0] !== 'COMPOUND') return;
+    const names = dtype[2].map(member => member.name);
+    const lowerNames = new Set(names.map(name => name.toLowerCase()));
+    const hasAlias = aliases => aliases.some(alias => lowerNames.has(alias.toLowerCase()));
+    if (!hasAlias(TLE_LINE1_FIELDS) || !hasAlias(TLE_LINE2_FIELDS)) return;
+    let rows;
+    try { rows = hdf5DatasetValues(dataset); } catch (_) { return; }
+    for (const row of rows) if (row && typeof row === 'object') records.push(row);
+  }
+
+  function visit(group) {
+    const children = new Map(group.keys.map(key => [key, group.get(key)]));
+    const datasetKeys = [...children].filter(([, child]) => child && !isGroup(child))
+      .map(([key]) => key);
+    const keyByLower = new Map(datasetKeys.map(key => [key.toLowerCase(), key]));
+    const findKey = aliases => aliases.map(alias => keyByLower.get(alias.toLowerCase())).find(Boolean);
+    const line1Key = findKey(TLE_LINE1_FIELDS);
+    const line2Key = findKey(TLE_LINE2_FIELDS);
+
+    if (line1Key && line2Key) {
+      const columns = new Map(datasetKeys
+        .filter(key => fieldNames.has(key.toLowerCase()))
+        .map(key => [key, hdf5DatasetValues(children.get(key))]));
+      const rowCount = columns.get(line1Key).length;
+      if (columns.get(line2Key).length !== rowCount) {
+        throw new Error(`HDF5 TLE columns have different lengths in ${group.name || '/'}`);
+      }
+      for (let index = 0; index < rowCount; index++) {
+        const record = {};
+        for (const [key, values] of columns) {
+          if (values.length === 1 || values.length === rowCount) {
+            record[key] = values.length === 1 ? values[0] : values[index];
+          }
+        }
+        records.push(record);
+      }
+    }
+
+    for (const child of children.values()) {
+      if (isGroup(child)) visit(child);
+      else collectCompound(child);
+    }
+  }
+
+  visit(root);
+  return records;
+}
+
+function parseHdf5Database(buffer, sourceName) {
+  const records = hdf5RecordsFromGroup(new hdf5.File(buffer, sourceName));
+  if (!records.length) {
+    throw new Error('HDF5 file contains no groups or datasets with line1/line2 TLE fields');
+  }
+  return records;
+}
+
+async function parseSatelliteDatabaseFile(file) {
+  const extension = (file.name.match(/\.[^.]+$/) || [''])[0].toLowerCase();
+  if (extension === '.json') return JSON.parse(await file.text());
+  if (extension === '.csv') return parseCsvDatabase(await file.text());
+  if (['.h5', '.hdf5', '.hdf'].includes(extension)) {
+    return parseHdf5Database(await file.arrayBuffer(), file.name);
+  }
+  throw new Error('unsupported format; choose JSON, CSV, or HDF5');
+}
+
+function showDatabaseLoadError(message) {
+  loadedDatabase = null;
+  const statusEl = document.getElementById('db-status');
+  const searchInput = document.getElementById('db-search-input');
+  if (statusEl) statusEl.textContent = message;
+  if (searchInput) {
+    searchInput.disabled = true;
+    searchInput.placeholder = 'Load a database first...';
+  }
+  renderSearchResults('');
+  return false;
+}
+
+function loadSatelliteDatabase(parsed, sourceName) {
+  const statusEl = document.getElementById('db-status');
+  const searchInput = document.getElementById('db-search-input');
+  const rawRecords = extractRecordArray(parsed);
+  if (!rawRecords) {
+    return showDatabaseLoadError('Unrecognized database structure: expected an array of ' +
+      'records, or an object containing one under "data"/"records"/"elsets"/etc.');
+  }
+
+  const valid = [];
+  let stateVectorCount = 0, metadataCount = 0, unrecognizedCount = 0;
+  for (const raw of rawRecords) {
+    const norm = normalizeSatelliteRecord(raw);
+    if (norm) {
+      norm._nid = norm.noradId != null ? norm.noradId :
+        (norm.line1 ? noradFromTle(norm.line1) : null); // precompute once, not per-keystroke
+      if (norm.mode === 'metadata') metadataCount++;
+      valid.push(norm);
+    } else if (looksLikeStateVector(raw)) {
+      stateVectorCount++;
+    } else {
+      unrecognizedCount++;
+    }
+  }
+
+  if (valid.length === 0) {
+    let reason;
+    if (stateVectorCount > 0) {
+      reason = `found ${stateVectorCount.toLocaleString()} state-vector records, ` +
+        `but this viewer accepts state vectors through satellite_viewer(), not as a catalog file.`;
+    } else if (unrecognizedCount > 0) {
+      reason = `none of the ${unrecognizedCount.toLocaleString()} records contained a ` +
+        `recognizable TLE (checked line1/line2, TLE_LINE1/2, tleLine1/2). If this is a ` +
+        `valid orbit file, the field names may differ from what's expected.`;
+    } else {
+      reason = 'the file contained no records.';
+    }
+    return showDatabaseLoadError('No satellites loaded: ' + reason);
+  }
+
+  loadedDatabase = valid;
+  const notes = [];
+  if (metadataCount > 0) notes.push(`${metadataCount.toLocaleString()} DISCOS metadata records`);
+  if (stateVectorCount > 0) notes.push(`${stateVectorCount.toLocaleString()} state-vector records skipped (use satellite_viewer(r, v, t))`);
+  if (unrecognizedCount > 0) notes.push(`${unrecognizedCount.toLocaleString()} unrecognized records skipped`);
+  statusEl.textContent = `Loaded ${valid.length.toLocaleString()} satellites from ${sourceName}` +
+    (notes.length ? ` (${notes.join('; ')})` : '');
+  searchInput.disabled = false;
+  searchInput.placeholder = 'Search by name or NORAD ID...';
+  renderSearchResults(searchInput.value);
+  return true;
+}
+
+function tleEntriesByNoradId() {
+  const entries = new Map();
+  const add = entry => {
+    if (!entry || entry.mode !== 'tle') return;
+    const nid = noradFromTle(entry.tle1);
+    if (nid === null) return;
+    if (!entries.has(nid)) entries.set(nid, []);
+    entries.get(nid).push(entry);
+  };
+  Object.values(SATELLITE_CATALOG).forEach(add);
+  if (loadedDatabase) loadedDatabase.forEach(add);
+  return entries;
+}
+
+function refreshActiveTle(key, line1, line2) {
+  const inst = activeSatellites.get(key);
+  if (!inst || inst.entry.mode !== 'tle') return false;
+  let satrec;
+  try {
+    satrec = satellite.twoline2satrec(line1, line2);
+    if (!tleStateAtMs(satrec, getCurrentSimMs())) return false;
+  } catch (_) {
+    return false;
+  }
+
+  inst.entry.tle1 = line1;
+  inst.entry.tle2 = line2;
+  inst.satrec = satrec;
+  inst.periodMin = computeOrbitPeriodMinutes(satrec);
+  const nowMs = getCurrentSimMs();
+  if (inst.orbitLine) {
+    scene.remove(inst.orbitLine);
+    inst.orbitLine.geometry.dispose();
+    inst.orbitLine.material.dispose();
+    inst.orbitLine = buildRealOrbitPath(satrec, nowMs, inst.periodMin, 0xffffff);
+    scene.add(inst.orbitLine);
+  }
+  inst.lastOrbitDrawMs = nowMs;
+  inst.lastOrbitPlaneNormal = computeOrbitPlaneNormal(satrec, nowMs);
+  updateOneSatellitePosition(key);
+  return true;
+}
+
+async function updateAllTles() {
+  const button = document.getElementById('db-update-btn');
+  const statusEl = document.getElementById('db-status');
+  const targets = tleEntriesByNoradId();
+  if (!targets.size) {
+    if (statusEl) statusEl.textContent = 'No numeric TLE entries are available to update.';
+    return;
+  }
+
+  const originalText = button ? button.textContent : '';
+  if (button) { button.disabled = true; button.textContent = 'Updating...'; }
+  if (statusEl) statusEl.textContent = `Fetching current TLEs for ${targets.size.toLocaleString()} objects...`;
+
+  try {
+    const response = await fetch(CELESTRAK_ACTIVE_TLE_URL, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`CelesTrak returned HTTP ${response.status}`);
+    const parsed = await response.json();
+    const records = extractRecordArray(parsed) || [];
+    const latest = new Map();
+    for (const raw of records) {
+      const record = normalizeSatelliteRecord(raw);
+      if (record && record.mode === 'tle') {
+        const nid = noradFromTle(record.line1);
+        if (nid !== null) latest.set(nid, record);
+      }
+    }
+
+    let updated = 0;
+    let activeUpdated = 0;
+    for (const [nid, entries] of targets) {
+      const record = latest.get(nid);
+      if (!record) continue;
+      for (const entry of entries) {
+        entry.tle1 = record.line1;
+        entry.tle2 = record.line2;
+      }
+      updated++;
+      for (const [key, inst] of activeSatellites) {
+        if (inst.entry.mode !== 'tle' || noradFromTle(inst.entry.tle1) !== nid) continue;
+        if (refreshActiveTle(key, record.line1, record.line2)) activeUpdated++;
+      }
+    }
+
+    conjunctionEvents = [];
+    for (const [id, line] of conjunctionLines) {
+      scene.remove(line); line.geometry.dispose(); line.material.dispose();
+      conjunctionLines.delete(id);
+    }
+    passEvents = [];
+    renderConjunctionResults();
+    renderPassResults();
+    if (groundTracksEnabled) lastGroundTrackRebuildMs = 0;
+    updateInfoPanel();
+    const missing = targets.size - updated;
+    if (statusEl) statusEl.textContent = `Updated ${updated.toLocaleString()} of ${targets.size.toLocaleString()} TLEs from CelesTrak` +
+      (missing ? `; ${missing.toLocaleString()} had no current active record` : '') +
+      (activeUpdated ? `; refreshed ${activeUpdated} displayed satellite${activeUpdated === 1 ? '' : 's'}` : '');
+    const searchInput = document.getElementById('db-search-input');
+    if (searchInput) renderSearchResults(searchInput.value);
+  } catch (error) {
+    if (statusEl) statusEl.textContent = `TLE update failed: ${error && error.message ? error.message : String(error)} (network access to CelesTrak is required)`;
+  } finally {
+    if (button) { button.disabled = false; button.textContent = originalText; }
+  }
 }
 
 function setupDatabaseSearch() {
   const fileInput = document.getElementById('db-file-input');
   const loadBtn = document.getElementById('db-load-btn');
+  const updateBtn = document.getElementById('db-update-btn');
   const statusEl = document.getElementById('db-status');
   const searchInput = document.getElementById('db-search-input');
   if (!fileInput || !loadBtn || !statusEl || !searchInput) return;
 
   loadBtn.addEventListener('click', () => fileInput.click());
+  if (updateBtn) updateBtn.addEventListener('click', updateAllTles);
 
-  fileInput.addEventListener('change', () => {
+  fileInput.addEventListener('change', async () => {
     const file = fileInput.files[0];
     if (!file) return;
-    statusEl.textContent = 'Loading...';
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const parsed = JSON.parse(reader.result);
-        const rawRecords = extractRecordArray(parsed);
-        if (!rawRecords) {
-          statusEl.textContent = 'Unrecognized JSON structure: expected an array of ' +
-            'records, or an object containing one under "data"/"records"/"elsets"/etc.';
-          loadedDatabase = null;
-          return;
-        }
-
-        const valid = [];
-        let stateVectorCount = 0, unrecognizedCount = 0;
-        for (const raw of rawRecords) {
-          const norm = normalizeSatelliteRecord(raw);
-          if (norm) {
-            norm._nid = noradFromTle(norm.line1); // precompute once, not per-keystroke
-            valid.push(norm);
-          } else if (looksLikeStateVector(raw)) {
-            stateVectorCount++;
-          } else {
-            unrecognizedCount++;
-          }
-        }
-
-        if (valid.length === 0) {
-          // Be specific about WHY nothing loaded -- this is the difference
-          // between "give up" and "oh, I exported the wrong data type".
-          let reason;
-          if (stateVectorCount > 0) {
-            reason = `found ${stateVectorCount.toLocaleString()} state-vector records, ` +
-              `but this viewer currently propagates TLE/elset data only. Export elsets instead.`;
-          } else if (unrecognizedCount > 0) {
-            reason = `none of the ${unrecognizedCount.toLocaleString()} records contained a ` +
-              `recognizable TLE (checked line1/line2, TLE_LINE1/2, tleLine1/2). If this is a ` +
-              `valid orbit file, the field names may differ from what's expected.`;
-          } else {
-            reason = 'the file contained no records.';
-          }
-          statusEl.textContent = 'No satellites loaded: ' + reason;
-          loadedDatabase = null;
-          return;
-        }
-
-        loadedDatabase = valid;
-        const notes = [];
-        if (stateVectorCount > 0) notes.push(`${stateVectorCount.toLocaleString()} state-vector records skipped (TLE-only for now)`);
-        if (unrecognizedCount > 0) notes.push(`${unrecognizedCount.toLocaleString()} unrecognized records skipped`);
-        statusEl.textContent = `Loaded ${valid.length.toLocaleString()} satellites` +
-          (notes.length ? ` (${notes.join('; ')})` : '');
-        searchInput.disabled = false;
-        searchInput.placeholder = 'Search by name or NORAD ID...';
-        renderSearchResults(searchInput.value);
-      } catch (e) {
-        statusEl.textContent = 'Could not read that file: ' + e.message;
-        loadedDatabase = null;
-      }
-    };
-    reader.onerror = () => { statusEl.textContent = 'Could not read that file.'; };
-    reader.readAsText(file);
+    statusEl.textContent = `Loading ${file.name}...`;
+    try {
+      loadSatelliteDatabase(await parseSatelliteDatabaseFile(file), file.name);
+    } catch (e) {
+      showDatabaseLoadError(`Could not read ${file.name}: ${e && e.message ? e.message : String(e)}`);
+    } finally {
+      fileInput.value = '';
+    }
   });
+
+  if (BUNDLED_SATELLITE_DATABASE) {
+    loadSatelliteDatabase(BUNDLED_SATELLITE_DATABASE, 'bundled database');
+    BUNDLED_SATELLITE_DATABASE = null;
+  }
 
   let debounceTimer = null;
   searchInput.addEventListener('input', () => {
@@ -645,7 +983,7 @@ function renderSearchResults(query) {
   if (!resultsEl) return;
 
   if (!loadedDatabase) {
-    resultsEl.innerHTML = `<div class="db-hint">Load your ssapy_satellites.json above to search it.</div>`;
+    resultsEl.innerHTML = `<div class="db-hint">Load a satellite JSON, CSV, or HDF5 database above to search it.</div>`;
     return;
   }
   const q = (query || '').trim().toUpperCase();
@@ -656,7 +994,8 @@ function renderSearchResults(query) {
 
   const qIsNumeric = /^\d+$/.test(q);
   const matches = loadedDatabase.filter(r =>
-    r.name.toUpperCase().includes(q) || (qIsNumeric && r._nid !== null && String(r._nid) === q)
+    String(r.name || '').toUpperCase().includes(q) ||
+    (qIsNumeric && r._nid !== null && String(r._nid) === q)
   );
   if (matches.length === 0) {
     resultsEl.innerHTML = `<div class="db-hint">No matches for "${escapeHtml(query)}".</div>`;
@@ -693,6 +1032,10 @@ function toggleDbSatellite(record) {
       if (statusEl) statusEl.textContent = `Limit reached (${MAX_ACTIVE_SATELLITES} satellites max) -- remove one to add another.`;
       return;
     }
+    if (added === 'metadata') {
+      if (statusEl) statusEl.textContent = `${record.name} is a DISCOS metadata record; load a matching TLE or pass state vectors to satellite_viewer() to plot it.`;
+      return;
+    }
     // Frame the first satellite so it isn't off-screen, but don't yank the
     // camera on any later selection -- keep whatever view the user has set.
     if (wasEmpty) reframeCamera();
@@ -704,31 +1047,52 @@ function toggleDbSatellite(record) {
 
 
 // ---------------------------------------------------------------------------
-// Starfield -- placed far enough out to actually read as background, not
-// something orbiting alongside the satellites. A real perspective camera
-// (unlike an orthographic chart) handles this range naturally: no "everything
-// shrinks to fit the farthest object" problem the way it would in a 2D-chart-
-// style 3D scene.
+// Real catalog stars in GCRF-of-date directions. They share one arbitrary sky
+// radius because the catalog supplies angular directions, not display-scale
+// distances. The ECI-to-scene remap matches every other inertial vector here.
 // ---------------------------------------------------------------------------
 function buildStarfield() {
-  const n = 4000;
-  const positions = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) {
-    const r = STARFIELD_INNER_RADIUS_KM + Math.random() * (STARFIELD_OUTER_RADIUS_KM - STARFIELD_INNER_RADIUS_KM);
-    const phi = Math.random() * Math.PI * 2;
-    const costheta = Math.random() * 2 - 1;
-    const theta = Math.acos(costheta);
-    positions[i * 3] = r * Math.sin(theta) * Math.cos(phi);
-    positions[i * 3 + 1] = r * Math.cos(theta);
-    positions[i * 3 + 2] = r * Math.sin(theta) * Math.sin(phi);
+  const vectors = STAR_CATALOG.v;
+  const positions = new Float32Array(vectors.length);
+  for (let i = 0; i < vectors.length; i += 3) {
+    positions[i] = vectors[i] * STARFIELD_RADIUS_KM;
+    positions[i + 1] = vectors[i + 2] * STARFIELD_RADIUS_KM;
+    positions[i + 2] = -vectors[i + 1] * STARFIELD_RADIUS_KM;
   }
   const geom = new THREE.BufferGeometry();
   geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  const mat = new THREE.PointsMaterial({
-    color: 0xffffff, size: 1.35, sizeAttenuation: false,
-    transparent: true, opacity: 0.9,
+  geom.setAttribute('color', new THREE.BufferAttribute(new Float32Array(STAR_CATALOG.c), 3));
+  geom.setAttribute('starSize', new THREE.BufferAttribute(new Float32Array(STAR_CATALOG.s), 1));
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { pixelRatio: { value: renderer.getPixelRatio() } },
+    vertexShader: `
+      #include <common>
+      #include <logdepthbuf_pars_vertex>
+      uniform float pixelRatio;
+      attribute float starSize;
+      varying vec3 vColor;
+      void main() {
+        vColor = color;
+        gl_PointSize = starSize * pixelRatio;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        #include <logdepthbuf_vertex>
+      }
+    `,
+    fragmentShader: `
+      #include <logdepthbuf_pars_fragment>
+      varying vec3 vColor;
+      void main() {
+        #include <logdepthbuf_fragment>
+        float alpha = 1.0 - smoothstep(0.12, 0.5, length(gl_PointCoord - vec2(0.5)));
+        if (alpha <= 0.01) discard;
+        gl_FragColor = vec4(vColor * alpha, 1.0);
+      }
+    `,
+    vertexColors: true, transparent: false, depthTest: false, depthWrite: false,
   });
   starfield = new THREE.Points(geom, mat);
+  starfield.frustumCulled = false;
+  starfield.renderOrder = -1000;
   scene.add(starfield);
 }
 
@@ -751,6 +1115,8 @@ function buildEarth() {
       sunDirection: { value: sunDirection },
     },
     vertexShader: `
+      #include <common>
+      #include <logdepthbuf_pars_vertex>
       varying vec2 vUv;
       varying vec3 vNormalW;
       varying vec3 vPositionW;
@@ -760,9 +1126,11 @@ function buildEarth() {
         vec4 worldPosition = modelMatrix * vec4(position, 1.0);
         vPositionW = worldPosition.xyz;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        #include <logdepthbuf_vertex>
       }
     `,
     fragmentShader: `
+      #include <logdepthbuf_pars_fragment>
       uniform sampler2D dayTexture;
       uniform sampler2D nightTexture;
       uniform sampler2D specularTexture;
@@ -771,6 +1139,7 @@ function buildEarth() {
       varying vec3 vNormalW;
       varying vec3 vPositionW;
       void main() {
+        #include <logdepthbuf_fragment>
         vec3 normal = normalize(vNormalW);
         float NdotL = dot(normal, normalize(sunDirection));
         // Keep the dark side visually stable: a narrow physical terminator,
@@ -803,6 +1172,9 @@ function buildEarth() {
         gl_FragColor = vec4(color, 1.0);
       }
     `,
+    transparent: false,
+    depthTest: true,
+    depthWrite: true,
   });
   earthMesh = new THREE.Mesh(geom, mat);
   scene.add(earthMesh);
@@ -846,6 +1218,8 @@ function buildAtmosphere() {
       sunDirection: { value: sunDirection },
     },
     vertexShader: `
+      #include <common>
+      #include <logdepthbuf_pars_vertex>
       varying vec3 vNormalW;
       varying vec3 vPositionW;
       void main() {
@@ -853,14 +1227,17 @@ function buildAtmosphere() {
         vec4 worldPosition = modelMatrix * vec4(position, 1.0);
         vPositionW = worldPosition.xyz;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        #include <logdepthbuf_vertex>
       }
     `,
     fragmentShader: `
+      #include <logdepthbuf_pars_fragment>
       uniform vec3 glowColor;
       uniform vec3 sunDirection;
       varying vec3 vNormalW;
       varying vec3 vPositionW;
       void main() {
+        #include <logdepthbuf_fragment>
         vec3 normal = normalize(vNormalW);
         vec3 viewDir = normalize(cameraPosition - vPositionW);
         float rim = 1.0 - max(dot(normal, viewDir), 0.0);
@@ -1020,18 +1397,23 @@ function buildCelestialMarkers() {
       nightColor: { value: new THREE.Color(0x222833) },
     },
     vertexShader: `
+      #include <common>
+      #include <logdepthbuf_pars_vertex>
       varying vec3 vNormalW;
       void main() {
         vNormalW = normalize(mat3(modelMatrix) * normal);
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        #include <logdepthbuf_vertex>
       }
     `,
     fragmentShader: `
+      #include <logdepthbuf_pars_fragment>
       uniform vec3 sunDirection;
       uniform vec3 dayColor;
       uniform vec3 nightColor;
       varying vec3 vNormalW;
       void main() {
+        #include <logdepthbuf_fragment>
         vec3 normal = normalize(vNormalW);
         float NdotL = dot(normal, normalize(sunDirection));
         float phase = smoothstep(-0.04, 0.08, NdotL);
@@ -1109,6 +1491,22 @@ function applyOrbitOrientation(obj3d, position, velocity) {
   const { xHat, yHat, zHat } = orbitFrame(position, velocity);
   const m = new THREE.Matrix4().makeBasis(xHat, yHat, zHat);
   obj3d.quaternion.setFromRotationMatrix(m);
+  obj3d.position.copy(position);
+}
+
+// SSAPy-Toolkit quaternions are body-to-GCRF in [w, x, y, z] order. Convert
+// the three body axes through the same ECI-to-scene rotation used for position
+// and velocity, then let Three.js build the scene-frame orientation.
+function applyQuaternionOrientation(obj3d, position, quaternion) {
+  const qEci = new THREE.Quaternion(
+    quaternion.x, quaternion.y, quaternion.z, quaternion.w
+  ).normalize();
+  const basis = new THREE.Matrix4().makeBasis(
+    eciToScene(new THREE.Vector3(1, 0, 0).applyQuaternion(qEci)),
+    eciToScene(new THREE.Vector3(0, 1, 0).applyQuaternion(qEci)),
+    eciToScene(new THREE.Vector3(0, 0, 1).applyQuaternion(qEci)),
+  );
+  obj3d.quaternion.setFromRotationMatrix(basis);
   obj3d.position.copy(position);
 }
 
@@ -1784,6 +2182,72 @@ function computeOrbitPeriodMinutes(satrec) {
   return (2 * Math.PI) / satrec.no;
 }
 
+// Browser-side propagation is deliberately kept behind one small dispatch
+// point. The default remains satellite.js SGP4; the Keplerian option is a
+// two-body interpretation of the TLE mean elements for users who want a
+// different model. State-vector tracks never enter this path.
+function tleStateAtMs(satrec, ms) {
+  if (!satrec) return null;
+  if (ACTIVE_PROPAGATOR === 'sgp4') {
+    const pv = satellite.propagate(satrec, new Date(ms));
+    return pv && pv.position ? pv : null;
+  }
+  if (ACTIVE_PROPAGATOR === 'keplerian') {
+    const elapsedMin = (ms - tleEpochToMs(satrec)) / 60000;
+    const meanMotion = satrec.no_kozai || satrec.no;
+    const meanAnomalyRad = satrec.mo + meanMotion * elapsedMin;
+    const aKm = satrec.a * R_EARTH_KM;
+    const trueAnomalyDeg = meanToTrueAnomalyDeg(meanAnomalyRad * 180 / Math.PI, satrec.ecco);
+    const state = keplerianOrbitState(
+      aKm, satrec.ecco, satrec.inclo * 180 / Math.PI,
+      satrec.nodeo * 180 / Math.PI, satrec.argpo * 180 / Math.PI,
+      trueAnomalyDeg
+    );
+    return { position: sceneToEci(state.position), velocity: sceneToEci(state.velocity) };
+  }
+  return null;
+}
+
+function stateVectorStateAtMs(inst, ms) {
+  const track = inst && inst.stateTrack;
+  if (!track || !Array.isArray(track.t) || !track.t.length) return null;
+  const times = track.t, positions = track.r, velocities = track.v;
+  let i = 0;
+  const atStart = ms <= times[0];
+  const atEnd = ms >= times[times.length - 1];
+  if (atEnd) i = times.length - 1;
+  else if (!atStart) {
+    let lo = 0, hi = times.length - 1;
+    while (lo + 1 < hi) {
+      const mid = (lo + hi) >> 1;
+      if (times[mid] <= ms) lo = mid; else hi = mid;
+    }
+    i = lo;
+  }
+  const j = Math.min(i + 1, times.length - 1);
+  const f = atStart || j === i ? 0 : (ms - times[i]) / (times[j] - times[i]);
+  const lerp = (a, b) => a + (b - a) * f;
+  let quaternion = null;
+  if (Array.isArray(track.q) && track.q.length) {
+    const qa = new THREE.Quaternion(track.q[i][1], track.q[i][2], track.q[i][3], track.q[i][0]);
+    const qb = new THREE.Quaternion(track.q[j][1], track.q[j][2], track.q[j][3], track.q[j][0]);
+    quaternion = new THREE.Quaternion().slerpQuaternions(qa, qb, f).normalize();
+  }
+  return {
+    position: {
+      x: lerp(positions[i][0], positions[j][0]),
+      y: lerp(positions[i][1], positions[j][1]),
+      z: lerp(positions[i][2], positions[j][2]),
+    },
+    velocity: {
+      x: lerp(velocities[i][0], velocities[j][0]),
+      y: lerp(velocities[i][1], velocities[j][1]),
+      z: lerp(velocities[i][2], velocities[j][2]),
+    },
+    quaternion,
+  };
+}
+
 // Builds a Line whose vertices fade from bright (at the head -- the
 // satellite's current position, index 0) to dim along the path, so the
 // orbit reads as DIRECTIONAL at a glance (you can see which way it's
@@ -1811,10 +2275,17 @@ function buildRealOrbitPath(satrec, epochMs, periodMin, color) {
   const steps = 220;
   for (let i = 0; i <= steps; i++) {
     const tMin = (i / steps) * periodMin;
-    const pv = satellite.propagate(satrec, new Date(epochMs + tMin * 60000));
+    const pv = tleStateAtMs(satrec, epochMs + tMin * 60000);
     if (pv && pv.position) pts.push(eciToScene(pv.position));
   }
   return buildGradientOrbitLine(pts, color);
+}
+
+function buildStateVectorOrbitPath(track, color) {
+  const points = (track && Array.isArray(track.r) ? track.r : [])
+    .map(p => eciToScene({ x: p[0], y: p[1], z: p[2] }));
+  if (points.length < 2) return null;
+  return buildGradientOrbitLine(points, color);
 }
 
 // Orbital angular momentum direction (position x velocity) -- stays fixed
@@ -1826,7 +2297,7 @@ function buildRealOrbitPath(satrec, epochMs, periodMin, color) {
 // current TLE, but a orbit line sampled once and never updated doesn't
 // track that).
 function computeOrbitPlaneNormal(satrec, atMs) {
-  const pv = satellite.propagate(satrec, new Date(atMs));
+  const pv = tleStateAtMs(satrec, atMs);
   if (!pv || !pv.position) return null;
   const p = new THREE.Vector3(pv.position.x, pv.position.y, pv.position.z);
   const v = new THREE.Vector3(pv.velocity.x, pv.velocity.y, pv.velocity.z);
@@ -1884,9 +2355,13 @@ function refreshOrbitLineIfNeeded(key) {
 // 'fixed' (JWST/L2) has no meaningful ground track and returns null.
 function eciAtMs(inst, ms) {
   const entry = inst.entry;
+  if (entry.mode === 'state') {
+    const pv = stateVectorStateAtMs(inst, ms);
+    return pv ? pv.position : null;
+  }
   if (entry.mode === 'tle') {
     if (!inst.satrec) return null;
-    const pv = satellite.propagate(inst.satrec, new Date(ms));
+    const pv = tleStateAtMs(inst.satrec, ms);
     return (pv && pv.position) ? pv.position : null;
   }
   if (entry.mode === 'keplerian') {
@@ -1915,7 +2390,7 @@ function subSatellitePointLocal(eci, gmst, surfaceR) {
 // further into the past. Span is one orbital period, capped so very long
 // orbits don't paint an unreadably long near-stationary smear.
 function buildGroundTrackLine(inst) {
-  if (!inst || (inst.entry.mode !== 'tle' && inst.entry.mode !== 'keplerian')) return null;
+  if (!inst || (inst.entry.mode !== 'tle' && inst.entry.mode !== 'keplerian' && inst.entry.mode !== 'state')) return null;
   const nowMs = getCurrentSimMs();
   const spanMin = Math.min(inst.periodMin || 95, GROUND_TRACK_MAX_SPAN_MIN);
   const pts = [];
@@ -1933,7 +2408,7 @@ function buildGroundTrackLine(inst) {
 }
 
 function attachGroundTrack(inst) {
-  if (!inst || inst.entry.mode === 'fixed') return; // no ground track for the illustrative L2 point
+  if (!inst || inst.entry.mode === 'fixed' || inst.entry.mode === 'metadata') return; // no ground track for non-orbital entries
   if (!inst.groundTrackLine) {
     const line = buildGroundTrackLine(inst);
     if (line) { inst.groundTrackLine = line; earthMesh.add(line); }
@@ -1968,6 +2443,28 @@ function setGroundTracksEnabled(on) {
   groundTracksEnabled = on;
   for (const inst of activeSatellites.values()) {
     if (on) attachGroundTrack(inst); else detachGroundTrack(inst);
+  }
+}
+
+function setQuaternionAttitudeEnabled(on) {
+  quaternionAttitudeEnabled = Boolean(on);
+  updateAllActiveSatellitePositions();
+}
+
+function refreshAttitudeControl() {
+  const toggle = document.getElementById('attitude-toggle');
+  if (!toggle) return;
+  const available = [...activeSatellites.values()].some(inst =>
+    inst.entry.mode === 'state' && inst.stateTrack &&
+    Array.isArray(inst.stateTrack.q) && inst.stateTrack.q.length
+  );
+  toggle.disabled = !available;
+  toggle.title = available
+    ? 'Use supplied body-to-GCRF quaternions when state-vector data includes q=[w,x,y,z].'
+    : 'Quaternion attitude is available when state-vector data includes q=[w,x,y,z].';
+  if (!available) {
+    toggle.checked = false;
+    quaternionAttitudeEnabled = false;
   }
 }
 
@@ -2039,7 +2536,7 @@ function refineConjunction(instA, instB, tCoarseMs, stepMs) {
 // a widened gate is then refined to a true TCA; those under threshold are kept.
 function screenConjunctions() {
   const entries = [...activeSatellites.entries()].filter(
-    ([, i]) => i.entry.mode === 'tle' || i.entry.mode === 'keplerian');
+    ([, i]) => i.entry.mode === 'tle' || i.entry.mode === 'keplerian' || i.entry.mode === 'state');
   const n = entries.length;
   conjunctionEvents = [];
   if (n < 2) return { status: 'need_more' };
@@ -2260,7 +2757,7 @@ function visibilityAt(inst, t, mask) {
 
 function computePasses(targetKey, windowHours) {
   const inst = activeSatellites.get(targetKey);
-  if (!inst || (inst.entry.mode !== 'tle' && inst.entry.mode !== 'keplerian')) return { status: 'bad_target' };
+  if (!inst || (inst.entry.mode !== 'tle' && inst.entry.mode !== 'keplerian' && inst.entry.mode !== 'state')) return { status: 'bad_target' };
   if (!observerGd) return { status: 'no_site' };
   passTargetKey = targetKey;
   passEvents = [];
@@ -2374,7 +2871,7 @@ function refreshPassTargetOptions() {
   if (!sel) return;
   const prev = sel.value;
   const opts = [...activeSatellites.entries()]
-    .filter(([, i]) => i.entry.mode === 'tle' || i.entry.mode === 'keplerian')
+    .filter(([, i]) => i.entry.mode === 'tle' || i.entry.mode === 'keplerian' || i.entry.mode === 'state')
     .map(([k, i]) => `<option value="${k}">${escapeHtml(i.entry.name)}</option>`);
   sel.innerHTML = opts.join('') || '<option value="">(no propagatable satellites)</option>';
   if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
@@ -2679,6 +3176,7 @@ function addSatellite(key, explicitEntry) {
   if (activeSatellites.has(key)) return; // already active, nothing to do
   const entry = explicitEntry || SATELLITE_CATALOG[key];
   if (!entry) return;
+  if (entry.mode === 'metadata') return 'metadata';
   if (activeSatellites.size >= MAX_ACTIVE_SATELLITES) {
     console.warn(`Not adding ${entry.name}: at the ${MAX_ACTIVE_SATELLITES}-satellite limit. Remove one first.`);
     return false;
@@ -2703,6 +3201,16 @@ function addSatellite(key, explicitEntry) {
     r0 = illustrativeDistKm;
     framingR = illustrativeDistKm;
     inst.periodMin = null;
+  } else if (entry.mode === 'state') {
+    inst.stateTrack = entry.stateVector;
+    const pv0 = stateVectorStateAtMs(inst, getCurrentSimMs());
+    if (!pv0) return false;
+    inst.periodMin = inst.stateTrack.t.length > 1
+      ? (inst.stateTrack.t[inst.stateTrack.t.length - 1] - inst.stateTrack.t[0]) / 60000
+      : null;
+    if (wantOrbitLine) inst.orbitLine = buildStateVectorOrbitPath(inst.stateTrack, 0xffffff);
+    r0 = Math.hypot(pv0.position.x, pv0.position.y, pv0.position.z);
+    framingR = Math.max(...inst.stateTrack.r.map(p => Math.hypot(p[0], p[1], p[2])));
   } else if (entry.mode === 'tle') {
     const satrec = satellite.twoline2satrec(entry.tle1, entry.tle2);
     inst.satrec = satrec;
@@ -2719,25 +3227,25 @@ function addSatellite(key, explicitEntry) {
       inst.lastOrbitDrawMs = drawMs;
       inst.lastOrbitPlaneNormal = computeOrbitPlaneNormal(satrec, drawMs);
     }
-    const pv0 = satellite.propagate(satrec, new Date(drawMs));
+    const pv0 = tleStateAtMs(satrec, drawMs);
+    if (!pv0) return false;
     r0 = Math.sqrt(pv0.position.x ** 2 + pv0.position.y ** 2 + pv0.position.z ** 2);
     framingR = r0; // near-circular in practice for every TLE-driven entry here, so r0 alone frames it fine
   } else {
     // 'keplerian' -- full eccentric-orbit propagation (see keplerianOrbitState
-    // / meanToTrueAnomalyDeg above). Sampling true anomaly via the Kepler
-    // solver (not a naive linear sweep) means the drawn path is the real
-    // ellipse shape, including for Chandra/TESS's very elongated orbits.
+    // / meanToTrueAnomalyDeg above). The moving satellite advances in mean
+    // anomaly (time), but the static display path uses uniform true anomaly so
+    // highly eccentric orbits do not turn into a few long chords at perigee.
     inst.periodMin = keplerianPeriodMinutes(entry.a);
     inst.keplerianEpochMs = getCurrentSimMs(); // idealized orbit, not tied to a real historical epoch -- mean anomaly = 0 (perigee) at the moment you add it, by convention
     if (wantOrbitLine) {
     const pts = [];
-    for (let m = 0; m <= 360; m += 2) {
-      const nuDeg = meanToTrueAnomalyDeg(m, entry.e);
+    for (let nuDeg = 0; nuDeg <= 360; nuDeg += 2) {
       pts.push(keplerianOrbitState(entry.a, entry.e, entry.inc, entry.raan, entry.argPerigee, nuDeg).position);
     }
     const geom = new THREE.BufferGeometry().setFromPoints(pts);
-    // Uniform (not gradient) on purpose: this path is sampled by mean
-    // anomaly from perigee, NOT from the satellite's current position like
+    // Uniform (not gradient) on purpose: this path starts at perigee,
+    // NOT from the satellite's current position like
     // the TLE path is, so a head-fade keyed to vertex 0 would brighten at
     // perigee instead of at the satellite -- misleading. Uniform is honest here.
     inst.orbitLine = new THREE.Line(geom, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 }));
@@ -2780,6 +3288,7 @@ function addSatellite(key, explicitEntry) {
 
   activeSatellites.set(key, inst);
   updateOneSatellitePosition(key); // position immediately, don't wait for the next animate() frame
+  refreshAttitudeControl();
   if (groundTracksEnabled) attachGroundTrack(inst); // honor the toggle for satellites added while it's on
   return true;
 }
@@ -2794,6 +3303,7 @@ function removeSatellite(key) {
   if (inst.orbitLine) scene.remove(inst.orbitLine);
   if (inst.labelEl && inst.labelEl.parentNode) inst.labelEl.parentNode.removeChild(inst.labelEl);
   activeSatellites.delete(key);
+  refreshAttitudeControl();
 }
 
 // Frames the camera to fit whichever active orbit is largest, so adding a
@@ -2850,10 +3360,12 @@ function updateOneSatellitePosition(key) {
     return;
   }
 
-  if (entry.mode === 'tle') {
-    if (!inst.satrec) return;
+  if (entry.mode === 'tle' || entry.mode === 'state') {
+    if (entry.mode === 'tle' && !inst.satrec) return;
     const nowMs = getCurrentSimMs();
-    const pv = satellite.propagate(inst.satrec, new Date(nowMs));
+    const pv = entry.mode === 'state'
+      ? stateVectorStateAtMs(inst, nowMs)
+      : tleStateAtMs(inst.satrec, nowMs);
     if (!pv || !pv.position) return;
     const pos = eciToScene(pv.position);
     const vel = eciToScene(pv.velocity);
@@ -2868,7 +3380,11 @@ function updateOneSatellitePosition(key) {
     inst.liveLatDeg = g.latDeg;
     inst.liveLonDeg = g.lonDeg;
     inst.liveSpeedKmS = vel.length();
-    applyOrbitOrientation(inst.model, pos, vel);
+    if (quaternionAttitudeEnabled && pv.quaternion) {
+      applyQuaternionOrientation(inst.model, pos, pv.quaternion);
+    } else {
+      applyOrbitOrientation(inst.model, pos, vel);
+    }
   } else {
     // 'keplerian': mean anomaly advances at a constant rate by definition;
     // converting through the Kepler solver to true anomaly is what makes
@@ -2903,6 +3419,7 @@ function updateAllActiveSatellitePositions() {
 // behind the planet.
 const _labelProjV = new THREE.Vector3();
 function updateLabels() {
+  if (!labelsEnabled) return;
   const w = renderer.domElement.clientWidth;
   const h = renderer.domElement.clientHeight;
   const camPos = camera.position;
@@ -2972,6 +3489,21 @@ function updateLabels() {
   }
 }
 
+function setLabelsEnabled(on) {
+  labelsEnabled = Boolean(on);
+  const layer = document.getElementById('label-layer');
+  const toggle = document.getElementById('labels-toggle');
+  if (layer) layer.style.display = labelsEnabled ? '' : 'none';
+  if (toggle) {
+    toggle.textContent = labelsEnabled ? 'Hide labels' : 'Show labels';
+    toggle.setAttribute('aria-pressed', String(labelsEnabled));
+  }
+  if (labelsEnabled) {
+    _labelsDecluttered = false;
+    updateLabels();
+  }
+}
+
 let lastOrbitRefreshCheckMs = 0;
 function refreshAllOrbitLinesIfNeeded() {
   const nowPerf = performance.now();
@@ -3006,6 +3538,18 @@ function updateInfoPanel() {
         ? `<div class="sat-info-line"><b>${name}</b> -- ~1.5M km (illustrative)</div>`
         : `<div class="sat-info-block"><b>${name}</b><br>distance ~1.5 million km (real) &middot; illustrative position<br>` +
           `<span style="opacity:0.7">${escapeHtml(entry.note)}</span></div>`);
+    } else if (entry.mode === 'metadata') {
+      blocks.push(compact
+        ? `<div class="sat-info-line"><b>${name}</b> -- DISCOS metadata only</div>`
+        : `<div class="sat-info-block"><b>${name}</b><br>DISCOS metadata only; no TLE or state vector is available for plotting.<br>` +
+          `<span style="opacity:0.7">${escapeHtml(entry.note)}</span></div>`);
+    } else if (entry.mode === 'state') {
+      const altKm = inst.liveAltKm == null ? 'n/a' : inst.liveAltKm.toFixed(0);
+      const sampleCount = entry.stateVector && entry.stateVector.t ? entry.stateVector.t.length : 0;
+      blocks.push(compact
+        ? `<div class="sat-info-line"><b>${name}</b> -- alt ${altKm} km &middot; state vectors</div>`
+        : `<div class="sat-info-block"><b>${name}</b><br>alt ${altKm} km &middot; ${sampleCount} supplied state-vector samples<br>` +
+          `<span style="opacity:0.7">${escapeHtml(entry.note)}</span></div>`);
     } else {
       const altKm = (inst.r0 - R_EARTH_KM).toFixed(0);
       // TLE staleness: a TLE describes one epoch, and propagation error grows
@@ -3038,6 +3582,14 @@ function updateInfoPanel() {
 function setupAnalysisControls() {
   const gt = document.getElementById('ground-track-toggle');
   if (gt) gt.addEventListener('change', () => setGroundTracksEnabled(gt.checked));
+  const attitude = document.getElementById('attitude-toggle');
+  if (attitude) attitude.addEventListener('change', () => setQuaternionAttitudeEnabled(attitude.checked));
+  refreshAttitudeControl();
+  const labels = document.getElementById('labels-toggle');
+  if (labels) {
+    labels.addEventListener('click', () => setLabelsEnabled(!labelsEnabled));
+    setLabelsEnabled(true);
+  }
 
   const screenBtn = document.getElementById('conj-screen-btn');
   const winInput = document.getElementById('conj-window');
@@ -3149,6 +3701,7 @@ function animate() {
     camTarget.z + camDist * Math.sin(camPhi) * Math.sin(camTheta)
   );
   camera.lookAt(camTarget);
+  if (starfield) starfield.position.copy(camera.position);
 
   const simDate = new Date(getCurrentSimMs());
   sunDirection.copy(eciToScene(computeSunDirectionEci(simDate)));
@@ -3162,8 +3715,6 @@ function animate() {
     if (clockEl) clockEl.textContent = simDate.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
     lastClockDisplayUpdateMs = performance.now();
   }
-
-  if (starfield) starfield.rotation.y += 0.00001;
   updateAllActiveSatellitePositions();
   updateSubPointMarkers();       // frame-exact nadir dots (cheap)
   updateEclipseShading();        // darken satellites inside Earth's shadow (throttled)

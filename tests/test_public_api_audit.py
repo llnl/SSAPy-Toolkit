@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 import matplotlib
@@ -582,6 +583,38 @@ def test_plot_utility_and_scene_primitive_wrappers(monkeypatch, tmp_path):
     assert len(fig.data) == 1
 
 
+def test_satellite_viewer_catalog_payload(monkeypatch):
+    from datetime import datetime
+
+    from ssapy_toolkit.plots import build_satellite_viewer as builder
+    from ssapy_toolkit.plots import starfield
+
+    def fake_directions(**kwargs):
+        assert kwargs == {
+            "mag_limit": 6.5,
+            "when": datetime(2026, 1, 2, 3, 4, 5),
+            "frame": "gcrf",
+        }
+        return (
+            np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]),
+            np.array([0.0, 6.0]),
+            np.array([[1.0, 0.5, 0.25], [0.2, 0.4, 1.0]]),
+        )
+
+    monkeypatch.setattr(starfield, "star_directions", fake_directions)
+    catalog = builder.load_star_catalog(when=datetime(2026, 1, 2, 3, 4, 5))
+
+    assert catalog["epoch"] == "2026-01-02T03:04:05Z"
+    assert catalog["frame"] == "gcrf-of-date"
+    assert catalog["v"] == [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+    assert catalog["c"] == [1.0, 0.5, 0.25, 0.14, 0.28, 0.7]
+    assert catalog["s"] == [4.8, 1.92]
+
+    monkeypatch.setattr(starfield, "star_directions", lambda **kwargs: None)
+    with pytest.raises(FileNotFoundError, match="bright_stars.csv"):
+        builder.load_star_catalog(when=datetime(2026, 1, 2))
+
+
 def test_satellite_viewer_builder_helpers(monkeypatch, tmp_path):
     from ssapy_toolkit.plots import build_satellite_viewer as builder
 
@@ -594,12 +627,95 @@ def test_satellite_viewer_builder_helpers(monkeypatch, tmp_path):
         builder.find_input("missing.txt")
 
     monkeypatch.setattr(builder, "load_textures", lambda: {key: f"{key}_b64" for key in ("day", "night", "specular", "clouds")})
+    catalog = {
+        "epoch": "2025-01-01T00:00:00Z",
+        "frame": "gcrf-of-date",
+        "v": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+        "c": [1.0, 0.5, 0.2, 0.2, 0.5, 1.0],
+        "s": [6.5, 4.0],
+    }
+    monkeypatch.setattr(builder, "load_star_catalog", lambda: catalog)
+    database = [{"name": "TEST SAT", "line1": "1 " + "0" * 67, "line2": "2 " + "0" * 67}]
+    monkeypatch.setattr(builder, "load_satellite_database", lambda path=None: database)
     monkeypatch.setattr(builder, "text", lambda filename: f"/* {filename} */")
     out = tmp_path / "viewer.html"
     assert builder.build(out_path=out, verbose=False) == out
     built = out.read_text(encoding="utf-8")
     assert "__SCENE_JS__" not in built
     assert "day_b64" in built
+    assert '"frame":"gcrf-of-date"' in built
+    assert '"v":[1.0,0.0,0.0,0.0,1.0,0.0]' in built
+    assert '"name":"TEST SAT"' in built
+    assert 'id="attitude-toggle"' in built
+    assert 'id="labels-toggle"' in built
+
+
+def test_satellite_viewer_accepts_ragged_time_tracks():
+    from astropy.time import Time
+    from ssapy_toolkit.plots import build_satellite_viewer as builder
+
+    r = [
+        np.array([[7_000_000.0, 0.0, 0.0], [0.0, 7_000_000.0, 0.0]]),
+        np.array([
+            [8_000_000.0, 0.0, 0.0],
+            [0.0, 8_000_000.0, 0.0],
+            [-8_000_000.0, 0.0, 0.0],
+        ]),
+    ]
+    v = [
+        np.array([[0.0, 7_500.0, 0.0], [-7_500.0, 0.0, 0.0]]),
+        np.array([
+            [0.0, 6_500.0, 0.0],
+            [-6_500.0, 0.0, 0.0],
+            [0.0, -6_500.0, 0.0],
+        ]),
+    ]
+    t = [np.array([0.0, 1.0]), np.array([2.0, 3.0, 4.0])]
+
+    tracks = builder._prepare_state_vectors(r, v, t)
+
+    assert [len(track["t"]) for track in tracks] == [2, 3]
+    np.testing.assert_allclose(tracks[0]["t"], Time(t[0], format="gps").unix * 1000.0)
+    np.testing.assert_allclose(tracks[1]["t"], Time(t[1], format="gps").unix * 1000.0)
+
+
+def test_satellite_viewer_accepts_body_to_gcrf_quaternions(monkeypatch):
+    from ssapy_toolkit.plots import build_satellite_viewer as builder
+
+    captured = {}
+
+    def fake_build(**kwargs):
+        captured.update(kwargs)
+        return "viewer.html"
+
+    monkeypatch.setattr(builder, "build", fake_build)
+    builder.satellite_viewer(
+        r=np.array([[7_000_000.0, 0.0, 0.0], [0.0, 7_000_000.0, 0.0]]),
+        v=np.array([[0.0, 7_500.0, 0.0], [-7_500.0, 0.0, 0.0]]),
+        t=np.array([0.0, 1.0]),
+        q=np.array([[2.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 2.0]]),
+        verbose=False,
+    )
+
+    track = captured["state_vectors"][0]
+    assert track["q"] == [[1.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]]
+
+
+def test_satellite_viewer_database_uses_ssatk_data(monkeypatch, tmp_path):
+    from ssapy_toolkit.io import tle_updater
+    from ssapy_toolkit.plots import build_satellite_viewer as builder
+
+    monkeypatch.setattr(tle_updater.os.path, "expanduser", lambda path: str(tmp_path))
+    legacy_dir = tmp_path / "ssatk_data"
+    legacy_dir.mkdir()
+    expected = [{"name": "TEST SAT", "line1": "line 1", "line2": "line 2"}]
+    (legacy_dir / "ssapy_satellites.json").write_text(json.dumps(expected), encoding="utf-8")
+
+    database_path = tle_updater._data_file("ssapy_satellites.json")
+    assert database_path == str(legacy_dir / "ssapy_satellites.json")
+
+    monkeypatch.setattr(tle_updater, "SATELLITES_JSON", database_path)
+    assert builder.load_satellite_database() == expected
 
 
 def test_groundtrack_enhanced_core_helpers(monkeypatch, tmp_path):

@@ -46,9 +46,48 @@ function assert(cond, msg) { if (!cond) { console.error('FAIL:', msg); process.e
     hasEarth: !!earthMesh,
   }));
   assert(base.catalog === 21, `catalog should be 21, got ${base.catalog}`);
-  assert(base.active === 4, `four demo satellites active by default, got ${base.active}`);
+  assert(base.active === 1, `only ISS should be active by default, got ${base.active}`);
   assert(/ISS/.test(base.defaultName), `default should be ISS, got ${base.defaultName}`);
   assert(base.hasEarth, 'earthMesh missing');
+
+  // --- Database formats -----------------------------------------------------
+  const formats = await page.evaluate(() => {
+    const iss = SATELLITE_CATALOG.iss;
+    const csv = parseCsvDatabase(
+      `name,line1,line2\n"ISS, ZARYA","${iss.tle1}","${iss.tle2}"\n`
+    );
+    const dataset = value => ({ value });
+    const group = (name, entries) => ({
+      name, keys: Object.keys(entries), get: key => entries[key],
+    });
+    const h5 = hdf5RecordsFromGroup(group('/', {
+      catalog: group('/catalog', {
+        name: dataset(['ISS']), line1: dataset([iss.tle1]), line2: dataset([iss.tle2]),
+      }),
+      unrelated: { get dtype() { throw new Error('unsupported HDF5 datatype'); } },
+    }));
+    const compound = hdf5RecordsFromGroup(group('/', {
+      catalog: {
+        dtype: ['COMPOUND', 160, [
+          { name: 'name', offset: 0, dtype: 'S20' },
+          { name: 'line1', offset: 20, dtype: 'S70' },
+          { name: 'line2', offset: 90, dtype: 'S70' },
+        ]],
+        value: [{ name: 'ISS TABLE  \0\0', line1: iss.tle1, line2: iss.tle2 }],
+      },
+    }));
+    return {
+      csv: normalizeSatelliteRecord(csv[0]),
+      h5: normalizeSatelliteRecord(h5[0]),
+      compound: normalizeSatelliteRecord(compound[0]),
+      hdf5ReaderLoaded: typeof hdf5.File === 'function',
+    };
+  });
+  assert(formats.csv && formats.csv.name === 'ISS, ZARYA', 'quoted CSV record did not normalize');
+  assert(formats.h5 && formats.h5.name === 'ISS', 'HDF5 column record did not normalize');
+  assert(formats.compound && formats.compound.name === 'ISS TABLE',
+    'HDF5 compound record did not normalize');
+  assert(formats.hdf5ReaderLoaded, 'jsfive HDF5 reader was not embedded');
 
   // --- Ground tracks --------------------------------------------------------
   await page.click('#ground-track-toggle');

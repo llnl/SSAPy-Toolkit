@@ -1,4 +1,7 @@
 import importlib
+import json
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -196,12 +199,32 @@ def test_satellite_viewer_scene_uses_physical_sun_moon_defaults():
     assert "const MOON_RENDER_DISTANCE_KM = MOON_MEAN_DISTANCE_KM;" in scene
     assert "const MOON_RENDER_RADIUS_KM = R_MOON_KM;" in scene
     assert "logarithmicDepthBuffer: true" in scene
-    default_keys = "const DEFAULT_DEMO_SATELLITES = ['iss', 'gps', 'weather_goes', 'cislunar_demo'];"
-    assert default_keys in scene
+    assert "const DEFAULT_DEMO_SATELLITES = EMBEDDED_STATE_VECTOR_TRACKS.length" in scene
+    assert "? Object.keys(STATE_VECTOR_CATALOG) : ['iss'];" in scene
     assert "name: 'Cislunar orbit demo'" in scene
     assert "const SATELLITE_GLYPH_SIZE_KM = 900;" in scene
     assert "const modelSize = SATELLITE_GLYPH_SIZE_KM;" in scene
     assert "framingR * 0.11" not in scene
+
+    keplerian_path = scene.split("// 'keplerian'", 1)[1].split(
+        "const state0", 1
+    )[0]
+    assert "for (let nuDeg = 0; nuDeg <= 360; nuDeg += 2)" in keplerian_path
+    assert "meanToTrueAnomalyDeg(m, entry.e)" not in keplerian_path
+
+    starfield = scene.split("function buildStarfield()", 1)[1].split(
+        "// ---------------------------------------------------------------------------", 1
+    )[0]
+    assert "STAR_CATALOG.v" in starfield
+    assert "STAR_CATALOG.c" in starfield
+    assert "STAR_CATALOG.s" in starfield
+    assert "Math.random" not in starfield
+    assert "STARFIELD_INNER_RADIUS_KM" not in scene
+    assert "STARFIELD_OUTER_RADIUS_KM" not in scene
+    assert "starfield.rotation" not in scene
+    assert "depthTest: false" in starfield
+    assert "starfield.frustumCulled = false" in starfield
+    assert "starfield.renderOrder = -1000" in starfield
 
 
 def test_satellite_viewer_texture_fallback_without_packaged_assets(monkeypatch):
@@ -222,3 +245,66 @@ def test_satellite_viewer_texture_fallback_without_packaged_assets(monkeypatch):
 
     assert set(textures) == {"day", "night", "specular", "clouds"}
     assert all(isinstance(value, str) and len(value) > 20 for value in textures.values())
+
+
+def test_satellite_viewer_loads_csv_and_hdf5_databases(tmp_path):
+    import h5py
+
+    module = importlib.import_module("ssapy_toolkit.plots.build_satellite_viewer")
+    line1 = "1 25544U 98067A   26133.42450843  .00004829  00000+0  95080-4 0  9993"
+    line2 = "2 25544  51.6310 112.1825 0007522  54.1994 305.9693 15.49203550566361"
+
+    csv_path = tmp_path / "satellites.csv"
+    csv_path.write_text(
+        f'name,line1,line2\n"ISS, ZARYA","{line1}","{line2}"\n',
+        encoding="utf-8",
+    )
+    assert module.load_satellite_database(csv_path) == [
+        {"name": "ISS, ZARYA", "line1": line1, "line2": line2}
+    ]
+
+    h5_path = tmp_path / "satellites.h5"
+    with h5py.File(h5_path, "w") as handle:
+        columns = handle.create_group("columns")
+        strings = h5py.string_dtype("utf-8")
+        columns.create_dataset("name", data=["ISS"], dtype=strings)
+        columns.create_dataset("line1", data=[line1], dtype=strings)
+        columns.create_dataset("line2", data=[line2], dtype=strings)
+        compound = np.array(
+            [(b"ISS COMPOUND", line1.encode(), line2.encode())],
+            dtype=[("OBJECT_NAME", "S32"), ("TLE_LINE1", "S80"), ("TLE_LINE2", "S80")],
+        )
+        handle.create_dataset("compound", data=compound)
+        handle.create_dataset("scalar_compound", data=compound[0])
+
+    records = module.load_satellite_database(h5_path)
+    assert {record["name"] for record in records if "name" in record} == {"ISS"}
+    assert {record["OBJECT_NAME"] for record in records if "OBJECT_NAME" in record} == {"ISS COMPOUND"}
+    assert len(records) == 3
+    assert all(record.get("line1", record.get("TLE_LINE1")) == line1 for record in records)
+    assert all(record.get("line2", record.get("TLE_LINE2")) == line2 for record in records)
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is required to exercise the browser HDF5 reader")
+    assert node is not None
+    assert module.__file__ is not None
+    reader = Path(module.__file__).with_name("hdf5.js")
+    script = """
+const fs = require('fs');
+const vm = require('vm');
+vm.runInThisContext(fs.readFileSync(process.argv[1], 'utf8'));
+const bytes = fs.readFileSync(process.argv[2]);
+const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+const rows = new hdf5.File(buffer).get('compound').value;
+process.stdout.write(JSON.stringify(rows));
+"""
+    result = subprocess.run(
+        [node, "-e", script, str(reader), str(h5_path)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert json.loads(result.stdout) == [
+        {"OBJECT_NAME": "ISS COMPOUND", "TLE_LINE1": line1, "TLE_LINE2": line2}
+    ]
