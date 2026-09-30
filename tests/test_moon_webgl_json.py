@@ -26,6 +26,51 @@ def _gdo_payload():
     }
 
 
+def test_cache_and_server_helpers_work_offline(monkeypatch, tmp_path):
+    monkeypatch.setenv("SSAPY_TOOLKIT_CACHE", str(tmp_path))
+    assert MODULE.cache_dir() == str(tmp_path)
+
+    for name in MODULE._THREE_FILES:
+        (tmp_path / name).write_bytes(b"runtime")
+    assert MODULE.ensure_three(download=False) == {
+        name: f"/cache/{name}" for name in MODULE._THREE_FILES
+    }
+
+    meta = {"n_az": 16}
+    (tmp_path / "moon_albedo.jpg").write_bytes(b"albedo")
+    (tmp_path / "moon_normal.png").write_bytes(b"normal")
+    (tmp_path / "moon_horizon_meta.json").write_text(
+        json.dumps(meta), encoding="utf-8"
+    )
+    for index in range(meta["n_az"] // 4):
+        (tmp_path / f"moon_horizon_{index}.png").write_bytes(b"horizon")
+    assert MODULE.find_moon_cache() == (str(tmp_path), meta)
+
+    html_path = tmp_path / "moon.html"
+    html_path.write_text("moon", encoding="utf-8")
+    calls = {}
+
+    class Server:
+        def __init__(self, address, handler):
+            calls["address"] = address
+            self.server_address = (address[0], 4321)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def serve_forever(self):
+            calls["served"] = True
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(MODULE.socketserver, "TCPServer", Server)
+    MODULE.show(html_path, open_browser=False)
+
+    assert calls == {"address": ("127.0.0.1", 0), "served": True}
+
+
 def test_load_gdo_orbit_set_defaults_xyz_to_moon_centered_km(tmp_path):
     path = tmp_path / "gdo.json"
     path.write_text(json.dumps(_gdo_payload()), encoding="utf-8")
