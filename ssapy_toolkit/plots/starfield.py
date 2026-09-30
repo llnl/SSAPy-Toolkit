@@ -343,6 +343,33 @@ def star_directions(mag_limit=6.5, when=None, frame="gcrf"):
     return None if s is None else (s['v'], s['mag'], s['rgb'])
 
 
+def moon_fixed_webgl_stars(mag_limit=7.0, radius_km=4.0e6,
+                           epoch="1980-01-01T00:00:00"):
+    """Return compact WebGL star arrays in the Moon-centred rotating frame."""
+    from astropy.time import Time
+    from ssapy.body import MoonPosition
+
+    catalogue = star_directions(mag_limit=mag_limit, frame="gcrf")
+    if catalogue is None:
+        return None
+    v, mag, rgb = (np.asarray(value, float) for value in catalogue)
+    t = np.atleast_1d(Time(epoch, scale="tt").gps)
+    moon = MoonPosition()
+    r_moon = np.squeeze(moon(t).T)
+    v_moon = np.squeeze(moon(t + 5.0).T) - np.squeeze(moon(t - 5.0).T)
+    x_hat = r_moon / np.linalg.norm(r_moon)
+    z_hat = np.cross(r_moon, v_moon)
+    z_hat /= np.linalg.norm(z_hat)
+    y_hat = np.cross(z_hat, x_hat)
+    positions = (v @ np.vstack([x_hat, y_hat, z_hat]).T) * radius_km
+    brightness = np.clip(1.60 - 0.15 * mag, 0.16, 1.0)
+    return {
+        "p": positions.astype(np.float32).ravel().round(0).tolist(),
+        "c": np.clip(rgb * brightness[:, None], 0, 1).round(3).ravel().tolist(),
+        "s": np.clip(4.8 - 0.48 * mag, 1.0, 6.5).round(2).tolist(),
+    }
+
+
 # ===========================================================================
 # Plotly
 # ===========================================================================

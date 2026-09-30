@@ -29,6 +29,7 @@ DEMO_MODULES = {
     "demo_kepler_vs_harmonics": "demos.orbital_mechanics.demo_kepler_vs_harmonics",
     "demo_magfield_plot": "demos.space_environment.demo_magfield_plot",
     "demo_moon_plot": "demos.orbit_visualization.demo_moon_plot",
+    "demo_moon_webgl": "demos.orbit_visualization.demo_moon_webgl",
     "demo_orbital_stats_dashboard": "demos.analysis_dashboards.demo_orbital_stats_dashboard",
     "demo_parsing_3le": "demos.getting_started.demo_parsing_3le",
     "demo_photometry_application": "demos.photometry.demo_photometry_application",
@@ -270,6 +271,14 @@ def test_demo_moon_plot():
     out = demo_moon_plot(make_figures=False, fast=True)
     assert out["r"].shape[1] == 3
     assert out["figures_created"] is False
+
+
+def test_demo_moon_webgl():
+    demo_moon_webgl = demo_main("demo_moon_webgl")
+    out = demo_moon_webgl(make_figures=False, fast=True)
+    assert out["r"].shape == (180, 3)
+    assert out["html"] is None
+    assert out["skipped"] is True
 
 
 def test_demo_orbital_stats_dashboard():
