@@ -29,9 +29,6 @@ def main(make_figures=None, fast=None):
         make_figures = not UNDER_PYTEST
     if fast is None:
         fast = UNDER_PYTEST
-    if UNDER_PYTEST:
-        make_figures = False
-
     epoch = Time("2025-01-01T00:00:00", scale="utc")
     orbit = Orbit.fromKeplerianElements(
         a=MOON_RADIUS + 1_000_000.0,
@@ -68,7 +65,7 @@ def main(make_figures=None, fast=None):
                 save_path=html_path,
             )
             print(f"Saved: {html_path}")
-        except SystemExit as exc:
+        except FileNotFoundError as exc:
             # The high-resolution baked maps are optional local data. Keep the
             # gallery run alive and report the exact preparation instructions.
             html_path = None

@@ -273,12 +273,21 @@ def test_demo_moon_plot():
     assert out["figures_created"] is False
 
 
-def test_demo_moon_webgl():
+def test_demo_moon_webgl(monkeypatch, tmp_path):
     demo_moon_webgl = demo_main("demo_moon_webgl")
-    out = demo_moon_webgl(make_figures=False, fast=True)
+    output = tmp_path / "moon.html"
+
+    def write_page(**kwargs):
+        output.write_text("moon", encoding="utf-8")
+        return str(output)
+
+    monkeypatch.setitem(demo_moon_webgl.__globals__, "figpath", lambda path: str(output))
+    monkeypatch.setitem(demo_moon_webgl.__globals__, "moon_webgl", write_page)
+    out = demo_moon_webgl(make_figures=True, fast=True)
     assert out["r"].shape == (180, 3)
-    assert out["html"] is None
-    assert out["skipped"] is True
+    assert out["html"] == str(output)
+    assert output.is_file()
+    assert out["skipped"] is False
 
 
 def test_demo_orbital_stats_dashboard():

@@ -343,8 +343,7 @@ def star_directions(mag_limit=6.5, when=None, frame="gcrf"):
     return None if s is None else (s['v'], s['mag'], s['rgb'])
 
 
-def moon_fixed_webgl_stars(mag_limit=7.0, radius_km=4.0e6,
-                           epoch="1980-01-01T00:00:00"):
+def moon_fixed_webgl_stars(mag_limit=7.0, radius_km=4.0e6, epoch=None):
     """Return compact WebGL star arrays in the Moon-centred rotating frame."""
     from astropy.time import Time
     from ssapy.body import MoonPosition
@@ -353,7 +352,13 @@ def moon_fixed_webgl_stars(mag_limit=7.0, radius_km=4.0e6,
     if catalogue is None:
         return None
     v, mag, rgb = (np.asarray(value, float) for value in catalogue)
-    t = np.atleast_1d(Time(epoch, scale="tt").gps)
+    if epoch is None:
+        epoch = Time.now()
+    elif isinstance(epoch, (int, float, np.integer, np.floating)):
+        epoch = Time(epoch, format="gps")
+    else:
+        epoch = Time(epoch, scale="tt")
+    t = np.atleast_1d(epoch.gps)
     moon = MoonPosition()
     r_moon = np.squeeze(moon(t).T)
     v_moon = np.squeeze(moon(t + 5.0).T) - np.squeeze(moon(t - 5.0).T)

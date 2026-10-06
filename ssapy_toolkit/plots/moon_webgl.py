@@ -19,7 +19,7 @@ emission angles, with an opposition surge. See ``_FRAG`` below.
 
 What it needs
 -------------
-The baked textures from scripts/bake_moon_maps.py, in the cache directory
+The baked textures from ``ssapy-bake-moon``, in the cache directory
 (~/.ssapy_toolkit/moon by default, or $SSAPY_TOOLKIT_CACHE). Nothing is
 read from SSAPy-Data and nothing large is committed.
 
@@ -63,15 +63,20 @@ from __future__ import annotations
 
 import base64
 import http.server
-import urllib.request
 import json
 import os
 import socketserver
 import threading
 import webbrowser
-from collections.abc import Mapping
 
 import numpy as np
+
+
+def load_orbit_json(source):
+    """Load orbit JSON through the I/O parser without eager optional imports."""
+    from ssapy_toolkit.io.orbit_json import load_orbit_json as _load_orbit_json
+
+    return _load_orbit_json(source)
 
 R_MOON_KM = 1737.4
 
@@ -83,51 +88,30 @@ _ASSETS = ("moon_albedo.jpg", "moon_normal.png", "moon_horizon_meta.json")
 # --------------------------------------------------------------------------
 
 def cache_dir():
-    """Where bake_moon_maps.py writes. Must match that script."""
+    """Where ``ssapy-bake-moon`` writes."""
     env = os.environ.get("SSAPY_TOOLKIT_CACHE")
     if env:
         return os.path.expanduser(env)
     return os.path.join(os.path.expanduser("~"), ".ssapy_toolkit", "moon")
 
 
-# three.js r128 is fetched once into the texture cache rather than vendored
-# in the package. The eclipse renderers ship a vendored r185 ES module pair;
-# this page uses the r128 UMD build plus OrbitControls, which is a different
-# major with a different module system, so sharing one copy would mean porting
-# the shaders. Keeping it in the cache means the repository carries one three.js
-# rather than two, and the page still runs offline once the cache is warm --
-# the same rule the baked textures follow.
-_THREE_CDN = "https://cdn.jsdelivr.net/npm/three@0.128.0"
-_THREE_FILES = {
-    "three.min.js": "/build/three.min.js",
-    "OrbitControls.js": "/examples/js/controls/OrbitControls.js",
-}
+_THREE_FILES = ("three.min.js", "OrbitControls.js")
 
 
-def ensure_three(directory=None, download=True):
-    """Return {name: url} for the three.js runtime the page should load.
-
-    Serves from the cache when the files are present, and falls back to the
-    CDN when they are absent and cannot be fetched, so an online first run
-    still works. Set SSAPY_TOOLKIT_NO_DOWNLOAD=1 to never reach the network.
-    """
+def ensure_three(directory=None):
+    """Return local URLs for the packaged three.js runtime."""
     d = os.path.expanduser(directory) if directory else cache_dir()
-    if os.environ.get("SSAPY_TOOLKIT_NO_DOWNLOAD"):
-        download = False
     urls = {}
-    for name, remote in _THREE_FILES.items():
+    for name in _THREE_FILES:
         local = os.path.join(d, name)
-        if not os.path.exists(local) and download:
-            try:
-                os.makedirs(d, exist_ok=True)
-                with urllib.request.urlopen(_THREE_CDN + remote, timeout=30) as r:
-                    data = r.read()
-                with open(local, "wb") as f:
-                    f.write(data)
-                print(f"[moon_webgl] cached {name} ({len(data) / 1024:.0f} KB) in {d}")
-            except Exception as exc:
-                print(f"[moon_webgl] could not cache {name}: {exc}")
-        urls[name] = f"/cache/{name}" if os.path.exists(local) else _THREE_CDN + remote
+        packaged = os.path.join(os.path.dirname(__file__), name)
+        if not os.path.exists(local) and os.path.exists(packaged):
+            local = packaged
+        if not os.path.exists(local):
+            raise FileNotFoundError(
+                f"moon_webgl: missing packaged runtime {name}"
+            )
+        urls[name] = f"/runtime/{name}" if local == packaged else f"/cache/{name}"
     return urls
 
 
@@ -140,12 +124,11 @@ def find_moon_cache(path=None):
     d = os.path.expanduser(path) if path else cache_dir()
     missing = [f for f in _ASSETS if not os.path.exists(os.path.join(d, f))]
     if missing:
-        raise SystemExit(
+        raise FileNotFoundError(
             f"moon_webgl: missing baked textures in {d}\n"
             f"  absent: {', '.join(missing)}\n\n"
             "Build them once with:\n"
-            "  python scripts/bake_moon_maps.py --dem <ldem_16_uint.tif> "
-            "--albedo <lroc_color_poles_8k.tif>")
+            "  ssapy-bake-moon")
 
     with open(os.path.join(d, "moon_horizon_meta.json")) as f:
         meta = json.load(f)
@@ -154,7 +137,7 @@ def find_moon_cache(path=None):
     for k in range(n_files):
         p = os.path.join(d, f"moon_horizon_{k}.png")
         if not os.path.exists(p):
-            raise SystemExit(f"moon_webgl: {p} missing; re-run the bake")
+            raise FileNotFoundError(f"moon_webgl: {p} missing; re-run the bake")
     return d, meta
 
 
@@ -1166,12 +1149,6 @@ addEventListener('resize', () => {
 # build
 # --------------------------------------------------------------------------
 
-def _as_km(arr):
-    """moon_plot_3d passes metres. A lunar orbit is a few thousand km."""
-    arr = np.asarray(arr, dtype=float)
-    return arr / 1e3 if np.nanmax(np.abs(arr)) > 1e6 else arr
-
-
 def _time_as_gps(t):
     """Return numeric GPS seconds for an SSAPy time-like value."""
     if hasattr(t, "gps"):
@@ -1181,36 +1158,6 @@ def _time_as_gps(t):
         if hasattr(values[0], "gps"):
             t = [value.gps for value in values]
     return np.asarray(t, dtype=float)
-
-
-def _json_timing_metadata(config, parent=None):
-    """Return optional sampled-track timing metadata in seconds."""
-    sources = (config, parent or {})
-    definitions = (
-        (("duration_seconds", "period_seconds", "duration_s", "period_s",
-          "durationSeconds", "periodSeconds"),
-         1.0, "duration_seconds"),
-        (("duration_days", "period_days", "durationDays", "periodDays"),
-         86400.0, "duration_seconds"),
-        (("step_seconds", "sample_step_seconds", "time_step_seconds",
-          "stepSeconds"),
-         1.0, "step_seconds"),
-        (("stride_hours",), 3600.0, "step_seconds"),
-        (("step_days", "sample_step_days", "stepDays"),
-         86400.0, "step_seconds"),
-    )
-    for source in sources:
-        for keys, scale, output_key in definitions:
-            for key in keys:
-                if key not in source:
-                    continue
-                value = float(source[key])
-                if not np.isfinite(value) or value <= 0.0:
-                    raise ValueError(
-                        f"orbit JSON {key} must be a positive finite number"
-                    )
-                return {output_key: value * scale}
-    return {}
 
 
 def _browser_track_timing(t, point_count, *, duration_seconds=None,
@@ -1242,172 +1189,6 @@ def _browser_track_timing(t, point_count, *, duration_seconds=None,
             raise ValueError("orbit duration must be a positive finite number")
         result["durationSeconds"] = duration
     return result
-
-
-def _json_times(value):
-    """Normalize numeric GPS or ISO-UTC JSON times to GPS seconds."""
-    values = np.asarray(value, dtype=object)
-    flat = values.reshape(-1)
-    if not len(flat):
-        raise ValueError("orbit JSON time data cannot be empty")
-    if all(isinstance(item, (int, float, np.integer, np.floating)) for item in flat):
-        return np.asarray(flat, dtype=float).reshape(values.shape)
-    try:
-        from astropy.time import Time
-    except ImportError as exc:  # pragma: no cover - SSAPy depends on Astropy
-        raise ImportError("ISO orbit JSON times require Astropy") from exc
-    parsed = Time(flat.tolist(), scale="utc").gps
-    return np.asarray(parsed, dtype=float).reshape(values.shape)
-
-
-def load_orbit_json(source):
-    """Load sampled positions or Keplerian elements from a JSON object/file.
-
-    Sampled JSON accepts ``r`` (or ``positions``), ``t`` (or ``times``), and
-    optional ``r_frame``/``frame`` plus ``units`` (``"m"`` or ``"km"``).
-    A set of sampled tracks accepts ``orbits``; each item may use the same
-    fields, or the LLNL cislunar export's ``xyz`` field.  ``xyz`` defaults to
-    Moon-centered kilometres because that is the coordinate convention of the
-    GDO cislunar catalogue. Optional ``period_seconds``/``period_days`` or
-    ``step_seconds``/``step_days`` metadata drives the browser's elapsed-day
-    timeline when position timestamps are unavailable.
-    Keplerian JSON accepts an ``elements`` object containing ``a``, ``e``,
-    ``i``, ``pa``, ``raan`` and ``nu``.  Angles are radians by default; set
-    ``angle_units`` to ``"deg"``.  ``a_units`` defaults to metres, ``mu`` to
-    the canonical SSAPy Moon value, and ``r_frame`` to ``"moon_centered"``.
-
-    The return value is a dictionary suitable for ``moon_webgl`` internals:
-    sampled input contains ``r`` and ``t``; element input contains an SSAPy
-    ``Orbit`` under ``orbit``.
-    """
-    if isinstance(source, Mapping):
-        payload = dict(source)
-    elif isinstance(source, (str, bytes, os.PathLike)):
-        path = os.path.expanduser(os.fspath(source))
-        # ``utf-8-sig`` accepts ordinary UTF-8 and the BOM emitted by
-        # Windows PowerShell's ``ConvertTo-Json``.
-        with open(path, encoding="utf-8-sig") as handle:
-            payload = json.load(handle)
-    else:
-        raise TypeError("orbit_json must be a mapping or JSON file path")
-    if not isinstance(payload, Mapping):
-        raise ValueError("orbit JSON root must be an object")
-
-    nested = payload.get("orbit")
-    if isinstance(nested, Mapping):
-        merged = dict(nested)
-        merged.update({key: value for key, value in payload.items() if key != "orbit"})
-        payload = merged
-
-    def units_alias(config=None, default="auto"):
-        aliases = {
-            "m": "m", "meter": "m", "meters": "m", "metre": "m", "metres": "m",
-            "km": "km", "kilometer": "km", "kilometers": "km",
-            "kilometre": "km", "kilometres": "km", "auto": "auto",
-        }
-        config = payload if config is None else config
-        value = str(config.get("units", config.get("position_units", default))).lower()
-        if value not in aliases:
-            raise ValueError("orbit JSON units must be 'm', 'km', or 'auto'")
-        return aliases[value]
-
-    records = payload.get("orbits")
-    if records is not None:
-        if not isinstance(records, (list, tuple)) or not records:
-            raise ValueError("orbit JSON 'orbits' must be a non-empty array")
-        default_frame = str(payload.get("r_frame", payload.get("frame", "moon_centered")))
-        default_units = units_alias(payload) if (
-            "units" in payload or "position_units" in payload
-        ) else None
-        default_times = next(
-            (payload[key] for key in ("t", "times", "time") if key in payload),
-            None,
-        )
-        tracks = []
-        for index, record in enumerate(records, start=1):
-            if not isinstance(record, Mapping):
-                raise ValueError(f"orbit JSON orbits[{index - 1}] must be an object")
-            positions_key = next(
-                (key for key in ("r", "positions", "position", "xyz") if key in record),
-                None,
-            )
-            if positions_key is None:
-                raise ValueError(f"orbit JSON orbits[{index - 1}] has no positions/xyz field")
-            frame = str(record.get("r_frame", record.get("frame", default_frame)))
-            if frame == "moon_centered_earth_moon_rotating":
-                frame = "moon_centered"
-            units = units_alias(
-                record,
-                default=default_units or ("km" if positions_key == "xyz" else "auto"),
-            )
-            times = next(
-                (record[key] for key in ("t", "times", "time") if key in record),
-                default_times,
-            )
-            if frame != "moon_centered" and times is None:
-                raise ValueError(f"orbit JSON orbits[{index - 1}] requires times for frame '{frame}'")
-            track = {
-                "r": record[positions_key],
-                "t": None if times is None else _json_times(times),
-                "r_frame": frame,
-                "units": units,
-                "name": str(record.get("name", record.get("oid", record.get("id", f"Orbit {index}")))),
-            }
-            track.update(_json_timing_metadata(record, payload))
-            tracks.append(track)
-        return {"tracks": tracks}
-
-    positions = next((payload[key] for key in ("r", "positions", "position") if key in payload), None)
-    if positions is not None:
-        times = next((payload[key] for key in ("t", "times", "time") if key in payload), None)
-        if times is None:
-            raise ValueError("sampled orbit JSON requires t/times alongside r/positions")
-        sampled = {
-            "r": positions,
-            "t": _json_times(times),
-            "r_frame": str(payload.get("r_frame", payload.get("frame", "gcrf"))),
-            "units": units_alias(payload),
-            "name": str(payload.get("name", payload.get("oid", payload.get("id", "Orbit")))),
-        }
-        sampled.update(_json_timing_metadata(payload))
-        return sampled
-
-    elements = payload.get("elements", payload.get("keplerian", payload))
-    if not isinstance(elements, Mapping) or "a" not in elements:
-        raise ValueError("orbit JSON must contain sampled r/t data or Keplerian a/elements data")
-    try:
-        import ssapy
-        from ssapy_toolkit.constants import MOON_MU
-    except ImportError as exc:  # pragma: no cover - SSAPy is a package dependency
-        raise ImportError("Keplerian orbit JSON requires SSAPy") from exc
-    def pick(*names, default=0.0):
-        return next((elements[name] for name in names if name in elements), default)
-    a_units = str(elements.get("a_units", payload.get("a_units", "m"))).lower()
-    if a_units in {"km", "kilometer", "kilometers", "kilometre", "kilometres"}:
-        a = float(elements["a"]) * 1e3
-    elif a_units in {"m", "meter", "meters", "metre", "metres"}:
-        a = float(elements["a"])
-    else:
-        raise ValueError("Keplerian JSON a_units must be 'm' or 'km'")
-    angle_units = str(elements.get("angle_units", payload.get("angle_units", "rad"))).lower()
-    angle_scale = np.pi / 180.0 if angle_units in {"deg", "degree", "degrees"} else 1.0
-    if angle_units not in {"rad", "radian", "radians", "deg", "degree", "degrees"}:
-        raise ValueError("Keplerian JSON angle_units must be 'rad' or 'deg'")
-    epoch = pick("t", "epoch", default=0.0)
-    epoch_gps = float(np.asarray(_json_times(epoch), dtype=float).reshape(-1)[0])
-    orbit = ssapy.Orbit.fromKeplerianElements(
-        a, float(pick("e", default=0.0)),
-        float(pick("i", "inclination", default=0.0)) * angle_scale,
-        float(pick("pa", "argp", "argument_of_periapsis", default=0.0)) * angle_scale,
-        float(pick("raan", default=0.0)) * angle_scale,
-        float(pick("nu", "true_anomaly", "trueAnomaly", default=0.0)) * angle_scale,
-        t=epoch_gps,
-        mu=float(elements.get("mu", payload.get("mu", MOON_MU))),
-    )
-    return {
-        "orbit": orbit,
-        "r_frame": str(payload.get("r_frame", payload.get("frame", "moon_centered"))),
-    }
 
 
 def _orbit_times(orbit, t, n_steps=360, n_orbits=1.0):
@@ -1465,7 +1246,11 @@ def _orbit_xyz(r, t, r_frame, *, units="auto"):
         elif units == "km":
             xyz = r_arr
         else:
-            xyz = _as_km(r_arr)
+            try:
+                from .plotutils import normalize_orbit_trajectory
+            except ImportError:  # pragma: no cover - direct module loading
+                from ssapy_toolkit.plots.plotutils import normalize_orbit_trajectory
+            xyz, _, _ = normalize_orbit_trajectory(r=r_arr, t=t, r_units=units)
     else:
         try:
             from ..coordinates import gcrf_to_lunar_fixed
@@ -1484,7 +1269,11 @@ def _orbit_xyz(r, t, r_frame, *, units="auto"):
         if units in {"m", "km"}:
             xyz = np.asarray(xyz, dtype=float) / 1e3
         else:
-            xyz = _as_km(xyz)
+            try:
+                from .plotutils import normalize_orbit_trajectory
+            except ImportError:  # pragma: no cover - direct module loading
+                from ssapy_toolkit.plots.plotutils import normalize_orbit_trajectory
+            xyz, _, _ = normalize_orbit_trajectory(r=xyz, t=t_arr, r_units=units)
     xyz = np.asarray(xyz, dtype=float).reshape(-1, 3)
     return [round(float(v), 3) for v in xyz.ravel()]
 
@@ -1585,14 +1374,14 @@ def _viewer_page_assets(directory, runtime_urls, embed_assets):
     runtime_paths = {}
     for name in _THREE_FILES:
         local = os.path.join(directory, name)
-        if not os.path.exists(local) and name == "three.min.js":
+        if not os.path.exists(local):
             packaged = os.path.join(os.path.dirname(__file__), name)
             if os.path.exists(packaged):
                 local = packaged
         if not os.path.exists(local):
-            raise SystemExit(
+            raise FileNotFoundError(
                 f"moon_webgl: portable export needs local {name}; "
-                "run once with network access so ensure_three() can cache it"
+                "install the package asset or provide a cached runtime"
             )
         runtime_paths[name] = local
 
@@ -1616,13 +1405,13 @@ def _viewer_page_assets(directory, runtime_urls, embed_assets):
     )
 
 
-def _starfield_payload():
+def _starfield_payload(epoch=None):
     """Reuse the Toolkit's catalogue-backed Moon-fixed WebGL starfield."""
     try:
         from .starfield import moon_fixed_webgl_stars
     except ImportError:  # pragma: no cover - script mode
         from ssapy_toolkit.plots.starfield import moon_fixed_webgl_stars
-    return moon_fixed_webgl_stars()
+    return moon_fixed_webgl_stars(epoch=epoch)
 
 
 def moon_webgl(r=None, t=None, r_frame="gcrf",
@@ -1633,25 +1422,46 @@ def moon_webgl(r=None, t=None, r_frame="gcrf",
                orbit_json=None, animation_seconds=24.0,
                embed_assets=False):
     """
-    Write the viewer page. Returns its path.
+    Write an interactive Moon viewer page.
 
-    r, t              trajectory and times, as moon_plot_3d takes them
-    orbit             optional SSAPy Orbit. Its positions are sampled with
-                      ``ssapy.rv`` at ``t``; if ``t`` is omitted, one period
-                      is sampled when the Orbit exposes a finite period.
-    propagator        optional SSAPy propagator passed to ``ssapy.rv``
-    n_steps           samples used for an automatically generated Orbit track
-    n_orbits          periods covered by an automatically generated track
-    orbit_json        JSON file path or mapping containing sampled positions,
-                      an ``orbits`` array, or Keplerian elements; see
-                      :func:`load_orbit_json`
-    sun_*_deg         fixed Sun direction in the lunar-fixed frame. A low
-                      elevation shows the relief, which is the point of the bake
-    exposure          display gain, not radiometry
-    animation_seconds browser seconds per orbit in per-orbit mode, or per
-                      simulated day in per-day mode
-    embed_assets      inline textures and JavaScript for a portable gallery HTML
-    save_path         defaults beside the cache
+    Parameters
+    ----------
+    r : array-like, optional
+        Trajectory positions, as accepted by ``moon_plot_3d``.
+    t : array-like, optional
+        Trajectory times.
+    r_frame : {"gcrf", "moon_centered"}
+        Frame of ``r``.
+    title, subtitle : str, optional
+        Page heading and supporting text.
+    sun_azimuth_deg, sun_elevation_deg : float
+        Fixed Sun direction in the lunar-fixed frame, in degrees.
+    exposure : float
+        Display gain, not radiometry.
+    cache : path-like, optional
+        Directory containing baked Moon assets.
+    save_path : path-like, optional
+        Output path; defaults beside the cache.
+    orbit : ssapy.Orbit, optional
+        Orbit sampled with ``ssapy.rv``.
+    propagator : object, optional
+        Propagator passed to ``ssapy.rv``.
+    n_steps : int
+        Samples used for an automatically generated orbit track.
+    n_orbits : float
+        Periods covered by an automatically generated track.
+    orbit_json : path-like or mapping, optional
+        Sampled positions, orbit records, or Keplerian elements. See
+        :func:`load_orbit_json`.
+    animation_seconds : float
+        Browser seconds per orbit or simulated day.
+    embed_assets : bool
+        Inline textures and JavaScript for a portable HTML file.
+
+    Returns
+    -------
+    str
+        Path to the written HTML page.
     """
     if r_frame not in {"gcrf", "moon_centered"}:
         raise ValueError("r_frame must be 'gcrf' or 'moon_centered'")
@@ -1678,7 +1488,21 @@ def moon_webgl(r=None, t=None, r_frame="gcrf",
     three = ensure_three(d)
     three_script, orbit_script, asset_urls = _viewer_page_assets(
         d, three, bool(embed_assets))
-    stars = _starfield_payload()
+    star_epoch = t
+    if star_epoch is None and orbit is not None:
+        star_epoch = getattr(orbit, "t", None)
+    if star_epoch is None and orbit_json is not None:
+        loaded = load_orbit_json(orbit_json)
+        if "tracks" in loaded:
+            star_epoch = next(
+                (track.get("t") for track in loaded["tracks"] if track.get("t") is not None),
+                None,
+            )
+        else:
+            star_epoch = getattr(loaded.get("orbit"), "t", None)
+    if star_epoch is not None:
+        star_epoch = _time_as_gps(star_epoch).reshape(-1)[0]
+    stars = _starfield_payload(star_epoch)
     doc = _HTML
     for key, val in (("{title}", title),
                      ("{three_script}", three_script),
@@ -1712,14 +1536,33 @@ def moon_webgl(r=None, t=None, r_frame="gcrf",
 
 def _handler(html_path, cache_path):
     class H(http.server.SimpleHTTPRequestHandler):
+        def do_GET(self):
+            if not self._allowed():
+                self.send_error(404)
+                return
+            super().do_GET()
+
+        def do_HEAD(self):
+            if not self._allowed():
+                self.send_error(404)
+                return
+            super().do_HEAD()
+
+        def _allowed(self):
+            p = self.path.split("?", 1)[0].split("#", 1)[0]
+            return p in ("/", "/index.html") or (
+                p.startswith("/cache/") and os.path.basename(p) == p[7:]
+            ) or p in {f"/runtime/{name}" for name in _THREE_FILES}
+
         def translate_path(self, path):
             p = path.split("?", 1)[0].split("#", 1)[0]
             if p in ("/", "/index.html"):
                 return html_path
             if p.startswith("/cache/"):
-                # basename only: never let a request walk out of the cache
                 return os.path.join(cache_path, os.path.basename(p))
-            return super().translate_path(path)
+            if p.startswith("/runtime/"):
+                return os.path.join(os.path.dirname(__file__), os.path.basename(p))
+            return html_path
 
         def log_message(self, *a):
             pass

@@ -1,10 +1,14 @@
 """
-bake_moon_maps.py — offline texture bakes for the WebGL Moon
+Offline texture baker for the WebGL Moon.
 
 Writes to ~/.ssapy_toolkit/moon, not into SSAPy-Toolkit or SSAPy-Data. The
 horizon set at full resolution is tens of megabytes and must never enter
-either repo; the script is the committed artefact, the textures are
+either repo; this module is the committed artefact, the textures are
 regenerated locally. Override with $SSAPY_TOOLKIT_CACHE.
+
+With no source arguments, the baker downloads NASA SVS LOLA elevation and
+LROC colour products into that cache. NASA source products remain subject to
+NASA's media usage guidelines.
 
 Outputs
   moon_normal.png         tangent-space normals from LOLA, true scale
@@ -39,11 +43,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import urllib.request
 
 import numpy as np
 
 R_MOON_KM = 1737.4
 ANG_LO_DEG, ANG_HI_DEG = -10.0, 70.0     # 8-bit encode range, 0.314 deg/step
+DEM_URL = "https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/ldem_16_uint.tif"
+ALBEDO_URL = "https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_poles_8k.tif"
 
 
 def cache_dir():
@@ -65,6 +72,20 @@ def cache_dir():
     return os.path.join(os.path.expanduser("~"), ".ssapy_toolkit", "moon")
 
 
+def download_source(url, directory):
+    """Download a NASA source into the cache once and return its path."""
+    path = os.path.join(directory, url.rsplit("/", 1)[-1])
+    if not os.path.exists(path):
+        partial = path + ".part"
+        try:
+            urllib.request.urlretrieve(url, partial)
+            os.replace(partial, path)
+        finally:
+            if os.path.exists(partial):
+                os.remove(partial)
+    return path
+
+
 def load_dem(path):
     """
     Accepts either the packaged .npz or NASA's raw uint16 LOLA TIFF.
@@ -81,7 +102,7 @@ def load_dem(path):
         dem = (arr - 20000.0) / 2000.0          # uint16 half-metres, +20000
         lo, hi = dem.min(), dem.max()
         if not (-11.0 < lo < -7.0 and 8.0 < hi < 13.0):
-            raise SystemExit(f"decoded elevations {lo:.2f} to {hi:.2f} km are "
+            raise ValueError(f"decoded elevations {lo:.2f} to {hi:.2f} km are "
                              "outside LOLA's known range")
         return dem
     with np.load(path) as z:
@@ -158,19 +179,19 @@ def bake_horizon(dem, n_az=16, n_step=128, max_km=260.0, shape=None):
     return out
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dem", required=True,
+    ap.add_argument("--dem", default=None,
                     help="LOLA source: either ldem_16_uint.tif (16 ppd, "
                          "preferred -- normals come off the native grid) or "
-                         "the 8 ppd moon_dem.npz")
+                         "an elevation npz; defaults to NASA SVS")
     ap.add_argument("--outdir", default=None,
                     help="defaults to the platform cache dir, never a repo")
     ap.add_argument("--n-az", type=int, default=16)
     ap.add_argument("--n-step", type=int, default=128)
     ap.add_argument("--albedo", default=None,
                     help="LROC colour mosaic (TIFF/PNG) to re-encode as the "
-                         "WebGL albedo texture. Lossy is fine for colour, "
+                         "WebGL albedo texture; defaults to NASA SVS. Lossy is fine for colour, "
                          "unlike normals and horizon where a quantisation "
                          "level is a slope or a shadow edge")
     ap.add_argument("--albedo-quality", type=int, default=92)
@@ -180,13 +201,15 @@ def main():
                          "integrated parts")
     ap.add_argument("--horizon-width", type=int, default=1440,
                     help="horizon map width; height is half")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     outdir = os.path.expanduser(args.outdir) if args.outdir else cache_dir()
     os.makedirs(outdir, exist_ok=True)
     print(f"cache: {outdir}")
 
-    dem = load_dem(args.dem)
+    dem_path = os.path.expanduser(args.dem) if args.dem else download_source(DEM_URL, outdir)
+    albedo_path = os.path.expanduser(args.albedo) if args.albedo else download_source(ALBEDO_URL, outdir)
+    dem = load_dem(dem_path)
     print(f"DEM {dem.shape[1]}x{dem.shape[0]}, {dem.min():.1f} to {dem.max():.1f} km")
 
     from PIL import Image
@@ -202,18 +225,16 @@ def main():
     print(f"normals -> {os.path.basename(p)}  {os.path.getsize(p) / 1e6:.1f} MB "
           f"({dem.shape[1]}x{dem.shape[0]}, XY only)")
 
-    if args.albedo:
-        src = Image.open(os.path.expanduser(args.albedo)).convert("RGB")
-        w, h = src.size
-        if max(w, h) > args.albedo_max:
-            k = args.albedo_max / float(max(w, h))
-            src = src.resize((int(w * k), int(h * k)), Image.LANCZOS)
-        p = os.path.join(outdir, "moon_albedo.jpg")
-        src.save(p, quality=args.albedo_quality, optimize=True,
-                 progressive=True)
-        print(f"albedo  -> {os.path.basename(p)}  "
-              f"{os.path.getsize(p) / 1e6:.1f} MB ({src.size[0]}x{src.size[1]}, "
-              f"q{args.albedo_quality})")
+    src = Image.open(albedo_path).convert("RGB")
+    w, h = src.size
+    if max(w, h) > args.albedo_max:
+        k = args.albedo_max / float(max(w, h))
+        src = src.resize((int(w * k), int(h * k)), Image.LANCZOS)
+    p = os.path.join(outdir, "moon_albedo.jpg")
+    src.save(p, quality=args.albedo_quality, optimize=True, progressive=True)
+    print(f"albedo  -> {os.path.basename(p)}  "
+          f"{os.path.getsize(p) / 1e6:.1f} MB ({src.size[0]}x{src.size[1]}, "
+          f"q{args.albedo_quality})")
 
     hw = args.horizon_width
     hz = bake_horizon(dem, n_az=args.n_az, n_step=args.n_step,
@@ -235,6 +256,7 @@ def main():
         json.dump(meta, f, indent=2)
     print(f"horizon {hz.shape[2]}x{hz.shape[1]}x{args.n_az}, "
           f"{total / 1e6:.1f} MB total")
+    return outdir
 
 
 if __name__ == "__main__":
