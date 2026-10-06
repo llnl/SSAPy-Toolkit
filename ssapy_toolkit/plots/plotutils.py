@@ -31,6 +31,16 @@ _SAVE_PATH_ALIAS_KEYS = (
 )
 
 
+def _first_state_vector(value, name="state"):
+    """Return a single state vector from a vector or sampled trajectory."""
+    array = np.asarray(value, dtype=float)
+    if array.ndim == 1 and array.size == 3:
+        return array
+    if array.ndim == 2 and array.shape[1] == 3 and array.shape[0]:
+        return array[0]
+    raise ValueError(f"{name} must be a 3-vector or an (N, 3) trajectory")
+
+
 def _plot_series_arrays(values):
     if isinstance(values, np.ndarray):
         array = np.asarray(values, dtype=float)
