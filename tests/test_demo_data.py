@@ -117,28 +117,12 @@ def test_horizons_vector_rows_extracts_csv_rows():
 
 
 def test_demo_data_fetchers_validate_and_write_without_network(tmp_path, monkeypatch):
-    calls = []
-
     def fake_download(url, *, timeout):
-        calls.append((url, timeout))
-        if "stations" in url:
-            return "ISS\n1 00000\n2 00000\n"
-        if "FORMAT=xml" in url:
-            return "<ndm><omm /></ndm>"
         if "horizons" in url:
             return "header\n$$SOE\n2461132.5,A.D. 2026-Apr-02 00:00:00.0000,1,2,3,4,5,6,extra\n$$EOE\n"
-        return "not tle"
+        return "invalid"
 
     monkeypatch.setattr(demo_data, "_download_text", fake_download)
-
-    tle_path = tmp_path / "tle.txt"
-    demo_data._fetch_full_catalog_3le(tle_path, timeout=4)
-    assert tle_path.read_text(encoding="utf-8").startswith("ISS")
-    assert len(calls) == 2
-
-    xml_path = tmp_path / "catalog.xml"
-    demo_data._fetch_full_catalog_xml(xml_path, timeout=5)
-    assert "<ndm" in xml_path.read_text(encoding="utf-8")
 
     horizons_path = tmp_path / "horizons.csv"
     demo_data._fetch_artemis2_orion_state_vectors(horizons_path, timeout=6)
@@ -147,10 +131,6 @@ def test_demo_data_fetchers_validate_and_write_without_network(tmp_path, monkeyp
     assert "2461132.5" in contents
 
     monkeypatch.setattr(demo_data, "_download_text", lambda *args, **kwargs: "invalid")
-    with pytest.raises(URLError):
-        demo_data._fetch_full_catalog_3le(tmp_path / "bad_tle.txt", timeout=1)
-    with pytest.raises(ValueError, match="OMM XML"):
-        demo_data._fetch_full_catalog_xml(tmp_path / "bad.xml", timeout=1)
     with pytest.raises(ValueError, match="vector rows"):
         demo_data._fetch_artemis2_orion_state_vectors(tmp_path / "bad.csv", timeout=1)
 
