@@ -15,9 +15,6 @@ from ssapy_toolkit._paths import DEFAULT_OUTPUT_DIR_NAME
 from .datapath import datapath
 
 _USER_AGENT = "ssapy-toolkit-demo-data/1.0"
-_CELESTRAK_ACTIVE_3LE_URL = "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=3le"
-_CELESTRAK_STATIONS_3LE_URL = "https://celestrak.org/NORAD/elements/stations.txt"
-_CELESTRAK_ACTIVE_XML_URL = "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=xml"
 
 
 class DemoDataUnavailableWarning(UserWarning):
@@ -131,27 +128,6 @@ def _atomic_write_text(target, text):
     os.replace(tmp_path, target)
 
 
-def _fetch_full_catalog_3le(target, *, timeout):
-    errors = []
-    for url in (_CELESTRAK_ACTIVE_3LE_URL, _CELESTRAK_STATIONS_3LE_URL):
-        try:
-            text = _download_text(url, timeout=timeout)
-            if "\n1 " not in text or "\n2 " not in text:
-                raise ValueError(f"response from {url} did not look like 3LE/TLE text")
-            _atomic_write_text(target, text)
-            return
-        except (OSError, HTTPError, URLError, TimeoutError, ValueError) as exc:
-            errors.append(f"{url}: {exc}")
-    raise URLError("; ".join(errors))
-
-
-def _fetch_full_catalog_xml(target, *, timeout):
-    text = _download_text(_CELESTRAK_ACTIVE_XML_URL, timeout=timeout)
-    if "<omm" not in text and "<ndm" not in text:
-        raise ValueError("response did not look like OMM XML")
-    _atomic_write_text(target, text)
-
-
 def _fetch_artemis2_orion_state_vectors(target, *, timeout):
     params = {
         "format": "text",
@@ -207,8 +183,6 @@ def _horizons_vector_rows(text):
 
 
 _DEMO_DATA_FETCHERS = {
-    "full_catalog_3le.txt": _fetch_full_catalog_3le,
-    "full_catalog.xml": _fetch_full_catalog_xml,
     "artemis2_orion_state_vectors.csv": _fetch_artemis2_orion_state_vectors,
 }
 

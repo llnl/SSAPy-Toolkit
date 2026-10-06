@@ -2,6 +2,10 @@
 
 import importlib.util
 import json
+import threading
+import urllib.error
+import urllib.request
+from http.server import HTTPServer
 from pathlib import Path
 
 
@@ -10,6 +14,12 @@ _SPEC = importlib.util.spec_from_file_location("moon_webgl_test_module", _MODULE
 MODULE = importlib.util.module_from_spec(_SPEC)
 assert _SPEC.loader is not None
 _SPEC.loader.exec_module(MODULE)
+
+_BAKER_PATH = Path(__file__).parents[1] / "ssapy_toolkit" / "io" / "moon_maps.py"
+_BAKER_SPEC = importlib.util.spec_from_file_location("moon_maps_test_module", _BAKER_PATH)
+BAKER = importlib.util.module_from_spec(_BAKER_SPEC)
+assert _BAKER_SPEC.loader is not None
+_BAKER_SPEC.loader.exec_module(BAKER)
 
 
 def _gdo_payload():
@@ -32,7 +42,7 @@ def test_cache_and_server_helpers_work_offline(monkeypatch, tmp_path):
 
     for name in MODULE._THREE_FILES:
         (tmp_path / name).write_bytes(b"runtime")
-    assert MODULE.ensure_three(download=False) == {
+    assert MODULE.ensure_three() == {
         name: f"/cache/{name}" for name in MODULE._THREE_FILES
     }
 
@@ -69,6 +79,66 @@ def test_cache_and_server_helpers_work_offline(monkeypatch, tmp_path):
     MODULE.show(html_path, open_browser=False)
 
     assert calls == {"address": ("127.0.0.1", 0), "served": True}
+
+
+def test_server_only_serves_page_cache_and_runtime(tmp_path):
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    page = tmp_path / "index.html"
+    page.write_text("page", encoding="utf-8")
+    (cache / "asset.txt").write_text("asset", encoding="utf-8")
+    (tmp_path / "secret.txt").write_text("secret", encoding="utf-8")
+
+    server = HTTPServer(("127.0.0.1", 0), MODULE._handler(str(page), str(cache)))
+    thread = threading.Thread(target=server.serve_forever)
+    thread.start()
+    try:
+        root = f"http://127.0.0.1:{server.server_port}"
+        assert urllib.request.urlopen(root + "/").read() == b"page"
+        assert urllib.request.urlopen(root + "/cache/asset.txt").read() == b"asset"
+        for path in ("/secret.txt", "/cache/../secret.txt"):
+            try:
+                urllib.request.urlopen(root + path)
+            except urllib.error.HTTPError as exc:
+                assert exc.code == 404
+            else:
+                raise AssertionError(f"server exposed {path}")
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
+
+
+def test_missing_cache_raises_file_not_found(tmp_path):
+    try:
+        MODULE.find_moon_cache(tmp_path)
+    except FileNotFoundError as exc:
+        assert "missing baked textures" in str(exc)
+    else:
+        raise AssertionError("missing assets should fail")
+
+
+def test_default_bake_produces_complete_cache(monkeypatch, tmp_path):
+    import numpy as np
+    from PIL import Image
+
+    dem_path = tmp_path / "dem.npz"
+    albedo_path = tmp_path / "albedo.png"
+    np.savez(dem_path, elev_km=np.zeros((4, 8), dtype=np.float32))
+    Image.new("RGB", (8, 4), "gray").save(albedo_path)
+
+    def source(url, directory):
+        return str(dem_path if url == BAKER.DEM_URL else albedo_path)
+
+    monkeypatch.setattr(BAKER, "download_source", source)
+    BAKER.main([
+        "--outdir", str(tmp_path), "--n-az", "4", "--n-step", "1",
+        "--horizon-width", "8", "--albedo-max", "8",
+    ])
+
+    cache, meta = MODULE.find_moon_cache(tmp_path)
+    assert cache == str(tmp_path)
+    assert meta["n_az"] == 4
 
 
 def test_load_gdo_orbit_set_defaults_xyz_to_moon_centered_km(tmp_path):
@@ -163,7 +233,7 @@ def test_moon_webgl_embeds_multiple_named_tracks(monkeypatch, tmp_path):
     monkeypatch.setattr(
         MODULE,
         "_starfield_payload",
-        lambda: {"p": [0.0, 0.0, 4.0e6], "c": [1.0, 1.0, 1.0], "s": [4.0]},
+        lambda epoch=None: {"p": [0.0, 0.0, 4.0e6], "c": [1.0, 1.0, 1.0], "s": [4.0]},
     )
 
     output = MODULE.moon_webgl(
@@ -311,7 +381,8 @@ def test_moon_webgl_portable_export_inlines_runtime_and_textures(monkeypatch, tm
             "OrbitControls.js": "/cache/OrbitControls.js",
         },
     )
-    monkeypatch.setattr(MODULE, "_starfield_payload", lambda: None)
+    epochs = []
+    monkeypatch.setattr(MODULE, "_starfield_payload", lambda epoch=None: epochs.append(epoch))
     (tmp_path / "three.min.js").write_text("window.THREE_FAKE=1;", encoding="utf-8")
     (tmp_path / "OrbitControls.js").write_text(
         "window.ORBIT_CONTROLS_FAKE=1;", encoding="utf-8"
@@ -340,6 +411,7 @@ def test_moon_webgl_portable_export_inlines_runtime_and_textures(monkeypatch, tm
     assert "data:image/jpeg;base64,aW1hZ2U=" in html
     assert "data:image/png;base64,aW1hZ2U=" in html
     assert "<script src=" not in html
+    assert epochs == [0.0]
 
 
 def test_orbit_json_rejects_empty_orbit_sets():
