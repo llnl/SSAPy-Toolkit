@@ -602,10 +602,11 @@ def test_satellite_viewer_catalog_payload(monkeypatch):
         )
 
     monkeypatch.setattr(starfield, "star_directions", fake_directions)
+    monkeypatch.setattr(builder, "_gcrf_to_teme_rotation", lambda when: np.eye(3))
     catalog = builder.load_star_catalog(when=datetime(2026, 1, 2, 3, 4, 5))
 
     assert catalog["epoch"] == "2026-01-02T03:04:05Z"
-    assert catalog["frame"] == "gcrf-of-date"
+    assert catalog["frame"] == "teme-of-date"
     assert catalog["v"] == [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
     assert catalog["c"] == [1.0, 0.5, 0.25, 0.14, 0.28, 0.7]
     assert catalog["s"] == [4.8, 1.92]
@@ -629,7 +630,7 @@ def test_satellite_viewer_builder_helpers(monkeypatch, tmp_path):
     monkeypatch.setattr(builder, "load_textures", lambda: {key: f"{key}_b64" for key in ("day", "night", "specular", "clouds")})
     catalog = {
         "epoch": "2025-01-01T00:00:00Z",
-        "frame": "gcrf-of-date",
+        "frame": "teme-of-date",
         "v": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
         "c": [1.0, 0.5, 0.2, 0.2, 0.5, 1.0],
         "s": [6.5, 4.0],
@@ -639,11 +640,11 @@ def test_satellite_viewer_builder_helpers(monkeypatch, tmp_path):
     monkeypatch.setattr(builder, "load_satellite_database", lambda path=None: database)
     monkeypatch.setattr(builder, "text", lambda filename: f"/* {filename} */")
     out = tmp_path / "viewer.html"
-    assert builder.build(out_path=out, verbose=False) == out
+    assert builder.build(out_path=out, verbose=False, database_path="catalog.json") == out
     built = out.read_text(encoding="utf-8")
     assert "__SCENE_JS__" not in built
     assert "day_b64" in built
-    assert '"frame":"gcrf-of-date"' in built
+    assert '"frame":"teme-of-date"' in built
     assert '"v":[1.0,0.0,0.0,0.0,1.0,0.0]' in built
     assert '"name":"TEST SAT"' in built
     assert 'id="attitude-toggle"' in built
@@ -689,6 +690,12 @@ def test_satellite_viewer_accepts_body_to_gcrf_quaternions(monkeypatch):
         return "viewer.html"
 
     monkeypatch.setattr(builder, "build", fake_build)
+    from ssapy import utils
+    monkeypatch.setattr(
+        utils,
+        "gcrf_to_teme",
+        lambda times: np.repeat(np.eye(3)[None, ...], len(np.atleast_1d(times)), axis=0),
+    )
     builder.satellite_viewer(
         r=np.array([[7_000_000.0, 0.0, 0.0], [0.0, 7_000_000.0, 0.0]]),
         v=np.array([[0.0, 7_500.0, 0.0], [-7_500.0, 0.0, 0.0]]),
@@ -699,6 +706,38 @@ def test_satellite_viewer_accepts_body_to_gcrf_quaternions(monkeypatch):
 
     track = captured["state_vectors"][0]
     assert track["q"] == [[1.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]]
+
+
+def test_satellite_viewer_rotates_gcrf_state_to_teme(monkeypatch):
+    from ssapy import utils
+    from ssapy_toolkit.plots import build_satellite_viewer as builder
+
+    captured = {}
+    monkeypatch.setattr(builder, "build", lambda **kwargs: captured.update(kwargs) or "viewer.html")
+    rotation = np.array([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+    monkeypatch.setattr(
+        utils,
+        "gcrf_to_teme",
+        lambda times: np.repeat(rotation[None, ...], len(np.atleast_1d(times)), axis=0),
+    )
+    builder.satellite_viewer(
+        r=np.array([[7_000_000.0, 0.0, 0.0]]),
+        v=np.array([[0.0, 7_500.0, 0.0]]),
+        t=np.array([0.0]),
+        verbose=False,
+    )
+    track = captured["state_vectors"][0]
+    assert track["r"][0] == pytest.approx(0.0)
+    assert track["r"][1] == pytest.approx(7_000.0)
+    assert track["v"][0] == pytest.approx(-7.5)
+    assert track["v"][1] == pytest.approx(0.0)
+
+
+def test_satellite_viewer_explicit_missing_database_raises(tmp_path):
+    from ssapy_toolkit.plots import build_satellite_viewer as builder
+
+    with pytest.raises(FileNotFoundError):
+        builder.load_satellite_database(tmp_path / "missing.json")
 
 
 def test_satellite_viewer_database_uses_ssatk_data(monkeypatch, tmp_path):
@@ -716,6 +755,52 @@ def test_satellite_viewer_database_uses_ssatk_data(monkeypatch, tmp_path):
 
     monkeypatch.setattr(tle_updater, "SATELLITES_JSON", database_path)
     assert builder.load_satellite_database() == expected
+
+
+def test_tle_cache_configuration_beats_legacy_path(monkeypatch, tmp_path):
+    from ssapy_toolkit.io import tle_updater
+
+    configured = tmp_path / "configured"
+    legacy = tmp_path / "legacy" / "ssatk_data"
+    legacy.mkdir(parents=True)
+    (legacy / "tle_cache.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("SSATK_OUTPUT_DIR", str(configured))
+    monkeypatch.setattr(tle_updater.os.path, "expanduser", lambda path: str(tmp_path / "legacy"))
+
+    assert tle_updater._cache_file() == str(configured / "tle_cache.json")
+
+
+def test_tle_cache_path_failure_does_not_break_resolution(monkeypatch, tmp_path):
+    from ssapy_toolkit.io import ssatk_data, tle_updater
+
+    monkeypatch.setattr(ssatk_data, "datapath", lambda name: (_ for _ in ()).throw(RuntimeError("read only")))
+    monkeypatch.setattr(tle_updater.os.path, "expanduser", lambda path: str(tmp_path))
+
+    assert tle_updater._cache_file() == str(tmp_path / "ssatk_data" / "tle_cache.json")
+
+
+def test_tle_updater_uses_space_track_and_persists_cache(monkeypatch, tmp_path):
+    from ssapy_toolkit.io import tle_updater
+
+    line1 = "1 25544U 98067A   26133.42450843  .00004829  00000+0  95080-4 0  9993"
+    line2 = "2 25544  51.6310 112.1825 0007522  54.1994 305.9693 15.49203550566361"
+    satellites = [{"type": "tle", "name": "ISS", "line1": line1, "line2": line2}]
+    monkeypatch.setenv("SSATK_OUTPUT_DIR", str(tmp_path))
+    monkeypatch.setattr(tle_updater, "ST_USER", "user@example.com")
+    monkeypatch.setattr(tle_updater, "ST_PASSWORD", "secret")
+    monkeypatch.setattr(
+        tle_updater,
+        "fetch_tle_spacetrack",
+        lambda norad_id, session_cookie=None: (line1, line2, "cookie"),
+    )
+    monkeypatch.setattr(tle_updater.time, "sleep", lambda seconds: None)
+
+    updated = tle_updater.update_satellites_auto(satellites, force_refresh=True, verbose=False)
+
+    assert updated[0]["line1"] == line1
+    assert json.loads((tmp_path / "tle_cache.json").read_text())[
+        "25544"
+    ]["source"] == "space-track"
 
 
 def test_groundtrack_enhanced_core_helpers(monkeypatch, tmp_path):

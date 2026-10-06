@@ -1,7 +1,4 @@
 import importlib
-import json
-import shutil
-import subprocess
 import sys
 from pathlib import Path
 
@@ -199,18 +196,14 @@ def test_satellite_viewer_scene_uses_physical_sun_moon_defaults():
     assert "const MOON_RENDER_DISTANCE_KM = MOON_MEAN_DISTANCE_KM;" in scene
     assert "const MOON_RENDER_RADIUS_KM = R_MOON_KM;" in scene
     assert "logarithmicDepthBuffer: true" in scene
-    assert "const DEFAULT_DEMO_SATELLITES = EMBEDDED_STATE_VECTOR_TRACKS.length" in scene
-    assert "? Object.keys(STATE_VECTOR_CATALOG) : ['iss'];" in scene
+    assert "const DEFAULT_DEMO_SATELLITES = Object.keys(STATE_VECTOR_CATALOG);" in scene
+    assert "No external TLEs are bundled" in scene
     assert "name: 'Cislunar orbit demo'" in scene
     assert "const SATELLITE_GLYPH_SIZE_KM = 900;" in scene
     assert "const modelSize = SATELLITE_GLYPH_SIZE_KM;" in scene
     assert "framingR * 0.11" not in scene
 
-    keplerian_path = scene.split("// 'keplerian'", 1)[1].split(
-        "const state0", 1
-    )[0]
-    assert "for (let nuDeg = 0; nuDeg <= 360; nuDeg += 2)" in keplerian_path
-    assert "meanToTrueAnomalyDeg(m, entry.e)" not in keplerian_path
+    assert "keplerian" not in scene.lower()
 
     starfield = scene.split("function buildStarfield()", 1)[1].split(
         "// ---------------------------------------------------------------------------", 1
@@ -284,27 +277,17 @@ def test_satellite_viewer_loads_csv_and_hdf5_databases(tmp_path):
     assert all(record.get("line1", record.get("TLE_LINE1")) == line1 for record in records)
     assert all(record.get("line2", record.get("TLE_LINE2")) == line2 for record in records)
 
-    node = shutil.which("node")
-    if node is None:
-        pytest.skip("Node.js is required to exercise the browser HDF5 reader")
-    assert node is not None
-    assert module.__file__ is not None
-    reader = Path(module.__file__).with_name("hdf5.js")
-    script = """
-const fs = require('fs');
-const vm = require('vm');
-vm.runInThisContext(fs.readFileSync(process.argv[1], 'utf8'));
-const bytes = fs.readFileSync(process.argv[2]);
-const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-const rows = new hdf5.File(buffer).get('compound').value;
-process.stdout.write(JSON.stringify(rows));
-"""
-    result = subprocess.run(
-        [node, "-e", script, str(reader), str(h5_path)],
-        check=True,
-        capture_output=True,
-        text=True,
+
+def test_plotutils_auto_units_cover_earth_moon_and_l2_cases():
+    from ssapy_toolkit.plots.plotutils import _position_scale_to_km
+
+    cases = (
+        ("LEO metres", 7_000_000.0, 1e-3),
+        ("GEO metres", 42_164_000.0, 1e-3),
+        ("low lunar orbit metres", 1_837_400.0, 1e-3),
+        ("ground site metres", 6_367_500.0, 1e-3),
+        ("lunar distance kilometres", 384_400.0, 1.0),
+        ("Sun-Earth L2 kilometres", 1_500_000.0, 1.0),
     )
-    assert json.loads(result.stdout) == [
-        {"OBJECT_NAME": "ISS COMPOUND", "TLE_LINE1": line1, "TLE_LINE2": line2}
-    ]
+    for name, radius, expected in cases:
+        assert _position_scale_to_km([[radius, 0.0, 0.0]]) == expected, name

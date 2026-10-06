@@ -161,43 +161,17 @@ def _precession_matrix(when) -> np.ndarray:
     return R3(-z) @ R2(theta) @ R3(-zeta)
 
 
-def _catalog_to_apparent_radec(ra, dec, pmra_mas, pmdec_mas,
-                               parallax_arcsec, when):
-    """Use SSAPy's catalog astrometry for a date-dependent catalog position."""
-    try:
-        from astropy.time import Time
-        from ssapy.utils import catalog_to_apparent
-    except ImportError as exc:
-        raise RuntimeError(
-            "date-dependent star positions require SSAPy and Astropy"
-        ) from exc
-
-    return catalog_to_apparent(
-        ra,
-        dec,
-        Time(when, scale="utc"),
-        pmra=np.asarray(pmra_mas, float),
-        pmdec=np.asarray(pmdec_mas, float),
-        parallax=np.asarray(parallax_arcsec, float),
-    )
-
-
-def _apply_frame(ra_hours, dec_deg, pmra_mas, pmdec_mas, when, frame,
-                 parallax_arcsec=None):
+def _apply_frame(ra_hours, dec_deg, pmra_mas, pmdec_mas, when, frame):
     """Catalogue RA/Dec -> unit vectors in the requested frame."""
-    frame = (frame or "j2000").lower()
-    if frame not in {"j2000", "gcrf", "ecef"}:
-        raise ValueError("frame must be j2000, gcrf, or ecef")
-
     ra = np.radians(np.asarray(ra_hours, float) * 15.0)
     dec = np.radians(np.asarray(dec_deg, float))
+    frame = (frame or "j2000").lower()
 
     if frame != "j2000" and when is not None:
-        if parallax_arcsec is None:
-            parallax_arcsec = np.zeros_like(np.asarray(ra_hours, float))
-        ra, dec = _catalog_to_apparent_radec(
-            ra, dec, pmra_mas, pmdec_mas, parallax_arcsec, when,
-        )
+        yrs = (_julian_date(when) - 2451545.0) / 365.25
+        # pmra is mu_alpha* (already carries cos(dec))
+        ra = ra + np.radians(np.asarray(pmra_mas, float)/3.6e6) * yrs / np.cos(dec)
+        dec = dec + np.radians(np.asarray(pmdec_mas, float)/3.6e6) * yrs
 
     v = np.stack([np.cos(dec)*np.cos(ra), np.cos(dec)*np.sin(ra), np.sin(dec)], axis=1)
 
@@ -340,8 +314,7 @@ def _load_stars(mag_limit=6.5, when=None, frame="gcrf", catalog_path=None):
         mag = df[need[2]].astype(float).values
         v = _apply_frame(df[need[0]].astype(float).values,
                          df[need[1]].astype(float).values,
-                         col('pmra'), col('pmdec'), when, frame,
-                         parallax_arcsec=col('parallax'))
+                         col('pmra'), col('pmdec'), when, frame)
 
         ci = col('ci', np.nan)
         spect = (df[cols['spect']].fillna('G').astype(str).values
@@ -364,10 +337,9 @@ def _load_stars(mag_limit=6.5, when=None, frame="gcrf", catalog_path=None):
         return None
 
 
-def star_directions(mag_limit=6.5, when=None, frame="gcrf", catalog_path=None):
+def star_directions(mag_limit=6.5, when=None, frame="gcrf"):
     """Unit vectors, magnitudes and RGB colours.  Returns (v, mag, rgb) or None."""
-    s = _load_stars(mag_limit=mag_limit, when=_to_datetime(when), frame=frame,
-                    catalog_path=catalog_path)
+    s = _load_stars(mag_limit=mag_limit, when=_to_datetime(when), frame=frame)
     return None if s is None else (s['v'], s['mag'], s['rgb'])
 
 
@@ -386,7 +358,7 @@ def _hemisphere_mask(vectors, away_from):
 
 
 def starfield_traces(sky_radius, when=None, frame="ecef", mag_limit=6.5,
-                     opacity=0.92, fallback_random=False, catalog_path=None,
+                     opacity=0.92, fallback_random=True, catalog_path=None,
                      hemisphere_away_from=None):
     """
     Star markers for a Plotly 3D scene, as a list of traces.
@@ -400,9 +372,28 @@ def starfield_traces(sky_radius, when=None, frame="ecef", mag_limit=6.5,
     d = _to_datetime(when)
     s = _load_stars(mag_limit=mag_limit, when=d, frame=frame, catalog_path=catalog_path)
     if s is None:
-        if fallback_random:
-            print("[starfield] catalogue not found — random fallback disabled")
-        return []
+        if not fallback_random:
+            return []
+        rng = np.random.default_rng(42)
+        n = 4000
+        th = rng.uniform(0, 2*np.pi, n)
+        ph = np.arccos(rng.uniform(-1, 1, n))
+        mags = rng.uniform(1.0, mag_limit, n)
+        print("[starfield] catalogue not found — random placeholder sky")
+        v = np.column_stack((
+            np.sin(ph) * np.cos(th),
+            np.sin(ph) * np.sin(th),
+            np.cos(ph),
+        ))
+        mask = _hemisphere_mask(v, hemisphere_away_from)
+        v = v[mask]
+        mags = mags[mask]
+        return [go.Scatter3d(
+            x=sky_radius*v[:, 0], y=sky_radius*v[:, 1], z=sky_radius*v[:, 2],
+            mode='markers',
+            marker=dict(size=np.clip(0.9*(mag_limit-mags)**1.25, 0.4, 5.0),
+                        color='white', opacity=0.75),
+            hoverinfo='none', showlegend=False, name='Stars')]
     v = s['v']
     mask = _hemisphere_mask(v, hemisphere_away_from)
     v = v[mask]

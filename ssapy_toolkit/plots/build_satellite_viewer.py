@@ -5,8 +5,7 @@
 
 Run:  python assemble.py
 
-Inlines scene.js, the vendored libraries (three.min.js, satellite.min.js,
-hdf5.js) and
+Inlines scene.js, the vendored libraries (three.min.js and satellite.min.js) and
 the four Earth textures into a single standalone HTML file. The texture images
 come from the external SSAPy-Data package, not from this source repository.
 
@@ -20,6 +19,7 @@ import base64
 import csv
 import json
 import os
+import re
 from datetime import datetime, timezone
 from io import BytesIO
 
@@ -125,15 +125,24 @@ def load_star_catalog(mag_limit=6.5, when=None):
         )
 
     vectors, magnitudes, colors = (np.asarray(value, dtype=float) for value in stars)
+    rotation = _gcrf_to_teme_rotation(when)
+    vectors = vectors @ rotation.T
     brightness = np.clip(1.60 - 0.15 * magnitudes, 0.16, 1.0)
     sizes = np.clip(4.8 - 0.48 * magnitudes, 1.0, 6.5)
     return {
         "epoch": when.isoformat(timespec="seconds") + "Z",
-        "frame": "gcrf-of-date",
+        "frame": "teme-of-date",
         "v": np.round(vectors, 7).ravel().tolist(),
         "c": np.round(np.clip(colors * brightness[:, None], 0, 1), 3).ravel().tolist(),
         "s": np.round(sizes, 2).tolist(),
     }
+
+
+def _gcrf_to_teme_rotation(when):
+    from astropy.time import Time
+    from ssapy.utils import gcrf_to_teme
+
+    return np.asarray(gcrf_to_teme(Time(when, scale="utc")), dtype=float)
 
 
 def _vector_track_list(values, name):
@@ -220,6 +229,46 @@ def _time_track_list(t):
     return [np.asarray(row, dtype=float).reshape(-1) for row in values]
 
 
+def _gcrf_state_vectors_to_teme(r, v, t, q=None):
+    """Rotate SSAPy GCRF state samples into the viewer's TEME frame."""
+    from astropy.time import Time
+    from ssapy.utils import gcrf_to_teme
+    from ssapy_toolkit.coordinates.attitude import quaternion_from_matrix, quaternion_multiply
+
+    r_tracks = _vector_track_list(r, "r")
+    v_tracks = _vector_track_list(v, "v")
+    t_tracks = _time_track_list(t)
+    q_tracks = _quaternion_track_list(q) if q is not None else [None] * len(r_tracks)
+    if len(v_tracks) != len(r_tracks) or len(t_tracks) != len(r_tracks):
+        raise ValueError("r, v, and t must contain the same number of tracks")
+    if len(q_tracks) == 1 and len(r_tracks) > 1:
+        q_tracks *= len(r_tracks)
+    if len(q_tracks) != len(r_tracks):
+        raise ValueError("q must contain the same number of tracks as r")
+
+    rotated_r, rotated_v, rotated_q = [], [], []
+    for ri, vi, ti, qi in zip(r_tracks, v_tracks, t_tracks, q_tracks):
+        if ri.shape != vi.shape or len(ti) != len(ri):
+            raise ValueError("r, v, and t lengths do not match")
+        matrices = np.asarray(gcrf_to_teme(Time(ti, format="unix")), dtype=float)
+        if matrices.ndim == 2:
+            matrices = matrices[None, ...]
+        rotated_r.append(np.einsum("nij,nj->ni", matrices, ri))
+        rotated_v.append(np.einsum("nij,nj->ni", matrices, vi))
+        if qi is None:
+            rotated_q.append(None)
+            continue
+        if qi.shape[0] == 1 and len(ri) > 1:
+            qi = np.repeat(qi, len(ri), axis=0)
+        if qi.shape != (len(ri), 4):
+            raise ValueError("q and r lengths do not match")
+        rotated_q.append(np.asarray([
+            quaternion_multiply(quaternion_from_matrix(matrix), quaternion)
+            for matrix, quaternion in zip(matrices, qi)
+        ]))
+    return rotated_r, rotated_v, t, rotated_q
+
+
 def _prepare_state_vectors(r, v, t, labels=None, units="m", q=None):
     """Build JSON-ready state-vector tracks for the browser viewer."""
     if units not in {"m", "km"}:
@@ -289,11 +338,9 @@ def _propagator_name(propagator):
     normalized = str(name).strip().lower().replace("_", "").replace("-", "")
     if normalized in {"sgp4", "sgp4propagator"}:
         return "sgp4"
-    if normalized in {"kepler", "keplerian", "keplerianpropagator"}:
-        return "keplerian"
     raise ValueError(
-        "propagator must be 'sgp4' or 'keplerian' when the viewer propagates "
-        "TLEs; pre-propagate with ssapy.rv for other models."
+        "propagator must be 'sgp4'; pre-propagate with ssapy.rv for other "
+        "models."
     )
 
 
@@ -378,12 +425,15 @@ def load_satellite_database(path=None):
     JSON:API exports from ESA DISCOS are accepted as-is; the browser flattens
     their ``attributes`` records and uses NORAD IDs to match available TLEs.
     """
+    explicit_path = path is not None
     if path is None:
         from ssapy_toolkit.io.tle_updater import SATELLITES_JSON
 
         path = SATELLITES_JSON
     if not os.path.isfile(path):
-        return None
+        if not explicit_path:
+            return None
+        raise FileNotFoundError(path)
     extension = os.path.splitext(os.fspath(path))[1].lower()
     if extension == ".json":
         with open(path, "r", encoding="utf-8") as f:
@@ -537,13 +587,6 @@ html = """<!DOCTYPE html>
     padding: 5px 8px; font: 12px -apple-system, sans-serif; cursor: pointer;
   }
   #db-load-btn:hover { background: #2b3c5c; }
-  #db-update-btn {
-    background: #1f4936; color: #e8edf4; border: 1px solid #3b7557; border-radius: 6px;
-    width: 100%; min-width: 0; box-sizing: border-box;
-    padding: 5px 8px; font: 12px -apple-system, sans-serif; cursor: pointer;
-  }
-  #db-update-btn:hover:not(:disabled) { background: #286044; }
-  #db-update-btn:disabled { opacity: 0.6; cursor: default; }
   #db-status { grid-column: 1 / -1; font-size: 11px; opacity: 0.65; overflow-wrap: anywhere; }
   #db-search-input {
     width: 100%; box-sizing: border-box; background: #171c26; color: #e8edf4; border: 1px solid #333c4a;
@@ -671,21 +714,20 @@ html = """<!DOCTYPE html>
   <div id="db-section">
     <div id="db-load-row">
       <button id="db-load-btn" type="button">Load database</button>
-      <button id="db-update-btn" type="button">Update all TLEs</button>
-      <span id="db-status" style="opacity:0.5">No bundled database found -- load a catalog or update the curated TLEs</span>
+      <span id="db-status" style="opacity:0.5">No bundled database found -- load a catalog</span>
     </div>
-    <input type="file" id="db-file-input" accept=".json,.csv,.h5,.hdf5,.hdf" style="display:none">
+    <input type="file" id="db-file-input" accept=".json,.csv" style="display:none">
     <input type="text" id="db-search-input" placeholder="Load a database first..." disabled>
     <div id="db-search-results"></div>
   </div>
   <div id="analysis-section">
-    <label class="analysis-toggle" title="Use supplied body-to-GCRF quaternions when state-vector data includes q=[w,x,y,z].">
+    <label class="analysis-toggle" title="Use supplied body-to-TEME quaternions when state-vector data includes q=[w,x,y,z].">
       <input type="checkbox" id="ground-track-toggle">
       <span class="analysis-swatch"></span>
       Ground tracks
       <span class="analysis-hint">sub-satellite path</span>
     </label>
-    <label class="analysis-toggle" title="Use supplied body-to-GCRF quaternions when state-vector data includes q=[w,x,y,z].">
+    <label class="analysis-toggle" title="Use supplied body-to-TEME quaternions when state-vector data includes q=[w,x,y,z].">
       <input type="checkbox" id="attitude-toggle">
       <span class="analysis-swatch" style="background:#c58cff; box-shadow:0 0 4px 0 rgba(197,140,255,0.7)"></span>
       Quaternion attitude
@@ -748,9 +790,6 @@ __THREE_JS__
 __SATELLITE_JS__
 </script>
 <script>
-__HDF5_JS__
-</script>
-<script>
 const DAY_TEXTURE_DATAURI = "data:image/jpeg;base64,__DAY_B64__";
 const NIGHT_TEXTURE_DATAURI = "data:image/jpeg;base64,__NIGHT_B64__";
 const SPECULAR_TEXTURE_DATAURI = "data:image/jpeg;base64,__SPEC_B64__";
@@ -791,12 +830,13 @@ def build(out_path=None, verbose=True, database_path=None, state_vectors=None,
         SSATK output path. If absent, the viewer keeps its file-picker fallback.
     state_vectors : list of dict or None
         JSON-ready propagated state-vector tracks. This is normally supplied by
-        :func:`satellite_viewer`; tracks may include body-to-GCRF ``q`` samples
-        in ``[w, x, y, z]`` order. When absent, the TLE demo catalog is used.
+        :func:`satellite_viewer`; tracks may include body-to-TEME ``q`` samples
+        in ``[w, x, y, z]`` order. When absent, no satellite catalog is
+        embedded unless ``database_path`` is supplied.
     propagator : str or propagator object
-        Browser propagation model for TLE-backed entries. ``"sgp4"`` is the
-        default; ``"keplerian"`` is also supported. State-vector input is
-        displayed by interpolation and is not propagated in the browser.
+        Browser propagation model for TLE-backed entries. Only ``"sgp4"`` is
+        supported. State-vector input is displayed by interpolation and is
+        not propagated in the browser.
 
     Returns
     -------
@@ -814,36 +854,36 @@ def build(out_path=None, verbose=True, database_path=None, state_vectors=None,
     )
     stars_json = json.dumps(load_star_catalog(), separators=(",", ":"))
     database_json = json.dumps(
-        load_satellite_database(database_path), separators=(",", ":")
+        load_satellite_database(database_path) if database_path is not None else None,
+        separators=(",", ":"),
     ).replace("<", "\\u003c")
     state_vectors_json = json.dumps(
         state_vectors or [], separators=(",", ":")
     ).replace("<", "\\u003c")
 
     satellite_js = text("satellite.min.js")
-    hdf5_js = text("hdf5.js")
     three_js = text("three.min.js")
     scene_js = text("satellite_viewer_scene.js")
 
-    # Work on a local copy: `html` is the module-level template and must stay
-    # un-substituted so repeated build() calls don't compound replacements.
-    doc = html
-    doc = doc.replace("__SATELLITE_JS__", satellite_js)
-    doc = doc.replace("__HDF5_JS__", hdf5_js)
-    doc = doc.replace("__DAY_B64__", day_b64)
-    doc = doc.replace("__NIGHT_B64__", night_b64)
-    doc = doc.replace("__SPEC_B64__", spec_b64)
-    doc = doc.replace("__CLOUDS_B64__", clouds_b64)
-    doc = doc.replace("__SSAPY_CONSTANTS__", ssapy_constants_json)
-    doc = doc.replace("__STAR_CATALOG__", stars_json)
-    doc = doc.replace("__STATE_VECTOR_TRACKS__", state_vectors_json)
-    doc = doc.replace("__PROPAGATOR__", json.dumps(propagator))
-    doc = doc.replace("__SATELLITE_DATABASE__", database_json)
-    doc = doc.replace("__SCENE_JS__", scene_js)
-    # Three.js last: it's the largest blob, and doing it after the others
-    # avoids any chance of a placeholder-looking substring inside it being
-    # re-substituted.
-    doc = doc.replace("__THREE_JS__", three_js)
+    replacements = {
+        "SATELLITE_JS": satellite_js,
+        "DAY_B64": day_b64,
+        "NIGHT_B64": night_b64,
+        "SPEC_B64": spec_b64,
+        "CLOUDS_B64": clouds_b64,
+        "SSAPY_CONSTANTS": ssapy_constants_json,
+        "STAR_CATALOG": stars_json,
+        "STATE_VECTOR_TRACKS": state_vectors_json,
+        "PROPAGATOR": json.dumps(propagator),
+        "SATELLITE_DATABASE": database_json,
+        "SCENE_JS": scene_js,
+        "THREE_JS": three_js,
+    }
+    doc = re.sub(
+        r"__([A-Z0-9_]+)__",
+        lambda match: replacements.get(match.group(1), match.group(0)),
+        html,
+    )
 
     if out_path is None:
         from ssapy_toolkit.plots.figpath import figpath
@@ -861,14 +901,16 @@ def satellite_viewer(r, v, t, *, labels=None, units="m", q=None, save_path=None,
     """Write the satellite WebGL viewer from propagated SSAPy state arrays.
 
     ``r`` and ``v`` are the position and velocity arrays returned by
-    ``ssapy.rv``; their default units are metres and metres/second. ``t`` is
-    the corresponding Astropy ``Time`` or GPS-second array. The existing
-    viewer scene, resolution, graphics, and controls are retained. The state
-    vectors are interpolated directly. Optional ``q`` contains body-to-GCRF
-    quaternions in ``[w, x, y, z]`` order; the viewer exposes a checkbox to
-    apply them to the spacecraft models. ``propagator`` is used only if the
-    bundled/catalog TLE path also needs browser-side propagation.
+    ``ssapy.rv`` in GCRF; their default units are metres and metres/second.
+    They are rotated into TEME before embedding because the browser's SGP4,
+    Earth rotation, and analysis paths use TEME. ``t`` is the corresponding
+    Astropy ``Time`` or GPS-second array. Optional ``q`` contains body-to-TEME
+    quaternions in ``[w, x, y, z]`` order and is rotated into body-to-TEME;
+    the viewer exposes a checkbox to apply them to the spacecraft models.
+    ``propagator`` is used only if the bundled/catalog TLE path also needs
+    browser-side propagation.
     """
+    r, v, t, q = _gcrf_state_vectors_to_teme(r, v, t, q=q)
     state_vectors = _prepare_state_vectors(r, v, t, labels=labels, units=units, q=q)
     return build(
         out_path=save_path,

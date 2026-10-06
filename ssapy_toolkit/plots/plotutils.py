@@ -2,7 +2,6 @@
 import io
 import os
 import re
-import warnings
 from enum import Enum, auto
 from numbers import Real
 from pathlib import Path
@@ -18,7 +17,7 @@ from PIL import Image as PILImage
 
 # --- Local modules ---
 from ssapy.utils import find_file
-from ..constants import EARTH_RADIUS, EARTH_MU_KM3_S2, MOON_RADIUS
+from ..constants import EARTH_RADIUS, MOON_RADIUS
 from ..vectors import rotation_matrix_from_vectors
 
 
@@ -221,23 +220,7 @@ def _ensure_nx3(values, name):
         return arr.reshape(1, 3)
     if arr.ndim == 2 and arr.shape[1] == 3:
         return arr
-    if arr.ndim == 3 and arr.shape[2] == 3:
-        raise ValueError(
-            f"{name} holds {arr.shape[0]} trajectories with shape {arr.shape}, but this "
-            f"plot draws one orbit; pass a single track such as {name}[k]."
-        )
     raise ValueError(f"{name} must be a 3-vector or an (N, 3) array; got shape {arr.shape}")
-
-
-def _first_state_vector(values, name):
-    """Return a ``(3,)`` state from a state or a propagated track.
-
-    State-based plotters take an initial condition. SSAPy hands back either a
-    ``(3,)`` state (scalar epoch) or an ``(N, 3)`` track (array of epochs); a
-    track is reduced to its first sample, the convention ``transfer_plot``
-    already uses.
-    """
-    return _ensure_nx3(values, name)[0]
 
 
 def _default_orbit_times_gps(orbit, *, n_steps=360, n_orbits=1.0):
@@ -322,13 +305,10 @@ def _position_scale_to_km(r, units="auto"):
     norms = np.linalg.norm(_ensure_nx3(r, "r"), axis=1)
     typical = float(np.nanmedian(norms)) if norms.size else 0.0
     # SSAPy native positions are metres (LEO is ~7e6), while Toolkit plotting
-    # arrays are usually kilometres.  Reject the metre interpretation when it
-    # would put the trajectory inside Earth; large kilometre arrays can easily
-    # exceed the numeric threshold used for SSAPy metres.
+    # arrays are usually kilometres.  A value above 1e6 is ambiguous: use the
+    # Moon's radius to keep low lunar-orbit metres distinct from L2 kilometres.
     candidate_radius_km = typical * 1e-3
-    if typical > 1e6 and candidate_radius_km >= EARTH_RADIUS / 1e3:
-        return 1e-3
-    return 1.0
+    return 1e-3 if typical > 1e6 and candidate_radius_km >= MOON_RADIUS / 1e3 else 1.0
 
 
 def _velocity_scale_to_kms(v, units="auto"):
@@ -345,22 +325,6 @@ def _velocity_scale_to_kms(v, units="auto"):
     return 1e-3 if typical > 100.0 else 1.0
 
 
-def _auto_velocity_scale_for_radius(v, r_km):
-    """Infer m/s versus km/s using a physically plausible Earth speed."""
-    speed = float(np.nanmedian(np.linalg.norm(_ensure_nx3(v, "v"), axis=1)))
-    radius = float(np.nanmedian(np.linalg.norm(_ensure_nx3(r_km, "r_km"), axis=1)))
-    if not np.isfinite(speed) or not np.isfinite(radius) or speed <= 0.0 or radius <= 0.0:
-        return _velocity_scale_to_kms(v, "auto")
-
-    # Escape speed is a generous Earth-orbit scale: a very eccentric
-    # apoapsis can be far below circular speed, while a value many times
-    # escape speed is not credible in the numeric unit it was supplied in.
-    expected = np.sqrt(2.0 * EARTH_MU_KM3_S2 / radius)
-    if speed > 10.0 * expected and speed / 1e3 <= 10.0 * expected:
-        return 1e-3
-    return 1.0
-
-
 def normalize_orbit_trajectory(
     *,
     orbit=None,
@@ -372,7 +336,6 @@ def normalize_orbit_trajectory(
     v_units="auto",
     n_steps=360,
     n_orbits=1.0,
-    warn_missing_time=True,
 ):
     """Normalize SSAPy orbit outputs into ``r_km, v_kms, t`` for Plotly helpers.
 
@@ -396,28 +359,19 @@ def normalize_orbit_trajectory(
         raise ValueError("Provide either orbit= or r= trajectory input.")
 
     r_arr = _ensure_nx3(r, "r")
-    r_scale = _position_scale_to_km(r_arr, r_units)
-    r_km = r_arr * r_scale
+    r_km = r_arr * _position_scale_to_km(r_arr, r_units)
 
     v_kms = None
     if v is not None:
         v_arr = _ensure_nx3(v, "v")
         if len(v_arr) != len(r_arr):
             raise ValueError("v must have the same number of samples as r")
-        auto_v = v_units is None or str(v_units).strip().lower() == "auto"
-        v_scale = (
-            _auto_velocity_scale_for_radius(v_arr, r_km)
-            if auto_v and r_scale == 1e-3
-            else _velocity_scale_to_kms(v_arr, v_units)
-        )
-        v_kms = v_arr * v_scale
+        v_kms = v_arr * _velocity_scale_to_kms(v_arr, v_units)
     elif require_velocity:
         raise ValueError("Velocity input is required; provide v= or an Orbit object.")
 
     t_gps = _as_gps_seconds_array(t)
     if t_gps is None:
-        if warn_missing_time:
-            _warn_missing_epoch(2)  # normalize_orbit_trajectory -> caller
         t_gps = np.zeros(len(r_arr), dtype=float)
     t_gps = np.asarray(t_gps, dtype=float).reshape(-1)
     if t_gps.size == 1 and len(r_arr) > 1:
@@ -428,24 +382,7 @@ def normalize_orbit_trajectory(
     return r_km, v_kms, Time(t_gps, format="gps")
 
 
-_MISSING_EPOCH_MESSAGE = (
-    "No epoch was given, so the trajectory is placed at GPS 0 (1980-01-06). "
-    "Earth rotation, lighting, the Moon and any ground track are drawn for that "
-    "date; pass the t that ssapy.compute.rv was evaluated at."
-)
-
-
-def _warn_missing_epoch(stacklevel):
-    """Warn from the plot function that called a normalizer without epochs.
-
-    Call depth from the user to the normalizer varies by plot, so the warning
-    is attributed to the normalizer's caller -- a plot function -- rather than
-    guessing at the user's own line.
-    """
-    warnings.warn(_MISSING_EPOCH_MESSAGE, UserWarning, stacklevel=stacklevel + 1)
-
-
-def valid_orbits(r, t, drop_empty=True, warn=True, warn_missing_time=True):
+def valid_orbits(r, t, drop_empty=True, warn=True):
     """
     Normalize r and t into parallel lists of shape-(n,3) ndarrays and astropy Time objects.
 
@@ -508,8 +445,6 @@ def valid_orbits(r, t, drop_empty=True, warn=True, warn_missing_time=True):
 
         # None -> dummy gps time arrays (zeros)
         if t_in is None:
-            if warn_missing_time:
-                _warn_missing_epoch(3)  # nested helper -> valid_orbits -> caller
             return [Time(np.zeros(len(rr), dtype=float), format="gps") for rr in r_list]
 
         # Single Time object -> broadcast if needed
@@ -955,18 +890,11 @@ def save_plotly_figure(
     return save_path
 
 
-def plotly_orbit_trace(r_km, *, name="Orbit", color="#ff4d4d", width=5, go_module=None,
-                       r_units="auto"):
-    """Return a Plotly 3D line trace for an orbit trajectory, drawn in kilometres.
-
-    ``r_units`` follows the Plotly-family convention of
-    ``normalize_orbit_trajectory``: ``"auto"`` converts SSAPy-native metres,
-    ``"m"`` or ``"km"`` force the conversion.
-    """
+def plotly_orbit_trace(r_km, *, name="Orbit", color="#ff4d4d", width=5, go_module=None):
+    """Return a Plotly 3D line trace for an orbit trajectory in kilometres."""
     if go_module is None:
         import plotly.graph_objects as go_module
     r_km = _ensure_nx3(r_km, "r_km")
-    r_km = r_km * _position_scale_to_km(r_km, r_units)
     return go_module.Scatter3d(
         x=r_km[:, 0],
         y=r_km[:, 1],
