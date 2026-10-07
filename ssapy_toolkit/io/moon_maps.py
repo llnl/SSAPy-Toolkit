@@ -88,11 +88,12 @@ def download_source(url, directory):
 
 def load_dem(path):
     """
-    Accepts either the packaged .npz or NASA's raw uint16 LOLA TIFF.
+    Accepts either NASA's raw uint16 LOLA TIFF or an elevation .npz.
 
-    The TIFF is the 16 ppd source; the packaged npz is downsampled to 8 ppd.
-    The higher-resolution TIFF preserves more detail in the normal map; the
-    horizon map is independently resized below.
+    The TIFF is the 16 ppd source and preserves the most detail in the normal
+    map. An .npz must hold elevations in km relative to R_MOON_KM, in an
+    ``elev_km`` array or as its first array. The horizon map is independently
+    resized below.
     """
     path = os.path.expanduser(path)
     if path.lower().endswith((".tif", ".tiff")):
@@ -126,7 +127,8 @@ def bake_normals(dem):
     """
     H, W = dem.shape
     latn = np.radians(np.linspace(90, -90, H))[:, None]
-    s_lat = np.gradient(dem, axis=0) / (np.pi / H) / R_MOON_KM
+    # Rows run north to south, so the row gradient is minus the northward slope.
+    s_lat = -np.gradient(dem, axis=0) / (np.pi / H) / R_MOON_KM
     s_lon = (np.gradient(dem, axis=1) / (2 * np.pi / W)
              / (R_MOON_KM * np.maximum(np.cos(latn), 0.05)))
     nx, ny, nz = -s_lon, -s_lat, np.ones_like(s_lon)
@@ -138,9 +140,8 @@ def bake_horizon(dem, n_az=16, n_step=128, max_km=260.0, shape=None):
     """
     Horizon elevation per texel per bearing, quantised to uint8.
 
-    Quantised inside the loop so peak memory holds one float grid rather
-    than the whole float stack: at 2880x1440x16 that is 33 MB instead of
-    265 MB.
+    Quantised inside the loop, so the bearings are kept as uint8 rather than
+    as a float64 stack: at 2880x1440x16 that is 66 MB instead of 531 MB.
 
     Bearing 0 is north, increasing eastward.
     """
