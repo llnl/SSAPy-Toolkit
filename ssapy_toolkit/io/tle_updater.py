@@ -3,7 +3,8 @@ tle_updater.py
 ==============
 Automatic TLE updater for coverage_analysis.py
 
-Fetches the latest TLEs from Space-Track.org and updates your SATELLITES list
+Fetches the latest TLEs from Space-Track.org (primary)
+or Celestrak (fallback) and updates your SATELLITES list
 before each analysis run.
 
 Usage in coverage_analysis.py:
@@ -49,7 +50,7 @@ _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__f
 #
 # If neither is set, ST_USER stays as the placeholder below, and the
 # existing "ST_USER != 'your_email@example.com'" checks elsewhere in this
-# file skip network updates and retain cached or existing TLEs.
+# file correctly skip Space-Track and fall back to Celestrak only.
 def _load_local_credentials():
     """Read ST_USER / ST_PASSWORD from a repo-root tle_credentials_local.py.
 
@@ -168,7 +169,30 @@ def _norad_from_tle(line1):
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+# CELESTRAK FETCHER (no account needed)
 # ═════════════════════════════════════════════════════════════════════════════
+
+def fetch_tle_celestrak(norad_id):
+    """
+    Fetch the latest TLE for a satellite from Celestrak.
+    No account required. Uses SSL bypass for restricted networks.
+    Returns (line1, line2) or (None, None) on failure.
+    """
+    url = (f"https://celestrak.org/NORAD/elements/gp.php"
+           f"?CATNR={norad_id}&FORMAT=JSON")
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "ssapy-tle-updater/1.0"}
+        )
+        with urllib.request.urlopen(req, context=SSL_CTX, timeout=15) as r:
+            data = json.loads(r.read().decode())
+            if data and len(data) > 0:
+                return data[0].get("TLE_LINE1"), data[0].get("TLE_LINE2")
+    except Exception as e:
+        print(f"  [celestrak] NORAD {norad_id} failed: {e}")
+    return None, None
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 # SPACE-TRACK FETCHER (requires free account)
@@ -754,20 +778,26 @@ def add_search_to_satellites(satellites, search_term,
 # MAIN UPDATER
 # ═════════════════════════════════════════════════════════════════════════════
 
-def update_satellites_auto(satellites, force_refresh=False, verbose=True):
+def update_satellites_auto(satellites, use_spacetrack=True, use_celestrak=True,
+                            force_refresh=False, verbose=True):
     """
     Update TLEs in your SATELLITES list automatically.
 
     For each satellite with type='tle':
       1. Check if cached TLE is still fresh (< 2 hours old)
-      2. If stale, fetch from Space-Track
-      3. Update the satellite dict with the new TLE
-      4. Save to local cache for next run
+      2. If stale, try Space-Track first (most accurate)
+      3. Fall back to Celestrak if Space-Track fails
+      4. Update the satellite dict with the new TLE
+      5. Save to local cache for next run
 
     Parameters
     ----------
     satellites : list
         Your SATELLITES list from coverage_analysis.py
+    use_spacetrack : bool
+        Try Space-Track.org first. Requires ST_USER and ST_PASSWORD.
+    use_celestrak : bool
+        Fall back to Celestrak if Space-Track fails.
     force_refresh : bool
         Ignore cache and always fetch fresh TLEs.
     verbose : bool
@@ -790,7 +820,7 @@ def update_satellites_auto(satellites, force_refresh=False, verbose=True):
         print("\n── TLE Updater ─────────────────────────────────────────")
         print(f"  Cache file : {_cache_file()}")
         print(f"  Max age    : {CACHE_MAX_AGE_SECONDS // 60} minutes")
-        print("  Source     : Space-Track")
+        print(f"  Sources    : {'Space-Track + ' if use_spacetrack else ''}{'Celestrak' if use_celestrak else ''}")
         print()
 
     for sat in satellites:
@@ -817,12 +847,19 @@ def update_satellites_auto(satellites, force_refresh=False, verbose=True):
             cached += 1
             continue
 
+        # Try Space-Track
         line1, line2 = None, None
-        if ST_USER != "your_email@example.com":
+        if use_spacetrack and ST_USER != "your_email@example.com":
             line1, line2, session_cookie = fetch_tle_spacetrack(
                 norad_id, session_cookie)
             if line1:
                 source = "space-track"
+
+        # Fall back to Celestrak
+        if line1 is None and use_celestrak:
+            line1, line2 = fetch_tle_celestrak(norad_id)
+            if line1:
+                source = "celestrak"
 
         if line1 and line2:
             sat["line1"] = line1
@@ -1138,6 +1175,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="TLE updater")
     parser.add_argument("--force",         action="store_true",
                         help="Force refresh all TLEs ignoring cache")
+    parser.add_argument("--no-spacetrack", action="store_true",
+                        help="Use Celestrak only")
+    parser.add_argument("--no-celestrak",  action="store_true",
+                        help="Use Space-Track only, no Celestrak fallback")
     parser.add_argument("--add-group",     type=str, default=None,
                         help="Add a satellite group")
     parser.add_argument("--search",        type=str, default=None,
@@ -1197,6 +1238,8 @@ if __name__ == "__main__":
     else:
         SATELLITES = update_satellites_auto(
             SATELLITES,
+            use_spacetrack=not args.no_spacetrack,
+            use_celestrak=not args.no_celestrak,
             force_refresh=args.force,
             verbose=True,
         )

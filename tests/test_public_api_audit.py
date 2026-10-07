@@ -639,6 +639,13 @@ def test_satellite_viewer_builder_helpers(monkeypatch, tmp_path):
     database = [{"name": "TEST SAT", "line1": "1 " + "0" * 67, "line2": "2 " + "0" * 67}]
     monkeypatch.setattr(builder, "load_satellite_database", lambda path=None: database)
     monkeypatch.setattr(builder, "text", lambda filename: f"/* {filename} */")
+    default_out = tmp_path / "viewer_default.html"
+    assert builder.build(out_path=default_out, verbose=False) == default_out
+    default_built = default_out.read_text(encoding="utf-8")
+    assert "__SCENE_JS__" not in default_built
+    assert "day_b64" in default_built
+    assert '"name":"TEST SAT"' not in default_built
+
     out = tmp_path / "viewer.html"
     assert builder.build(out_path=out, verbose=False, database_path="catalog.json") == out
     built = out.read_text(encoding="utf-8")
@@ -727,10 +734,9 @@ def test_satellite_viewer_rotates_gcrf_state_to_teme(monkeypatch):
         verbose=False,
     )
     track = captured["state_vectors"][0]
-    assert track["r"][0] == pytest.approx(0.0)
-    assert track["r"][1] == pytest.approx(7_000.0)
-    assert track["v"][0] == pytest.approx(-7.5)
-    assert track["v"][1] == pytest.approx(0.0)
+    assert "q" not in track
+    assert track["r"][0] == pytest.approx([0.0, 7_000.0, 0.0])
+    assert track["v"][0] == pytest.approx([-7.5, 0.0, 0.0])
 
 
 def test_satellite_viewer_explicit_missing_database_raises(tmp_path):
@@ -771,8 +777,11 @@ def test_tle_cache_configuration_beats_legacy_path(monkeypatch, tmp_path):
 
 
 def test_tle_cache_path_failure_does_not_break_resolution(monkeypatch, tmp_path):
-    from ssapy_toolkit.io import ssatk_data, tle_updater
+    import importlib
 
+    from ssapy_toolkit.io import tle_updater
+
+    ssatk_data = importlib.import_module("ssapy_toolkit.io.ssatk_data")
     monkeypatch.setattr(ssatk_data, "datapath", lambda name: (_ for _ in ()).throw(RuntimeError("read only")))
     monkeypatch.setattr(tle_updater.os.path, "expanduser", lambda path: str(tmp_path))
 

@@ -266,7 +266,7 @@ def _gcrf_state_vectors_to_teme(r, v, t, q=None):
             quaternion_multiply(quaternion_from_matrix(matrix), quaternion)
             for matrix, quaternion in zip(matrices, qi)
         ]))
-    return rotated_r, rotated_v, t, rotated_q
+    return rotated_r, rotated_v, t, (rotated_q if q is not None else None)
 
 
 def _prepare_state_vectors(r, v, t, labels=None, units="m", q=None):
@@ -824,10 +824,9 @@ def build(out_path=None, verbose=True, database_path=None, state_vectors=None,
     verbose : bool
         Print the written path and size, as the old module-level code did.
     database_path : str or None
-        Satellite JSON, CSV, or HDF5 file to bundle (including ESA DISCOS JSON).
-        Defaults to an existing
-        ``~/ssatk_data/ssapy_satellites.json`` catalog, then the configured
-        SSATK output path. If absent, the viewer keeps its file-picker fallback.
+        Satellite JSON, CSV, or HDF5 file to embed, including ESA DISCOS JSON.
+        None (the default) embeds no catalog, and the page keeps its
+        file-picker.
     state_vectors : list of dict or None
         JSON-ready propagated state-vector tracks. This is normally supplied by
         :func:`satellite_viewer`; tracks may include body-to-TEME ``q`` samples
