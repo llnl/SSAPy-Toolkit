@@ -15,8 +15,11 @@ def calculate_errors(data: np.ndarray, CI: float = 0.05) -> np.ndarray:
     Author: Travis Yeager (yaeger7@llnl.gov)
     """
     data_median = []
-    data = np.sort(data)
-    median_ = np.nanmedian(data)
+    # Drop NaNs before sorting: np.sort puts them last, so they would shift the
+    # upper index while nanmedian ignores them.
+    data = np.asarray(data, dtype=float)
+    data = np.sort(data[~np.isnan(data)])
+    median_ = np.median(data)
     data_median.append(median_)
     err = [median_ - data[int(CI * len(data))], data[int((1 - CI) * len(data))] - median_]
     return err, data_median

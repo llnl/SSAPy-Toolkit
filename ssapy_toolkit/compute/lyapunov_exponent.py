@@ -29,8 +29,9 @@ def lyapunov_exponent_from_statevectors(
     max_horizon : int or None
         Max number of forward steps k to track divergence. If None, uses as much as possible.
     fit_window : tuple
-        Either (t_min_frac, t_max_frac) as fractions of the available time range (0..1),
-        OR (t_min, t_max) in the same time units as dt if values > 1.
+        Either (t_min_frac, t_max_frac) with 0 <= t_min_frac < t_max_frac <= 1,
+        as fractions of the available time range, OR (t_min, t_max) in the same
+        time units as dt otherwise.
     min_initial_separation : float
         Pairs with initial separation below this are discarded (avoids log(0) and numerical issues).
     trim_percentile : float or None
@@ -143,8 +144,9 @@ def lyapunov_exponent_from_statevectors(
     y_f = mean_log_div[finite]
 
     fw0, fw1 = fit_window
-    # If fit_window values look like fractions in (0,1], interpret as fractions of available range
-    if (0 < fw0 <= 1.0) and (0 < fw1 <= 1.0) and (fw1 > fw0):
+    # Values in [0, 1] are fractions of the available range, as documented; a
+    # window starting at 0 (e.g. (0.0, 0.1)) is a fraction too.
+    if (0.0 <= fw0 < fw1 <= 1.0):
         tmin = t_f.min() + fw0 * (t_f.max() - t_f.min())
         tmax = t_f.min() + fw1 * (t_f.max() - t_f.min())
     else:
