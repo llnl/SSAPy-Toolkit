@@ -62,8 +62,8 @@ def test_apsis_and_velocity_formula_helpers():
     assert keplerian.peri_apo_from_rv(rp, ra) == {"a": a, "e": e}
     assert keplerian.apapsis_from_a_rp(a, rp) == ra
     assert np.isclose(keplerian.vcircular(rp, mu_=EARTH_MU), np.sqrt(EARTH_MU / rp))
-    assert np.isclose(keplerian.vis_viva(a, rp, EARTH_MU), np.sqrt(EARTH_MU * (2.0 / rp - 1.0 / a)))
-    assert np.isclose(keplerian.v_periapsis(a, rp, EARTH_MU), keplerian.vis_viva(a, rp, EARTH_MU))
+    assert np.isclose(keplerian.vis_viva(a=a, r=rp, mu=EARTH_MU), np.sqrt(EARTH_MU * (2.0 / rp - 1.0 / a)))
+    assert np.isclose(keplerian.v_periapsis(a, rp, EARTH_MU), keplerian.vis_viva(a=a, r=rp, mu=EARTH_MU))
 
 
 @pytest.mark.parametrize("converter", ["kepler_to_state", "kepler_to_state_loop"])

@@ -106,7 +106,7 @@ def gcrf_to_lat_lon(r: np.ndarray, t: np.ndarray) -> np.ndarray:
     - t (np.ndarray): Time array for conversion.
 
     Returns:
-    - Tuple of longitude, latitude, and height above the Earth's surface.
+    - Tuple of geodetic longitude (rad), latitude (rad), and height above the WGS84 ellipsoid (m), from ``ssapy.groundTrack``.
     """
     lon, lat, height = groundTrack(r, t)
     return lon, lat, height

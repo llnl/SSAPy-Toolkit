@@ -1043,9 +1043,15 @@ def vcircular(r=au_to_m, mu_=1.32712440018e20 + 2.2032e13 + 3.24859e14):
     return np.sqrt(mu_ / r)
 
 
-def vis_viva(a, r, mu):
+def vis_viva(*, a, r, mu):
     """
     Calculate orbital velocity using vis-viva equation.
+
+    The arguments are keyword-only: the package-level
+    ``ssapy_toolkit.orbital_mechanics.vis_viva`` is
+    :func:`ssapy_toolkit.orbital_mechanics.misc.vis_viva`, which takes
+    ``(mu, r, a)`` positionally, and a positional call written for one order
+    would silently return the wrong speed under the other.
 
     Parameters
     ----------

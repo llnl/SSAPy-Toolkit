@@ -1,9 +1,8 @@
 import numpy as np
 from typing import Tuple, Optional
 
-# Source: Wikipedia Orbital mechanics: https://en.wikipedia.org/wiki/Orbital_mechanics ([en.wikipedia.org](https://en.wikipedia.org/wiki/Orbital_mechanics))
-
-G = 6.67430e-11  # gravitational constant (m^3 kg^-1 s^-2)
+# Closed-form two-body relations; see e.g. Vallado, Fundamentals of
+# Astrodynamics and Applications (4th ed.), chapters 1-2 and 6.
 
 
 def escape_velocity(mu: float, r: float) -> float:
