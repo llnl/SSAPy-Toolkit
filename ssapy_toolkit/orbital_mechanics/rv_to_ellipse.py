@@ -96,33 +96,36 @@ def rv_to_ellipse(
             # determine Δf that brings r to 2·|r0|
             cos_f_lim = (p/(2*r_mag) - 1)/e
             cos_f_lim = np.clip(cos_f_lim, -1.0, 1.0)
-            f_lim = np.arccos(cos_f_lim)          # positive angle
-            f_steps = np.linspace(0,  f_lim, total)[1:]
+            f_lim = np.arccos(cos_f_lim)          # true anomaly where r = 2|r0|, outbound
+            # ta is stored in [0, 2 pi); an inbound state has a negative true
+            # anomaly. The steps are increments from ta, so they run to f_lim - ta.
+            ta_signed = ta - 2*np.pi if ta > np.pi else ta
+            f_steps = np.linspace(0, f_lim - ta_signed, total)[1:]
+            ta = ta_signed
 
         # generate the remaining samples
+        # u_hat points at r0, which sits at true anomaly ta, so a sample at
+        # true anomaly ta + df lies at angle df from u_hat.
         for k, df in enumerate(f_steps, start=1):
             f = ta + df
             r_k = p / (1 + e*np.cos(f))
-            r_vec = r_k*(np.cos(f)*u_hat + np.sin(f)*v_hat)
-            r_samples[k] = r_vec
+            r_hat = np.cos(df)*u_hat + np.sin(df)*v_hat
+            t_hat = -np.sin(df)*u_hat + np.cos(df)*v_hat
+            r_samples[k] = r_k * r_hat
 
             # velocity
             v_r = (mu/h)*e*np.sin(f)
             v_t = (mu/h)*(1 + e*np.cos(f))
-            r_hat = r_vec / r_k
-            t_hat = -np.sin(f)*u_hat + np.cos(f)*v_hat
             v_samples[k] = v_r*r_hat + v_t*t_hat
 
-        # relative times via area law
-        delta_f = np.diff(np.concatenate(([0.0], f_steps)))
-        r_norm = np.linalg.norm(r_samples, axis=1)
-        dt_mid = 0.5*(r_norm[:-1]**2 + r_norm[1:]**2)/h * delta_f
-        t_rel[1:] = np.cumsum(dt_mid)
+        # relative times from Kepler's equation
+        t_rel[1:] = _time_since(ta, ta + f_steps, e=e, a=a, p=p, mu=mu)
 
     # ── absolute times array ─────────────────────────────────────────
     if t0 is not None:
         if Time is not None and isinstance(t0, Time):
-            t_abs = (t0 + t_rel * t0.unit).astype(object)
+            from astropy.time import TimeDelta
+            t_abs = t0 + TimeDelta(t_rel, format="sec")
         else:
             t_abs = t0 + t_rel
     else:
@@ -143,6 +146,39 @@ def rv_to_ellipse(
         "plane_basis": plane_basis, "rot_dir": 1,
         "mu": mu,
     }
+
+
+
+def _time_since(f0, f, *, e, a, p, mu):
+    """Time (s) to move from true anomaly f0 to each f (f >= f0, unwrapped) on a conic."""
+    f = np.asarray(f, dtype=float)
+    if e < 1.0:
+        n = np.sqrt(mu / a**3)
+
+        def mean_anomaly(nu):
+            E = 2.0 * np.arctan(np.sqrt((1.0 - e) / (1.0 + e)) * np.tan(nu / 2.0))
+            return E - e * np.sin(E)
+
+        # Count whole revolutions separately so tan(nu/2) never crosses pi.
+        def unwrapped(nu):
+            turns = np.floor((nu + np.pi) / (2.0 * np.pi))
+            return mean_anomaly(nu - 2.0 * np.pi * turns) + 2.0 * np.pi * turns
+
+        return (unwrapped(f) - unwrapped(f0)) / n
+    if e == 1.0:
+        def barker(nu):
+            D = np.tan(nu / 2.0)
+            return np.sqrt(p**3 / mu) * 0.5 * (D + D**3 / 3.0)
+
+        return barker(f) - barker(f0)
+
+    n = np.sqrt(mu / (-a) ** 3) if np.isfinite(a) else np.sqrt(mu / (p / (e * e - 1.0)) ** 3)
+
+    def hyperbolic_mean_anomaly(nu):
+        H = 2.0 * np.arctanh(np.sqrt((e - 1.0) / (e + 1.0)) * np.tan(nu / 2.0))
+        return e * np.sinh(H) - H
+
+    return (hyperbolic_mean_anomaly(f) - hyperbolic_mean_anomaly(f0)) / n
 
 
 # ── quick demo ───────────────────────────────────────────────────────

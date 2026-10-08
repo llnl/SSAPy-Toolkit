@@ -31,7 +31,7 @@ def ellipse_from_rv(r, v, num=500, f_span=None, t0=None):
     e_vec = np.cross(v, h_vec) / mu - r / r_mag
     e = np.linalg.norm(e_vec)
     Energy = np.dot(v, v) / 2.0 - mu / r_mag
-    a = -mu / (2.0 * Energy)          # (negative for hyperbola)
+    a = -mu / (2.0 * Energy) if Energy != 0.0 else np.inf  # negative for hyperbola, inf for parabola
     p = h * h / mu
 
     # ---------- orientation angles -----------------------------------------
@@ -101,7 +101,8 @@ def ellipse_from_rv(r, v, num=500, f_span=None, t0=None):
                          [0.0,  c, -s],
                          [0.0,  s,  c]])
 
-    Q = R3(-raan) @ R1(-i_rad) @ R3(-pa)
+    # Perifocal -> inertial: R3(RAAN) R1(i) R3(pa), with R1/R3 active rotations.
+    Q = R3(raan) @ R1(i_rad) @ R3(pa)
 
     pts  = (Q @ np.vstack((x_pf,  y_pf,  z_pf))).T
     vels = (Q @ np.vstack((vx_pf, vy_pf, vz_pf))).T
@@ -120,7 +121,8 @@ def ellipse_from_rv(r, v, num=500, f_span=None, t0=None):
         period = 2.0 * np.pi / n_mean
     elif abs(e - 1.0) <= tol:
         D = np.tan(f / 2.0)
-        t_rel = (p ** 1.5 / np.sqrt(mu)) * (D + D ** 3 / 3.0)
+        # Barker's equation: t = (1/2) sqrt(p^3 / mu) (D + D^3 / 3)
+        t_rel = 0.5 * (p ** 1.5 / np.sqrt(mu)) * (D + D ** 3 / 3.0)
         t_rel -= t_rel[0]
     else:
         sinhH = np.sqrt((e - 1.0) / (e + 1.0)) * np.tan(f / 2.0)
@@ -139,7 +141,10 @@ def ellipse_from_rv(r, v, num=500, f_span=None, t0=None):
     v_hat = np.cross(h_hat, u_hat)
     rot_dir = 1 if h_hat[2] >= 0.0 else -1
 
-    F2 = 2.0 * a * e_vec if e > tol else np.zeros(3)
+    if not np.isfinite(a):
+        F2 = np.full(3, np.nan)  # a parabola's second focus is at infinity
+    else:
+        F2 = 2.0 * a * e_vec if e > tol else np.zeros(3)
 
     result = {
         # trajectory
