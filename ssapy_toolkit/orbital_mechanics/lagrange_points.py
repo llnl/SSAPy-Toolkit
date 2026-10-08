@@ -2,7 +2,6 @@ import numpy as np
 from ssapy import get_body
 from astropy.time import Time
 
-from ..vectors import rotation_matrix_from_vectors
 from ..constants import EARTH_MU, MOON_MU
 from ..coordinates import gcrf_to_lunar, gcrf_to_lunar_fixed
 
@@ -49,6 +48,56 @@ def moon_normal_vector(t):
     return normal / normal_norm[..., np.newaxis]
 
 
+def _cr3bp_collinear_fractions(mass_ratio):
+    """Collinear equilibria of the circular restricted three-body problem.
+
+    Returns the signed distances of L1, L2, and L3 from the primary along the
+    primary-to-secondary line, in units of the primary-secondary separation.
+    """
+    from scipy.optimize import brentq
+
+    mu = mass_ratio
+
+    def net_acceleration(x):  # rotating frame, barycentric x, primary at -mu
+        return (x - (1.0 - mu) * (x + mu) / abs(x + mu) ** 3
+                - mu * (x - 1.0 + mu) / abs(x - 1.0 + mu) ** 3)
+
+    eps = 1e-12
+    l1 = brentq(net_acceleration, -mu + eps, 1.0 - mu - eps, xtol=1e-15)
+    l2 = brentq(net_acceleration, 1.0 - mu + eps, 2.0, xtol=1e-15)
+    l3 = brentq(net_acceleration, -2.0, -mu - eps, xtol=1e-15)
+    return l1 + mu, l2 + mu, l3 + mu
+
+
+def _earth_moon_lagrange_points(t):
+    """Earth-centred GCRF positions (m) of the instantaneous Earth-Moon L1-L5."""
+    if isinstance(t, list):
+        t = [item.gps if isinstance(item, Time) else item for item in t]
+    elif isinstance(t, Time):
+        t = t.gps
+    scalar = np.ndim(t) == 0
+    t_gps = np.atleast_1d(np.asarray(t, dtype=float))
+    moon_body = get_body("moon")  # keep the Body referenced while it is used
+    r_moon = np.asarray(moon_body.position(t_gps), dtype=float).reshape(3, -1).T
+    v_moon = (np.asarray(moon_body.position(t_gps + 60.0), dtype=float).reshape(3, -1).T
+              - np.asarray(moon_body.position(t_gps - 60.0), dtype=float).reshape(3, -1).T) / 120.0
+    d = np.linalg.norm(r_moon, axis=-1, keepdims=True)
+    x_hat = r_moon / d
+    z_hat = np.cross(r_moon, v_moon)
+    z_hat /= np.linalg.norm(z_hat, axis=-1, keepdims=True)
+    y_hat = np.cross(z_hat, x_hat)  # along the Moon's motion
+
+    f1, f2, f3 = _cr3bp_collinear_fractions(MOON_MU / (EARTH_MU + MOON_MU))
+    points = {
+        "L1": f1 * d * x_hat,
+        "L2": f2 * d * x_hat,
+        "L3": f3 * d * x_hat,
+        "L4": d * (0.5 * x_hat + np.sqrt(3.0) / 2.0 * y_hat),
+        "L5": d * (0.5 * x_hat - np.sqrt(3.0) / 2.0 * y_hat),
+    }
+    return {key: value[0] if scalar else value for key, value in points.items()}
+
+
 def lunar_lagrange_points(t):
     """
     Calculate the positions of the lunar Lagrange points (L1, L2, L3, L4, L5)
@@ -67,57 +116,26 @@ def lunar_lagrange_points(t):
     -------
     dict
         A dictionary containing the positions of the Lagrange points:
-        - "L1": Position of L1 from Earth in the Moon's direction (np.ndarray or None if discriminant < 0)
-        - "L2": Position of L2 from Earth in the Moon's direction (np.ndarray or None if discriminant < 0)
-        - "L3": Position of L3 (opposite to the Moon, on the far side of Earth)
+        - "L1": Position of L1, between Earth and the Moon
+        - "L2": Position of L2, beyond the Moon
+        - "L3": Position of L3, on the far side of Earth
         - "L4": Position of L4 (60 degrees ahead of the Moon in its orbit)
         - "L5": Position of L5 (60 degrees behind the Moon in its orbit)
 
     Notes
     -----
-    - L1 and L2 are calculated by solving a quadratic equation.
-    - L4 and L5 are approximated by shifting the Moon's position forward
-      or backward by 1/6 of its orbital period.
-    - L3 is simply the position opposite the Moon.
+    - The points are the equilibria of the circular restricted three-body
+      problem scaled to the instantaneous Earth-Moon distance d. L1, L2, and L3
+      lie on the Earth-Moon line at about 0.849 d, 1.168 d, and -0.993 d from
+      Earth; L4 and L5 form equilateral triangles with Earth and the Moon in
+      the instantaneous orbital plane, leading and trailing the Moon.
+    - Positions are Earth-centred GCRF in metres.
 
     Author
     ------
     Travis Yeager (yeager7@llnl.gov)
     """
-    if isinstance(t, list):
-        t = [item.gps if isinstance(item, Time) else item for item in t]
-    elif isinstance(t, Time):
-        t = t.gps
-    moon_body = get_body("moon")
-    r = moon_body.position(t).T
-    d = np.linalg.norm(r)  # Distance between Earth and Moon
-    unit_vector_moon = r / np.linalg.norm(r, axis=-1)
-    # plane_vector = np.cross(r, r_random)
-    lunar_period_seconds = 2.3605915968e6
-
-    # Coefficients of the quadratic equation
-    a = EARTH_MU - MOON_MU
-    b = 2 * MOON_MU * d
-    c = -MOON_MU * d**2
-
-    # Solve the quadratic equation
-    discriminant = b**2 - 4 * a * c
-
-    if discriminant >= 0:
-        L1_from_moon = (-b - np.sqrt(discriminant)) / (2 * a) * unit_vector_moon
-        L2_from_moon = (-b + np.sqrt(discriminant)) / (2 * a) * unit_vector_moon
-    else:
-        print("Discriminate is less than 0! THAT'S WEIRD FIX IT.")
-        L1_from_moon = None
-        L2_from_moon = None
-
-    return {
-        "L1": L1_from_moon + r,
-        "L2": L2_from_moon + r,
-        "L3": -r,
-        "L4": moon_body.position(t + lunar_period_seconds / 6).T,
-        "L5": moon_body.position(t - lunar_period_seconds / 6).T
-    }
+    return _earth_moon_lagrange_points(t)
 
 
 def lunar_lagrange_points_circular(t):
@@ -138,65 +156,26 @@ def lunar_lagrange_points_circular(t):
     -------
     dict
         A dictionary containing the positions of the Lagrange points:
-        - "L1": Position of L1 from Earth in the Moon's direction (np.ndarray or None if discriminant < 0)
-        - "L2": Position of L2 from Earth in the Moon's direction (np.ndarray or None if discriminant < 0)
-        - "L3": Position of L3 (opposite to the Moon, on the far side of Earth)
+        - "L1": Position of L1, between Earth and the Moon
+        - "L2": Position of L2, beyond the Moon
+        - "L3": Position of L3, on the far side of Earth
         - "L4": Position of L4 (60 degrees ahead of the Moon in its orbit)
         - "L5": Position of L5 (60 degrees behind the Moon in its orbit)
 
     Notes
     -----
-    - L1 and L2 are calculated by solving a quadratic equation.
-    - L4 and L5 are calculated by rotating the Moon's position by ±60 degrees.
-    - L3 is simply the position opposite the Moon.
+    - The points are the equilibria of the circular restricted three-body
+      problem scaled to the instantaneous Earth-Moon distance d. L1, L2, and L3
+      lie on the Earth-Moon line at about 0.849 d, 1.168 d, and -0.993 d from
+      Earth; L4 and L5 form equilateral triangles with Earth and the Moon in
+      the instantaneous orbital plane, leading and trailing the Moon.
+    - Positions are Earth-centred GCRF in metres.
 
     Author
     ------
     Travis Yeager (yeager7@llnl.gov)
     """
-    if isinstance(t, list):
-        t = [item.gps if isinstance(item, Time) else item for item in t]
-    elif isinstance(t, Time):
-        t = t.gps
-    moon_body = get_body("moon")
-    r = moon_body.position(t).T
-    d = np.linalg.norm(r)  # Distance between Earth and Moon
-    unit_vector_moon = r / np.linalg.norm(r, axis=-1)
-
-    # Coefficients of the quadratic equation
-    a = EARTH_MU - MOON_MU
-    b = 2 * MOON_MU * d
-    c = -MOON_MU * d**2
-
-    # Solve the quadratic equation
-    discriminant = b**2 - 4 * a * c
-
-    if discriminant >= 0:
-        L1_from_moon = (-b - np.sqrt(discriminant)) / (2 * a) * unit_vector_moon
-        L2_from_moon = (-b + np.sqrt(discriminant)) / (2 * a) * unit_vector_moon
-    else:
-        print("Discriminate is less than 0! THAT'S WEIRD FIX IT.")
-        L1_from_moon = None
-        L2_from_moon = None
-
-    # L45
-    # Create the rotation matrix to align z-axis with the normal vector
-    normal_vector = moon_normal_vector(t)
-    rotation_matrix = rotation_matrix_from_vectors(np.array([0, 0, 1]), normal_vector)
-    theta = np.radians(60) + np.arctan2(unit_vector_moon[1], unit_vector_moon[0])
-    L4 = np.vstack((d * np.cos(theta), d * np.sin(theta), np.zeros_like(theta))).T
-    L4 = np.squeeze(L4 @ rotation_matrix.T)
-    theta = -np.radians(60) + np.arctan2(unit_vector_moon[1], unit_vector_moon[0])
-    L5 = np.vstack((d * np.cos(theta), d * np.sin(theta), np.zeros_like(theta))).T
-    L5 = np.squeeze(L5 @ rotation_matrix.T)
-
-    return {
-        "L1": L1_from_moon + r,
-        "L2": L2_from_moon + r,
-        "L3": -r,
-        "L4": L4,
-        "L5": L5
-    }
+    return _earth_moon_lagrange_points(t)
 
 
 def lagrange_points_lunar_frame():
