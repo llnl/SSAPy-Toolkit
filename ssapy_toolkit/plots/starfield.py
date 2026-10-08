@@ -344,9 +344,13 @@ def star_directions(mag_limit=6.5, when=None, frame="gcrf"):
 
 
 def moon_fixed_webgl_stars(mag_limit=7.0, radius_km=4.0e6, epoch=None):
-    """Return compact WebGL star arrays in the Moon-centred rotating frame."""
+    """Return compact WebGL star arrays in the lunar body-fixed frame.
+
+    Uses the same frame as the textured Moon in ``moon_webgl``; see
+    :func:`ssapy_toolkit.coordinates.lunar_body_rotation`.
+    """
     from astropy.time import Time
-    from ssapy.body import MoonPosition
+    from ssapy_toolkit.coordinates.lunar import lunar_body_rotation
 
     catalogue = star_directions(mag_limit=mag_limit, frame="gcrf")
     if catalogue is None:
@@ -358,15 +362,8 @@ def moon_fixed_webgl_stars(mag_limit=7.0, radius_km=4.0e6, epoch=None):
         epoch = Time(epoch, format="gps")
     else:
         epoch = Time(epoch, scale="tt")
-    t = np.atleast_1d(epoch.gps)
-    moon = MoonPosition()
-    r_moon = np.squeeze(moon(t).T)
-    v_moon = np.squeeze(moon(t + 5.0).T) - np.squeeze(moon(t - 5.0).T)
-    x_hat = r_moon / np.linalg.norm(r_moon)
-    z_hat = np.cross(r_moon, v_moon)
-    z_hat /= np.linalg.norm(z_hat)
-    y_hat = np.cross(z_hat, x_hat)
-    positions = (v @ np.vstack([x_hat, y_hat, z_hat]).T) * radius_km
+    rotation = lunar_body_rotation(float(np.atleast_1d(epoch.gps)[0]))[0]
+    positions = (v @ rotation.T) * radius_km
     brightness = np.clip(1.60 - 0.15 * mag, 0.16, 1.0)
     return {
         "p": positions.astype(np.float32).ravel().round(0).tolist(),

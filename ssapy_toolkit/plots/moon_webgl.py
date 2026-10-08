@@ -54,9 +54,10 @@ Usage
 
     python -m ssapy_toolkit.plots.moon_webgl        # demo, no arguments
 
-``r`` is in metres in the GCRF frame and is converted to the lunar-fixed
-frame internally. Pass ``r_frame="moon_centered"`` for data already
-Moon-centred.
+``r`` is in metres in the GCRF frame and is converted internally to the lunar
+body-fixed frame (SSAPy ``MoonOrientation``, DE440 principal axes), whose +X
+is 0 deg selenographic longitude, matching the texture. Pass
+``r_frame="moon_centered"`` for Moon-centred data already in body-fixed axes.
 """
 
 from __future__ import annotations
@@ -1253,27 +1254,28 @@ def _orbit_xyz(r, t, r_frame, *, units="auto"):
             xyz, _, _ = normalize_orbit_trajectory(r=r_arr, t=t, r_units=units)
     else:
         try:
-            from ..coordinates import gcrf_to_lunar_fixed
+            from ..coordinates import gcrf_to_lunar_body
         except ImportError:
-            from ssapy_toolkit.coordinates import gcrf_to_lunar_fixed
-        # The lunar-frame transform needs one time per position.  Broadcasting
-        # a scalar keeps the raw one-state r/t form useful as well.
-        t_arr = _time_as_gps(t).reshape(-1) if t is not None else t
-        if t_arr is not None and np.size(t_arr) == 1 and len(r_arr) > 1:
-            if hasattr(t_arr, "reshape"):
-                t_arr = np.repeat(t_arr, len(r_arr))
-            else:
-                t_arr = [t_arr[0]] * len(r_arr)
-        transform_r = r_arr * 1e3 if units == "km" else r_arr
-        xyz = gcrf_to_lunar_fixed(transform_r, t_arr)
-        if units in {"m", "km"}:
-            xyz = np.asarray(xyz, dtype=float) / 1e3
+            from ssapy_toolkit.coordinates import gcrf_to_lunar_body
+        if t is None:
+            raise ValueError("t is required to place GCRF positions on the Moon")
+        # Resolve units in GCRF, where Earth-centred cislunar magnitudes
+        # (~4e5 km or ~4e8 m) are unambiguous, before subtracting the Moon's
+        # position in metres.
+        if units == "km":
+            r_m = r_arr * 1e3
+        elif units == "m":
+            r_m = r_arr
         else:
             try:
                 from .plotutils import normalize_orbit_trajectory
             except ImportError:  # pragma: no cover - direct module loading
                 from ssapy_toolkit.plots.plotutils import normalize_orbit_trajectory
-            xyz, _, _ = normalize_orbit_trajectory(r=xyz, t=t_arr, r_units=units)
+            r_km, _, _ = normalize_orbit_trajectory(r=r_arr, t=t, r_units=units)
+            r_m = np.asarray(r_km, dtype=float).reshape(-1, 3) * 1e3
+        # The texture's +X is 0 deg selenographic longitude, so tracks must be
+        # in the lunar body frame, not the Earth-Moon rotating frame.
+        xyz = gcrf_to_lunar_body(r_m, _time_as_gps(t).reshape(-1)) / 1e3
     xyz = np.asarray(xyz, dtype=float).reshape(-1, 3)
     return [round(float(v), 3) for v in xyz.ravel()]
 
@@ -1431,7 +1433,10 @@ def moon_webgl(r=None, t=None, r_frame="gcrf",
     t : array-like, optional
         Trajectory times.
     r_frame : {"gcrf", "moon_centered"}
-        Frame of ``r``.
+        Frame of ``r``. ``"gcrf"`` positions are moved into the lunar
+        body-fixed frame with :func:`ssapy_toolkit.coordinates.gcrf_to_lunar_body`
+        and require ``t``. ``"moon_centered"`` positions are drawn as given,
+        so they must already be in body-fixed axes.
     title, subtitle : str, optional
         Page heading and supporting text.
     sun_azimuth_deg, sun_elevation_deg : float

@@ -39,3 +39,79 @@ def test_bake_normals_tilt_downslope_in_east_north_frame():
     np.testing.assert_allclose(north[..., 1], -slope, rtol=0.02)
     np.testing.assert_allclose(east[..., 0], -slope, rtol=0.02)
     np.testing.assert_allclose(north[..., 0], 0.0, atol=1e-12)
+
+
+_FRAME_EPOCH_ISO = "2025-01-01T00:00:00"
+# Optical libration keeps the sub-Earth point within about 8 deg of 0 deg
+# selenographic longitude and latitude. The Earth-Moon rotating frame instead
+# places it at 180 deg longitude, which these bounds reject.
+_LIBRATION_BOUND_DEG = 9.0
+
+
+def _frame_epoch_gps():
+    from astropy.time import Time
+
+    return Time(_FRAME_EPOCH_ISO, scale="utc").gps
+
+
+def _lon_lat_deg(xyz):
+    import numpy as np
+
+    xyz = np.asarray(xyz, dtype=float).reshape(-1, 3)
+    lon = np.degrees(np.arctan2(xyz[:, 1], xyz[:, 0]))
+    lat = np.degrees(np.arcsin(xyz[:, 2] / np.linalg.norm(xyz, axis=1)))
+    return lon, lat
+
+
+def test_lunar_body_frame_keeps_earth_near_zero_longitude():
+    # R2: SSAPy MoonOrientation (DE440 principal axes) puts the sub-Earth point
+    # within the libration bounds of 0 deg longitude over a month.
+    import numpy as np
+    from ssapy_toolkit.coordinates import gcrf_to_lunar_body
+
+    times = _frame_epoch_gps() + np.linspace(0.0, 27.32 * 86400.0, 12)
+    lon, lat = _lon_lat_deg(gcrf_to_lunar_body(np.zeros((len(times), 3)), times))
+
+    assert np.all(np.abs(lon) < _LIBRATION_BOUND_DEG)
+    assert np.all(np.abs(lat) < _LIBRATION_BOUND_DEG)
+
+
+def test_gcrf_tracks_register_on_the_lunar_near_side_in_every_unit_mode():
+    # R2: a point 100 km above the sub-Earth side must be drawn over the near
+    # side, at 1837.4 km from the Moon's centre, whether given in m, km, or auto.
+    import numpy as np
+    import ssapy
+
+    t = _frame_epoch_gps()
+    moon = ssapy.get_body("moon")
+    r_moon = np.asarray(moon.position(t), dtype=float).reshape(3)
+    point_m = r_moon - r_moon / np.linalg.norm(r_moon) * (moon.radius + 100.0e3)
+    for units, scale in (("m", 1.0), ("km", 1.0e-3), ("auto", 1.0), ("auto", 1.0e-3)):
+        xyz = MODULE._orbit_xyz((point_m * scale)[None, :], np.array([t]), "gcrf", units=units)
+        lon, lat = _lon_lat_deg(xyz)
+        assert abs(lon[0]) < _LIBRATION_BOUND_DEG, (units, scale, lon[0])
+        assert abs(lat[0]) < _LIBRATION_BOUND_DEG, (units, scale, lat[0])
+        assert abs(np.linalg.norm(xyz) - 1837.4) < 0.01, (units, scale)  # km
+
+
+def test_moon_webgl_stars_share_the_textured_moon_frame(monkeypatch):
+    # R2: a star in the direction of Earth must sit over the near side, in the
+    # same body frame as the textured Moon.
+    import numpy as np
+    import ssapy
+    from ssapy_toolkit.plots import starfield
+
+    t = _frame_epoch_gps()
+    moon = ssapy.get_body("moon")
+    r_moon = np.asarray(moon.position(t), dtype=float).reshape(3)
+    toward_earth = -r_moon / np.linalg.norm(r_moon)
+    monkeypatch.setattr(
+        starfield,
+        "star_directions",
+        lambda **kwargs: (toward_earth[None, :], np.array([1.0]), np.ones((1, 3))),
+    )
+
+    lon, lat = _lon_lat_deg(starfield.moon_fixed_webgl_stars(epoch=t)["p"])
+
+    assert abs(lon[0]) < _LIBRATION_BOUND_DEG
+    assert abs(lat[0]) < _LIBRATION_BOUND_DEG
