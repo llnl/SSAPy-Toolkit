@@ -184,11 +184,17 @@ def read_3le(data_file, makedf=True, verbose=False):
     df = pd.DataFrame(rows, columns=cols)
 
     # -------------------- Time convenience --------------------
-    dec = pd.to_numeric(df["decimal_year"], errors="coerce").to_numpy()
-    gps = np.full(dec.shape, np.nan)
-    mask = np.isfinite(dec)
+    # The TLE epoch is a UTC day of year: Jan 1 00:00 UTC plus (day - 1) UTC
+    # days. astropy's "decimalyear" spreads a year's leap second over the whole
+    # year, which put 2008 epochs (leap second on Dec 31) up to 1 s late --
+    # 0.72 s, or 5.5 km along-track for the ISS, at day 264.
+    years = pd.to_numeric(df["epoch_year"], errors="coerce").to_numpy()
+    days = pd.to_numeric(df["epoch_day"], errors="coerce").to_numpy()
+    gps = np.full(years.shape, np.nan)
+    mask = np.isfinite(years) & np.isfinite(days)
     if np.any(mask):
-        gps[mask] = Time(dec[mask], format="decimalyear", scale="utc").gps
+        jan1 = Time([f"{int(y):04d}-01-01T00:00:00" for y in years[mask]], scale="utc")
+        gps[mask] = Time(jan1.jd1, jan1.jd2 + (days[mask] - 1.0), format="jd", scale="utc").gps
     df["epoch_gps"] = gps
 
     # -------------------- Orbital elements and derived quantities (SI) --------------------
