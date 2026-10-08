@@ -20,14 +20,14 @@ for _name in _SSAPY_CONSTANT_NAMES:
 # Toolkit-specific material, unit, angle, and time conveniences.
 W_rho = 19280  # kg/m^3, density of tungsten
 
-au_to_m = 149597870700
-pc_to_au = 206265
-pc_to_m = 3.085677581e16
+au_to_m = 149597870700  # IAU 2012 Resolution B2, exact
+pc_to_au = 648000 / np.pi  # IAU 2015 Resolution B2
+pc_to_m = au_to_m * pc_to_au
 km_to_m = 1000
 
 deg_to_arcsecond = 3600
-rad_to_arcsecond = 206265
-rad_to_deg = 57.3
+rad_to_arcsecond = 180 * 3600 / np.pi
+rad_to_deg = 180 / np.pi
 
 day_to_second = 86400
 year_to_second = 31557600
@@ -35,16 +35,18 @@ year_to_minute = 525960
 year_to_hour = 8766
 year_to_day = 365.25
 year_to_week = 365.25 / 7
-year_to_month = 365.25 / 12
+year_to_month = 12
 
 kg_to_g = 1000
-v_rebound_to_si = 4744 * 2 * np.pi  # au/2pi * yr to m/s
-aupyr_to_mps = 4744
+aupyr_to_mps = au_to_m / year_to_second  # au per Julian year, in m/s
+# REBOUND's G = 1 velocity unit in au and Msun: au per yr2pi = 1/k day, with the
+# Gaussian gravitational constant k = 0.01720209895 (IAU 1976).
+v_rebound_to_si = au_to_m * 0.01720209895 / day_to_second
 
 c = 299792458  # speed of light m/s
-G = 6.67408e-11  # gravitational constant m3 kg-1 s-2
+G = 6.67430e-11  # gravitational constant m3 kg-1 s-2, CODATA 2018
 J2_wgs = 1.08262668e-3
-kb = 1.38064852e-23  # Boltzmann constant m2 kg s-2 K-1
+kb = 1.380649e-23  # Boltzmann constant m2 kg s-2 K-1, exact since the 2019 SI
 pi = np.pi
 
 STANDARD_GRAVITY = 9.80665  # m/s^2
@@ -75,7 +77,7 @@ EARTH_OBLIQUITY_J2000_RAD = np.radians(EARTH_OBLIQUITY_J2000_DEG)
 MERCURY_a = 0.3871
 VENUS_a = 0.7233
 EARTH_a = 1.000
-MARS_a = 1.5273
+MARS_a = 1.5237
 JUPITER_a = 5.2028
 SATURN_a = 9.5388
 URANUS_a = 19.1914
