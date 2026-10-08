@@ -128,6 +128,18 @@ def ellipse_fit(
             F2_m = np.asarray(F2_m, float)
             a_m_ = _a_for_focus(F2_m, P1_m_)
             e_ = _eccentricity_from_focus(F2_m, a_m_)
+            # Foci at the origin and F2 fix the ellipse through P1; P2 must lie
+            # on it too (|P2| + |P2 - F2| = 2a) and F2 must lie in their plane.
+            w_unit = np.cross(u_hat, v_hat)
+            off_plane_m = abs(float(np.dot(F2_m, w_unit)))
+            sum_residual_m = np.linalg.norm(P2_m_) + np.linalg.norm(P2_m_ - F2_m) - 2.0 * a_m_
+            scale_m = max(np.linalg.norm(P1_m_), np.linalg.norm(P2_m_))
+            if off_plane_m > 1e-6 * scale_m or abs(sum_residual_m) > 1e-6 * scale_m:
+                raise ValueError(
+                    "F2_m does not define an ellipse through both P1 and P2: "
+                    f"|P2| + |P2 - F2| - 2a = {sum_residual_m:.3f} m, "
+                    f"F2 is {off_plane_m:.3f} m out of the P1-P2 plane."
+                )
             return F2_m, a_m_, e_
 
         if (a_m is None) and (e is None):
