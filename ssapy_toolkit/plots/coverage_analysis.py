@@ -99,7 +99,7 @@ except ImportError:
     except ImportError:
         _draw_continents = _fallback_draw_continents
 
-R_EARTH = 6.3781e6  # m
+R_EARTH = 6.378137e6  # m, WGS84 equatorial radius
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -1396,19 +1396,30 @@ def gcrf_to_itrf(r_gcrf, t_gps):
 
 
 def site_ecef(lat_deg, lon_deg, alt_m=0.0):
-    phi = np.radians(lat_deg)
-    lam = np.radians(lon_deg)
-    r   = R_EARTH + alt_m
-    return np.array([
-        r * np.cos(phi) * np.cos(lam),
-        r * np.cos(phi) * np.sin(lam),
-        r * np.sin(phi),
-    ])
+    """ITRF position (m) of a site at geodetic latitude/longitude (deg) and
+    height above the WGS84 ellipsoid (m).
+
+    Previously a sphere of radius 6378.1 km with the geodetic latitude used as
+    a geocentric one, which misplaced a 45 deg site by 23.9 km.
+    """
+    from astropy.coordinates import EarthLocation
+
+    location = EarthLocation.from_geodetic(lon_deg * u.deg, lat_deg * u.deg, alt_m * u.m, ellipsoid="WGS84")
+    return np.array([c.to_value(u.m) for c in location.to_geocentric()])
 
 
 def elevation_from_site(r_ecef_sat, se):
-    phi = np.arcsin(se[2] / np.linalg.norm(se))
-    lam = np.arctan2(se[1], se[0])
+    """Elevation (deg), azimuth (deg, from north through east), and range (m)
+    of ITRF positions ``r_ecef_sat`` (N, 3) seen from the site at ``se``.
+
+    Local up is the WGS84 geodetic normal at the site, not the geocentric
+    radial direction (which differs by up to 0.19 deg).
+    """
+    from astropy.coordinates import EarthLocation
+
+    site = EarthLocation.from_geocentric(se[0] * u.m, se[1] * u.m, se[2] * u.m)
+    phi = site.to_geodetic("WGS84").lat.to_value(u.rad)
+    lam = site.to_geodetic("WGS84").lon.to_value(u.rad)
     sp, cp = np.sin(phi), np.cos(phi)
     sl, cl = np.sin(lam), np.cos(lam)
     ENU = np.array([
@@ -1416,7 +1427,7 @@ def elevation_from_site(r_ecef_sat, se):
         [-sp * cl, -sp * sl, cp ],
         [ cp * cl,  cp * sl, sp ],
     ])
-    rho     = r_ecef_sat - se
+    rho     = np.atleast_2d(r_ecef_sat) - se
     rho_enu = (ENU @ rho.T).T
     dist    = np.linalg.norm(rho_enu, axis=1)
     el      = np.degrees(np.arcsin(rho_enu[:, 2] / dist))
