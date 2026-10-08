@@ -111,10 +111,11 @@ def get_lunar_rv(t):
         t = np.array([ti.gps for ti in t], dtype=float)
 
     moon = get_body("moon")
+    t = np.asarray(t, dtype=float)
     r = moon.position(t).T
-    if np.size(t) > 1:
-        v = v_from_r(r, t)
-    else:
-        dt = 1.0
-        v = (moon.position(t + dt).T - moon.position(t - dt).T) / (2.0 * dt)
+    # A +/-1 s central difference at each epoch. Differencing the requested
+    # epochs themselves gives chord velocities that depend on the sampling
+    # (120 m/s wrong for daily samples).
+    dt = 1.0
+    v = (moon.position(t + dt).T - moon.position(t - dt).T) / (2.0 * dt)
     return np.atleast_2d(r), np.atleast_2d(v)
