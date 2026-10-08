@@ -29,6 +29,12 @@ do.
 - **Keep the diff to one concern.** No drive-by reformatting, no import
   reordering, no mass lint fixes, no unrelated renames. One problem per branch,
   with its own tests.
+- **Tests compare against a reference.** Each test checks a computed value
+  against a closed form, an independent implementation, a published value, a
+  conservation law, or a finite-difference derivative, with a stated tolerance
+  (see `docs/testing_policy.md`). Do not add tests whose only purpose is to run
+  code, raise coverage, or check imports, aliases, rendering, or argument
+  validation.
 - **Never weaken a check to make a change pass.** Do not delete, skip, `xfail`,
   loosen a tolerance on, or narrow the scope of an existing test. Do not relax
   `scripts/check_repository_policy.py`, edit `.github/workflows/`, or add lint
@@ -117,8 +123,10 @@ the strength of these alone:
   findings; do not bulk-fix them.
 - `check_repository_policy.py` is diff-scoped. On a clean checkout it reports
   "no changed paths found" and inspects nothing. It guards new violations only.
-- Roughly nineteen tests skip by design: the external-validation cases (Orekit,
-  Basilisk, spacepy/IRBEM, ppigrf/geopack, pymsis). Cross-tool residuals quoted
+- Thirteen tests skip by design on a `.[dev]` install: the external-validation
+  cases (Orekit, Basilisk, spacepy/IRBEM, ppigrf/geopack, pymsis). CI also
+  installs the `geomagnetics` and `atmosphere` extras, which leaves four
+  skipped (Orekit, Basilisk, and two spacepy/IRBEM cases). Cross-tool residuals quoted
   anywhere in this repository are **not** reproducible from a stock install and
   must not be repeated as verified without re-running them.
 - `docs/generated/` holds autosummary stubs. A stale stub for a module absent

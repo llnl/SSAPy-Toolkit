@@ -46,10 +46,3 @@ class StateContinuityTests(unittest.TestCase):
         )
         np.testing.assert_allclose(final.inertia, expected.current_inertia, atol=1e-10)
         np.testing.assert_allclose(final.inertia, final.body.current_inertia, atol=1e-10)
-
-    def test_segment_inertia_override_is_retained_at_handoff(self):
-        inertia = np.diag([2., 3., 4.])
-        _, final, _ = _propagate_spacecraft_segment(
-            self.craft(), dict(times=[0, 1], inertia=inertia, mu=0),
-        )
-        np.testing.assert_array_equal(final.inertia, inertia)

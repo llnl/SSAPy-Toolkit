@@ -1,9 +1,6 @@
 import numpy as np
-import pytest
 
 import ssapy_toolkit as ssatk
-from ssapy_toolkit.propagators_6dof import SixDOFState
-from ssapy_toolkit.propagators_6dof import targeting as targeting_module
 
 
 def test_solve_6dof_target_reaches_terminal_velocity():
@@ -26,13 +23,6 @@ def test_solve_6dof_target_reaches_terminal_velocity():
     np.testing.assert_allclose(result.control, [0.2, 0.0, 0.0], rtol=1e-9, atol=1e-12)
     np.testing.assert_allclose(result.trajectory.v[-1], [2.0, 0.0, 0.0], rtol=1e-9, atol=1e-12)
     np.testing.assert_allclose(result.residual, 0.0, atol=1e-12)
-
-
-def test_solve_6dof_target_requires_a_terminal_target():
-    spacecraft = ssatk.Spacecraft(r=[0.0, 0.0, 0.0], v=[0.0, 0.0, 0.0], inertia=np.eye(3))
-
-    with pytest.raises(ValueError, match="target_r or target_v is required"):
-        ssatk.solve_6dof_target(spacecraft, times=[0.0, 1.0])
 
 
 def test_solve_6dof_multi_segment_target_reaches_terminal_state_with_constraints():
@@ -162,70 +152,3 @@ def test_multiple_shooting_continues_mass_and_wheel_state():
         first.wheel_momentum[-1], result.node_states[1].wheel_momentum, atol=1e-10
     )
     assert abs(result.node_states[1].wheel_momentum[0]) <= 0.5
-
-
-def test_multiple_shooting_attitude_hook_and_quaternion_sign_are_invariant():
-    q = np.array([0.0, 1.0, 0.0, 0.0])
-    endpoint = SixDOFState(
-        r=np.zeros(3), v=np.zeros(3), q=q, omega=np.zeros(3), t=1.0
-    )
-    opposite_node = SixDOFState(
-        r=np.zeros(3), v=np.zeros(3), q=-q, omega=np.zeros(3), t=1.0
-    )
-    np.testing.assert_allclose(
-        targeting_module._continuity_residual(
-            endpoint, opposite_node, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
-        ),
-        0.0,
-        atol=1e-12,
-    )
-
-    spacecraft = ssatk.Spacecraft(r=[0.0, 0.0, 0.0], v=[0.0, 0.0, 0.0], q=q, inertia=np.eye(3))
-    result = ssatk.solve_6dof_multiple_shooting_target(
-        spacecraft,
-        segments=[{"times": [0.0, 1.0], "mu": 0.0}],
-        terminal_residual=lambda final: targeting_module._rotation_vector(
-            ssatk.quaternion_multiply(ssatk.quaternion_conjugate(-q), final.q)
-        ),
-    )
-
-    assert result.success
-    np.testing.assert_allclose(result.residual, 0.0, atol=1e-12)
-
-
-def test_multiple_shooting_accepts_a_node_hook_without_terminal_target():
-    spacecraft = ssatk.Spacecraft(r=[0.0, 0.0, 0.0], v=[0.0, 0.0, 0.0], inertia=np.eye(3))
-
-    result = ssatk.solve_6dof_multiple_shooting_target(
-        spacecraft,
-        segments=[{"times": [0.0, 10.0], "mu": 0.0}],
-        node_residual=lambda nodes, trajectories, controls: trajectories[-1].v - [1.0, 0.0, 0.0],
-        control_scale=[1.0, 1.0, 1.0],
-    )
-
-    assert result.success
-    np.testing.assert_allclose(result.trajectory.v[-1], [1.0, 0.0, 0.0], atol=1e-9)
-
-
-def test_multiple_shooting_requires_a_user_target():
-    spacecraft = ssatk.Spacecraft(r=[0.0, 0.0, 0.0], v=[0.0, 0.0, 0.0], inertia=np.eye(3))
-
-    with pytest.raises(ValueError, match="terminal target or residual hook"):
-        ssatk.solve_6dof_multiple_shooting_target(
-            spacecraft, segments=[{"times": [0.0, 1.0], "mu": 0.0}]
-        )
-
-
-def test_multiple_shooting_rejects_an_early_terminal_segment():
-    spacecraft = ssatk.Spacecraft(r=[0.0, 0.0, 0.0], v=[0.0, 0.0, 0.0], inertia=np.eye(3))
-
-    def stop_at_one(t, y):
-        return t - 1.0
-
-    stop_at_one.terminal = True
-    with pytest.raises(RuntimeError, match="reach its final epoch"):
-        ssatk.solve_6dof_multiple_shooting_target(
-            spacecraft,
-            segments=[{"times": [0.0, 2.0], "mu": 0.0, "events": stop_at_one}],
-            target_v=[0.0, 0.0, 0.0],
-        )

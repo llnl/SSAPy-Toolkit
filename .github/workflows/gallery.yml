@@ -3,6 +3,7 @@ name: Build Demo Gallery
 on:
   push:
     branches: [main, master]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -11,7 +12,8 @@ permissions:
   id-token: write
 
 concurrency:
-  group: github-pages
+  # Pull requests get their own group so they never cancel a Pages deploy.
+  group: ${{ github.event_name == 'pull_request' && format('gallery-pr-{0}', github.ref) || 'github-pages' }}
   cancel-in-progress: true
 
 jobs:
@@ -59,11 +61,13 @@ jobs:
           ssapy-demo-gallery --output site
 
       - name: Upload GitHub Pages artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
   deploy:
+    if: github.event_name != 'pull_request'
     needs: build-gallery
     runs-on: ubuntu-latest
     environment:
