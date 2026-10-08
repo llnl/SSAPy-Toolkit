@@ -89,26 +89,26 @@ CACHE_MAX_AGE_SECONDS = 7200   # 2 hours
 # satellites -- see save_satellites()'s docstring for why.
 PY_MIRROR_MAX_SATELLITES = 500
 
-# Path to local TLE cache file — lives next to coverage_analysis.py in
-# ssapy_toolkit/plots/, computed relative to this file's own location so
-# it's correct regardless of the working directory this is run from.
-# (Previously pointed at ~/tle_cache.json, a home-directory path that
-# nothing else in the repo ever actually read from or wrote to.)
+# coverage_analysis.py still lives in plots; generated data does not.
 _PLOTS_DIR = os.path.join(_REPO_ROOT, "ssapy_toolkit", "plots")
 
 
 def _data_file(name):
-    """Generated data goes to ~/ssatk_data, not into the source tree."""
+    """Use configured output, then a legacy path, without failing import."""
+    legacy_path = os.path.join(os.path.expanduser("~"), "ssatk_data", name)
+    configured = bool(os.environ.get("SSATK_OUTPUT_DIR"))
+    if not configured and os.path.isfile(legacy_path):
+        return legacy_path
     try:
         from .ssatk_data import datapath
         return str(datapath(name))
-    except Exception:
-        base = os.path.join(os.path.expanduser("~"), "ssatk_data")
-        os.makedirs(base, exist_ok=True)
-        return os.path.join(base, name)
+    except (OSError, RuntimeError):
+        return legacy_path
 
 
-CACHE_FILE = _data_file("tle_cache.json")
+def _cache_file():
+    """Resolve the cache lazily so configuration changes take effect."""
+    return _data_file("tle_cache.json")
 
 # SSL context — verifies certificates by default. Only bypass verification
 # if you're on a restricted network that requires it, by setting:
@@ -127,9 +127,10 @@ if os.environ.get("SPACETRACK_INSECURE_SSL") == "1":
 
 def _load_cache():
     """Load local TLE cache from disk."""
-    if os.path.exists(CACHE_FILE):
+    cache_file = _cache_file()
+    if os.path.exists(cache_file):
         try:
-            with open(CACHE_FILE, 'r') as f:
+            with open(cache_file, 'r') as f:
                 return json.load(f)
         except Exception:
             pass
@@ -139,7 +140,7 @@ def _load_cache():
 def _save_cache(cache):
     """Save TLE cache to disk."""
     try:
-        with open(CACHE_FILE, 'w') as f:
+        with open(_cache_file(), 'w') as f:
             json.dump(cache, f, indent=2)
     except Exception as e:
         print(f"  [tle_updater] Could not save cache: {e}")
@@ -817,7 +818,7 @@ def update_satellites_auto(satellites, use_spacetrack=True, use_celestrak=True,
 
     if verbose:
         print("\n── TLE Updater ─────────────────────────────────────────")
-        print(f"  Cache file : {CACHE_FILE}")
+        print(f"  Cache file : {_cache_file()}")
         print(f"  Max age    : {CACHE_MAX_AGE_SECONDS // 60} minutes")
         print(f"  Sources    : {'Space-Track + ' if use_spacetrack else ''}{'Celestrak' if use_celestrak else ''}")
         print()
@@ -888,7 +889,7 @@ def update_satellites_auto(satellites, use_spacetrack=True, use_celestrak=True,
 
     if verbose:
         print(f"\n  Updated: {updated}  |  From cache: {cached}  |  Failed: {failed}")
-        print(f"  Cache saved -> {CACHE_FILE}")
+        print(f"  Cache saved -> {_cache_file()}")
         print()
 
     return satellites

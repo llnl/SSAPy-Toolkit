@@ -42,13 +42,31 @@ function assert(cond, msg) { if (!cond) { console.error('FAIL:', msg); process.e
   const base = await page.evaluate(() => ({
     catalog: Object.keys(SATELLITE_CATALOG).length,
     active: activeSatellites.size,
-    defaultName: [...activeSatellites.values()][0].entry.name,
+    defaultName: [...activeSatellites.values()][0]?.entry.name || null,
     hasEarth: !!earthMesh,
   }));
-  assert(base.catalog === 21, `catalog should be 21, got ${base.catalog}`);
-  assert(base.active === 4, `four demo satellites active by default, got ${base.active}`);
-  assert(/ISS/.test(base.defaultName), `default should be ISS, got ${base.defaultName}`);
+  assert(base.active === 0, `no external TLE should be active by default, got ${base.active}`);
   assert(base.hasEarth, 'earthMesh missing');
+
+  await page.evaluate(() => addSatellite('__ISS', {
+    name: 'ISS (test)', type: 'ISS', mode: 'tle',
+    tle1: '1 25544U 98067A   26133.42450843  .00004829  00000+0  95080-4 0  9993',
+    tle2: '2 25544  51.6310 112.1825 0007522  54.1994 305.9693 15.49203550566361',
+  }));
+
+  // --- Database formats -----------------------------------------------------
+  const formats = await page.evaluate(() => {
+    const iss = activeSatellites.get('__ISS').entry;
+    const csv = parseCsvDatabase(
+      `name,line1,line2\n"ISS, ZARYA","${iss.tle1}","${iss.tle2}"\n`
+    );
+    return {
+      csv: normalizeSatelliteRecord(csv[0]),
+      hdf5ReaderLoaded: typeof hdf5 !== 'undefined',
+    };
+  });
+  assert(formats.csv && formats.csv.name === 'ISS, ZARYA', 'quoted CSV record did not normalize');
+  assert(!formats.hdf5ReaderLoaded, 'browser HDF5 reader should not be embedded');
 
   // --- Ground tracks --------------------------------------------------------
   await page.click('#ground-track-toggle');
@@ -66,10 +84,29 @@ function assert(cond, msg) { if (!cond) { console.error('FAIL:', msg); process.e
   assert(gt.line && gt.marker, 'ground track line/marker not created');
   assert(gt.markerAngleDeg < 0.01, `nadir marker off by ${gt.markerAngleDeg.toFixed(4)} deg`);
 
+  // --- State-vector Hermite interpolation ----------------------------------
+  const hermite = await page.evaluate(() => {
+    const radius = 7000;
+    const omega = Math.sqrt(SSAPY_CONSTANTS.MU_EARTH_KM3_S2 / (radius ** 3));
+    const dt = 60;
+    const angle = omega * dt;
+    const track = {
+      t: [0, dt * 1000],
+      r: [[radius, 0, 0], [radius * Math.cos(angle), radius * Math.sin(angle), 0]],
+      v: [[0, radius * omega, 0], [-radius * omega * Math.sin(angle), radius * omega * Math.cos(angle), 0]],
+    };
+    const state = stateVectorStateAtMs({ stateTrack: track }, dt * 500);
+    const radiusErrorM = Math.abs(Math.hypot(state.position.x, state.position.y) - radius) * 1000;
+    return { radiusErrorM, outside: stateVectorStateAtMs({ stateTrack: track }, -1) };
+  });
+  assert(hermite.radiusErrorM < 1, `Hermite midpoint error ${hermite.radiusErrorM} m`);
+  assert(hermite.outside === null, 'state track outside its span should be hidden');
+
   // --- Conjunction screening (verified vs brute force) ----------------------
   const conj = await page.evaluate(() => {
-    addSatellite('__A', { mode: 'keplerian', name: 'A', type: 'payload', a: 7000, e: 0, inc: 50, raan: 0, argPerigee: 0 });
-    addSatellite('__B', { mode: 'keplerian', name: 'B', type: 'payload', a: 7000, e: 0, inc: 50, raan: 8, argPerigee: 0 });
+    const iss = activeSatellites.get('__ISS').entry;
+    addSatellite('__A', { ...iss, name: 'A' });
+    addSatellite('__B', { ...iss, name: 'B' });
     conjunctionWindowHours = 3;
     conjunctionThresholdKm = 5000;
     screenConjunctions();
@@ -145,7 +182,7 @@ function assert(cond, msg) { if (!cond) { console.error('FAIL:', msg); process.e
   // repeated dark/lit cycles.
   const eclipse = await page.evaluate(() => {
     let worst = 0, shared = 0;
-    for (const key of ['hst', 'gps', 'jwst']) {
+    for (const key of ['__ISS', 'jwst']) {
       removeSatellite(key); addSatellite(key);
       const inst = activeSatellites.get(key);
       const counts = new Map(), mats = [];

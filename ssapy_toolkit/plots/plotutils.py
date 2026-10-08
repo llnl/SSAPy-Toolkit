@@ -305,10 +305,10 @@ def _position_scale_to_km(r, units="auto"):
     norms = np.linalg.norm(_ensure_nx3(r, "r"), axis=1)
     typical = float(np.nanmedian(norms)) if norms.size else 0.0
     # SSAPy native positions are metres (LEO is ~7e6), while Toolkit plotting
-    # arrays are usually kilometres.  Keep the threshold high enough that
-    # cislunar kilometre arrays (~4e5 km) stay in km unless callers explicitly
-    # request metres.
-    return 1e-3 if typical > 1e6 else 1.0
+    # arrays are usually kilometres.  A value above 1e6 is ambiguous: use the
+    # Moon's radius to keep low lunar-orbit metres distinct from L2 kilometres.
+    candidate_radius_km = typical * 1e-3
+    return 1e-3 if typical > 1e6 and candidate_radius_km >= MOON_RADIUS / 1e3 else 1.0
 
 
 def _velocity_scale_to_kms(v, units="auto"):
