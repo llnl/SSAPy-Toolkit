@@ -22,13 +22,14 @@ def test_vis_viva_matches_periapsis_and_apoapsis_speeds(e):
 def test_lonlat_distance_is_the_haversine_great_circle():
     # R1: on a sphere of radius R, a quarter meridian is pi R / 2, a quarter of
     # the equator is pi R / 2, and 1 deg of arc is pi R / 180. Inputs in
-    # radians; 1e-9 m.
+    # radians; 1e-12 relative (1e-5 m on 10,000 km; an absolute 1e-9 m is below
+    # float64 resolution at that size).
     quarter = np.pi * EARTH_RADIUS / 2
-    assert lonlat_distance(0.0, np.pi / 2, 0.0, 0.0) == pytest.approx(quarter, abs=1e-9)
-    assert lonlat_distance(0.0, 0.0, 0.0, np.pi / 2) == pytest.approx(quarter, abs=1e-9)
+    assert lonlat_distance(0.0, np.pi / 2, 0.0, 0.0) == pytest.approx(quarter, rel=1e-12)
+    assert lonlat_distance(0.0, 0.0, 0.0, np.pi / 2) == pytest.approx(quarter, rel=1e-12)
     lat = np.radians(37.7)
     expected = 2 * EARTH_RADIUS * np.arcsin(np.cos(lat) * np.sin(np.radians(1.0) / 2))
-    assert lonlat_distance(lat, lat, 0.0, np.radians(1.0)) == pytest.approx(expected, abs=1e-9)
+    assert lonlat_distance(lat, lat, 0.0, np.radians(1.0)) == pytest.approx(expected, rel=1e-12)
     assert lonlat_distance(np.radians(10.0), np.radians(11.0), 0.3, 0.3) == pytest.approx(
         np.pi * EARTH_RADIUS / 180, abs=1e-6
     )
