@@ -8,7 +8,7 @@ from ssapy_toolkit.propagators_orbit import leapfrog
 def burn_to_deltav(orbit, times, burn_ntw):
     """
     Compare continuous finite-duration NTW acceleration vs an instantaneous impulse
-    applied at the mid-time of `times`.
+    applied at the sample of `times` nearest its mid-time (returned as t_center).
 
     Parameters
     ----------
@@ -64,8 +64,10 @@ def burn_to_deltav(orbit, times, burn_ntw):
 
     # Impulsive approximation at mid-time:
     # 1) Kepler-only to center
-    k = t.size // 2
-    t_center = 0.5 * (t[0] + t[-1])
+    # The impulse is applied at the sample nearest the mid-time; t_center is
+    # that sample's time (the exact mid-time is not a grid point for even N).
+    k = int(np.argmin(np.abs(t - 0.5 * (t[0] + t[-1]))))
+    t_center = float(t[k])
     r_pre, v_pre = leapfrog(r0, v0, t[:k+1],
                             radial=None, velocity=None, inclination=None)
     r_c = r_pre[-1]
