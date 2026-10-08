@@ -64,3 +64,23 @@ def test_apsis_and_velocity_formula_helpers():
     assert np.isclose(keplerian.vcircular(rp, mu_=EARTH_MU), np.sqrt(EARTH_MU / rp))
     assert np.isclose(keplerian.vis_viva(a, rp, EARTH_MU), np.sqrt(EARTH_MU * (2.0 / rp - 1.0 / a)))
     assert np.isclose(keplerian.v_periapsis(a, rp, EARTH_MU), keplerian.vis_viva(a, rp, EARTH_MU))
+
+
+@pytest.mark.parametrize("converter", ["kepler_to_state", "kepler_to_state_loop"])
+@pytest.mark.parametrize("eccentricity", [0.0, 0.12, 0.7])
+def test_kepler_to_state_matches_ssapy_and_conic_invariants(converter, eccentricity):
+    # R2: SSAPy's Orbit.fromKeplerianElements; R1: vis-viva and h = sqrt(mu p).
+    import ssapy
+    from ssapy_toolkit.constants import EARTH_MU
+    from ssapy_toolkit.orbital_mechanics import keplerian
+
+    a, i, pa, raan, nu = 8000e3, np.radians(51.6), np.radians(30.0), np.radians(40.0), np.radians(70.0)
+    r, v = (np.ravel(x) for x in getattr(keplerian, converter)(a, eccentricity, i, pa, raan, nu))
+    reference = ssapy.Orbit.fromKeplerianElements(a, eccentricity, i, pa, raan, nu, t=0.0)
+
+    np.testing.assert_allclose(r, reference.r, atol=1e-6)        # m
+    np.testing.assert_allclose(v, reference.v, atol=1e-9)        # m/s
+    radius = np.linalg.norm(r)
+    assert np.linalg.norm(v) == pytest.approx(np.sqrt(EARTH_MU * (2.0 / radius - 1.0 / a)), rel=1e-12)
+    semi_latus_rectum = a * (1.0 - eccentricity**2)
+    assert np.linalg.norm(np.cross(r, v)) == pytest.approx(np.sqrt(EARTH_MU * semi_latus_rectum), rel=1e-12)
