@@ -18,7 +18,7 @@ Why Orbit.fromKeplerianElements?
 SSAPy Orbit() is constructed from Cartesian state (r, v, t). For Keplerian
 initialization you must use:
     Orbit.fromKeplerianElements(a, e, i, pa, raan, trueAnomaly, t, mu=...)
-See SSAPy orbit module docs. :contentReference[oaicite:1]{index=1}
+See the SSAPy orbit module documentation.
 
 Returned time grid:
 -------------------
@@ -194,7 +194,7 @@ def synthetic_orbit_population(
     v_list = []
     t_list = []
     for k in range(M):
-        o_t = orbits[k].at(t_abs, propagator=prop)  # returns vector-Orbit over times :contentReference[oaicite:2]{index=2}
+        o_t = orbits[k].at(t_abs, propagator=prop)  # returns a vector Orbit over the times
         r = np.asarray(o_t.r, dtype=float)
         v = np.asarray(o_t.v, dtype=float)
 
