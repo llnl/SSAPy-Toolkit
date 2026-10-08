@@ -40,6 +40,14 @@ def test_megno_matches_closed_forms():
     np.testing.assert_allclose(y[1:], exact, rtol=0, atol=2e-4)
 
 
+def _variational_particles(sim):
+    # REBOUND 5 exposes them as sim.particles_var; REBOUND 4 appends them to
+    # sim.particles after the N_real real particles.
+    if hasattr(sim, "particles_var"):
+        return list(sim.particles_var)
+    return [sim.particles[i] for i in range(sim.N_real, sim.N)]
+
+
 def test_megno_matches_rebound_for_a_regular_two_planet_system():
     # R2: REBOUND's built-in MEGNO (init_megno) integrated with WHFast; our value
     # from the sampled variational-vector norms agrees to 1e-3 at t = 500.
@@ -55,7 +63,7 @@ def test_megno_matches_rebound_for_a_regular_two_planet_system():
     norms = []
     for time in times:
         sim.integrate(time, exact_finish_time=1)
-        norms.append(np.sqrt(sum(p.x**2 + p.y**2 + p.z**2 + p.vx**2 + p.vy**2 + p.vz**2 for p in sim.particles_var)))
+        norms.append(np.sqrt(sum(p.x**2 + p.y**2 + p.z**2 + p.vx**2 + p.vy**2 + p.vz**2 for p in _variational_particles(sim))))
     assert megno(times, np.array(norms)) == pytest.approx(sim.megno(), abs=1e-3)
 
 
