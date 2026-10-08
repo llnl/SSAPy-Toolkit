@@ -1,78 +1,42 @@
-# API Coverage Audit
+# Testing Policy
 
-This branch adds an executable coverage audit for SSAPy-Toolkit functions before
-PR review.
+Every test in `tests/` compares a computed quantity with an independent
+reference, under a stated tolerance. A test that only shows that code runs,
+returns an object, writes a file, or accepts an argument is not kept.
 
-## Scope
+## Accepted references
 
-The default audit treats the public package surface as:
+| Code | Reference | Examples in `tests/` |
+|---|---|---|
+| R1 | Closed-form or analytic solution | Hohmann and bi-elliptic delta-v, J2 RAAN rate, dipole field limits, Lambert on a circular orbit |
+| R2 | Independent implementation | astropy, SGP4 `Satrec`, geopack, IGRF, MSIS, REBOUND IAS15, Orekit, Basilisk, native SSAPy |
+| R3 | Published or real-world value | textbook LEO-to-GEO transfer, ISS TLE fields, 2024-04-08 eclipse path, IAU and IGRF constants |
+| R4 | Conservation law or physical invariant | angular momentum with reaction wheels, propellant mass across segments, rotation orthonormality, epoch invariance |
+| R5 | Analytic derivative against finite differences | STM and Jacobian checks in `test_6dof_variational.py` |
+| R6 | Regression for a shipped numerical bug | terminal-event roots within one ULP, absolute epochs reaching force models |
 
-- top-level functions in `ssapy_toolkit` modules whose names do not start with
-  `_`;
-- methods on public classes whose names do not start with `_`.
+Name the reference in the test name or docstring, and state the tolerance with
+its unit.
 
-The exhaustive audit adds:
+## Not tested in `tests/`
 
-- private functions and methods whose names start with `_`;
-- nested function definitions and closures;
-- package-scoped branch coverage thresholds.
+- Plot, viewer, and HTML rendering, and demo execution. Demos run in the
+  gallery workflow, on pull requests and on pushes to `main`.
+- Import paths, aliases, and package exports. The docs build imports every
+  module.
+- Argument validation and error messages, unless the rejected input is
+  physically meaningful.
+- Code paths exercised only to raise a coverage percentage.
 
-`if __name__ == "__main__"` self-test helpers are intentionally excluded.
-Dependency-fallback definitions are audited only when the fallback branch is
-actually defined in the current environment. This prevents the audit from
-requiring dead fallback code when the primary implementation imports correctly.
+## External references in CI
 
-## Validation Standard
+CI installs the `geomagnetics` and `atmosphere` extras, so the geopack, IGRF,
+and MSIS comparisons run. The spacepy/IRBEM, Basilisk, and Orekit comparisons
+skip unless those tools are installed locally.
 
-Every audited function body must execute under coverage. Tests then check one
-of:
+## Coverage
 
-- a numerical oracle from geometry, orbital mechanics, or coordinate algebra;
-- a round-trip or norm-preservation invariant;
-- a structural plot oracle, such as expected trace/artist types and counts;
-- a controlled failure mode for optional heavy dependencies.
-
-This is stronger than statement coverage alone:
-`scripts/audit_public_api_coverage.py` verifies that each audited
-function/method has at least one executable body line hit by the test run.
-
-## Commands
-
-```bash
-python3 -m coverage erase
-python3 -m coverage run --branch -m pytest -q
-python3 -m coverage json -i -o /tmp/ssatk_branch_coverage.json
-python3 scripts/audit_public_api_coverage.py \
-  --coverage-json /tmp/ssatk_branch_coverage.json \
-  --min-hit-pct 95 \
-  --require-branch-data \
-  --write-unhit /tmp/ssatk_public_functions_body_unhit.tsv
-python3 scripts/audit_public_api_coverage.py \
-  --coverage-json /tmp/ssatk_branch_coverage.json \
-  --include-private \
-  --include-nested \
-  --min-hit-pct 90 \
-  --min-branch-pct 65 \
-  --require-branch-data \
-  --write-unhit /tmp/ssatk_all_functions_unhit.tsv \
-  --write-missing-branches /tmp/ssatk_missing_branches.tsv
-```
-
-Current audited result from this branch (Python 3.13):
-
-- `796 passed, 18 skipped`
-- `public_functions=1012`
-- `body_hit=963`
-- `body_unhit=49`
-- `body_hit_pct=95.2`
-- `all_functions_including_nested=2214`
-- `all_functions_body_hit=2128`
-- `all_functions_body_unhit=86`
-- `all_functions_body_hit_pct=96.1`
-- `package_branches=9404`
-- `package_branch_hit_pct=70.9`
-
-CI enforces the public audit at 95% body-hit and the exhaustive audit at 90%
-body-hit / 65% branch-hit on Python 3.13. Those thresholds are intentionally
-below the current measured baseline so normal line-number or dependency-version
-drift does not create brittle failures.
+Coverage is a diagnostic, not a gate. `scripts/audit_public_api_coverage.py`
+still reports which functions no test reaches. Use it to find untested physics,
+then add a reference test for that physics rather than a test that only
+executes the code.

@@ -42,9 +42,12 @@ change and updates the repository policy check if needed.
 ## Tests and demos
 
 Pull requests that change package behavior must include automated tests under
-`tests/`. Add or update tests for bug fixes, new functions, changed defaults,
-and changed error handling. Documentation-only and CI-only changes do not need
-new tests, but the pull request should state that explicitly.
+`tests/`. Each test must compare a computed value with an independent reference
+(closed form, independent implementation, published value, conservation law,
+or finite-difference derivative) and state its tolerance; see
+`docs/testing_policy.md`. Tests that only show code runs or raise coverage are
+not accepted. Documentation-only and CI-only changes do not need new tests, but
+the pull request should state that explicitly.
 
 New user-facing workflows, plotting utilities, data-ingest utilities, command
 line behavior, or analysis recipes must also add or update a runnable demo under

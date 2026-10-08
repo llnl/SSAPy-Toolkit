@@ -7,6 +7,7 @@
 - [ ] If any part of this change was produced with an automated agent or LLM assistance, [AGENTS.md](../AGENTS.md) was followed and this PR states what was verified by running it.
 - [ ] Changes preserve the existing file layout (`ssapy_toolkit/`, `tests/`, `demos/`, `docs/`, `scripts/`, `.github/`).
 - [ ] Package-code changes include tests under `tests/`, or this PR only changes docs/CI/metadata.
+- [ ] Each new test compares against a named independent reference with a stated tolerance (`docs/testing_policy.md`).
 - [ ] New user-facing workflows include a runnable demo under `demos/`, or no demo is needed because:
 - [ ] No generated outputs, downloaded data, images, notebooks with embedded outputs, binary media, or large artifacts are committed.
 - [ ] Persistent data needed by this work is stored in SSAPy-Data or documented as an external input.
