@@ -84,3 +84,16 @@ def test_kepler_to_state_matches_ssapy_and_conic_invariants(converter, eccentric
     assert np.linalg.norm(v) == pytest.approx(np.sqrt(EARTH_MU * (2.0 / radius - 1.0 / a)), rel=1e-12)
     semi_latus_rectum = a * (1.0 - eccentricity**2)
     assert np.linalg.norm(np.cross(r, v)) == pytest.approx(np.sqrt(EARTH_MU * semi_latus_rectum), rel=1e-12)
+
+
+@pytest.mark.parametrize("eccentricity", [0.1, 0.3, 0.7, 0.95])
+def test_true_anomaly_from_mean_anomaly_inverts_keplers_equation(eccentricity):
+    # R1: nu -> E -> M in closed form, then true_anomaly(e, M) must return nu.
+    from ssapy_toolkit.orbital_mechanics import keplerian
+
+    nu = np.radians([1.0, 45.0, 120.0, 179.0, 181.0, 300.0])
+    ecc_anom = 2 * np.arctan2(np.sqrt(1 - eccentricity) * np.sin(nu / 2),
+                              np.sqrt(1 + eccentricity) * np.cos(nu / 2))
+    mean = np.mod(ecc_anom - eccentricity * np.sin(ecc_anom), 2 * np.pi)
+    result = keplerian.true_anomaly(eccentricity=eccentricity, mean_anomaly=mean)
+    np.testing.assert_allclose(np.angle(np.exp(1j * (result - nu))), 0.0, atol=1e-12)

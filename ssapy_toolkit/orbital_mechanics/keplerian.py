@@ -194,11 +194,21 @@ def true_anomaly(eccentricity=None, eccentric_anomaly=None, mean_anomaly=None,
             1 - beta * np.cos(eccentric_anomaly)
         )
     elif eccentricity is not None and mean_anomaly is not None:
-        ta = (mean_anomaly +
-              (2 * eccentricity - 1 / 4 * eccentricity**3) *
-              np.sin(mean_anomaly) +
-              5 / 4 * eccentricity**2 * np.sin(2 * mean_anomaly) +
-              13 / 12 * eccentricity**3 * np.sin(3 * mean_anomaly))
+        # Solve Kepler's equation M = E - e sin E by Newton iteration; the old
+        # third-order series was off by 0.25 deg at e = 0.3.
+        ecc = np.asarray(eccentricity, dtype=float)
+        mean = np.asarray(mean_anomaly, dtype=float)
+        wrapped = np.mod(mean, 2 * np.pi)
+        ecc_anom = np.where(ecc < 0.8, wrapped, np.pi)
+        for _ in range(60):
+            step = (ecc_anom - ecc * np.sin(ecc_anom) - wrapped) / (1 - ecc * np.cos(ecc_anom))
+            ecc_anom = ecc_anom - step
+            if np.all(np.abs(step) < 1e-15):
+                break
+        nu = 2 * np.arctan2(np.sqrt(1 + ecc) * np.sin(ecc_anom / 2),
+                            np.sqrt(1 - ecc) * np.cos(ecc_anom / 2))
+        # Keep the result on the same revolution as the input mean anomaly.
+        ta = mean + np.angle(np.exp(1j * (nu - mean)))
     elif (true_longitude is not None and
           longitude_of_ascending_node is not None and
           argument_of_periapsis is not None):
