@@ -491,10 +491,15 @@ class SpaceEnvironment:
         if key == "moon":
             return self.moon_position
 
-        def position(time, *_args):
-            from ssapy.body import get_body
+        from ssapy.body import get_body
 
-            return _vector3(get_body(name).position(self.absolute_time(time)), f"{name}_position")
+        # One Body, held by the closure: SSAPy closes a Body's ephemeris when the
+        # Body is collected, so get_body(name).position(t) on a temporary raises
+        # TypeError for every planet.
+        body = get_body(name)
+
+        def position(time, *_args):
+            return _vector3(body.position(self.absolute_time(time)), f"{name}_position")
 
         return position
 

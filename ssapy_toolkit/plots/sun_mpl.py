@@ -58,7 +58,11 @@ def get_sun_position(t):
     """
     try:
         from ssapy import get_body
-        return get_body("sun").position(t).T
+        # Keep the Body referenced: SSAPy closes its ephemeris when a temporary
+        # Body is collected, so get_body("sun").position(t) raises TypeError and
+        # this function silently fell back to the low-precision series.
+        sun = get_body("sun")
+        return sun.position(t).T
     except Exception:
         return _sun_position_fallback(t)
 
