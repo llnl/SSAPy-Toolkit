@@ -201,9 +201,14 @@ def _resolve_band(band):
     return lo, hi
 
 
-def _planck_band_radiance(T, lam_lo, lam_hi, n=600):
-    """In-band blackbody radiance  integral of B_lambda  [W m^-2 sr^-1]."""
-    lam = np.linspace(lam_lo, lam_hi, n)
+def _planck_band_radiance(T, lam_lo, lam_hi, n=2000):
+    """In-band blackbody radiance  integral of B_lambda  [W m^-2 sr^-1].
+
+    Integrated on a logarithmic wavelength grid: a linear 600-point grid
+    under-sampled the peak of any band spanning more than a decade, so
+    0.01 um - 1 mm recovered only 25 % of sigma T^4 / pi at 5772 K.
+    """
+    lam = np.geomspace(lam_lo, lam_hi, n)
     with np.errstate(over="ignore"):
         x = H_PLANCK * C_LIGHT / (lam * K_BOLTZ * max(T, 1e-3))
         B = (2 * H_PLANCK * C_LIGHT**2 / lam**5) / np.expm1(np.clip(x, None, 700.0))
