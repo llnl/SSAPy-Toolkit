@@ -45,7 +45,6 @@ from __future__ import annotations
 import numpy as np
 
 from ssapy_toolkit.constants import SUN_EARTH_AVERAGE_DISTANCE_KM, SUN_RADIUS_KM
-from matplotlib.colors import to_rgb
 
 
 # ---------------------------------------------------------------------------

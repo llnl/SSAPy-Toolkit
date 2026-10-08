@@ -718,7 +718,6 @@ def ellipse_fit(
     # ─────────────────────────── plotting  ──────────────────────────────
     if plot or save_path:
         import matplotlib.pyplot as plt
-        from matplotlib import cm
         from matplotlib.gridspec import GridSpec
         from ssapy_toolkit.ssapy_wrappers.ssapy_orbits import ssapy_orbit
 

@@ -25,7 +25,6 @@ import time
 import urllib.request
 import urllib.parse
 import ssl
-import datetime
 
 # This module lives at ssapy_toolkit/io/, so the repo root is three levels up.
 # Defined here, above _load_local_credentials(), because that function needs it
@@ -808,7 +807,6 @@ def update_satellites_auto(satellites, use_spacetrack=True, use_celestrak=True,
     list
         Updated SATELLITES list with fresh TLEs.
     """
-    import urllib.parse
 
     cache          = _load_cache()
     session_cookie = None

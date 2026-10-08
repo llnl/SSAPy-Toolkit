@@ -1,7 +1,6 @@
 # ssapy_toolkit/orbital_mechanics/burn_to_deltav.py
 
 import numpy as np
-from ssapy import Orbit
 from ssapy_toolkit.coordinates import ntw_to_gcrf
 from ssapy_toolkit.propagators_orbit import leapfrog
 

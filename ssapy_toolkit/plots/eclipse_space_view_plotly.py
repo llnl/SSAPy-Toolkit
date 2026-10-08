@@ -31,7 +31,7 @@ try:
     from .eclipse_appearance_strip import render_lunar_panel, render_solar_panel
     from .scene_primitives import earth_rotation_deg_from_time
 except ImportError:
-    from globe_orbit_daynight_plotly import _earth_mesh, _sun_sphere_traces, _earth_atmosphere_trace, RE_KM
+    from globe_orbit_daynight_plotly import _earth_mesh, _earth_atmosphere_trace, RE_KM
     from moon_render import moon_mesh_plotly
     from eclipse_brightness_plot import propagate_eci, sun_direction_eci, illumination_fraction, R_SUN_KM, AU_KM
     from eclipse_appearance_strip import render_lunar_panel, render_solar_panel

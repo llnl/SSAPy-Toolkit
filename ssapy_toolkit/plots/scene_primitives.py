@@ -12,7 +12,6 @@ from datetime import datetime
 import numpy as np
 
 from ssapy_toolkit.constants import (
-    EARTH_RADIUS_KM,
     LD_KM,
     MOON_RADIUS_KM,
     SIDEREAL_DAY_SECONDS,

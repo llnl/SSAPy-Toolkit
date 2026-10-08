@@ -8,7 +8,7 @@ artifact lines across the whole map, while trying to preserve input types.
 
 from __future__ import annotations
 
-from typing import Iterable, Tuple, Union, Sequence
+from typing import Tuple, Union, Sequence
 
 import numpy as np
 
