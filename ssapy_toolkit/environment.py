@@ -526,7 +526,11 @@ def body_mu(name: str) -> float:
 
 
 def body_radius(name: str) -> float:
-    """Return a named Solar-System body's mean radius in meters."""
+    """Return a named Solar-System body's reference radius in meters.
+
+    This is the ``<NAME>_RADIUS`` constant (equatorial for Earth, 6378.137 km;
+    SSAPy's value otherwise), not a mean radius.
+    """
 
     from . import constants
 
@@ -585,9 +589,12 @@ def igrf_magnetic_field(time, r_inertial: ArrayLike) -> np.ndarray:
         _vector3(r_inertial, "r_inertial").reshape(1, 3),
         time_astropy,
     )[0]
+    # Internal field only: the module-level external model (e.g. T89, set by
+    # the magnetosphere plots) would otherwise leak into an "IGRF" result.
     b_itrf_nt = _bfield_batch(
         (r_itrf_m / 1000.0).reshape(1, 3),
         _datetime_from_astropy(time_astropy),
+        include_external=False,
     )[0]
     return _itrf_vector_to_gcrf(b_itrf_nt, time_astropy) * 1e-9
 
