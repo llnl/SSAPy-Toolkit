@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from ssapy_toolkit.compute.generate_sphere_of_vectors import generate_sphere_vectors
-from ssapy_toolkit.plots.plotutils import figsave  # [27]
+from ssapy_toolkit.plots.plotutils import figsave
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 

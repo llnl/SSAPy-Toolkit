@@ -1,7 +1,7 @@
 # ssapy_toolkit/accelerations_orbit/accel_circularize.py
 
 import numpy as np
-from ..constants import EARTH_MU, EARTH_RADIUS  # [56]
+from ..constants import EARTH_MU, EARTH_RADIUS
 from ._state import state
 
 _orbit_achieved = False  # global variable to track circularization

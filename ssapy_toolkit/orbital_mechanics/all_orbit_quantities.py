@@ -4,7 +4,7 @@ import numpy as np
 from astropy.time import Time
 from ssapy import Orbit
 from ssapy_toolkit.constants import EARTH_MU
-from ssapy_toolkit.orbital_mechanics.keplerian import true_anomaly  # mean/eccentric -> true anomaly [3]
+from ssapy_toolkit.orbital_mechanics.keplerian import true_anomaly  # mean/eccentric -> true anomaly
 
 
 def all_orbital_quantities(
@@ -69,7 +69,7 @@ def all_orbital_quantities(
 
         ta = _resolve_true_anomaly(ta=ta, ma=ma, e=e)
 
-        orbit = Orbit.fromKeplerianElements(a, e, i, pa, raan, ta, t, mu)  # [6]
+        orbit = Orbit.fromKeplerianElements(a, e, i, pa, raan, ta, t, mu)
         return _extract_all_elements_ssapy(orbit)
 
     # ----------------------------
@@ -81,7 +81,7 @@ def all_orbital_quantities(
 
         ta = _resolve_true_anomaly(ta=ta, ma=ma, e=e)
 
-        orbit = Orbit.fromKeplerianElements(a, e, i, pa, raan, ta, t, mu)  # [6]
+        orbit = Orbit.fromKeplerianElements(a, e, i, pa, raan, ta, t, mu)
         return _extract_all_elements_ssapy(orbit)
 
     raise ValueError(
@@ -112,9 +112,9 @@ def _extract_all_elements_ssapy(orbit: Orbit):
       - Use SSAPy naming (pa, raan, trueAnomaly/meanAnomaly/eccentricAnomaly, meanMotion, period) [6]
       - Keep r,v,t,mu and add common derived scalars (rp, ra).
     """
-    a_val, e_val, i_val, pa_val, raan_val, ta_val = orbit.keplerianElements  # [6]
+    a_val, e_val, i_val, pa_val, raan_val, ta_val = orbit.keplerianElements
 
-    # Prefer SSAPy properties [6]
+    # Prefer SSAPy properties
     out = {
         # epoch/state
         "t": float(orbit.t),
@@ -122,7 +122,7 @@ def _extract_all_elements_ssapy(orbit: Orbit):
         "r": np.asarray(orbit.r, dtype=float),
         "v": np.asarray(orbit.v, dtype=float),
 
-        # classical Keplerian elements (SSAPy order/names) [6]
+        # classical Keplerian elements (SSAPy order/names)
         "a": float(a_val),
         "e": float(e_val),
         "i": float(i_val),
@@ -130,11 +130,11 @@ def _extract_all_elements_ssapy(orbit: Orbit):
         "raan": float(raan_val),
         "trueAnomaly": float(ta_val),
 
-        # SSAPy anomaly fields (when defined) [6]
+        # SSAPy anomaly fields (when defined)
         "eccentricAnomaly": _safe_float(getattr(orbit, "eccentricAnomaly", np.nan)),
         "meanAnomaly": _safe_float(getattr(orbit, "meanAnomaly", np.nan)),
 
-        # SSAPy derived fields (when defined) [6]
+        # SSAPy derived fields (when defined)
         "period": _safe_float(getattr(orbit, "period", np.inf)),
         "meanMotion": _safe_float(getattr(orbit, "meanMotion", 0.0)),
         "p": _safe_float(getattr(orbit, "p", np.nan)),
@@ -142,7 +142,7 @@ def _extract_all_elements_ssapy(orbit: Orbit):
         "energy": _safe_float(getattr(orbit, "energy", np.nan)),
         "LRL": np.asarray(getattr(orbit, "LRL", np.full(3, np.nan)), dtype=float),
 
-        # SSAPy periapsis/apoapsis coordinates (vectors) [6]
+        # SSAPy periapsis/apoapsis coordinates (vectors)
         "periapsis": np.asarray(getattr(orbit, "periapsis", np.full(3, np.nan)), dtype=float),
         "apoapsis": np.asarray(getattr(orbit, "apoapsis", np.full(3, np.nan)), dtype=float),
     }

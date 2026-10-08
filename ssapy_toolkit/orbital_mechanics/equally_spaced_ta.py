@@ -115,7 +115,7 @@ def equally_spaced_ta(
     E_equal = np.mod(E_equal, 2.0 * np.pi)
 
     # Convert eccentric anomaly -> true anomaly using SSAPy relation
-    # orbit.py provides _ellipticalEccentricToTrueAnomaly(E, e) [10]
+    # orbit.py provides _ellipticalEccentricToTrueAnomaly(E, e)
     beta = e / (1 + np.sqrt((1 - e) * (1 + e)))
     ta = E_equal + 2 * np.arctan(beta * np.sin(E_equal) / (1 - beta * np.cos(E_equal)))
     ta = np.mod(ta, 2.0 * np.pi)

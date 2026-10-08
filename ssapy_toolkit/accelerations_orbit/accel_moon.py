@@ -35,7 +35,7 @@ def accel_point_moon(r: np.ndarray, time=None) -> np.ndarray:
     r, _, time = state(r, np.zeros(3), time)
 
     # 1) Convert time to GPS seconds since 1980-01-06
-    time_gps = to_gps(time)  # [176]
+    time_gps = to_gps(time)
     t = Time(time_gps, format="gps", scale="utc")
 
     # 2) Get Moon position in GCRS using Astropy's configured ephemeris.

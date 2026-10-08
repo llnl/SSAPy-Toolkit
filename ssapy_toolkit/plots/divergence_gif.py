@@ -180,7 +180,7 @@ def divergence_gif(
         if snap_idx % 10 == 0:
             print(f"  Generated frame {snap_idx+1}/{n_snapshots}")
     
-    # Use write_gif from ssapy_toolkit [1][3]
+    # Use write_gif from ssapy_toolkit
     output_path = os.path.expanduser(output_path)
     
     write_gif(

@@ -7,7 +7,7 @@ from ssapy_toolkit.plots.orbit_plot import orbit_plot
 from ssapy_toolkit.propagators_orbit.leap_frog import leapfrog
 from ssapy_toolkit.accelerations_orbit.accel_uniform_earth import accel_uniform_earth
 from ssapy_toolkit.plots.figpath import figpath
-from ssapy_toolkit.constants import RGEO, VGEO  # inferred from context [21]
+from ssapy_toolkit.constants import RGEO, VGEO
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
