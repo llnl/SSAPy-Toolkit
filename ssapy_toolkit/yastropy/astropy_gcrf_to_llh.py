@@ -1,8 +1,6 @@
 from astropy.coordinates import GCRS, ITRS
 from astropy.coordinates.representation import CartesianRepresentation
-from astropy.time import Time
 from astropy import units as u
-import numpy as np
 
 
 def astropy_gcrf_to_llh(r_gcrf, t):

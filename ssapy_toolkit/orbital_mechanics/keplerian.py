@@ -654,103 +654,89 @@ def state_to_kepler(r, v, mu=EARTH_MU):
     ------
     Travis Yeager (yeager7@llnl.gov)
     """
-    # Compute angular momentum vector
+    r = np.asarray(r, dtype=float)
+    v = np.asarray(v, dtype=float)
+    single = r.ndim == 1
+    r = np.atleast_2d(r)
+    v = np.atleast_2d(v)
+
+    r_norm = np.linalg.norm(r, axis=1)
     h = np.cross(r, v)
+    h_norm = np.linalg.norm(h, axis=1)
+    e_vec = np.cross(v, h) / mu - r / r_norm[:, None]
+    e = np.linalg.norm(e_vec, axis=1)
+    a = 1.0 / (2.0 / r_norm - np.einsum("ij,ij->i", v, v) / mu)
+    i = np.arccos(np.clip(h[:, 2] / h_norm, -1.0, 1.0))
 
-    # Compute eccentricity vector
-    e_vec = (np.cross(v, h) / mu) - r / np.linalg.norm(r)
+    # Node vector n = z_hat x h. RAAN is its azimuth; for an equatorial orbit it
+    # is undefined and set to 0, with the reference direction taken as +x.
+    node = np.column_stack([-h[:, 1], h[:, 0], np.zeros(len(h))])
+    node_norm = np.linalg.norm(node, axis=1)
+    equatorial = node_norm < 1e-10 * h_norm
+    raan = np.where(equatorial, 0.0, np.mod(np.arctan2(node[:, 1], node[:, 0]), 2 * np.pi))
+    node_hat = np.where(equatorial[:, None], np.array([1.0, 0.0, 0.0]), node / np.where(equatorial, 1.0, node_norm)[:, None])
 
-    # Compute semi-major axis
-    a = 1 / (2 / np.linalg.norm(r) - np.linalg.norm(v)**2 / mu)
+    # Angles measured in the orbit plane from the node, positive along h.
+    def _plane_angle(from_hat, to_vec):
+        cross = np.cross(from_hat, to_vec)
+        return np.mod(
+            np.arctan2(np.einsum("ij,ij->i", cross, h) / h_norm, np.einsum("ij,ij->i", from_hat, to_vec)),
+            2 * np.pi,
+        )
 
-    # Compute eccentricity
-    e = np.linalg.norm(e_vec)
+    # For a circular orbit the periapsis is undefined; pa is 0 and nu is the
+    # argument of latitude.
+    circular = e < 1e-12
+    e_hat = np.where(circular[:, None], node_hat, e_vec / np.where(circular, 1.0, e)[:, None])
+    pa = np.where(circular, 0.0, _plane_angle(node_hat, e_hat))
+    nu = _plane_angle(e_hat, r)
 
-    # Compute inclination
-    i = np.arccos(h[2] / np.linalg.norm(h))
-
-    # Compute right ascension of the ascending node
-    h_xy_norm = np.linalg.norm(h[:2])
-    if h_xy_norm < 1e-10:  # Tolerance for equatorial orbit
-        raan = 0  # RAAN is undefined, set to 0
-    else:
-        if h[0] >= 0:
-            raan = np.arccos(h[0] / h_xy_norm)
-        else:
-            raan = 2 * np.pi - np.arccos(h[0] / h_xy_norm)
-
-    # Compute argument of perigee
-    if e_vec[2] >= 0:
-        pa = np.arccos(np.dot(h, e_vec) / (np.linalg.norm(h) * e))
-    else:
-        pa = 2 * np.pi - np.arccos(np.dot(h, e_vec) / (np.linalg.norm(h) * e))
-
-    # Compute true anomaly
-    if np.dot(r, v) >= 0:
-        nu = np.arccos(np.dot(e_vec, r) / (e * np.linalg.norm(r)))
-    else:
-        nu = 2 * np.pi - np.arccos(np.dot(e_vec, r) / (e * np.linalg.norm(r)))
-
+    if single:
+        return a[0], e[0], i[0], pa[0], raan[0], nu[0]
     return a, e, i, pa, raan, nu
 
 
 def kepler_to_parametric(a, e, i, omega, pa, theta):
     """
-    Convert Keplerian elements to parametric coordinates.
+    Position on a Keplerian orbit from its elements, with the focus at the origin.
 
     Parameters
     ----------
-    a : float
+    a : float or array-like
         Semi-major axis.
-    e : float
-        Eccentricity.
-    i : float
+    e : float or array-like
+        Eccentricity, 0 <= e < 1.
+    i : float or array-like
         Inclination (degrees).
-    omega : float
+    omega : float or array-like
         Longitude of ascending node (degrees).
-    pa : float
+    pa : float or array-like
         Argument of periapsis (degrees).
-    theta : float
+    theta : float or array-like
         True anomaly (degrees).
 
     Returns
     -------
     tuple
-        (x_final, y_final, z_final) parametric coordinates.
+        ``(x, y, z)`` in the units of ``a``: the perifocal point
+        ``r (cos theta, sin theta, 0)`` with ``r = a (1 - e^2) / (1 + e cos theta)``,
+        rotated by ``Rz(omega) Rx(i) Rz(pa)``.
 
     Author
     ------
     Travis Yeager (yeager7@llnl.gov)
     """
-    # Convert to radians
-    i = np.radians(i)
-    omega = np.radians(omega)
-    pa = np.radians(pa)
-    theta = np.radians(theta)
+    i, omega, pa, theta = (np.radians(np.asarray(value, dtype=float)) for value in (i, omega, pa, theta))
+    a = np.asarray(a, dtype=float)
+    e = np.asarray(e, dtype=float)
 
-    # Compute the semi-major and semi-minor axes
-    b = a * np.sqrt(1 - e**2)
-
-    # Compute the parametric coefficients
-    x = a * np.cos(theta)
-    y = b * np.sin(theta)
-    z = 0
-
-    # Rotate the ellipse about the x-axis
-    x_prime = x
-    y_prime = y * np.cos(i) - z * np.sin(i)
-    z_prime = y * np.sin(i) + z * np.cos(i)
-
-    # Rotate the ellipse about the z-axis
-    x_prime_prime = x_prime * np.cos(omega) - y_prime * np.sin(omega)
-    y_prime_prime = x_prime * np.sin(omega) + y_prime * np.cos(omega)
-    z_prime_prime = z_prime
-
-    # Translate the ellipse
-    x_final = x_prime_prime + pa
-    y_final = y_prime_prime
-    z_final = z_prime_prime
-
+    radius = a * (1.0 - e**2) / (1.0 + e * np.cos(theta))
+    u = pa + theta  # argument of latitude
+    cos_o, sin_o = np.cos(omega), np.sin(omega)
+    cos_i, sin_i = np.cos(i), np.sin(i)
+    x_final = radius * (cos_o * np.cos(u) - sin_o * np.sin(u) * cos_i)
+    y_final = radius * (sin_o * np.cos(u) + cos_o * np.sin(u) * cos_i)
+    z_final = radius * np.sin(u) * sin_i
     return x_final, y_final, z_final
 
 
@@ -1057,9 +1043,15 @@ def vcircular(r=au_to_m, mu_=1.32712440018e20 + 2.2032e13 + 3.24859e14):
     return np.sqrt(mu_ / r)
 
 
-def vis_viva(a, r, mu):
+def vis_viva(*, a, r, mu):
     """
     Calculate orbital velocity using vis-viva equation.
+
+    The arguments are keyword-only: the package-level
+    ``ssapy_toolkit.orbital_mechanics.vis_viva`` is
+    :func:`ssapy_toolkit.orbital_mechanics.misc.vis_viva`, which takes
+    ``(mu, r, a)`` positionally, and a positional call written for one order
+    would silently return the wrong speed under the other.
 
     Parameters
     ----------

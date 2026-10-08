@@ -69,13 +69,14 @@ def estimate_fuel_usage(
     total_fuel = 0.0  # Total fuel used
     mass = mass0
 
+    exhaust_velocity = isp * g0
     for a, _pos in zip(accels, positions):
-        force = mass * a
-        mdot = force / (isp * g0)
-        delta_m = mdot * dt
-        # Accumulate total fuel used
-        total_fuel += delta_m
-        # Update spacecraft mass
-        mass -= delta_m
+        # Each sample holds the acceleration for dt. At constant acceleration
+        # m' = -m a / (Isp g0), so the mass decays by exp(-a dt / (Isp g0))
+        # exactly (Tsiolkovsky); a forward-Euler step m a dt / (Isp g0)
+        # under-counts the mass loss and over-counts the propellant on coarse steps.
+        new_mass = mass * np.exp(-a * dt / exhaust_velocity)
+        total_fuel += mass - new_mass
+        mass = new_mass
 
     return total_fuel

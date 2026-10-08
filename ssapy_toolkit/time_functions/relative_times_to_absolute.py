@@ -1,6 +1,5 @@
 import numpy as np
 from astropy.time import Time, TimeDelta
-import astropy.units as u
 
 
 def time_rel_to_abs(times, ref, anchor='start'):

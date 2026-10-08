@@ -19,14 +19,12 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
-from mpl_toolkits.mplot3d import Axes3D
 from PIL import Image
 
 from .starfield import add_starfield
 from .plotutils import valid_orbits, figsave
-from ..constants import RGEO, MOON_RADIUS, EARTH_RADIUS
+from ..constants import MOON_RADIUS, EARTH_RADIUS
 from ..coordinates import gcrf_to_lunar_fixed
-from ..compute import find_smallest_bounding_cube
 
 # Real Sun ephemeris + texture shading (diffuse lighting on the Moon/Earth)
 from .sun_mpl import (
@@ -37,7 +35,6 @@ from .sun_mpl import (
 # projection helper that ties the Sun's position to the shading above
 from .sun_render import (
     render_sun,
-    background_sun_position,
     background_sun_radius,
 )
 

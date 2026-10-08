@@ -1,5 +1,4 @@
 import numpy as np
-import warnings
 
 from .convert_dd_and_dms import dms_to_dd
 
@@ -38,27 +37,21 @@ def dd_to_hms(degree_decimal):
 
     Parameters
     ----------
-    degree_decimal : float
-        The decimal degree value.
+    degree_decimal : float or str
+        The angle in decimal degrees, or a 'deg:min:sec' string. Angles
+        outside [0, 360) are wrapped into it, so -15 deg is 23h.
 
     Returns
     -------
     str
-        The corresponding HMS string in the format 'hour:minute:second'.
+        The corresponding HMS string in the format 'hour:minute:second', with
+        hours in [0, 24).
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
     if isinstance(degree_decimal, str):
         degree_decimal = dms_to_dd(degree_decimal)
-    if degree_decimal < 0:
-        warnings.warn(
-            "dd for HMS conversion cannot be negative; using its absolute value.",
-            UserWarning,
-            stacklevel=2,
-        )
-        _dd = -degree_decimal / 15
-    else:
-        _dd = degree_decimal / 15
+    _dd = float(np.mod(degree_decimal, 360.0)) / 15
     _h, __h = np.trunc(_dd), _dd - np.trunc(_dd)
     _m, __m = np.trunc(__h * 60), __h * 60 - np.trunc(__h * 60)
     _s = round(__m * 60, 4)
@@ -66,6 +59,8 @@ def dd_to_hms(degree_decimal):
         _m, _s = _m + 1, _s - 60
     if _m >= 60:
         _h, _m = _h + 1, 0
+    if _h >= 24:
+        _h = 0
     _s = int(_s) if int(_s) == _s else _s
 
     return f'{int(_h)}:{int(_m)}:{_s}'

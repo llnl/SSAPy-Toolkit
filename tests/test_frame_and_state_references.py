@@ -386,3 +386,25 @@ def test_satellite_viewer_rotates_body_to_gcrf_quaternions_into_teme():
     body_vector = rng.normal(size=3)
     expected = np.asarray(gcrf_to_teme(epoch), dtype=float) @ (body_to_gcrf @ body_vector)
     np.testing.assert_allclose(rotate(q_out[0][0], body_vector), expected, atol=1e-12)
+
+
+def test_gcrf_to_itrf_transforms_a_supplied_velocity_like_astropy():
+    # R2: astropy GCRS -> ITRS with a CartesianDifferential. SSAPy's IAU 1976/80
+    # rotation and astropy's IAU 2006/2000A agree to ~10 m in position here, so
+    # the Earth-fixed velocities are held to 0.01 m/s.
+    import astropy.units as u
+    from astropy.coordinates import GCRS, ITRS, CartesianDifferential, CartesianRepresentation
+    from astropy.time import Time
+
+    from ssapy_toolkit.coordinates import gcrf_to_itrf
+
+    times = Time(["2026-10-08T00:00:00", "2026-10-08T06:00:00", "2026-03-20T12:00:00"], scale="utc")
+    r = np.array([[7000e3, 1000e3, -500e3], [-4000e3, 5000e3, 3000e3], [42164e3, 0.0, 0.0]])
+    v = np.array([[-1000.0, 7300.0, 1500.0], [-3000.0, -4000.0, 5000.0], [0.0, 3074.7, 0.0]])
+
+    representation = CartesianRepresentation(r.T * u.m, differentials=CartesianDifferential(v.T * u.m / u.s))
+    itrs = GCRS(representation, obstime=times).transform_to(ITRS(obstime=times))
+    expected_v = itrs.cartesian.differentials["s"].d_xyz.to_value(u.m / u.s).T
+
+    _r_itrf, v_itrf = gcrf_to_itrf(r, times.gps, v=v)
+    np.testing.assert_allclose(v_itrf, expected_v, rtol=0, atol=0.01)

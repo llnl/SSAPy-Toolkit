@@ -57,7 +57,7 @@ from astropy.time import Time
 from astropy.coordinates import GCRS, ITRS, CartesianRepresentation, get_sun
 import astropy.units as u
 
-from ssapy_toolkit.constants import AU_KM, EARTH_MU_KM3_S2, EARTH_RADIUS_KM, SUN_RADIUS_KM
+from ssapy_toolkit.constants import EARTH_MU_KM3_S2, EARTH_RADIUS_KM, SUN_RADIUS_KM
 
 from .plotutils import (
     _figure_save_path,
@@ -266,7 +266,6 @@ def _draw_continents(ax):
         return "ssapy earth.png"
 
     try:
-        import cartopy.crs as ccrs
         import cartopy.feature as cfeature
         # NOTE: this path only works if `ax` was created with a cartopy
         # projection; since the rest of this plot uses plain matplotlib

@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from ssapy_toolkit.coordinates.earth_fixed import gcrf_to_itrf, itrf_to_gcrf
 from ssapy_toolkit.time_functions.get_times import get_times
 from ssapy_toolkit.ssapy_wrappers.ssapy_orbits import ssapy_orbit
-from ssapy_toolkit.constants import RGEO  # [19]
+from ssapy_toolkit.constants import RGEO
 from ssapy_toolkit.plots.plotutils import figsave
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None

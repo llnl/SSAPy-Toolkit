@@ -31,7 +31,6 @@ ALLOWED_TOP_LEVEL = {
     "pyproject.toml",
     "requirements-dev.txt",
     "scripts",
-    "skills.md",
     "ssapy_toolkit",
     "tests",
 }

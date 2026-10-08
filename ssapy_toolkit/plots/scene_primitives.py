@@ -12,7 +12,6 @@ from datetime import datetime
 import numpy as np
 
 from ssapy_toolkit.constants import (
-    EARTH_RADIUS_KM,
     LD_KM,
     MOON_RADIUS_KM,
     SIDEREAL_DAY_SECONDS,
@@ -108,9 +107,8 @@ def gps_seconds_at(value, index=-1, default=None):
 def earth_rotation_deg_from_time(time=None, *, epoch_jd=None, relative_seconds=0.0):
     """Return Greenwich sidereal rotation angle in degrees for Earth textures.
 
-    The convention matches ``globe_plot._earth_lon0_from_time`` and SSAPy's
-    ``drawEarth`` path: GPS seconds are converted to TT MJD and evaluated with
-    ERFA ``gst94``.  ``epoch_jd`` plus ``relative_seconds`` supports older demo
+    The convention matches SSAPy's ``groundTrack``: GPS seconds are converted
+    to UT1 with the IERS table and evaluated with ERFA ``gst94``.  ``epoch_jd`` plus ``relative_seconds`` supports older demo
     helpers that propagate relative seconds from a fixed Julian-date epoch.
     """
     if time is None and epoch_jd is None:
@@ -125,11 +123,26 @@ def earth_rotation_deg_from_time(time=None, *, epoch_jd=None, relative_seconds=0
     else:
         gps_seconds = gps_seconds_at(time, default=0.0)
     try:
-        from erfa import gst94
-        mjd_tt = 44244.0 + (gps_seconds + 51.184) / 86400.0
-        return float(np.degrees(gst94(2400000.5, mjd_tt)) % 360.0)
+        return float(np.degrees(_gst94_rad(gps_seconds)) % 360.0)
     except Exception:
         return float((gps_seconds / SIDEREAL_DAY_SECONDS * 360.0) % 360.0)
+
+
+def _gst94_rad(gps_seconds):
+    """Greenwich sidereal angle (rad) at GPS seconds, as SSAPy's groundTrack uses it.
+
+    gst94 takes UT1, so the TT date is corrected by IERS UT1 - TT (about
+    -69 s in 2026). Passing TT straight in, as these helpers used to, turned
+    the Earth texture 17 arcmin (32 km at the equator) away from SSAPy's
+    ground tracks.
+    """
+    from erfa import gst94
+    from ssapy.utils import iers_interp
+
+    gps_seconds = np.asarray(gps_seconds, dtype=float)
+    mjd_tt = 44244.0 + (gps_seconds + 51.184) / 86400.0
+    d_ut1_tt_mjd, _pmx, _pmy = iers_interp(gps_seconds)
+    return gst94(2400000.5, mjd_tt + d_ut1_tt_mjd)
 
 def _gps_seconds(value):
     if value is None:

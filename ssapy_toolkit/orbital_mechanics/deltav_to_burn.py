@@ -1,7 +1,6 @@
 # ssapy_toolkit/orbital_mechanics/deltav_to_burn.py
 
 import numpy as np
-from ssapy import Orbit
 from ssapy_toolkit.coordinates import ntw_to_gcrf
 from ssapy_toolkit.propagators_orbit import leapfrog
 
@@ -60,8 +59,10 @@ def deltav_to_burn(orbit, times, delta_v_ntw):
                               inclination=inclination_prof)
 
     # Impulsive approximation at mid-time
-    k = t.size // 2
-    t_center = 0.5 * (t[0] + t[-1])
+    # The impulse is applied at the sample nearest the mid-time; t_center is
+    # that sample's time (the exact mid-time is not a grid point for even N).
+    k = int(np.argmin(np.abs(t - 0.5 * (t[0] + t[-1]))))
+    t_center = float(t[k])
 
     r_pre, v_pre = leapfrog(r0, v0, t[:k+1],
                             radial=None, velocity=None, inclination=None)

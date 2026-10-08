@@ -29,15 +29,15 @@ Usage
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 
 import numpy as np
 
 from ssapy_toolkit.constants import G0
 
-from ssapy_toolkit.coordinates.frames import ntw_axes, lvlh_axes, _unit
+from ssapy_toolkit.coordinates.frames import ntw_axes, lvlh_axes
 
 
 # ─── BurnEvent ────────────────────────────────────────────────────────────────

@@ -178,8 +178,18 @@ def lunar_lagrange_points_circular(t):
     return _earth_moon_lagrange_points(t)
 
 
-def lagrange_points_lunar_frame():
-    t = Time(["2025-1-1"], scale='utc').gps
+def lagrange_points_lunar_frame(t=None):
+    """Earth-Moon L1-L5 in the rotating lunar frame of :func:`ssapy_toolkit.coordinates.gcrf_to_lunar` (Earth-centred), in meters.
+
+    ``t`` is the epoch (GPS seconds or astropy Time); it previously could not be
+    set and was always 2025-01-01, which is still the default.
+    """
+    if t is None:
+        t = Time(["2025-1-1"], scale='utc').gps
+    elif hasattr(t, "gps"):
+        t = np.atleast_1d(t.gps)
+    else:
+        t = np.atleast_1d(np.asarray(t, dtype=float))
     L = lunar_lagrange_points(t)
     return {
         "L1": np.squeeze(gcrf_to_lunar(L["L1"], t)),
@@ -190,8 +200,18 @@ def lagrange_points_lunar_frame():
     }
 
 
-def lagrange_points_lunar_fixed_frame():
-    t = Time(["2025-1-1"], scale='utc').gps
+def lagrange_points_lunar_fixed_frame(t=None):
+    """Earth-Moon L1-L5 in the Moon-centred Earth-Moon rotating frame of :func:`ssapy_toolkit.coordinates.gcrf_to_lunar_fixed` (Earth on -X), in meters.
+
+    ``t`` is the epoch (GPS seconds or astropy Time); it previously could not be
+    set and was always 2025-01-01, which is still the default.
+    """
+    if t is None:
+        t = Time(["2025-1-1"], scale='utc').gps
+    elif hasattr(t, "gps"):
+        t = np.atleast_1d(t.gps)
+    else:
+        t = np.atleast_1d(np.asarray(t, dtype=float))
     L = lunar_lagrange_points(t)
     return {
         "L1": np.squeeze(gcrf_to_lunar_fixed(L["L1"], t)),

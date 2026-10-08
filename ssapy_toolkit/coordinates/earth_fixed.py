@@ -7,31 +7,46 @@ from ..time_functions import to_gps
 from .velocity import v_from_r
 
 
-def gcrf_to_itrf(r_gcrf, t, v=None):
+def gcrf_to_itrf(r_gcrf, t, v=None, *, step_s=1.0):
     """
     Convert GCRF coordinates to ITRF coordinates.
 
     Parameters
     ----------
     r_gcrf : numpy.ndarray
-        3D position vector in GCRF coordinates (meters).
+        GCRF positions in meters, shape (n, 3).
     t : numpy.ndarray
-        Time array for conversion.
-    v : numpy.ndarray, optional
-        Velocity vector in GCRF coordinates (m/s).
+        Times (GPS seconds or astropy Time), one per position.
+    v : numpy.ndarray or True, optional
+        GCRF velocities in m/s, shape (n, 3), to transform to Earth-fixed
+        velocities. ``True`` instead differentiates the ITRF positions
+        numerically, which needs a densely sampled trajectory.
+    step_s : float, optional
+        Half-width in seconds of the central difference used to differentiate
+        the rotation when ``v`` is an array. Default 1 s.
 
     Returns
     -------
     numpy.ndarray or tuple
-        Position in ITRF coordinates, or ``(position, velocity)`` when a
-        velocity is provided.
+        ITRF positions in meters, or ``(position, velocity)`` when ``v`` is
+        given. The velocity is Earth-relative: ``R v + (dR/dt) r``.
     """
     t = to_gps(t)
     x, y, z = groundTrack(r_gcrf, t, format="cartesian")
     pos = np.array([x, y, z]).T
-    if v is None:
+    if v is None or v is False:
         return pos
-    return pos, v_from_r(pos, t)
+    if v is True:
+        return pos, v_from_r(pos, t)
+
+    r_gcrf = np.asarray(r_gcrf, dtype=float)
+    v_gcrf = np.asarray(v, dtype=float)
+    if v_gcrf.shape != r_gcrf.shape:
+        raise ValueError("v must have the same shape as r_gcrf.")
+    t = np.asarray(t, dtype=float)
+    ahead = np.array(groundTrack(r_gcrf + v_gcrf * step_s, t + step_s, format="cartesian")).T
+    behind = np.array(groundTrack(r_gcrf - v_gcrf * step_s, t - step_s, format="cartesian")).T
+    return pos, (ahead - behind) / (2.0 * step_s)
 
 
 def gcrf_to_itrf_astropy(state_vectors, t):

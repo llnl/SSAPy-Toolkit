@@ -35,8 +35,6 @@ st.plotly_chart(fig, use_container_width=True)
 from __future__ import annotations
 
 import threading
-import time
-import warnings
 from pathlib import Path
 from typing import Callable, Optional
 

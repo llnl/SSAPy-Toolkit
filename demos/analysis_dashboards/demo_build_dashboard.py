@@ -4,7 +4,7 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ssapy_toolkit.plots.build_dashboard import build_dashboard  # [2]
+from ssapy_toolkit.plots.build_dashboard import build_dashboard
 from ssapy_toolkit.plots.plotutils import figsave
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None

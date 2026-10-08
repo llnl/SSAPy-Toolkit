@@ -10,7 +10,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.time import Time
-from erfa import gst94
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.colors import cnames, to_rgb, rgb2hex
 from PIL import Image as PILImage
@@ -613,14 +612,14 @@ def drawEarth(time, ngrid=100, R=EARTH_RADIUS, rfactor=1):
     u = np.linspace(0, 1, ngrid)
     v, u = np.meshgrid(u, u)
 
-    # Earth rotation angle for t (approximate, visualization only)
+    # Earth rotation angle for t, from UT1 as in SSAPy's groundTrack
     if isinstance(time, Time):
         time = time.gps
     if isinstance(time, Real):
         time = np.array([time])
 
-    mjd_tt = 44244.0 + (time + 51.184) / 86400
-    gst = gst94(2400000.5, mjd_tt)
+    from .scene_primitives import _gst94_rad
+    gst = _gst94_rad(time)
 
     u = u - (gst / (2 * np.pi))[:, None, None]
     v = np.broadcast_to(v, u.shape)
@@ -674,16 +673,32 @@ def drawMoon(time, ngrid=100, R=MOON_RADIUS, rfactor=1):
     if isinstance(time, Real):
         time = np.array([time])
 
-    mjd_tt = 44244.0 + (time + 51.184) / 86400
-    gst = gst94(2400000.5, mjd_tt)
+    # Rotate the texture by the Moon's own prime-meridian angle (DE440 lunar
+    # principal axes), not Earth's sidereal angle as before.
+    angle = _moon_texture_rotation_rad(time)
 
-    u = u - (gst / (2 * np.pi))[:, None, None]
+    u = u - (angle / (2 * np.pi))[:, None, None]
     v = np.broadcast_to(v, u.shape)
 
     return ipv.plot_mesh(
         x * R * rfactor, y * R * rfactor, z * R * rfactor,
         u=u, v=v, wireframe=False, texture=moon
     )
+
+
+def _moon_texture_rotation_rad(time):
+    """Azimuth (rad) in the GCRF x-y plane of the Moon's body +X axis
+    (0 deg selenographic longitude) at GPS seconds ``time``.
+
+    The texture spins about the GCRF z axis only, so the ~6.7 deg tilt of the
+    lunar equator is not drawn; the prime meridian, which faces Earth within
+    the optical libration (about 8 deg), is placed correctly.
+    """
+    from ..coordinates.lunar import lunar_body_rotation
+
+    rotation = lunar_body_rotation(np.atleast_1d(np.asarray(time, dtype=float)))  # GCRF -> body
+    x_axis = rotation[:, 0, :]  # body +X expressed in GCRF
+    return np.arctan2(x_axis[:, 1], x_axis[:, 0])
 
 
 def draw_moon(time, ngrid=100, R=MOON_RADIUS, rfactor=1):

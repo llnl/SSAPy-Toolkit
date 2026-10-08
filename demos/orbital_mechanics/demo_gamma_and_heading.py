@@ -11,11 +11,11 @@ from astropy.time import Time
 from astropy.coordinates import ITRS, GCRS, CartesianRepresentation
 import astropy.units as u
 
-from ssapy_toolkit.ssapy_wrappers.ssapy_orbits import ssapy_orbit  # [13]
-from ssapy_toolkit.orbital_mechanics.gamma_and_heading import calc_gamma_and_heading  # [13]
-from ssapy_toolkit.plots.figpath import figpath  # [13]
-from ssapy_toolkit.constants import EARTH_RADIUS  # [13]
-from ssapy_toolkit.plots.groundtrack_dashboard_gamma_heading import groundtrack_dashboard_gamma_heading  # [13]
+from ssapy_toolkit.ssapy_wrappers.ssapy_orbits import ssapy_orbit
+from ssapy_toolkit.orbital_mechanics.gamma_and_heading import calc_gamma_and_heading
+from ssapy_toolkit.plots.figpath import figpath
+from ssapy_toolkit.constants import EARTH_RADIUS
+from ssapy_toolkit.plots.groundtrack_dashboard_gamma_heading import groundtrack_dashboard_gamma_heading
 
 try:
     from ssapy import groundTrack

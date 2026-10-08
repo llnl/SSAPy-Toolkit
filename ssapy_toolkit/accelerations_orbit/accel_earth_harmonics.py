@@ -1,8 +1,37 @@
 # ssapy_toolkit/accelerations_orbit/accel_earth_harmonics.py
+"""Point-mass Earth gravity plus the J2-J8 zonal harmonics.
+
+The zonal potential of degree n is
+
+    U_n = -mu J_n R^n P_n(u) / r^(n+1),    u = z / r,
+
+with P_n the Legendre polynomial, and its gradient is
+
+    a_n = mu J_n R^n / r^(n+3) * [((n+1) P_n(u) + u P_n'(u)) r_vec - P_n'(u) r z_hat].
+
+The coefficients are the unnormalized EGM96 zonals (J_n = -C_n0), which match
+the EGM96 file shipped with SSAPy and the EGM96/WGS84 ``EARTH_MU`` and
+``EARTH_RADIUS`` in ``ssapy_toolkit.constants``. The z axis of ``r`` is taken
+to be Earth's rotation axis; no precession, nutation, or polar motion is
+applied.
+"""
 
 import numpy as np
+from numpy.polynomial import legendre as _legendre
+
 from ..constants import EARTH_MU, EARTH_RADIUS
 from ._state import position
+
+# Unnormalized EGM96 zonal coefficients J_n = -C_n0.
+EGM96_ZONAL_J = {
+    2: 1.0826266835531513e-3,
+    3: -2.5326564853322355e-6,
+    4: -1.619621591367e-6,
+    5: -2.2729608286869828e-7,
+    6: 5.406812391070849e-7,
+    7: -3.523599084182364e-7,
+    8: -2.0479946698535123e-7,
+}
 
 
 def _check_r_safe(r2: float) -> None:
@@ -12,143 +41,58 @@ def _check_r_safe(r2: float) -> None:
         raise ValueError(f"r magnitude ({r_mag:.2f} m) is below Earth's surface.")
 
 
-def accel_J2(r: np.ndarray) -> np.ndarray:
-    J2 = 1.08262668e-3
-    mu = EARTH_MU
-    Re = EARTH_RADIUS
-
+def _accel_zonal(r, n: int) -> np.ndarray:
+    """Acceleration (m/s^2) from the degree-n zonal term at position r (m)."""
     r = position(r)
     r2 = float(np.dot(r, r))
     _check_r_safe(r2)
     r_mag = np.sqrt(r2)
+    u = r[2] / r_mag
 
-    inv_r5 = 1.0 / (r2 * r_mag**3)  # = 1/r^5
-    z = r[2]
-    u = z / r_mag
-    k2 = 5.0 * u**2 - 1.0
+    coeffs = np.zeros(n + 1)
+    coeffs[n] = 1.0
+    p_n = _legendre.legval(u, coeffs)
+    dp_n = _legendre.legval(u, _legendre.legder(coeffs))
 
-    factor2 = 1.5 * J2 * mu * Re**2 * inv_r5
-    return factor2 * np.array([r[0] * k2, r[1] * k2, r[2] * (5.0 * u**2 - 3.0)])
+    factor = EARTH_MU * EGM96_ZONAL_J[n] * EARTH_RADIUS**n / r_mag ** (n + 3)
+    radial = ((n + 1) * p_n + u * dp_n) * r
+    axial = np.array([0.0, 0.0, dp_n * r_mag])
+    return factor * (radial - axial)
+
+
+def accel_J2(r: np.ndarray) -> np.ndarray:
+    """J2 zonal acceleration (m/s^2) at position ``r`` (m)."""
+    return _accel_zonal(r, 2)
 
 
 def accel_J3(r: np.ndarray) -> np.ndarray:
-    J3 = -2.5324105e-6
-    mu = EARTH_MU
-    Re = EARTH_RADIUS
-
-    r = position(r)
-    r2 = float(np.dot(r, r))
-    _check_r_safe(r2)
-    r_mag = np.sqrt(r2)
-
-    inv_r6 = 1.0 / (r2**3)  # = 1/r^6
-    z = r[2]
-    u = z / r_mag
-
-    P3 = 0.5 * (5.0 * u**3 - 3.0 * u)
-    dP3 = 0.5 * (15.0 * u**2 - 3.0)
-    factor3 = -mu * J3 * Re**3 * inv_r6
-    return factor3 * (4.0 * P3 * r - dP3 * r * u * np.array([0.0, 0.0, 1.0]))
+    """J3 zonal acceleration (m/s^2) at position ``r`` (m)."""
+    return _accel_zonal(r, 3)
 
 
 def accel_J4(r: np.ndarray) -> np.ndarray:
-    J4 = -1.6198976e-6
-    mu = EARTH_MU
-    Re = EARTH_RADIUS
-
-    r = position(r)
-    r2 = float(np.dot(r, r))
-    _check_r_safe(r2)
-    r_mag = np.sqrt(r2)
-
-    inv_r7 = 1.0 / (r2**2 * r_mag**3)  # = 1/r^7
-    z = r[2]
-    u = z / r_mag
-
-    P4 = (1.0 / 8.0) * (35.0 * u**4 - 30.0 * u**2 + 3.0)
-    dP4 = (1.0 / 8.0) * (140.0 * u**3 - 60.0 * u)
-    factor4 = -mu * J4 * Re**4 * inv_r7
-    return factor4 * (5.0 * P4 * r - dP4 * r * u * np.array([0.0, 0.0, 1.0]))
+    """J4 zonal acceleration (m/s^2) at position ``r`` (m)."""
+    return _accel_zonal(r, 4)
 
 
 def accel_J5(r: np.ndarray) -> np.ndarray:
-    J5 = -2.272960828e-7
-    mu = EARTH_MU
-    Re = EARTH_RADIUS
-
-    r = position(r)
-    r2 = float(np.dot(r, r))
-    _check_r_safe(r2)
-    r_mag = np.sqrt(r2)
-
-    inv_r9 = 1.0 / (r2**4 * r_mag)  # = 1/r^9
-    z = r[2]
-    u = z / r_mag
-
-    P5 = (1.0 / 8.0) * (63.0 * u**5 - 70.0 * u**3 + 15.0 * u)
-    dP5 = (1.0 / 8.0) * (315.0 * u**4 - 210.0 * u**2 + 15.0)
-    factor5 = -mu * J5 * Re**5 * inv_r9
-    return factor5 * (6.0 * P5 * r - dP5 * r * u * np.array([0.0, 0.0, 1.0]))
+    """J5 zonal acceleration (m/s^2) at position ``r`` (m)."""
+    return _accel_zonal(r, 5)
 
 
 def accel_J6(r: np.ndarray) -> np.ndarray:
-    J6 = 5.406812391e-7
-    mu = EARTH_MU
-    Re = EARTH_RADIUS
-
-    r = position(r)
-    r2 = float(np.dot(r, r))
-    _check_r_safe(r2)
-    r_mag = np.sqrt(r2)
-
-    inv_r10 = 1.0 / (r2**4 * r_mag**2)  # = 1/r^10
-    z = r[2]
-    u = z / r_mag
-
-    P6 = (1.0 / 16.0) * (231.0 * u**6 - 315.0 * u**4 + 105.0 * u**2 - 5.0)
-    dP6 = (1.0 / 16.0) * (1386.0 * u**5 - 1260.0 * u**3 + 210.0 * u)
-    factor6 = -mu * J6 * Re**6 * inv_r10
-    return factor6 * (7.0 * P6 * r - dP6 * r * u * np.array([0.0, 0.0, 1.0]))
+    """J6 zonal acceleration (m/s^2) at position ``r`` (m)."""
+    return _accel_zonal(r, 6)
 
 
 def accel_J7(r: np.ndarray) -> np.ndarray:
-    J7 = -3.529000898e-7
-    mu = EARTH_MU
-    Re = EARTH_RADIUS
-
-    r = position(r)
-    r2 = float(np.dot(r, r))
-    _check_r_safe(r2)
-    r_mag = np.sqrt(r2)
-
-    inv_r11 = 1.0 / (r2**4 * r_mag**3)  # = 1/r^11
-    z = r[2]
-    u = z / r_mag
-
-    P7 = (1.0 / 16.0) * (429.0 * u**7 - 693.0 * u**5 + 315.0 * u**3 - 35.0 * u)
-    dP7 = (1.0 / 16.0) * (3003.0 * u**6 - 3465.0 * u**4 + 945.0 * u**2 - 35.0)
-    factor7 = -mu * J7 * Re**7 * inv_r11
-    return factor7 * (8.0 * P7 * r - dP7 * r * u * np.array([0.0, 0.0, 1.0]))
+    """J7 zonal acceleration (m/s^2) at position ``r`` (m)."""
+    return _accel_zonal(r, 7)
 
 
 def accel_J8(r: np.ndarray) -> np.ndarray:
-    J8 = 2.532000898e-7
-    mu = EARTH_MU
-    Re = EARTH_RADIUS
-
-    r = position(r)
-    r2 = float(np.dot(r, r))
-    _check_r_safe(r2)
-    r_mag = np.sqrt(r2)
-
-    inv_r12 = 1.0 / (r2**5 * r_mag**2)  # = 1/r^12
-    z = r[2]
-    u = z / r_mag
-
-    P8 = (1.0 / 128.0) * (6435.0 * u**8 - 12012.0 * u**6 + 6930.0 * u**4 - 1260.0 * u**2 + 35.0)
-    dP8 = (1.0 / 128.0) * (51480.0 * u**7 - 72072.0 * u**5 + 27720.0 * u**3 - 2520.0 * u)
-    factor8 = -mu * J8 * Re**8 * inv_r12
-    return factor8 * (9.0 * P8 * r - dP8 * r * u * np.array([0.0, 0.0, 1.0]))
+    """J8 zonal acceleration (m/s^2) at position ``r`` (m)."""
+    return _accel_zonal(r, 8)
 
 
 def accel_earth_harmonics(r: np.ndarray) -> np.ndarray:
@@ -160,14 +104,5 @@ def accel_earth_harmonics(r: np.ndarray) -> np.ndarray:
     _check_r_safe(r2)
     r_mag = np.sqrt(r2)
 
-    a_central = -EARTH_MU * r / (r_mag**3)  # [59]
-    return (
-        a_central
-        + accel_J2(r)
-        + accel_J3(r)
-        + accel_J4(r)
-        + accel_J5(r)
-        + accel_J6(r)
-        + accel_J7(r)
-        + accel_J8(r)
-    )
+    a_central = -EARTH_MU * r / (r_mag**3)
+    return a_central + sum(_accel_zonal(r, n) for n in range(2, 9))

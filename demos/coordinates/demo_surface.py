@@ -19,7 +19,7 @@ from ssapy_toolkit.coordinates.geodetic import gcrf_to_llh, llh_to_gcrf
 from ssapy_toolkit.yastropy.astropy_surface_rv import astropy_surface_rv
 from ssapy_toolkit.plots.groundtrack_dashboard import groundtrack_dashboard
 from ssapy_toolkit.constants import EARTH_RADIUS
-from ssapy_toolkit.plots.figpath import figpath  # [32]
+from ssapy_toolkit.plots.figpath import figpath
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 

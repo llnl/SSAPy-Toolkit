@@ -42,8 +42,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--min-hit-pct",
         type=float,
-        default=95.0,
-        help="Fail if function body-hit percentage is below this value.",
+        default=0.0,
+        help=(
+            "Fail if function body-hit percentage is below this value. The default, 0, "
+            "only reports: coverage is a diagnostic, not a gate (docs/testing_policy.md)."
+        ),
     )
     parser.add_argument(
         "--include-private",

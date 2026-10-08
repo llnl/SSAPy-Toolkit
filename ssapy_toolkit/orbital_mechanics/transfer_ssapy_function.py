@@ -34,7 +34,6 @@ from ssapy.propagator import RK78Propagator
 from ssapy.utils import normed, rv_to_ntw
 from ssapy.constants import EARTH_MU
 from ssapy_toolkit.constants import G0
-from ssapy_toolkit.time_functions._gps import _to_gps_seconds
 from ssapy_toolkit.orbital_mechanics._transfer_result import _is_state_vector, maneuver_burn, trajectory_dict, transfer_boundary_states, transfer_result
 
 

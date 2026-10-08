@@ -76,7 +76,7 @@ except ImportError as _e:
 # Core layer imports
 # ---------------------------------------------------------------------------
 try:
-    from .layers import SensorFOVLayer  # added this session
+    from .layers import SensorFOVLayer
     _LAYER_OK = True
 except ImportError:
     # Inline fallback — copy of the geometry helpers so the script is self-contained

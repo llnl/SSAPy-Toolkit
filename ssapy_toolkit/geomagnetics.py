@@ -434,7 +434,7 @@ def _enu_to_cartesian_batch(Be, Bn, Bu, lons_deg, lats_deg):
     return np.stack([Bx, By, Bz], axis=1)
 
 
-def _bfield_batch(positions, date):
+def _bfield_batch(positions, date, include_external=True):
     """
     IGRF field vector (nT) in geocentric cartesian coordinates.
 
@@ -453,7 +453,7 @@ def _bfield_batch(positions, date):
     B = np.stack([Br*st*cp + Bt*ct*cp - Bp*sp,
                   Br*st*sp + Bt*ct*sp + Bp*cp,
                   Br*ct    - Bt*st], axis=1)
-    if _EXTERNAL_MODEL is not None:
+    if include_external and _EXTERNAL_MODEL is not None:
         B = B + _EXTERNAL_MODEL(positions)
     return B
 

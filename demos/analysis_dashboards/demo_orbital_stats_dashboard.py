@@ -11,7 +11,7 @@ import numpy as np
 
 from ssapy_toolkit.orbital_mechanics.synthetic_orbit_population import synthetic_orbit_population
 from ssapy_toolkit.orbital_mechanics.orbital_comparison_stats import orbit_stats_dashboard
-from ssapy_toolkit.plots.plotutils import figsave  # [23]
+from ssapy_toolkit.plots.plotutils import figsave
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 

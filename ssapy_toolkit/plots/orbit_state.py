@@ -28,15 +28,14 @@ Force-model customisation
 from __future__ import annotations
 
 import threading
-import time
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable, NamedTuple, Optional
 
 import numpy as np
 
-from ssapy_toolkit.constants import AU_KM, EARTH_MU_KM3_S2, EARTH_RADIUS_KM, J2_wgs, LD_KM, WGS84_EARTH_OMEGA
+from ssapy_toolkit.constants import EARTH_MU_KM3_S2, EARTH_RADIUS_KM, J2_wgs, LD_KM, WGS84_EARTH_OMEGA
 from .plotutils import normalize_orbit_trajectory
 
 # ── Optional SSAPy ────────────────────────────────────────────────────────────

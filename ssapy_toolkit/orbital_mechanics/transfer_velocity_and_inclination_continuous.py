@@ -23,6 +23,16 @@ def transfer_velocity_and_inclination_continuous(
     body_radius=EARTH_RADIUS,
     plot=False
 ):
+    """
+    Two continuous burns: along the velocity for ``max_time1`` seconds, then
+    normal to the orbit until the inclination reaches ``i_target`` (rad).
+
+    ``max_time1`` is the duration of the velocity-aligned phase, not an upper
+    bound. In the normal phase the thrust sign follows cos(u), the argument of
+    latitude, so by Gauss's equation di/dt = r cos(u) a_W / h the inclination
+    changes monotonically toward ``i_target`` (raising or lowering it).
+    ``max_time2`` bounds that phase.
+    """
     if initial is not None:
         state0 = transfer_state(state=initial, mu=mu)
         r0, v0, t0 = state0["r"], state0["v"], state0["t"]
@@ -47,7 +57,14 @@ def transfer_velocity_and_inclination_continuous(
         h = np.cross(r, v)
         h_norm = np.linalg.norm(h)
         n_vec = h / h_norm if h_norm > 0.0 else np.zeros(3)
-        return np.hstack((v, a_grav + a_thrust * n_vec))
+        # Gauss: di/dt = r cos(u) a_W / h. Flip the normal thrust with cos(u) so
+        # the inclination moves monotonically toward the target instead of
+        # oscillating about its initial value.
+        node = np.cross([0.0, 0.0, 1.0], h)
+        node_norm = np.linalg.norm(node)
+        cos_u = np.dot(node, r) / (node_norm * r_norm) if node_norm > 0.0 else 1.0
+        steer = np.sign(cos_u) * direction if cos_u != 0.0 else direction
+        return np.hstack((v, a_grav + steer * a_thrust * n_vec))
 
     def inclination_event(t, y):
         r = y[:3]
@@ -60,7 +77,6 @@ def transfer_velocity_and_inclination_continuous(
         return inc - i_target
 
     inclination_event.terminal = True
-    inclination_event.direction = 1
 
     y0 = np.hstack((r0, v0))
     sol1 = solve_ivp(
@@ -75,6 +91,11 @@ def transfer_velocity_and_inclination_continuous(
 
     y1 = sol1.y[:, -1]
     t1 = sol1.t[-1]
+
+    h1_vec = np.cross(y1[:3], y1[3:])
+    i_start = np.arccos(np.clip(h1_vec[2] / np.linalg.norm(h1_vec), -1.0, 1.0))
+    direction = 1.0 if i_target >= i_start else -1.0
+    inclination_event.direction = direction
 
     sol2 = solve_ivp(
         fun=equations_normal_burn,

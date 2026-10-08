@@ -6,12 +6,12 @@ from scipy.optimize import brentq
 from ..constants import EARTH_RADIUS
 from ..time_functions import to_gps
 
-from .int_utils import acceleration_adapter, build_profile  # thrust-profile helper [104]
+from .int_utils import acceleration_adapter, build_profile  # thrust-profile helper
 
-from ..accelerations_orbit.accel_point_earth import accel_point_earth  # [64]
-from ..accelerations_orbit.accel_radial import accel_radial            # [65]
-from ..accelerations_orbit.accel_velocity import accel_velocity        # [68]
-from ..accelerations_orbit.accel_inclination import accel_inclination  # [61]
+from ..accelerations_orbit.accel_point_earth import accel_point_earth
+from ..accelerations_orbit.accel_radial import accel_radial
+from ..accelerations_orbit.accel_velocity import accel_velocity
+from ..accelerations_orbit.accel_inclination import accel_inclination
 
 
 def leapfrog(
@@ -144,13 +144,13 @@ def leapfrog(
 
         # first half-kick
         a0 = (
-            accel_point_earth(r[i])                          # [64]
-            + accel_radial(r[i],            r_th[i])         # [65]
-            + accel_velocity(v[i],          v_th[i])         # [68]
-            + accel_inclination(r[i], v[i], i_th[i])         # [61]
+            accel_point_earth(r[i])
+            + accel_radial(r[i],            r_th[i])
+            + accel_velocity(v[i],          v_th[i])
+            + accel_inclination(r[i], v[i], i_th[i])
             + _eval_extra_accels(r[i], v[i], t_abs[i])
         )
-        v_half = v[i] + 0.5 * dt * a0  # [104]
+        v_half = v[i] + 0.5 * dt * a0
 
         crossing = (_first_radius_crossing(r[i], v[i], a0, dt, r_stop)
                     if check_impact else None)
@@ -179,13 +179,13 @@ def leapfrog(
 
         # second half-kick
         a1 = (
-            accel_point_earth(r[i + 1])                          # [64]
-            + accel_radial(r[i + 1],            r_th[i + 1])     # [65]
-            + accel_velocity(v_half,            v_th[i + 1])     # [68]
-            + accel_inclination(r[i + 1], v_half, i_th[i + 1])   # [61]
+            accel_point_earth(r[i + 1])
+            + accel_radial(r[i + 1],            r_th[i + 1])
+            + accel_velocity(v_half,            v_th[i + 1])
+            + accel_inclination(r[i + 1], v_half, i_th[i + 1])
             + _eval_extra_accels(r[i + 1], v_half, t_abs[i + 1])
         )
-        v[i + 1] = v_half + 0.5 * dt * a1  # [104]
+        v[i + 1] = v_half + 0.5 * dt * a1
 
     return result(n_steps)
 

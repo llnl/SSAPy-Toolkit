@@ -260,7 +260,7 @@ def _small_accel_ladder(max_rungs):
     suite["Kep+Moon+J2"] = suite["Kep+Moon"] + a_earth_j2
     return suite
 # =============================================================================
-# The ONE calculation function you asked for
+# Model-comparison calculation
 # =============================================================================
 
 

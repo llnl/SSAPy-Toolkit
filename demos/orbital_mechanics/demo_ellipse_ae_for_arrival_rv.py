@@ -5,9 +5,9 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ssapy_toolkit.orbital_mechanics.rv_to_ellipse import rv_to_ellipse  # [6]
-from ssapy_toolkit.io.pprint_utils import pprint  # [6]
-from ssapy_toolkit.plots.figpath import figpath  # [6]
+from ssapy_toolkit.orbital_mechanics.rv_to_ellipse import rv_to_ellipse
+from ssapy_toolkit.io.pprint_utils import pprint
+from ssapy_toolkit.plots.figpath import figpath
 
 UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 

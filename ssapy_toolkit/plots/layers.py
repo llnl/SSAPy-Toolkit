@@ -467,7 +467,6 @@ class EarthLayer(BaseLayer):
         self._load_texture()
         X, Y, Z = self._sphere_xyz()
         if self._tex is not None:
-            from matplotlib import cm
             fcolors = self._tex / 255.0
             surf = ax.plot_surface(X, Y, Z, facecolors=fcolors,
                                    rstride=1, cstride=1, shade=False,

@@ -1665,23 +1665,6 @@ def _inertia_directional_rate(
     return (at(after) - at(before)) / (after - before)
 
 
-def _angular_mass_matrix(model, inertia, t, r, v, q, omega, mass):
-    matrix = np.array(inertia, copy=True)
-    if not callable(model) or not np.any(omega):
-        return matrix
-    for column in range(3):
-        step = np.cbrt(np.finfo(float).eps) * max(1.0, abs(omega[column]))
-        plus, minus = omega.copy(), omega.copy()
-        plus[column] += step
-        minus[column] -= step
-        difference = (
-            _inertia_at_state(model, t, r, v, q, plus, mass)
-            - _inertia_at_state(model, t, r, v, q, minus, mass)
-        ) / (plus[column] - minus[column])
-        matrix[:, column] += difference @ omega
-    return matrix
-
-
 def _sum_model_accelerations(models, *, suppress_depleted=True):
     models = tuple(models)
     propulsive = any(_is_propulsive_model(model) for model in models)

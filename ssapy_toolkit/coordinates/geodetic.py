@@ -91,7 +91,13 @@ def bbox_min(lons, lats):
 
 
 def lonlat_distance(lat1: float, lat2: float, lon1: float, lon2: float) -> float:
-    """Calculate spherical distance between two lon/lat points in meters."""
+    """Great-circle distance in meters between two points on a sphere.
+
+    All four angles are in radians, in the order ``(lat1, lat2, lon1, lon2)``.
+    Uses the haversine formula on a sphere of radius ``EARTH_RADIUS``
+    (6378.137 km, the WGS84 equatorial radius), so it is not a geodesic on
+    the ellipsoid.
+    """
     dlon = lon2 - lon1
     dlat = lat2 - lat1
     a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2

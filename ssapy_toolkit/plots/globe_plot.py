@@ -125,7 +125,7 @@ def globe_plot(
     _raise_unrecognized_kwargs(save_kwargs, "globe_plot")
 
     # ---- Normalize/validate inputs ----
-    r_list, t_list = valid_orbits(r, t)  # t_list kept for consistency [1]
+    r_list, t_list = valid_orbits(r, t)  # t_list kept for consistency
     n_tracks = len(r_list)
 
     # --- Labels sanity ---
