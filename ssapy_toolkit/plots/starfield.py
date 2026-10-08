@@ -113,9 +113,8 @@ def _to_datetime(epoch):
         return None
     if isinstance(epoch, datetime):
         return epoch
-    jd = getattr(epoch, "jd", None)
-    if jd is not None:
-        return _jd_to_datetime(float(jd))
+    if hasattr(epoch, "utc") and hasattr(epoch, "jd"):  # astropy Time, any scale
+        return epoch.utc.to_datetime() if np.ndim(epoch.jd) == 0 else epoch[0].utc.to_datetime()
     v = float(np.asarray(epoch).flat[0])
     if 1900.0 < v < 2200.0:                       # decimal year
         year = int(v)
@@ -124,7 +123,9 @@ def _to_datetime(epoch):
         days = 366 if calendar.isleap(year) else 365
         from datetime import timedelta
         return datetime(year, 1, 1) + timedelta(days=frac*days)
-    return _jd_to_datetime(GPS_JD_EPOCH + (v - 18.0) / 86400.0)
+    # GPS -> UTC with the leap-second table; GPS - UTC was 18 s only from 2017.
+    from astropy.time import Time
+    return Time(v, format="gps").utc.to_datetime()
 
 
 def _jd_to_datetime(jd: float) -> datetime:
