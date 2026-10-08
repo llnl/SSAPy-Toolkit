@@ -19,10 +19,11 @@ def dms_to_dd(dms):
     """
     dms, out = [[dms] if isinstance(dms, str) else dms][0], []
     for i in dms:
-        deg, minute, sec = [float(j) for j in i.split(':')]
-        if deg < 0:
-            minute, sec = -minute, -sec
-        out.append(deg + minute / 60 + sec / 3600)
+        text = i.strip()
+        # The sign belongs to the whole angle: "-00:30:00" is -0.5 deg.
+        sign = -1.0 if text.startswith('-') else 1.0
+        deg, minute, sec = [abs(float(j)) for j in text.lstrip('+-').split(':')]
+        out.append(sign * (deg + minute / 60 + sec / 3600))
     return out[0] if isinstance(dms, str) or len(dms) == 1 else out
 
 
@@ -42,15 +43,16 @@ def dd_to_dms(degree_decimal):
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
-    _d, __d = np.trunc(degree_decimal), degree_decimal - np.trunc(degree_decimal)
-    __d = -__d if degree_decimal < 0 else __d
+    # Work on the magnitude and prefix the sign, so angles between -1 and 0 deg
+    # keep it: -0.5 deg is "-0:30:0", not "0:30:0".
+    value = abs(float(degree_decimal))
+    _d, __d = np.trunc(value), value - np.trunc(value)
     _m, __m = np.trunc(__d * 60), __d * 60 - np.trunc(__d * 60)
     _s = round(__m * 60, 4)
     if _s >= 60:
         _m, _s = _m + 1, _s - 60
     if _m >= 60:
-        _d = _d - 1 if degree_decimal < 0 else _d + 1
-        _m = 0
+        _d, _m = _d + 1, 0
     _s = int(_s) if int(_s) == _s else _s
-
-    return f'{int(_d)}:{int(_m)}:{_s}'
+    sign = '-' if degree_decimal < 0 and (_d, _m, _s) != (0, 0, 0) else ''
+    return f'{sign}{int(_d)}:{int(_m)}:{_s}'

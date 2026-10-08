@@ -1,7 +1,7 @@
 import numpy as np
 import warnings
 from .sky import zenithangle2altitude
-from ..time_functions import hms_to_dd, dd_to_hms, dd_to_dms
+from ..time_functions import hms_to_dd, dd_to_hms
 
 
 def rightascension2hourangle(right_ascension, local_time):
@@ -10,26 +10,17 @@ def rightascension2hourangle(right_ascension, local_time):
 
     Parameters:
     - right_ascension (str or float): The right ascension of the object in HH:MM:SS format or decimal degrees.
-    - local_time (str or float): The local time in HH:MM:SS format or decimal hours.
+    - local_time (str or float): The local sidereal time in HH:MM:SS format or decimal hours.
 
     Returns:
     - str: The corresponding hour angle in HH:MM:SS format.
 
     Author: Travis Yeager (yeager7@llnl.gov)
     """
-    if not isinstance(right_ascension, str):
-        right_ascension = dd_to_hms(right_ascension)
-    if not isinstance(local_time, str):
-        local_time = dd_to_dms(local_time)
-
-    _ra = float(right_ascension.split(':')[0])
-    _lt = float(local_time.split(':')[0])
-
-    if _ra > _lt:
-        __ltm, __lts = local_time.split(':')[1:]
-        local_time = f'{24 + _lt}:{__ltm}:{__lts}'
-
-    return dd_to_dms(hms_to_dd(local_time) - hms_to_dd(right_ascension))
+    ra_deg = hms_to_dd(right_ascension) if isinstance(right_ascension, str) else float(right_ascension)
+    lst_deg = hms_to_dd(local_time) if isinstance(local_time, str) else 15.0 * float(local_time)
+    # Hour angle = local sidereal time - right ascension, wrapped to [0, 24) h.
+    return dd_to_hms((lst_deg - ra_deg) % 360.0)
 
 
 def equatorial_to_horizontal(
@@ -84,12 +75,13 @@ def equatorial_to_horizontal(
 
     altitude = zenithangle2altitude(zenith_angle, deg=False)
 
-    _num = np.sin(declination) - np.sin(observer_latitude) * np.cos(zenith_angle)
-    _den = np.cos(observer_latitude) * np.sin(zenith_angle)
-    azimuth = np.arccos(_num / _den)
-
-    if observer_latitude < 0:
-        azimuth = np.pi - azimuth
+    # Azimuth from north through east. arccos alone cannot tell east from west;
+    # the sign of sin(hour angle) does (positive hour angle = west of meridian).
+    azimuth = np.mod(np.arctan2(
+        -np.cos(declination) * np.sin(hour_angle_rad),
+        np.sin(declination) * np.cos(observer_latitude)
+        - np.cos(declination) * np.sin(observer_latitude) * np.cos(hour_angle_rad),
+    ), 2 * np.pi)
     altitude, azimuth = np.degrees([altitude, azimuth])
 
     return azimuth, altitude
@@ -125,7 +117,7 @@ def horizontal_to_equatorial(observer_latitude, azimuth, altitude):
 
     hour_angle_rad = np.arccos(np.clip(cos_hour_angle, -1, 1))
 
-    if azimuth_rad > np.pi:  # 3rd or 4th quadrant
+    if np.sin(azimuth_rad) > 0:  # east of the meridian: rising, negative hour angle
         hour_angle_rad = 2 * np.pi - hour_angle_rad
 
     declination, hour_angle = np.degrees([declination_rad, hour_angle_rad])

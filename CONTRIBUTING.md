@@ -65,6 +65,23 @@ python -m ssapy_toolkit.run_all_demos
 python scripts/check_repository_policy.py
 ```
 
+## Development notes
+
+- Supported floors are `llnl-ssapy>=1.1.9` and `llnl-ssapy-data>=0.1.5`. Test
+  against the published `llnl-ssapy-data` distribution. SSAPy 1.1.5 and earlier
+  rebuild a zero-drag `Satrec` in `SGP4Propagator`, so SGP4 comparisons fail
+  there; that is an environment problem, not a Toolkit bug.
+- Use `python3 -m pip` rather than bare `pip` so packages install into the
+  interpreter that runs the tests.
+- Work on the core propagation and force-model engine belongs in
+  [SSAPy](https://github.com/llnl/SSAPy). Check SSAPy and the Toolkit for an
+  existing function before adding a new propagator, force model, or transform.
+- Build the docs with `python3 -m sphinx -b html -W --keep-going docs /tmp/docs`
+  after deleting `docs/generated/`; stale autosummary stubs fail the
+  warning-as-error build.
+- Delete `build/` before a release build so removed demos cannot persist in a
+  stale wheel.
+
 ## Review and merge requirements
 
 Each pull request must:

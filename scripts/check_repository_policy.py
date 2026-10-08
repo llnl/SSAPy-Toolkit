@@ -13,7 +13,6 @@ from pathlib import PurePosixPath
 
 ALLOWED_TOP_LEVEL = {
     ".flake8",
-    "AGENTS.md",
     ".github",
     ".gitignore",
     ".gitlab-ci.yml",

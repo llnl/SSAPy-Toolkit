@@ -48,3 +48,17 @@ def test_gps_helpers_and_now_format():
 
     assert _gpsToTT(0.0) == pytest.approx(44244.0 + 51.184 / 86400.0)
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", now())
+
+
+def test_negative_sub_degree_dms_angles_keep_their_sign():
+    # R3 (sexagesimal definition): the sign applies to the whole angle, so a
+    # declination of -00:30:00 is -0.5 deg and must not come back as +0.5 deg.
+    from ssapy_toolkit.time_functions.convert_dd_and_dms import dd_to_dms, dms_to_dd
+
+    cases = {"-00:30:00": -0.5, "-0:00:36": -0.01, "-10:30:36": -10.51, "10:30:36": 10.51, "+00:30:00": 0.5}
+    for text, degrees in cases.items():
+        assert dms_to_dd(text) == pytest.approx(degrees, abs=1e-12), text
+    assert dd_to_dms(-0.5) == "-0:30:0"
+    assert dd_to_dms(-10.51) == "-10:30:36"
+    for degrees in (-0.5, -0.01, -0.999999, -10.51, -89.9999, 0.0, 45.25):
+        assert dms_to_dd(dd_to_dms(degrees)) == pytest.approx(degrees, abs=1e-6), degrees

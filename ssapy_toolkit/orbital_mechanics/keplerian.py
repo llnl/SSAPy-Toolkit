@@ -194,11 +194,21 @@ def true_anomaly(eccentricity=None, eccentric_anomaly=None, mean_anomaly=None,
             1 - beta * np.cos(eccentric_anomaly)
         )
     elif eccentricity is not None and mean_anomaly is not None:
-        ta = (mean_anomaly +
-              (2 * eccentricity - 1 / 4 * eccentricity**3) *
-              np.sin(mean_anomaly) +
-              5 / 4 * eccentricity**2 * np.sin(2 * mean_anomaly) +
-              13 / 12 * eccentricity**3 * np.sin(3 * mean_anomaly))
+        # Solve Kepler's equation M = E - e sin E by Newton iteration; the old
+        # third-order series was off by 0.25 deg at e = 0.3.
+        ecc = np.asarray(eccentricity, dtype=float)
+        mean = np.asarray(mean_anomaly, dtype=float)
+        wrapped = np.mod(mean, 2 * np.pi)
+        ecc_anom = np.where(ecc < 0.8, wrapped, np.pi)
+        for _ in range(60):
+            step = (ecc_anom - ecc * np.sin(ecc_anom) - wrapped) / (1 - ecc * np.cos(ecc_anom))
+            ecc_anom = ecc_anom - step
+            if np.all(np.abs(step) < 1e-15):
+                break
+        nu = 2 * np.arctan2(np.sqrt(1 + ecc) * np.sin(ecc_anom / 2),
+                            np.sqrt(1 - ecc) * np.cos(ecc_anom / 2))
+        # Keep the result on the same revolution as the input mean anomaly.
+        ta = mean + np.angle(np.exp(1j * (nu - mean)))
     elif (true_longitude is not None and
           longitude_of_ascending_node is not None and
           argument_of_periapsis is not None):
@@ -401,10 +411,10 @@ def kepler_to_state(a=1, e=0, i=0, pa=0, raan=0, nu=0, mu=EARTH_MU):
         Eccentricity (dimensionless). Must be in [0, 1).
     i : float or array-like
         Inclination (rad). Must be in [0, π].
-    raan : float or array-like
-        Right ascension of the ascending node (rad). Must be in [0, 2π].
     pa : float or array-like
         Argument of perigee (rad). Must be in [0, 2π].
+    raan : float or array-like
+        Right ascension of the ascending node (rad). Must be in [0, 2π].
     nu : float or array-like
         True anomaly (rad). Must be in [0, 2π].
     mu : float, optional
@@ -452,7 +462,8 @@ def kepler_to_state(a=1, e=0, i=0, pa=0, raan=0, nu=0, mu=EARTH_MU):
     sin_nu = np.sin(nu)
     r_pf = ((a * (1 - e**2) / (1 + e * cos_nu))[:, None] *
             np.stack([cos_nu, sin_nu, np.zeros_like(cos_nu)], axis=-1))
-    v_pf = ((np.sqrt(mu / a)[:, None]) *
+    # Perifocal speed scale is sqrt(mu / p) with p = a (1 - e^2), not sqrt(mu / a).
+    v_pf = ((np.sqrt(mu / (a * (1 - e**2)))[:, None]) *
             np.stack([-sin_nu, e + cos_nu, np.zeros_like(sin_nu)], axis=-1))
 
     # Precompute trigonometric terms
@@ -525,10 +536,10 @@ def kepler_to_state_loop(a=1, e=0, i=0, pa=0, raan=0, nu=0, mu=EARTH_MU):
         Eccentricity (dimensionless).
     i : float or array-like
         Inclination (rad).
-    raan : float or array-like
-        Right ascension of the ascending node (rad).
     pa : float or array-like
         Argument of perigee (rad).
+    raan : float or array-like
+        Right ascension of the ascending node (rad).
     nu : float or array-like
         True anomaly (rad).
     mu : float, optional
@@ -575,7 +586,7 @@ def kepler_to_state_loop(a=1, e=0, i=0, pa=0, raan=0, nu=0, mu=EARTH_MU):
                 np.array([np.cos(nui), np.sin(nui), 0]))
 
         # Compute velocity vector in perifocal frame
-        v_pf = (np.sqrt(mu / ai) *
+        v_pf = (np.sqrt(mu / (ai * (1 - ei**2))) *
                 np.array([-np.sin(nui), ei + np.cos(nui), 0]))
 
         # Create rotation matrix from perifocal to inertial frame

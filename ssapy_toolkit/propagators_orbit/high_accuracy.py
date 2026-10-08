@@ -196,8 +196,8 @@ def _finite_difference_jacobian(
     models: tuple[AccelerationModel, ...],
     relative_step: float,
 ) -> np.ndarray:
-    # ponytail: finite differences keep arbitrary force models supported; add analytic/complex-step
-    # Jacobians only when profiling shows this optional covariance path needs them.
+    # Finite differences keep arbitrary force models supported; add analytic or
+    # complex-step Jacobians only if profiling shows this covariance path needs them.
     jacobian = np.empty((6, 6), dtype=float)
     for column in range(6):
         step = relative_step * max(1.0, abs(float(y[column])))

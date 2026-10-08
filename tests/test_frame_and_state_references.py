@@ -332,3 +332,57 @@ def test_satellite_viewer_rotates_gcrf_state_to_teme(monkeypatch):
     assert "q" not in track
     assert track["r"][0] == pytest.approx([0.0, 7_000.0, 0.0])
     assert track["v"][0] == pytest.approx([-7.5, 0.0, 0.0])
+
+
+def test_sun_ra_dec_matches_astropy_solar_position():
+    # R2: astropy's apparent geocentric Sun; the toolkit returns SSAPy's geometric
+    # position, so the two differ by aberration (~20.5 arcsec) at most.
+    import astropy.units as u
+    from astropy.coordinates import get_sun
+    from astropy.time import Time
+
+    from ssapy_toolkit.coordinates.sky import sun_ra_dec
+
+    times = Time(["2025-03-20T09:01:00", "2025-06-21T02:42:00", "2026-10-08T00:00:00"], scale="utc")
+    tolerance_rad = np.radians(30.0 / 3600.0)
+    for t in times:
+        sun = get_sun(t)
+        for given in (t, t.isot, t.mjd):
+            ra, dec = sun_ra_dec(given)
+            assert abs(np.angle(np.exp(1j * (ra - sun.ra.to_value(u.rad))))) < tolerance_rad
+            assert abs(dec - sun.dec.to_value(u.rad)) < tolerance_rad
+    ra, dec = sun_ra_dec(times.mjd)
+    assert np.shape(ra) == np.shape(dec) == (3,)
+
+
+def test_satellite_viewer_rotates_body_to_gcrf_quaternions_into_teme():
+    # R2: SSAPy's gcrf_to_teme applied to a known body-to-GCRF rotation. The
+    # returned quaternion must rotate body vectors exactly as R_teme @ R_body.
+    import importlib
+
+    from astropy.time import Time
+    from ssapy.utils import gcrf_to_teme
+
+    from ssapy_toolkit.coordinates.attitude import quaternion_from_matrix
+
+    module = importlib.import_module("ssapy_toolkit.plots.build_satellite_viewer")
+
+    def rotate(q, x):
+        w, qv = q[0], np.asarray(q[1:])
+        return x + 2.0 * w * np.cross(qv, x) + 2.0 * np.cross(qv, np.cross(qv, x))
+
+    rng = np.random.default_rng(7)
+    body_to_gcrf, _ = np.linalg.qr(rng.normal(size=(3, 3)))
+    if np.linalg.det(body_to_gcrf) < 0.0:
+        body_to_gcrf[:, 0] *= -1.0
+    epoch = Time("2026-10-07T00:00:00", scale="utc")
+    _, _, _, q_out = module._gcrf_state_vectors_to_teme(
+        np.array([[7.0e6, 0.0, 0.0]]),
+        np.array([[0.0, 7.5e3, 0.0]]),
+        np.array([epoch.gps]),
+        q=quaternion_from_matrix(body_to_gcrf)[None, :],
+    )
+
+    body_vector = rng.normal(size=3)
+    expected = np.asarray(gcrf_to_teme(epoch), dtype=float) @ (body_to_gcrf @ body_vector)
+    np.testing.assert_allclose(rotate(q_out[0][0], body_vector), expected, atol=1e-12)
