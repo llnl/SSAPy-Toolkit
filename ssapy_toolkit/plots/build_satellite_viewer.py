@@ -721,7 +721,7 @@ html = """<!DOCTYPE html>
     <div id="db-search-results"></div>
   </div>
   <div id="analysis-section">
-    <label class="analysis-toggle" title="Use supplied body-to-TEME quaternions when state-vector data includes q=[w,x,y,z].">
+    <label class="analysis-toggle">
       <input type="checkbox" id="ground-track-toggle">
       <span class="analysis-swatch"></span>
       Ground tracks
@@ -903,9 +903,10 @@ def satellite_viewer(r, v, t, *, labels=None, units="m", q=None, save_path=None,
     ``ssapy.rv`` in GCRF; their default units are metres and metres/second.
     They are rotated into TEME before embedding because the browser's SGP4,
     Earth rotation, and analysis paths use TEME. ``t`` is the corresponding
-    Astropy ``Time`` or GPS-second array. Optional ``q`` contains body-to-TEME
-    quaternions in ``[w, x, y, z]`` order and is rotated into body-to-TEME;
-    the viewer exposes a checkbox to apply them to the spacecraft models.
+    Astropy ``Time`` or GPS-second array. Optional ``q`` contains body-to-GCRF
+    quaternions in ``[w, x, y, z]`` order, the same frame as ``r`` and ``v``,
+    and is rotated into body-to-TEME; the viewer exposes a checkbox to apply
+    them to the spacecraft models.
     ``propagator`` is used only if the bundled/catalog TLE path also needs
     browser-side propagation.
     """
