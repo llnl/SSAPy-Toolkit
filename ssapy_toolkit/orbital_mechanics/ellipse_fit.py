@@ -522,10 +522,8 @@ def ellipse_fit(
 
     # ───────────────────────── fallback: previous method ──────────────────
     if not kepler_ok:
-        # NOTE: we keep your previous sampling approach intact here.
-        # It is wrapped so that a Kepler failure does not break functionality.
-        # If you want to see why it fell back, uncomment the print.
-        # print(f"[ellipse_fit] Kepler sampling failed; falling back. Reason: {kepler_error}")
+        # Fallback: the earlier polygon/angle-integral sampling, used only if
+        # Kepler sampling raised (the exception is kept in kepler_error).
 
         # ---- previous “polygon ellipse + dt/df” method ----
         f2_2d_m = _in_plane_m(F2_m, u_hat, v_hat)

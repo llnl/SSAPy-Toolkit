@@ -4,9 +4,6 @@ from ssapy.orbit import Orbit
 from ssapy.propagator import SGP4Propagator
 from .tle_iter_pairs import tle_iter_pairs
 
-# assumes you have iter_tle_pairs(path, validate_checksum=False) available
-# from your earlier helper
-
 def tle_prop_to_time(t, tle_path, *, validate_checksum=False, truncate=False, return_arrays=False):
     """
     Propagate all TLE pairs in `tle_path` to a common epoch `t` using SGP4.
