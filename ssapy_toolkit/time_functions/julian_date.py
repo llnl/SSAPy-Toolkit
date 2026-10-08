@@ -13,8 +13,9 @@ def julian_date(d: datetime) -> float:
     A continuous day count from 4713 BC, which is what makes time differences
     across month and year boundaries trivial instead of a calendar problem.
 
-    Uses the Gregorian correction term B, so dates before 1582-10-15 fall on
-    the Julian calendar as they should. Sub-second components are carried
+    Applies the Gregorian correction term B to every date, so dates before
+    1582-10-15 are read on the proleptic Gregorian calendar, as in ERFA
+    ``cal2jd`` and astropy, not on the Julian calendar. Sub-second components are carried
     through deliberately: each second discarded costs ~15 arcsec of sidereal
     angle downstream, which is visible in a rendered star field.
 
