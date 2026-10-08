@@ -332,3 +332,24 @@ def test_satellite_viewer_rotates_gcrf_state_to_teme(monkeypatch):
     assert "q" not in track
     assert track["r"][0] == pytest.approx([0.0, 7_000.0, 0.0])
     assert track["v"][0] == pytest.approx([-7.5, 0.0, 0.0])
+
+
+def test_sun_ra_dec_matches_astropy_solar_position():
+    # R2: astropy's apparent geocentric Sun; the toolkit returns SSAPy's geometric
+    # position, so the two differ by aberration (~20.5 arcsec) at most.
+    import astropy.units as u
+    from astropy.coordinates import get_sun
+    from astropy.time import Time
+
+    from ssapy_toolkit.coordinates.sky import sun_ra_dec
+
+    times = Time(["2025-03-20T09:01:00", "2025-06-21T02:42:00", "2026-10-08T00:00:00"], scale="utc")
+    tolerance_rad = np.radians(30.0 / 3600.0)
+    for t in times:
+        sun = get_sun(t)
+        for given in (t, t.isot, t.mjd):
+            ra, dec = sun_ra_dec(given)
+            assert abs(np.angle(np.exp(1j * (ra - sun.ra.to_value(u.rad))))) < tolerance_rad
+            assert abs(dec - sun.dec.to_value(u.rad)) < tolerance_rad
+    ra, dec = sun_ra_dec(times.mjd)
+    assert np.shape(ra) == np.shape(dec) == (3,)

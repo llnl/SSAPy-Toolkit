@@ -8,20 +8,33 @@ from .angle_units import rad0to2pi
 
 def sun_ra_dec(time_):
     """
-    Calculate the Right Ascension and Declination of the Sun for a given time.
+    Calculate the geocentric Right Ascension and Declination of the Sun.
 
     Parameters
     ----------
-    time : int, float, or str
-        Time for the Sun position, as MJD or an ISO-format string.
+    time_ : int, float, str, or astropy.time.Time
+        Time for the Sun position: MJD (UTC) as a number or array, an
+        ISO-format string, or an astropy ``Time``.
 
     Returns
     -------
-    tuple of float
-        Right Ascension and Declination of the Sun in radians.
+    tuple of float or numpy.ndarray
+        Right Ascension in [0, 2*pi) and Declination of the Sun in radians,
+        from SSAPy's geometric GCRF Sun position.
     """
-    out = get_body(Time(time_, format='mjd'))
-    return out.ra.to('rad').value, out.dec.to('rad').value
+    if isinstance(time_, Time):
+        t = time_
+    elif isinstance(time_, str):
+        t = Time(time_, scale="utc")
+    else:
+        t = Time(time_, format="mjd", scale="utc")
+    sun = get_body("sun")  # keep the Body referenced while its kernel is in use
+    r = np.asarray(sun.position(np.atleast_1d(t.gps)), dtype=float).reshape(3, -1)
+    ra = np.mod(np.arctan2(r[1], r[0]), 2 * np.pi)
+    dec = np.arcsin(r[2] / np.linalg.norm(r, axis=0))
+    if np.ndim(t.gps) == 0:
+        return float(ra[0]), float(dec[0])
+    return ra, dec
 
 
 def ra_dec(
