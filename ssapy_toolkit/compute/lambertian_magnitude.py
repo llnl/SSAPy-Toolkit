@@ -49,8 +49,6 @@ Planck spectra throughout:
 Magnitudes are on the AB system, from the band-averaged flux density:
 m_AB = -2.5 log10(<f_nu> / 3631 Jy).  For the default V band this agrees
 with Johnson V to a few hundredths of a magnitude.
-
-Author: generated with Claude.
 """
 
 from __future__ import annotations
