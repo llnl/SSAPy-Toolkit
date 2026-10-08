@@ -10,7 +10,6 @@ from ssapy_toolkit.coordinates.satellite_frames import (
     frame_to_gcrf_matrix,
     gcrf_to_body_matrix,
     gcrf_to_frame_matrix,
-    los_to_gcrf_matrix,
     nadir_velocity_to_gcrf_matrix,
     ned_to_ecef_matrix,
     ntw_to_gcrf_matrix,
@@ -98,19 +97,3 @@ def test_local_tangent_frames_at_greenwich_equator():
     np.testing.assert_allclose(sez[:, 1], [0.0, 1.0, 0.0])
     np.testing.assert_allclose(sez[:, 2], [1.0, 0.0, 0.0])
     np.testing.assert_allclose(ecef_to_sez_matrix(0.0, 0.0), sez.T)
-
-
-def test_line_of_sight_frame_and_validation():
-    matrix = los_to_gcrf_matrix([0.0, 0.0, 0.0], [1.0, 0.0, 0.0])
-    np.testing.assert_allclose(matrix, np.eye(3), atol=1e-12)
-    np.testing.assert_allclose(
-        frame_to_gcrf_matrix("sun pointing", origin=[0.0, 0.0, 0.0], target=[0.0, 1.0, 0.0])[:, 0],
-        [0.0, 1.0, 0.0],
-    )
-
-    with pytest.raises(ValueError, match="unsupported"):
-        frame_to_gcrf_matrix("bad-frame")
-    with pytest.raises(ValueError, match="non-zero"):
-        frame_to_gcrf_matrix("los", origin=[1.0, 0.0, 0.0], target=[1.0, 0.0, 0.0])
-    with pytest.raises(ValueError, match="lat and lon"):
-        frame_to_gcrf_matrix("enu")

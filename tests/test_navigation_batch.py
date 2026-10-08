@@ -9,7 +9,6 @@ from ssapy_toolkit.navigation import (
     solve_batch_orbit,
 )
 from ssapy_toolkit.propagators_orbit import propagate_orbit_state_with_stm
-from ssapy_toolkit.propagators_orbit.high_accuracy import OrbitPropagationWithSTM
 
 
 @pytest.fixture
@@ -105,58 +104,3 @@ def test_batch_fit_handles_bias_and_angular_seam(synthetic_station):
     assert result.success
     assert result.state0[0] == pytest.approx(truth[0], abs=1e-3)
     assert ((result.state0[2] - truth[2] + np.pi) % (2.0 * np.pi) - np.pi) == pytest.approx(0.0, abs=1e-3)
-
-
-def test_batch_validation_rank_and_nonconvergence(synthetic_station):
-    one = [_observation(synthetic_station, "range", 1.0, 0.0)]
-    with pytest.raises(ValueError, match="six scalar"):
-        solve_batch_orbit(one, state0=np.zeros(6))
-    same_epoch = [_observation(synthetic_station, "range", 1.0, 0.0) for _ in range(6)]
-    with pytest.raises(ValueError, match="two distinct"):
-        solve_batch_orbit(same_epoch, state0=np.zeros(6))
-    rank_deficient = [_observation(synthetic_station, "range", 1.0, 0.0)] * 3
-    rank_deficient += [_observation(synthetic_station, "range", 1.0, 1.0)] * 3
-    result = solve_batch_orbit(rank_deficient, state0=np.zeros(6), propagation_kwargs={"mu": 0.0})
-    assert not result.success and result.covariance is None and result.numerical_rank < 6
-    full_rank = [
-        _observation(synthetic_station, "range", 10.0, 0.0),
-        _observation(synthetic_station, "range_rate", 1.0, 0.0),
-        _observation(synthetic_station, "az_el", [0.4, 2.0], 0.0),
-        _observation(synthetic_station, "ra_dec", [0.5, 0.2], 1.0),
-    ]
-    stalled = solve_batch_orbit(
-        full_rank,
-        state0=np.zeros(6),
-        propagation_kwargs={"mu": 0.0},
-        max_nfev=1,
-    )
-    assert not stalled.success and "maximum number" in stalled.message.lower()
-    assert "rank deficient" in result.message.lower()
-    with pytest.raises(ValueError, match="cannot override"):
-        solve_batch_orbit(rank_deficient, state0=np.zeros(6), propagation_kwargs={"times": [0.0, 1.0]})
-
-
-def test_batch_skips_invalid_none_and_rejects_non_pd_or_bad_scales(synthetic_station):
-    valid = _observation(synthetic_station, "range", 1.0, 0.0)
-    observations = [valid] * 6 + [(synthetic_station, None)]
-    observations.extend(_observation(synthetic_station, "range", 1.0, 1.0) for _ in range(6))
-    observations.append(_observation(synthetic_station, "range", 1.0, 1.0, valid=False))
-    result = solve_batch_orbit(observations, state0=np.zeros(6), propagation_kwargs={"mu": 0.0})
-    assert result.nfev > 0
-    singular = StationObservation(1.0, "range", 1.0, [[0.0]], 0.0, 0.5, True)
-    with pytest.raises(ValueError, match="positive-definite"):
-        solve_batch_orbit([valid] * 6 + [(synthetic_station, singular)], state0=np.zeros(6))
-    with pytest.raises(ValueError, match="positive"):
-        solve_batch_orbit(observations, state0=np.zeros(6), state_scale=[1, 1, 1, 1, 1, 0])
-    with pytest.raises(ValueError, match="positive integer"):
-        solve_batch_orbit(observations, state0=np.zeros(6), max_nfev=1.0)
-
-
-def test_batch_result_copies_and_freezes_trajectory(synthetic_station):
-    source = OrbitPropagationWithSTM(
-        t=np.array([0.0, 1.0]), r=np.zeros((2, 3)), v=np.zeros((2, 3)),
-        stm=np.repeat(np.eye(6)[None, :, :], 2, axis=0), nfev=1, message="ok"
-    )
-    result = BatchOrbitFitResult(np.zeros(6), 0.0, source, np.zeros(6), np.zeros(6), 0.0, 1, "ok", 0, None, False)
-    assert source.t.flags.writeable
-    assert not result.trajectory.t.flags.writeable

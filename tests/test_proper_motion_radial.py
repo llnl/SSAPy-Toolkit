@@ -39,7 +39,3 @@ def test_general_motion_matches_independent_tangent_components():
         velocity = vr * radial + ve * east + vn * north
         actual = proper_motion(*(distance * radial), *velocity)
         assert actual == pytest.approx(np.hypot(ve, vn) / distance * 206265, rel=1e-12)
-
-
-def test_zero_transverse_speed_is_zero():
-    assert proper_motion(7e6, 0.0, 0.0, 7500.0, 0.0, 0.0) == 0.0

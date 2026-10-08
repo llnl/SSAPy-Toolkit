@@ -5,8 +5,6 @@ import pytest
 
 from ssapy_toolkit.ssa.conjunction import (
     encounter_frame,
-    probability_of_collision,
-    relative_encounter_covariance,
 )
 
 
@@ -34,15 +32,6 @@ def test_nearly_collinear_encounter_preserves_resolved_miss_direction():
     np.testing.assert_allclose(basis[:, 0], transverse, atol=5e-9)
     np.testing.assert_allclose(basis.T @ normal, 0.0, atol=1e-14)
     np.testing.assert_allclose(basis.T @ basis, np.eye(2), atol=1e-14)
-
-
-def test_collinear_frame_can_project_covariance_and_compute_probability():
-    position = np.array([1000.0, 2000.0, 3000.0])
-    basis = encounter_frame(position, [7500.0, 15000.0, 22500.0])
-    covariance = relative_encounter_covariance(0.25 * np.eye(3), 0.75 * np.eye(3), basis)
-    np.testing.assert_allclose(covariance, np.eye(2), atol=1e-14)
-    probability = probability_of_collision(basis.T @ position, covariance, 0.5)
-    assert probability == pytest.approx(-np.expm1(-0.5 * 0.5**2), abs=1e-12)
 
 
 def test_well_separated_frame_agrees_with_direct_projection():

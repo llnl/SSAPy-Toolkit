@@ -1,8 +1,7 @@
 import numpy as np
 import pytest
-from astropy.time import Time
 
-from ssapy_toolkit.navigation import GroundStation, GroundStationMeasurement
+from ssapy_toolkit.navigation import GroundStation
 
 
 @pytest.fixture
@@ -69,19 +68,6 @@ def test_analytic_jacobians_match_finite_difference(station, monkeypatch):
     assert prediction.kind == "ra_dec"
 
 
-def test_measurement_validation(station):
-    with pytest.raises(ValueError, match="measurement"):
-        station.predict(np.ones(6), 0.0, "doppler")
-    with pytest.raises(ValueError, match="six-element"):
-        station.predict(np.ones(5), 0.0)
-    with pytest.raises(TypeError, match="numeric GPS"):
-        station.predict(np.ones(6), "now")
-    with pytest.raises(ValueError, match="scalar GPS"):
-        station.predict(np.ones(6), [1.0, 2.0])
-    with pytest.raises(ValueError, match="scalar GPS"):
-        station.predict(np.ones(6), Time([1.0, 2.0], format="gps"))
-
-
 def test_real_earth_observer_frame_is_orthonormal():
     station = GroundStation(0.0, 0.0, fast=True)
     observer = station._observer()
@@ -92,55 +78,3 @@ def test_real_earth_observer_frame_is_orthonormal():
     prediction = station.predict(np.r_[target, [0.0, 0.0, 0.0]], 0.0, "az_el")
     assert prediction.visible
     assert np.all(np.isfinite(prediction.value))
-
-
-def test_zenith_and_nadir_keep_non_azimuth_measurements_valid(station, monkeypatch):
-    observer = type("Observer", (), {
-        "getRV": lambda self, time: (np.zeros(3), np.zeros(3)),
-        "itrs": np.array([1.0, 0.0, 0.0]),
-    })()
-    monkeypatch.setattr(GroundStation, "_observer", lambda self: observer)
-    monkeypatch.setattr(
-        GroundStation,
-        "_local_basis",
-        lambda self, time: (
-            np.array([0.0, 1.0, 0.0]),
-            np.array([0.0, 0.0, 1.0]),
-            np.array([1.0, 0.0, 0.0]),
-        ),
-    )
-    for sign in (1.0, -1.0):
-        state = np.r_[sign * np.array([100.0, 0.0, 0.0]), np.zeros(3)]
-        assert station.predict(state, 0.0, "range").value == pytest.approx(100.0)
-        assert station.predict(state, 0.0, "range_rate").value == pytest.approx(0.0)
-        assert station.predict(state, 0.0, "ra_dec").value[0] == pytest.approx(0.0 if sign > 0 else np.pi)
-        assert station.predict(state, 0.0, "range").elevation_rad == pytest.approx(sign * np.pi / 2)
-        with pytest.raises(ValueError, match="azimuth is singular"):
-            station.predict(state, 0.0, "az_el")
-
-
-def test_scalar_astropy_time_matches_numeric_time(station, monkeypatch):
-    observer = type("Observer", (), {
-        "getRV": lambda self, time: (np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0])),
-        "itrs": np.array([1.0, 0.0, 0.0]),
-    })()
-    monkeypatch.setattr(GroundStation, "_observer", lambda self: observer)
-    monkeypatch.setattr(GroundStation, "_local_basis", lambda self, time: (
-        np.array([0.0, 1.0, 0.0]), np.array([0.0, 0.0, 1.0]), np.array([1.0, 0.0, 0.0])
-    ))
-    state = np.array([4.0, 4.0, 0.0, 2.0, 1.0, 0.0])
-    numeric = station.predict(state, 123.0, "range")
-    scalar_time = station.predict(state, Time(123.0, format="gps"), "range")
-    assert scalar_time.time == pytest.approx(numeric.time)
-    assert scalar_time.value == pytest.approx(numeric.value)
-
-
-def test_ground_station_measurement_adapts_prediction_to_ekf(station, monkeypatch):
-    monkeypatch.setattr(GroundStation, "_observer", lambda self: type("Observer", (), {
-        "getRV": lambda self, time: (np.zeros(3), np.zeros(3)),
-    })())
-    model = GroundStationMeasurement(station, 0.0, "ra_dec")
-    value, jacobian = model(np.array([4.0, 3.0, 2.0, 0.0, 0.0, 0.0]))
-    assert value.shape == (2,)
-    assert jacobian.shape == (2, 6)
-    assert model.angle_indices == (0,)

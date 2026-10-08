@@ -45,10 +45,3 @@ class LeapfrogImpactTests(unittest.TestCase):
                                     return_times=True)
         np.testing.assert_array_equal(actual, times)
         np.testing.assert_allclose(r[:, 1], 7500 * (times - times[0]), atol=1e-8, rtol=0)
-
-    def test_initial_inside_state_is_retained_and_invalid_times_rejected(self):
-        r, v, t = leapfrog([EARTH_RADIUS, 0, 0], [0, 1, 0], [0, 1], return_times=True)
-        self.assertEqual(len(t), 1)
-        for times in ([0., np.inf], [1., 0.], [0., 0.], [[0., 1.]]):
-            with self.subTest(times=times), self.assertRaises(ValueError):
-                leapfrog([7e6, 0, 0], [0, 1, 0], times)

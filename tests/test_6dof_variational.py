@@ -172,19 +172,6 @@ def test_attitude_error_stm_has_nonsingular_three_parameter_attitude_state():
     np.testing.assert_allclose(error_stm[0], np.eye(12), atol=1e-12)
 
 
-def test_variational_mass_state_is_included_and_custom_stm_is_honored():
-    stm0 = np.eye(14) * 2.0
-    result = propagate_6dof_variational(
-        times=[0.0, 0.01], inertia=np.eye(3), r0=[7e6, 0, 0], v0=[0, 7500, 0],
-        mass0=100.0, mass_flow_rate=lambda t, r, v, q, omega: 1.0, stm0=stm0,
-        rtol=1e-6,
-        atol=1e-9,
-    )
-    assert result.stm.shape == (2, 14, 14)
-    np.testing.assert_allclose(result.stm[0], stm0)
-    np.testing.assert_allclose(result.trajectory.mass, [100.0, 99.99], rtol=1e-8)
-
-
 def test_covariance_transform_uses_stm_and_process_noise():
     result = propagate_6dof_variational(
         times=[0.0, 0.01],

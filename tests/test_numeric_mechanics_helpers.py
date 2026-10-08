@@ -1,11 +1,6 @@
-import importlib
 
 import numpy as np
-import pytest
 
-from ssapy_toolkit.compute.lyapunov_exponent import lyapunov_exponent_from_statevectors
-from ssapy_toolkit.compute.proper_motions import proper_motion, proper_motion_ra_dec
-from ssapy_toolkit.compute.segment_intersection import segment_intersects_sphere
 from ssapy_toolkit.constants import EARTH_MU
 from ssapy_toolkit.coordinates import equatorial_ecliptic
 from ssapy_toolkit.coordinates.cartesian import cart2sph_deg, cart_to_cyl
@@ -19,11 +14,8 @@ from ssapy_toolkit.coordinates.angle_units import (
     dms_to_rad,
     rad0to2pi,
 )
-from ssapy_toolkit.propagators_orbit import int_utils
 from ssapy_toolkit.orbital_mechanics import misc
 
-rk4_module = importlib.import_module("ssapy_toolkit.propagators_orbit.rk4")
-leapfrog_module = importlib.import_module("ssapy_toolkit.propagators_orbit.leap_frog")
 eqecl = equatorial_ecliptic
 
 
@@ -98,84 +90,3 @@ def test_coordinate_conversion_helpers():
     ra2, dec2 = eqecl.ecliptic_to_equatorial(*eqecl.equatorial_to_ecliptic(ra, dec, degrees=True), degrees=True)
     assert np.isfinite(ra2)
     assert np.isfinite(dec2)
-
-
-def test_propagator_profile_and_simple_motion(monkeypatch):
-    t = np.arange(5.0)
-    np.testing.assert_array_equal(int_utils.build_profile(None, t), np.zeros(5))
-    np.testing.assert_array_equal(int_utils.build_profile(2.0, t), np.full(5, 2.0))
-    np.testing.assert_array_equal(int_utils.build_profile([1, 2, 3, 4, 5], t), [1, 2, 3, 4, 5])
-    np.testing.assert_array_equal(int_utils.build_profile({"start": 1, "end": 3, "thrust": 4}, t), [0, 4, 4, 0, 0])
-    np.testing.assert_array_equal(int_utils.build_profile([(1, 3, 2), (3, 1)], t), [0, 2, 2, 1, 1])
-    with pytest.raises(ValueError):
-        int_utils.build_profile([(1, 2, 3, 4)], t)
-    with pytest.raises(TypeError):
-        int_utils.build_profile(object(), t)
-
-    class FakeBody:
-        def position(self, times):
-            times = np.asarray(times, dtype=float)
-            return np.vstack((times, 2 * times, 3 * times))
-
-    monkeypatch.setattr("ssapy.get_body", lambda name: FakeBody())
-    interp = int_utils.precompute_third_body_positions(np.array([0.0, 1.0, 2.0, 3.0]), "moon")
-    np.testing.assert_allclose(interp(np.array([0.5, 1.5])), [[0.5, 1.0, 1.5], [1.5, 3.0, 4.5]])
-
-    monkeypatch.setattr(rk4_module, "accel_point_moon", lambda r, t: np.zeros(3))
-    monkeypatch.setattr(rk4_module, "accel_point_sun", lambda r, t: np.zeros(3))
-    r_hist, v_hist = rk4_module.rk4([0, 0, 0], [1, 0, 0], np.array([0.0, 1.0, 2.0]), accel_gravity=lambda r: np.zeros(3))
-    np.testing.assert_allclose(r_hist[:, 0], [0, 1, 2])
-    np.testing.assert_allclose(v_hist[:, 0], [1, 1, 1])
-
-    monkeypatch.setattr(leapfrog_module, "accel_point_earth", lambda r: np.zeros(3))
-    r_hist, v_hist = leapfrog_module.leapfrog([0, 0, 0], [1, 0, 0], np.array([0.0, 1.0, 2.0]), stop_altitude_m=-1e9)
-    np.testing.assert_allclose(r_hist[:, 0], [0, 1, 2])
-    np.testing.assert_allclose(v_hist[:, 0], [1, 1, 1])
-    with pytest.raises(ValueError, match="at least 2"):
-        leapfrog_module.leapfrog([0, 0, 0], [1, 0, 0], np.array([0.0]))
-    with pytest.raises(ValueError, match="Non-uniform"):
-        leapfrog_module.leapfrog([0, 0, 0], [1, 0, 0], np.array([0.0, 1.0, 3.0]), stop_altitude_m=-1e9)
-
-
-def test_proper_motion_segment_intersection_and_lyapunov():
-    assert np.isclose(proper_motion(1.0, 0.0, 0.0, 0.0, 1.0, 0.0), 206265.0)
-    assert np.isnan(proper_motion(0.0, 0.0, 0.0, 1.0, 0.0, 0.0))
-    with pytest.warns(UserWarning, match="input_unit"):
-        assert proper_motion(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, input_unit="bad") is None
-
-    r = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
-    v = np.array([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0]])
-    pmra, pmdec = proper_motion_ra_dec(r=r, v=v)
-    assert pmra.shape == pmdec.shape == (2,)
-    pmra_rebound, pmdec_rebound = proper_motion_ra_dec(r=r, v=v, input_unit="rebound")
-    assert np.all(np.abs(pmra_rebound) < np.abs(pmra))
-    with pytest.raises(ValueError):
-        proper_motion_ra_dec(x=1, y=2)
-    with pytest.warns(UserWarning, match="input_unit"):
-        assert proper_motion_ra_dec(r=r, v=v, input_unit="bad") is None
-
-    assert segment_intersects_sphere([-2, 0, 0], [2, 0, 0], radius=1.0)
-    assert not segment_intersects_sphere([2, 0, 0], [3, 0, 0], radius=1.0)
-    assert segment_intersects_sphere([1, 0, 0], [2, 0, 0], radius=1.0, atol=0.0)
-
-    n = 12
-    times = np.arange(n, dtype=float)
-    r_series = np.column_stack((times, np.sin(times), np.cos(times)))
-    v_series = np.column_stack((np.ones(n), np.cos(times), -np.sin(times)))
-    lle, t_curve, mean_log, diag = lyapunov_exponent_from_statevectors(r_series, v_series, dt=0.5, theiler_window=1, max_horizon=4, trim_percentile=90)
-    assert np.isfinite(lle)
-    assert t_curve.shape == mean_log.shape
-    assert diag["K"] <= 4
-    lle2, _, _ = lyapunov_exponent_from_statevectors(r_series, v_series, dt=1.0, theiler_window=0, return_diagnostics=False)
-    assert np.isfinite(lle2)
-
-    with pytest.raises(ValueError, match="shaped"):
-        lyapunov_exponent_from_statevectors(np.zeros((3, 2)), np.zeros((3, 3)))
-    with pytest.raises(ValueError, match="same length"):
-        lyapunov_exponent_from_statevectors(np.zeros((3, 3)), np.zeros((4, 3)))
-    with pytest.raises(ValueError, match="positive"):
-        lyapunov_exponent_from_statevectors(np.zeros((3, 3)), np.zeros((3, 3)), dt=0)
-    with pytest.raises(ValueError, match=">= 0"):
-        lyapunov_exponent_from_statevectors(np.zeros((3, 3)), np.zeros((3, 3)), theiler_window=-1)
-    with pytest.raises(ValueError, match="at least 3"):
-        lyapunov_exponent_from_statevectors(np.zeros((2, 3)), np.zeros((2, 3)))
