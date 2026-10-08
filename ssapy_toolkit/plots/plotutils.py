@@ -613,14 +613,14 @@ def drawEarth(time, ngrid=100, R=EARTH_RADIUS, rfactor=1):
     u = np.linspace(0, 1, ngrid)
     v, u = np.meshgrid(u, u)
 
-    # Earth rotation angle for t (approximate, visualization only)
+    # Earth rotation angle for t, from UT1 as in SSAPy's groundTrack
     if isinstance(time, Time):
         time = time.gps
     if isinstance(time, Real):
         time = np.array([time])
 
-    mjd_tt = 44244.0 + (time + 51.184) / 86400
-    gst = gst94(2400000.5, mjd_tt)
+    from .scene_primitives import _gst94_rad
+    gst = _gst94_rad(time)
 
     u = u - (gst / (2 * np.pi))[:, None, None]
     v = np.broadcast_to(v, u.shape)
