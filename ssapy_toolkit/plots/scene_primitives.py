@@ -14,7 +14,6 @@ import numpy as np
 from ssapy_toolkit.constants import (
     LD_KM,
     MOON_RADIUS_KM,
-    SIDEREAL_DAY_SECONDS,
     SUN_EARTH_AVERAGE_DISTANCE_KM,
     SUN_RADIUS_KM,
 )
@@ -105,36 +104,46 @@ def gps_seconds_at(value, index=-1, default=None):
 
 
 def earth_rotation_deg_from_time(time=None, *, epoch_jd=None, relative_seconds=0.0):
-    """Return Greenwich sidereal rotation angle in degrees for Earth textures.
+    """Return the angle (deg) to turn an Earth texture about GCRF +z at ``time``.
 
-    The convention matches SSAPy's ``groundTrack``: GPS seconds are converted
-    to UT1 with the IERS table and evaluated with ERFA ``gst94``.  ``epoch_jd`` plus ``relative_seconds`` supports older demo
-    helpers that propagate relative seconds from a fixed Julian-date epoch.
+    The angle is the GCRF right ascension of the Greenwich meridian under the
+    same GCRF->ITRF chain as SSAPy's ``groundTrack`` (precession-nutation,
+    GAST at UT1, polar motion; see
+    :func:`ssapy_toolkit.coordinates.frames.greenwich_azimuth_rad`), so a
+    texture turned by it puts the prime meridian where SSAPy's ground tracks
+    do. ``epoch_jd`` plus ``relative_seconds`` supports older demo helpers that
+    propagate relative seconds from a fixed Julian-date epoch.
+
+    This used to return GAST alone. GAST is measured from the true equinox of
+    date, not from the GCRF x-axis, so GCRF scenes drew Earth 1242 arcsec
+    (38.4 km at the equator) away from SSAPy's ground tracks on 2026-10-09,
+    growing by about 50 arcsec per year. A z-rotation still cannot carry the
+    0.15 deg (2026) tilt of the true pole from GCRF +z.
     """
     if time is None and epoch_jd is None:
         return 0.0
     if time is None:
-        try:
-            from astropy.time import Time
-            gps_seconds = float(Time(float(epoch_jd) + float(relative_seconds) / 86400.0,
-                                     format="jd", scale="utc").gps)
-        except Exception:
-            gps_seconds = float(relative_seconds)
+        from astropy.time import Time
+
+        gps_seconds = float(Time(float(epoch_jd) + float(relative_seconds) / 86400.0,
+                                 format="jd", scale="utc").gps)
     else:
         gps_seconds = gps_seconds_at(time, default=0.0)
-    try:
-        return float(np.degrees(_gst94_rad(gps_seconds)) % 360.0)
-    except Exception:
-        return float((gps_seconds / SIDEREAL_DAY_SECONDS * 360.0) % 360.0)
+    return float(np.degrees(_greenwich_azimuth_rad(gps_seconds)) % 360.0)
+
+
+def _greenwich_azimuth_rad(gps_seconds):
+    """GCRF right ascension (rad) of the Greenwich meridian at GPS seconds."""
+    from ssapy_toolkit.coordinates.frames import greenwich_azimuth_rad
+
+    return greenwich_azimuth_rad(gps_seconds)
 
 
 def _gst94_rad(gps_seconds):
-    """Greenwich sidereal angle (rad) at GPS seconds, as SSAPy's groundTrack uses it.
+    """Greenwich apparent sidereal angle (rad) at GPS seconds, evaluated at UT1.
 
-    gst94 takes UT1, so the TT date is corrected by IERS UT1 - TT (about
-    -69 s in 2026). Passing TT straight in, as these helpers used to, turned
-    the Earth texture 17 arcmin (32 km at the equator) away from SSAPy's
-    ground tracks.
+    Kept for callers that need GAST itself. Do not use it to orient a texture
+    in a GCRF scene; use :func:`_greenwich_azimuth_rad`.
     """
     from erfa import gst94
     from ssapy.utils import iers_interp
@@ -143,6 +152,7 @@ def _gst94_rad(gps_seconds):
     mjd_tt = 44244.0 + (gps_seconds + 51.184) / 86400.0
     d_ut1_tt_mjd, _pmx, _pmy = iers_interp(gps_seconds)
     return gst94(2400000.5, mjd_tt + d_ut1_tt_mjd)
+
 
 def _gps_seconds(value):
     if value is None:

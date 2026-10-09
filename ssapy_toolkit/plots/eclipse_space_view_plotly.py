@@ -1723,26 +1723,55 @@ def _real_solar_eclipse_geometry(times, ephemeris="builtin"):
     return moon_pos, sun_hat
 
 
+def _wgs84_radius_along(u_itrf):
+    """Distance (km) from Earth's centre to the WGS84 surface along unit ITRF direction(s)."""
+    from ssapy_toolkit.constants import WGS84_A_KM, WGS84_B_KM
+
+    a_km = WGS84_A_KM
+    b2_over_a2 = (WGS84_B_KM / WGS84_A_KM) ** 2
+    u = np.asarray(u_itrf, dtype=float)
+    return a_km / np.sqrt(u[..., 0] ** 2 + u[..., 1] ** 2 + u[..., 2] ** 2 / b2_over_a2)
+
+
 def _eci_surface_to_latlon(point_km, time):
-    """Convert an inertial Earth-surface point to approximate geodetic lat/lon."""
-    point = np.asarray(point_km, dtype=float)
-    radius = np.linalg.norm(point)
-    lat = np.degrees(np.arcsin(point[2] / radius))
-    lon_inertial = np.degrees(np.arctan2(point[1], point[0]))
-    lon = ((lon_inertial - earth_rotation_deg_from_time(time) + 180.0) % 360.0) - 180.0
-    return float(lat), float(lon)
+    """WGS84 geodetic (lat, lon) in degrees of the Earth-surface point along a GCRF direction.
+
+    The GCRF direction is rotated to ITRF with the chain SSAPy's groundTrack
+    uses, projected onto the WGS84 ellipsoid, and converted to geodetic
+    coordinates. Previously the rotation was GAST about GCRF +z (1242 arcsec,
+    38.4 km at the equator, off in 2026) and the latitude was geocentric
+    (up to 0.19 deg, 21 km, off).
+    """
+    import erfa
+    from ssapy_toolkit.coordinates.frames import eci_to_ecf_matrix
+
+    u = eci_to_ecf_matrix(_gps_seconds_at(time)) @ np.asarray(point_km, dtype=float)
+    u = u / np.linalg.norm(u)
+    surface_m = u * _wgs84_radius_along(u) * 1000.0
+    lon, lat, _height = erfa.gc2gd(1, surface_m)
+    return float(np.degrees(lat)), float(np.degrees(lon))
 
 
 def _latlon_to_eci_surface(lat_deg, lon_deg, time, radius_scale=1.0, radius_km=RE_KM):
-    """Place a fixed Earth lat/lon marker in the inertial scene frame."""
-    lat = np.radians(float(lat_deg))
-    lon = np.radians(float(lon_deg) + earth_rotation_deg_from_time(time))
-    radius = float(radius_km) * float(radius_scale)
-    return radius * np.array([
-        np.cos(lat) * np.cos(lon),
-        np.cos(lat) * np.sin(lon),
-        np.sin(lat),
-    ])
+    """Place a fixed Earth geodetic lat/lon marker in the inertial (GCRF) scene frame.
+
+    The marker sits on the scene's spherical Earth (``radius_km * radius_scale``)
+    in the GCRF direction of the WGS84 surface point, so it is the exact
+    inverse of :func:`_eci_surface_to_latlon`.
+    """
+    import erfa
+    from ssapy_toolkit.coordinates.frames import eci_to_ecf_matrix
+
+    itrf_m = erfa.gd2gc(1, np.radians(float(lon_deg)), np.radians(float(lat_deg)), 0.0)
+    gcrf = eci_to_ecf_matrix(_gps_seconds_at(time)).T @ itrf_m
+    return float(radius_km) * float(radius_scale) * gcrf / np.linalg.norm(gcrf)
+
+
+def _gps_seconds_at(time):
+    gps = getattr(time, "gps", None)
+    if gps is not None:
+        return float(np.asarray(gps, dtype=float).reshape(-1)[0])
+    return float(np.asarray(time, dtype=float).reshape(-1)[0])
 
 
 def _ground_latlon_path_to_eci(ground_latlon, time, radius_scale=1.0, radius_km=RE_KM):

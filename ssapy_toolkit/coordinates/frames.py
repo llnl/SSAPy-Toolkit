@@ -38,6 +38,7 @@ __all__ = [
     "Frame",
     "FrameTransform",
     "eci_to_ecf_matrix",
+    "greenwich_azimuth_rad",
     "eci_to_lon_lat",
     "lvlh_axes",
     "lvlh_matrix",
@@ -72,28 +73,61 @@ def _unit(v: np.ndarray) -> np.ndarray:
 
 
 # ── rotation matrices ─────────────────────────────────────────────────────────
-def eci_to_ecf_matrix(t_gps: float) -> np.ndarray:
+def eci_to_ecf_matrix(t_gps) -> np.ndarray:
     """
-    3×3 rotation matrix ECI → ECF at GPS time t_gps.
-    Uses a simple Greenwich sidereal angle approximation;
-    if astropy is available uses a more precise GMST.
-    """
-    try:
-        from astropy.time import Time
-        t_ast = Time(t_gps, format="gps")
-        theta  = float(t_ast.sidereal_time("mean", "greenwich").rad)
-    except Exception:
-        # fallback: approximate GST from GPS epoch
-        gps_epoch_jd = 2_444_244.5
-        jd = gps_epoch_jd + t_gps / 86_400.0
-        T  = (jd - 2_451_545.0) / 36_525.0
-        theta = (280.46061837 + 360.98564736629*(jd - 2_451_545.0)) % 360
-        theta  = np.radians(theta)
+    GCRF -> ITRF rotation matrix at GPS time(s) ``t_gps``.
 
-    ct, st = np.cos(theta), np.sin(theta)
-    return np.array([[ct,  st, 0],
-                     [-st, ct, 0],
-                     [0,   0,  1]])
+    Same chain as :func:`ssapy.compute.groundTrack` and
+    ``ssapy.EarthObserver``: IAU 1976/1980 precession-nutation (``erfa.pnm80``
+    at TT), Greenwich apparent sidereal time (``erfa.gst94`` at UT1 from the
+    IERS table), then polar motion. Returns ``(3, 3)`` for a scalar time and
+    ``(N, 3, 3)`` for an array, with ``r_itrf = M @ r_gcrf``.
+
+    This previously rotated by Greenwich *mean* sidereal time alone. Applied to
+    GCRF vectors that omits precession and nutation since J2000: on
+    2026-10-09 it put an equatorial point 1235 arcsec (38.2 km) west and
+    540 arcsec south of astropy's GCRS->ITRS result.
+    """
+    import erfa
+    from ssapy.utils import iers_interp
+
+    t = np.asarray(t_gps, dtype=float)
+    scalar = t.ndim == 0
+    t = np.atleast_1d(t)
+    mjd_tt = 44244.0 + (t + 51.184) / 86400.0          # GPS -> TT, as MJD
+    d_ut1_tt_mjd, pmx, pmy = iers_interp(t)
+    pn = erfa.pnm80(2400000.5, mjd_tt)
+    gst = erfa.gst94(2400000.5, mjd_tt + d_ut1_tt_mjd)
+
+    cg, sg = np.cos(gst), np.sin(gst)
+    r3 = np.zeros((t.size, 3, 3))
+    r3[:, 0, 0] = cg
+    r3[:, 0, 1] = sg
+    r3[:, 1, 0] = -sg
+    r3[:, 1, 1] = cg
+    r3[:, 2, 2] = 1.0
+
+    polar = np.broadcast_to(np.eye(3), (t.size, 3, 3)).copy()
+    polar[:, 0, 2] = pmx
+    polar[:, 1, 2] = -pmy
+    polar[:, 2, 0] = -pmx
+    polar[:, 2, 1] = pmy
+
+    m = polar @ r3 @ pn
+    return m[0] if scalar else m
+
+
+def greenwich_azimuth_rad(t_gps):
+    """Right ascension (rad) of the ITRF x-axis (Greenwich meridian) in GCRF.
+
+    This is the single angle to turn an Earth texture about GCRF +z so that
+    the prime meridian lands where :func:`eci_to_ecf_matrix` puts it. A pure
+    z-rotation cannot also reproduce the tilt of the true pole from GCRF +z
+    (0.15 deg in 2026), so latitudes on such a texture stay off by up to that
+    amount; use :func:`eci_to_ecf_matrix` directly when that matters.
+    """
+    m = eci_to_ecf_matrix(t_gps)
+    return np.arctan2(m[..., 0, 1], m[..., 0, 0])
 
 
 def lvlh_matrix(r: np.ndarray, v: np.ndarray) -> np.ndarray:
@@ -292,16 +326,12 @@ class FrameTransform:
 # ── Convenience functions ─────────────────────────────────────────────────────
 def eci_to_lon_lat(r_eci_km: np.ndarray, t_gps: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
-    Convert (N,3) ECI positions → (lon_deg, lat_deg) sub-satellite point.
-    Uses ECF rotation for longitude, then spherical geometry.
+    Convert (N,3) GCRF positions -> (lon_deg, geocentric lat_deg) sub-satellite point.
+    Rotates with :func:`eci_to_ecf_matrix`, then uses spherical geometry.
     """
-    r = np.asarray(r_eci_km)
-    t = np.asarray(t_gps)
-    lons, lats = [], []
-    for i in range(len(r)):
-        r_ecf = eci_to_ecf_matrix(t[i]) @ r[i]
-        x, y, z = r_ecf
-        lon = np.degrees(np.arctan2(y, x))
-        lat = np.degrees(np.arcsin(z / np.linalg.norm(r_ecf)))
-        lons.append(lon); lats.append(lat)
-    return np.array(lons), np.array(lats)
+    r = np.atleast_2d(np.asarray(r_eci_km, dtype=float))
+    t = np.broadcast_to(np.asarray(t_gps, dtype=float), (len(r),))
+    r_ecf = np.einsum("nij,nj->ni", np.atleast_3d(eci_to_ecf_matrix(t)).reshape(len(r), 3, 3), r)
+    lon = np.degrees(np.arctan2(r_ecf[:, 1], r_ecf[:, 0]))
+    lat = np.degrees(np.arcsin(r_ecf[:, 2] / np.linalg.norm(r_ecf, axis=1)))
+    return lon, lat

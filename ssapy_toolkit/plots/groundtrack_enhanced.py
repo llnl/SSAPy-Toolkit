@@ -17,11 +17,9 @@ they're available, instead of reimplementing them:
     real in an environment that has neither — but in your actual conda env
     with ssapy installed, this will show the same continents as the rest
     of the toolkit's plots.
-  - Coordinate transform: tries this toolkit's real
-    `ssapy_toolkit.coordinates.frames.eci_to_ecf_matrix` (GMST rotation, matches
-    the rest of this toolkit's frame conventions) first; falls back to
-    astropy's GCRS->ITRS (higher precision, no toolkit dependency) if
-    frames.py isn't importable.
+  - Coordinate transform: `ssapy_toolkit.coordinates.frames.eci_to_ecf_matrix`,
+    the GCRF->ITRF chain SSAPy's groundTrack uses (precession-nutation, GAST
+    at UT1, polar motion); within 0.05 arcsec of astropy GCRS->ITRS in 2026.
   - Eclipse / shadow geometry: always uses the inlined two-circle overlap
     formula below (same real physics as a correct umbra/penumbra cone).
     An earlier version of this tried a toolkit `shadow_cone_params`
@@ -54,7 +52,7 @@ from matplotlib.patches import Circle
 import warnings
 
 from astropy.time import Time
-from astropy.coordinates import GCRS, ITRS, CartesianRepresentation, get_sun
+from astropy.coordinates import GCRS, ITRS, get_sun
 import astropy.units as u
 
 from ssapy_toolkit.constants import EARTH_MU_KM3_S2, EARTH_RADIUS_KM, SUN_RADIUS_KM
@@ -74,14 +72,7 @@ RE_KM = EARTH_RADIUS_KM
 R_SUN_KM = SUN_RADIUS_KM
 
 # ── Optional real-toolkit imports (all soft — each falls back cleanly) ──────
-try:
-    # frames.py moved from the old repo-root core/ package into
-    # ssapy_toolkit/plots/ (a sibling of this file) -- relative import
-    # instead of the old core.frames path, which no longer exists.
-    from ssapy_toolkit.coordinates.frames import eci_to_ecf_matrix as _tk_eci_to_ecf_matrix
-    _HAS_TK_FRAMES = True
-except ImportError:
-    _HAS_TK_FRAMES = False
+from ssapy_toolkit.coordinates.frames import eci_to_ecf_matrix as _tk_eci_to_ecf_matrix
 
 # Note: this file used to also try importing a toolkit `shadow_cone_params`
 # helper (from the old core/sun.py) for eclipse geometry, with a fallback
@@ -108,39 +99,35 @@ except ImportError:
 # ── gcrf_to_itrf — uses your real frames.py if available, else astropy ───
 def gcrf_to_itrf(r_eci_km: np.ndarray, t: Time) -> np.ndarray:
     """
-    Transform (N,3) GCRS (ECI, km) positions to ITRS (ECEF, km) at times t.
-    t must be an astropy.time.Time of the same length as r_eci_km (or a
-    scalar Time, broadcast to all rows).
+    Transform (N,3) GCRF positions (km) to ITRF (km) at times ``t``.
+
+    ``t`` is an astropy Time of the same length as ``r_eci_km`` or a scalar
+    Time broadcast to all rows; any time scale is accepted. The rotation is
+    :func:`ssapy_toolkit.coordinates.frames.eci_to_ecf_matrix`, the chain
+    SSAPy's groundTrack uses.
+
+    Previously this rotated by Greenwich mean sidereal time only (38.2 km
+    west and 16.7 km south at the equator on 2026-10-09 versus astropy
+    GCRS->ITRS), and rebuilt a scalar Time from its ISO string, which
+    dropped the time scale: a TT-scale Time moved points another 32.2 km.
     """
-    r_eci_km = np.atleast_2d(r_eci_km)
-    if t.isscalar:
-        t = Time([t.iso] * len(r_eci_km))
-
-    if _HAS_TK_FRAMES:
-        # Your toolkit's own GMST rotation — consistent with every other
-        # plot in this codebase that uses frames.py.
-        out = np.empty_like(r_eci_km)
-        for i in range(len(r_eci_km)):
-            M = _tk_eci_to_ecf_matrix(t[i].gps)
-            out[i] = M @ r_eci_km[i]
-        return out
-
-    # Fallback: astropy GCRS->ITRS (no toolkit dependency, still real)
-    cart = CartesianRepresentation(r_eci_km[:, 0], r_eci_km[:, 1], r_eci_km[:, 2], unit=u.km)
-    gcrs = GCRS(cart, obstime=t)
-    itrs = gcrs.transform_to(ITRS(obstime=t))
-    return np.stack([itrs.x.to(u.km).value,
-                     itrs.y.to(u.km).value,
-                     itrs.z.to(u.km).value], axis=1)
+    r_eci_km = np.atleast_2d(np.asarray(r_eci_km, dtype=float))
+    gps = np.broadcast_to(np.atleast_1d(np.asarray(t.gps, dtype=float)), (len(r_eci_km),))
+    matrices = _tk_eci_to_ecf_matrix(gps).reshape(len(r_eci_km), 3, 3)
+    return np.einsum("nij,nj->ni", matrices, r_eci_km)
 
 
 def ecef_to_geodetic(r_ecef_km: np.ndarray):
-    """Spherical-Earth lat/lon/alt — fine for ground-track plotting."""
-    x, y, z = r_ecef_km[:, 0], r_ecef_km[:, 1], r_ecef_km[:, 2]
-    r = np.linalg.norm(r_ecef_km, axis=1)
-    lat = np.degrees(np.arcsin(np.clip(z / r, -1, 1)))
-    lon = np.degrees(np.arctan2(y, x))
-    return lat, lon, r - RE_KM
+    """WGS84 geodetic (lat_deg, lon_deg, height_km) of (N,3) ITRF positions (km).
+
+    Previously spherical: geocentric latitude (up to 0.19 deg, 21 km, from
+    geodetic) and height above the equatorial radius at every latitude.
+    """
+    import erfa
+
+    r = np.atleast_2d(np.asarray(r_ecef_km, dtype=float)) * 1000.0
+    lon, lat, height = erfa.gc2gd(1, r)   # 1 = WGS84
+    return np.degrees(lat), np.degrees(lon), height / 1000.0
 
 
 def subsolar_point(t: Time):

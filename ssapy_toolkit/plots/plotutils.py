@@ -619,8 +619,8 @@ def drawEarth(time, ngrid=100, R=EARTH_RADIUS, rfactor=1):
     if isinstance(time, Real):
         time = np.array([time])
 
-    from .scene_primitives import _gst94_rad
-    gst = _gst94_rad(time)
+    from .scene_primitives import _greenwich_azimuth_rad
+    gst = np.atleast_1d(_greenwich_azimuth_rad(time))
 
     u = u - (gst / (2 * np.pi))[:, None, None]
     v = np.broadcast_to(v, u.shape)
