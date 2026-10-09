@@ -7,7 +7,7 @@ Run:  python assemble.py
 
 Inlines scene.js, the vendored libraries (three.min.js and satellite.min.js) and
 the four Earth textures into a single standalone HTML file. The texture images
-come from the external SSAPy-Data package, not from this source repository.
+come from the external core data package, not from this source repository.
 
 Layout-agnostic on purpose: inputs are looked up next to this script first,
 then in an optional assets/ subfolder, then one directory up. That means the
@@ -71,7 +71,7 @@ def text(filename):
 def load_textures():
     """Return base64 strings for the four Earth textures.
 
-    Textures ship as individual files in SSAPy-Data. This avoids committing a
+    Textures ship as individual files in the core data package. This avoids committing a
     duplicated texture archive to SSAPy-Toolkit while
     still allowing installed users to build a self-contained HTML viewer.
     """
@@ -121,7 +121,7 @@ def load_star_catalog(mag_limit=6.5, when=None):
     if stars is None:
         raise FileNotFoundError(
             "Accurate satellite-viewer stars require bright_stars.csv from "
-            "the llnl-ssapy-data package."
+            "the appropriate ssatk-data-* package."
         )
 
     vectors, magnitudes, colors = (np.asarray(value, dtype=float) for value in stars)
@@ -447,7 +447,7 @@ def load_satellite_database(path=None):
 
 
 def _read_texture_binary(filename, kind):
-    """Read a texture from SSAPy-Data or return a generated placeholder."""
+    """Read a texture from the core data package or return a generated placeholder."""
     try:
         return read_data_binary(filename)
     except (DataPackageNotFoundError, DataResourceNotFoundError):

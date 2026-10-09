@@ -157,7 +157,7 @@ def read_eop(path: str | Path) -> EarthOrientationTable:
 
 @lru_cache(maxsize=1)
 def load_packaged_eop() -> EarthOrientationTable:
-    """Load the frozen IERS EOP snapshot from SSAPy-Data."""
+    """Load the frozen IERS EOP snapshot from ``ssatk-data-core``."""
 
     with data_path("environment/eop/finals2000A.all") as path:
         table = read_eop(path)

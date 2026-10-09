@@ -86,7 +86,7 @@ python -m pip install -e .[dev]
 This installs the package in editable mode along with development dependencies
 (testing, linting, docs tools, JavaScript validation helpers, etc.). Runtime
 plotting dependencies support HTML, image, and GIF output through Plotly,
-Matplotlib, Pillow, imageio, and SSAPy-Data assets. Install
+Matplotlib, Pillow, imageio, and split SSATK data assets. Install
 `ssapy-toolkit[static]` for Plotly static-image export through Kaleido,
 `ssapy-toolkit[pdf]` for appending pages to existing PDF plots,
 `ssapy-toolkit[notebook]` for IPython display and ipyvolume Earth/Moon meshes,
@@ -246,7 +246,7 @@ operations, ``frame="vnb"`` for velocity-normal-binormal commands,
 ``frame="body"`` for body-mounted thrust, or ``frame="ntw"`` for exact SSAPy
 ``[N, T, W]`` convention. Thrust can be constant, trapezoidal, smoothstep,
 exponential, pulsed, callable, or loaded from CSV with ``ThrustCurve``; citable
-engine data belongs in SSAPy-Data rather than this source repository and can be
+engine data belongs in the appropriate split SSATK data repository rather than this source repository and can be
 loaded with ``load_thrust_curve_data(...)`` once packaged.
 
 Preset spacecraft bodies live in `ssapy_toolkit.satellites`. Use

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ssapy-toolkit"
-version = "1.0.5"
+version = "1.0.6"
 description = "SSAPy Toolkit: extensions for orbital mechanics, plotting, and data IO"
 authors = [
   { name = "Travis R. Yeager", email = "yeagerastro@gmail.com" }
@@ -33,8 +33,11 @@ dependencies = [
   "astropy",
   "h5py",
   "imageio",
-  "llnl-ssapy-data>=0.1.5",
-  "llnl-ssapy>=1.1.9",
+  "llnl-ssapy>=1.1.11",
+  "ssatk-data-core==0.0.1",
+  "ssatk-data-gravity==0.0.1",
+  "ssatk-data-lunar==0.0.1",
+  "ssatk-data-lunar-gravity==0.0.1",
   "matplotlib",
   "numpy",
   "pandas",
@@ -48,6 +51,17 @@ dependencies = [
 [project.optional-dependencies]
 monitoring = [
   "psutil",
+]
+
+propulsion = ["ssatk-data-propulsion==0.0.1"]
+benchmarks = ["ssatk-data-benchmarks==0.0.1"]
+all-data = [
+  "ssatk-data-core==0.0.1",
+  "ssatk-data-gravity==0.0.1",
+  "ssatk-data-lunar==0.0.1",
+  "ssatk-data-lunar-gravity==0.0.1",
+  "ssatk-data-propulsion==0.0.1",
+  "ssatk-data-benchmarks==0.0.1",
 ]
 
 notebook = [

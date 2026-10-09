@@ -21,7 +21,7 @@ What it needs
 -------------
 The baked textures from ``ssapy-bake-moon``, in the cache directory
 (~/.ssapy_toolkit/moon by default, or $SSAPY_TOOLKIT_CACHE). Nothing is
-read from SSAPy-Data and nothing large is committed.
+read from the lunar data package and nothing large is committed.
 
 Why it serves over HTTP
 -----------------------

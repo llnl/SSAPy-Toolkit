@@ -54,7 +54,7 @@ def data_resource(
         paths and ``..`` traversal are rejected.
     package
         Import package that owns the data resources. Toolkit code should use the
-        default ``ssapy_data`` package once SSAPy-Data is published as a wheel.
+        default split ``ssatk-data-*`` packages.
     data_root
         Directory inside ``package`` that contains data resources.
     must_exist

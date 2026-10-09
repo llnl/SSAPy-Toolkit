@@ -21,7 +21,7 @@ SSAPy Toolkit is a source-code repository. Keep generated artifacts, analysis
 outputs, downloaded data products, figures, screenshots, animations, notebooks
 with embedded outputs, and other binary media out of the repository. If a change
 requires persistent data, put that data in
-[SSAPy-Data](https://github.com/llnl/SSAPy-Data) or document an external
+the appropriate ``ssatk-data-*`` repository or document an external
 download/source instead of committing it here.
 
 Use the existing top-level structure for new work:
@@ -67,8 +67,8 @@ python scripts/check_repository_policy.py
 
 ## Development notes
 
-- Supported floors are `llnl-ssapy>=1.1.9` and `llnl-ssapy-data>=0.1.5`. Test
-  against the published `llnl-ssapy-data` distribution. SSAPy 1.1.5 and earlier
+- Supported floors are `llnl-ssapy>=1.1.11` and the published `ssatk-data-*` distributions. Test
+  against the split data distributions. SSAPy 1.1.5 and earlier
   rebuild a zero-drag `Satrec` in `SGP4Propagator`, so SGP4 comparisons fail
   there; that is an environment problem, not a Toolkit bug.
 - Use `python3 -m pip` rather than bare `pip` so packages install into the
@@ -96,6 +96,6 @@ Each pull request must:
 
 The repository policy workflow blocks pull requests that add disallowed file
 types, binary files, large files, or unexpected top-level paths. If a blocked
-file is genuinely required, prefer moving it to SSAPy-Data. If a repository
+file is genuinely required, prefer moving it to the appropriate split data repository. If a repository
 policy exception is still necessary, make the exception explicit in the pull
 request and update `scripts/check_repository_policy.py` in the same change.
