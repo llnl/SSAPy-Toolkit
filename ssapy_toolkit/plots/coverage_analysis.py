@@ -28,7 +28,7 @@ contouring that looked like coverage dropping over oceans and was purely a
 sampling artefact.
 
 Satellite list resolution, in order: the local JSON store written by
-tle_updater (~/ssatk_data), the copy shipped in llnl-ssapy-data, then the
+tle_updater (~/ssatk_data), the copy shipped in split data packages, then the
 list embedded below. Nothing here touches the network at import time; refresh
 elements explicitly with tle_updater.update_satellites_auto().
 
@@ -1145,7 +1145,7 @@ _BUNDLED_SATELLITES = [
 # ── Satellite list: data package first, bundled copy second ──────────────────
 #
 # Same arrangement as the 3D satellite viewer: prefer the curated list shipped
-# in llnl-ssapy-data, fall back to the copy embedded above, and work either
+# in split data packages, fall back to the copy embedded above, and work either
 # way. The point is that neither a missing data package nor a missing network
 # connection stops this from running.
 #
@@ -1165,7 +1165,7 @@ _SATELLITES_ASSET = "ssapy_satellites_default.json"
 def _load_default_satellites():
     """Return the default satellite list, preferring the packaged copy.
 
-    Order: llnl-ssapy-data -> the bundled list above. Any failure reading the
+    Order: split data packages -> the bundled list above. Any failure reading the
     packaged copy falls through to the bundle rather than raising, since a
     stale-but-present list is more useful here than an import error.
     """

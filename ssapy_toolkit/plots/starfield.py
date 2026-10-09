@@ -529,12 +529,11 @@ def _add_milky_way(ax, sky_radius):
 
 
 # ---------------------------------------------------------------------------
-# Data-asset resolution (SSAPy-Data)
+# Data-asset resolution (split SSATK data packages)
 # ---------------------------------------------------------------------------
 # Large binary assets -- the HYG star catalogue, the AE-8/AP-8 flux table,
 # planetary textures -- are not carried in this repo. They live in
-# https://github.com/LLNL/SSAPy-Data, which is packaged as the
-# `llnl-ssapy-data` distribution and exposes the `ssapy_data` import package.
+# The split `ssatk-data-core` distribution exposes the packaged resources.
 # Its README is explicit about the mechanism:
 #
 #     "Data files live under src/ssapy_data/data so users can receive the
@@ -549,7 +548,7 @@ def _add_milky_way(ax, sky_radius):
 #
 # Resolution order, first hit wins:
 #   1. $SSAPY_DATA                        -- explicit override for CI / odd layouts
-#   2. a sibling SSAPy-Data checkout      -- what you get developing both repos
+#   2. a sibling data checkout            -- useful while developing both repos
 #      side by side, before `pip install -e` has been run against the data repo
 #   3. the installed ssapy_data package   -- the real, supported user mechanism
 #   4. alongside this module              -- legacy in-tree assets, so existing
@@ -601,11 +600,11 @@ def ssapy_data_dirs():
         dirs.append(_Path(env))
 
     # Sibling checkouts. Both the repo name and a lowercase variant are tried:
-    # the repo is LLNL/SSAPy-Data, so `git clone` produces "SSAPy-Data", but
+    # the data repository may be checked out under a project-specific name, but
     # case-insensitive filesystems and hand-made directories commonly give
-    # "ssapy-data". On Linux only the exact case matches, so list both.
+    # the package directory name can vary by platform.
     for parent in (repo_parent, repo_root):
-        for name in ("SSAPy-Data", "ssapy-data"):
+        for name in ("ssatk-data-core", "data-core"):
             dirs.append(parent / name)
             # the packaged layout, if someone points at a raw checkout
             dirs.append(parent / name / "src" / "ssapy_data" / "data")
