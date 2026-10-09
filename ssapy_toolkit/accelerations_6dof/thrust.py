@@ -57,7 +57,7 @@ class ThrustCurve:
     """Interpolated scalar thrust curve in newtons.
 
     Curves are evaluated with linear interpolation and return ``fill_value``
-    outside the tabulated time span. Store real engine data in SSAPy-Data or a
+    outside the tabulated time span. Store real engine data in ``ssatk-data-propulsion`` or a
     user path, then load it with :func:`load_thrust_curve_csv`.
     """
 
@@ -301,7 +301,7 @@ def load_thrust_curve_csv(
 
 
 def load_thrust_curve_data(relative_path, **kwargs) -> ThrustCurve:
-    """Load a thrust curve CSV from the installed SSAPy-Data package."""
+    """Load a thrust curve CSV from the installed propulsion data package."""
 
     from ..data import data_path
 
@@ -310,7 +310,7 @@ def load_thrust_curve_data(relative_path, **kwargs) -> ThrustCurve:
 
 
 def packaged_thrust_curve_index(collection: str = "nasa_ntrs") -> tuple[dict[str, str], ...]:
-    """Return rows from a packaged SSAPy-Data thrust-curve index.
+    """Return rows from a packaged propulsion-data thrust-curve index.
 
     Parameters
     ----------
@@ -345,7 +345,7 @@ def load_packaged_thrust_curve(
     clamp_normalized: bool = True,
     fill_value: float = 0.0,
 ) -> ThrustCurve:
-    """Load a named thrust curve packaged in SSAPy-Data.
+    """Load a named thrust curve packaged in ``ssatk-data-propulsion``.
 
     Absolute curves with a ``thrust_n`` column load directly. Normalized curves,
     such as the RS-18 startup shape, require ``steady_state_thrust_n`` so the

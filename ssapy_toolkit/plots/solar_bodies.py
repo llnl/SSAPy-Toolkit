@@ -154,7 +154,7 @@ _earth_texture_cache = None   # lazy-loaded (H, W) float array, values 0..1
 
 def _load_earth_texture():
     """
-    Load the real land/ocean/ice classification packaged by SSAPy-Data.
+    Load the real land/ocean/ice classification packaged by the core data package.
 
     Returns None (triggering the harmonic-blob fallback below) when the data
     package is absent or older than the asset. The Toolkit source tree should
@@ -237,7 +237,7 @@ def _color_earth(n=_N, rotation_deg=0.0):
     samples a real classification derived from a NASA Blue Marble mosaic
     (public domain), so raising `n` actually resolves finer real coastline
     detail instead of just smoothing the same four blobs. Falls back to the
-    old blobs if SSAPy-Data is absent or older than this packaged asset.
+    old blobs if the core data package is absent or older than this packaged asset.
     """
     tex = _load_earth_texture()
     if tex is None:

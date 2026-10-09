@@ -275,7 +275,7 @@ def validate(changed: list[ChangedPath], head_ref: str) -> list[str]:
         if forbidden_matches:
             errors.append(
                 f"{item.path}: file type {', '.join(forbidden_matches)} is not allowed in this source repo. "
-                "Keep generated media/data out of git or move persistent data to SSAPy-Data."
+                "Keep generated media/data out of git or move persistent data to the split data repositories."
             )
 
         size = file_size(item, head_ref)
@@ -287,7 +287,7 @@ def validate(changed: list[ChangedPath], head_ref: str) -> list[str]:
         if item.is_added_like and is_binary(content_for_path(item, head_ref)):
             errors.append(
                 f"{item.path}: binary files are not allowed in this source repo. "
-                "Store reusable data in SSAPy-Data or generate artifacts during CI."
+                "Store reusable data in the split data repositories or generate artifacts during CI."
             )
 
     has_source_change = any(source_changed(item.path) and not item.is_deleted for item in changed)

@@ -2,7 +2,7 @@
 
 The catalog gives engineering-scale defaults for simulation setup.  Values are
 representative ranges, not procurement data.  Use mission/vendor thrust curves
-from SSAPy-Data with :class:`ssapy_toolkit.accelerations_6dof.ThrustCurve` when
+from ``ssatk-data-propulsion`` with :class:`ssapy_toolkit.accelerations_6dof.ThrustCurve` when
 flight-specific fidelity is required.
 """
 
@@ -276,7 +276,7 @@ def load_throttle_map(name: str) -> tuple[dict[str, object], ...]:
     """Load a packaged electric-propulsion throttle/performance map.
 
     Values are returned as dictionaries with numeric fields converted to
-    ``float`` where possible. The source CSV remains in SSAPy-Data.
+    ``float`` where possible. The source CSV remains in ``ssatk-data-propulsion``.
     """
 
     key = _key(name)

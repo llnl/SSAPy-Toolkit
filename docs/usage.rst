@@ -11,7 +11,7 @@ Install in editable mode with development extras:
    python -m pip install -e .[dev]
 
 Plotting installs the Python packages needed for HTML, image, and GIF outputs,
-including Plotly, Matplotlib, Pillow, imageio, and SSAPy-Data.
+including Plotly, Matplotlib, Pillow, imageio, and split SSATK data packages.
 Install ``ssapy-toolkit[static]`` for Plotly static-image export through Kaleido.
 Install ``ssapy-toolkit[pdf]`` to append pages to existing PDF plots.
 Install ``ssapy-toolkit[notebook]`` for IPython display and ipyvolume
@@ -433,7 +433,7 @@ velocity-normal-binormal, ``frame="body"`` maps body-mounted thrust through the
 current attitude, and ``frame="ntw"`` preserves exact SSAPy ``[N, T, W]``
 convention. Thrust can be constant, trapezoidal, smoothstep, exponential,
 pulsed, callable, or loaded from a CSV file through ``ThrustCurve``. Citable
-engine curves should live in SSAPy-Data, not this source repository, and can be
+engine curves should live in the propulsion data package, not this source repository, and can be
 loaded with ``load_thrust_curve_data(...)`` once packaged.
 
 Representative propulsion presets live in :mod:`ssapy_toolkit.engines` and
@@ -446,7 +446,7 @@ electrospray, or dual-mode chemical/electric propulsion classes.  Each
 power and dry-mass ranges where applicable, and builders for
 ``Thruster`` body components or ``SpacecraftManeuverAccel`` finite burns.
 These values are engineering-scale defaults for analysis setup; replace them
-with vendor or mission thrust curves from SSAPy-Data when flight-specific
+with vendor or mission thrust curves from ``ssatk-data-propulsion`` when flight-specific
 validation is required.
 
 Preset body designs live in :mod:`ssapy_toolkit.satellites`. Use
@@ -511,7 +511,7 @@ Packaged data
 
 SSAPy Toolkit should not commit reusable datasets, generated figures, or other
 binary artifacts. Toolkit functions that require reusable data should read it
-from the installed ``llnl-ssapy-data`` dependency instead. The dependency exposes
+from the installed split data dependencies instead. These packages expose
 the ``ssapy_data`` import package with resources below ``ssapy_data/data``.
 
 Use :mod:`ssapy_toolkit.data` when a toolkit function needs a packaged data

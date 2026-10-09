@@ -1,7 +1,7 @@
 """
 Offline texture baker for the WebGL Moon.
 
-Writes to ~/.ssapy_toolkit/moon, not into SSAPy-Toolkit or SSAPy-Data. The
+Writes to ~/.ssapy_toolkit/moon, not into SSAPy-Toolkit or the lunar data package. The
 horizon set at full resolution is tens of megabytes and must never enter
 either repo; this module is the committed artefact, the textures are
 regenerated locally. Override with $SSAPY_TOOLKIT_CACHE.
@@ -57,7 +57,7 @@ def cache_dir():
     """
     Where the baked textures live.
 
-    Deliberately not inside SSAPy-Toolkit or SSAPy-Data: this is tens of
+    Deliberately not inside SSAPy-Toolkit or the lunar data package: this is tens of
     megabytes of regenerable data and must never enter either repo. Not
     AppData either -- Explorer hides it, which makes the output hard to
     find for no benefit. A leading dot does not hide a directory on
