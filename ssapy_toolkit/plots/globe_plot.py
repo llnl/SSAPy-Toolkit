@@ -4,7 +4,7 @@ from PIL import Image as PILImage
 import numpy as np
 
 
-from ssapy.utils import find_file
+from ._textures import earth_texture_path
 from .plotutils import (
     make_black,
     make_white,
@@ -155,7 +155,7 @@ def globe_plot(
     scale = 1.0 if (not np.isfinite(scale) or scale <= 0) else float(scale)
     tex_w = int(round(5400 / scale))
     tex_h = int(round(2700 / scale))
-    earth_png = PILImage.open(find_file("earth", ext=".png")).resize(
+    earth_png = PILImage.open(earth_texture_path()).resize(
         (tex_w, tex_h), resample=PILImage.BILINEAR
     )
     bm = np.asarray(earth_png, dtype=float) / 255.0  # (H, W, C)

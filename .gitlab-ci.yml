@@ -19,7 +19,7 @@ stages:
       if [ -f requirements.txt ]; then
         pip install -r requirements.txt
       elif [ -f pyproject.toml ]; then
-        pip install ".[dev,geomagnetics,atmosphere]"
+        pip install ".[dev,geomagnetics,atmosphere,propulsion]"
       else
         pip install .
       fi

@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 from astropy.time import Time
 
-from .data import data_path
+from .data import data_path, resource_package
 
 __all__ = [
     "EarthOrientationRecord",
@@ -161,7 +161,7 @@ def load_packaged_eop() -> EarthOrientationTable:
 
     with data_path("environment/eop/finals2000A.all") as path:
         table = read_eop(path)
-    return EarthOrientationTable(table.records, source="ssapy_data:environment/eop/finals2000A.all")
+    return EarthOrientationTable(table.records, source=resource_package("environment/eop/finals2000A.all") + ":environment/eop/finals2000A.all")
 
 
 def _parse_eop_lines(lines) -> EarthOrientationTable:

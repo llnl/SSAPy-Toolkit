@@ -5,8 +5,14 @@ Utilities for orbital mechanics, plotting, coordinate transforms,
 """
 
 from importlib import import_module
+from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
+from importlib.metadata import version as _distribution_version
 
-__version__ = "1.0.5"
+try:
+    # Single source of truth: the version in pyproject.toml, as installed.
+    __version__ = _distribution_version("ssapy-toolkit")
+except _PackageNotFoundError:  # running from a source tree that is not installed
+    __version__ = "0+unknown"
 
 _CONSTANT_NAMES = None
 _SSAPY_ALIAS_NAMES = frozenset(

@@ -16,6 +16,7 @@ from PIL import Image as PILImage
 
 # --- Local modules ---
 from ssapy.utils import find_file
+from ._textures import earth_texture_path
 from ..constants import EARTH_RADIUS, MOON_RADIUS
 from ..vectors import rotation_matrix_from_vectors
 
@@ -569,7 +570,7 @@ def valid_orbits(r, t, drop_empty=True, warn=True):
 
 
 def load_earth_file():
-    earth = PILImage.open(find_file("earth", ext=".png"))
+    earth = PILImage.open(earth_texture_path())
     earth = earth.resize((5400 // 5, 2700 // 5))
     return earth
 

@@ -118,9 +118,9 @@ def _load_real_earth_texture(n_lat, n_lon):
     if _earth_texture_cache is not None and _earth_texture_cache.shape[:2] == (n_lat, n_lon):
         return _earth_texture_cache
     try:
-        from ssapy.utils import find_file
+        from ._textures import earth_texture_path
         from PIL import Image
-        img = Image.open(find_file("earth", ext=".png")).convert("RGB")
+        img = Image.open(earth_texture_path()).convert("RGB")
         img = img.resize((n_lon, n_lat), Image.LANCZOS)
         _earth_texture_cache = np.array(img)
         return _earth_texture_cache

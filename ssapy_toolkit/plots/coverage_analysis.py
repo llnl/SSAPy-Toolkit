@@ -39,6 +39,7 @@ Run interactively:
 
 import argparse
 import json
+import warnings
 import os
 
 import matplotlib
@@ -69,8 +70,8 @@ def _fallback_draw_continents(ax):
     """Self-contained fallback if groundtrack_enhanced.py isn't importable."""
     try:
         from PIL import Image as _PILImage
-        from ssapy.utils import find_file
-        tex = np.asarray(_PILImage.open(find_file("earth", ext=".png")).convert("RGB"))
+        from ._textures import earth_texture_path
+        tex = np.asarray(_PILImage.open(earth_texture_path()).convert("RGB"))
         ax.imshow(tex, extent=[-180, 180, -90, 90], origin="upper",
                   aspect="auto", zorder=0.5, alpha=0.9)
         return "ssapy earth.png"
@@ -1170,11 +1171,15 @@ def _load_default_satellites():
     stale-but-present list is more useful here than an import error.
     """
     try:
-        from ..data import data_package_available, read_data_text
-        if data_package_available():
-            return json.loads(read_data_text(_SATELLITES_ASSET)), "ssapy_data"
-    except Exception:  # noqa: BLE001, S110 - use the bundled fallback.
-        pass
+        from ..data import data_resource
+        resource = data_resource(_SATELLITES_ASSET)
+        return json.loads(resource.read_text(encoding="utf-8")), f"data:{resource}"
+    except Exception as exc:  # noqa: BLE001 - use the bundled fallback.
+        warnings.warn(
+            f"Packaged satellite list unavailable ({exc}); using the embedded list.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
     return _BUNDLED_SATELLITES, "bundled"
 
 

@@ -532,50 +532,52 @@ def _add_milky_way(ax, sky_radius):
 # Data-asset resolution (split SSATK data packages)
 # ---------------------------------------------------------------------------
 # Large binary assets -- the HYG star catalogue, the AE-8/AP-8 flux table,
-# planetary textures -- are not carried in this repo. They live in
-# The split `ssatk-data-core` distribution exposes the packaged resources.
-# Its README is explicit about the mechanism:
-#
-#     "Data files live under src/ssapy_data/data so users can receive the
-#      required data through normal pip installation without Git LFS, git
-#      submodules, or runtime GitHub downloads."
-#
-# and about why, which is the same reason the toolkit gitignores these files:
-#
-#     "If a future dataset pushes the wheel above PyPI limits, split the data
-#      into a separate companion package rather than using Git LFS in
-#      SSAPy Toolkit."
+# planetary textures -- are not carried in this repo. They ship in the split
+# ``ssatk-data-*`` distributions (``ssatk-data-core`` holds the star catalogue
+# and Earth textures), each installing its own ``ssapy_data_<name>`` package
+# with files below ``<package>/data``. See ``ssapy_toolkit.data``.
 #
 # Resolution order, first hit wins:
 #   1. $SSAPY_DATA                        -- explicit override for CI / odd layouts
 #   2. a sibling data checkout            -- useful while developing both repos
 #      side by side, before `pip install -e` has been run against the data repo
-#   3. the installed ssapy_data package   -- the real, supported user mechanism
+#   3. the installed split data packages  -- the real, supported user mechanism
+#      (then the retired ``ssapy_data`` archive package, if still installed)
 #   4. alongside this module              -- legacy in-tree assets, so existing
 #                                            working copies keep functioning
 #
 # Everything degrades: find_data_file() returns None rather than raising, and
-# callers already fall back (procedural textures, no belt surfaces, a synthetic
-# starfield) when an asset is absent.
+# callers fall back (procedural textures, no belt surfaces, a synthetic
+# starfield) when an asset is absent. Callers that fall back should say so.
+
+
+def _ssapy_data_package_dirs():
+    """Directories of the installed split data packages, in search order.
+
+    The split packages expose data via importlib.resources. For a normal
+    (unzipped) install the ``data`` directories are stable on disk, which is
+    what the filename searches below need.
+    """
+    import importlib.resources as _res
+    from pathlib import Path as _P
+
+    from ssapy_toolkit.data import DEFAULT_DATA_PACKAGES, LEGACY_DATA_PACKAGE
+
+    dirs = []
+    for package in (*DEFAULT_DATA_PACKAGES, LEGACY_DATA_PACKAGE):
+        try:
+            p = _P(str(_res.files(package) / "data"))
+        except (ImportError, TypeError):
+            continue
+        if p.is_dir():
+            dirs.append(p)
+    return dirs
 
 
 def _ssapy_data_package_dir():
-    """Directory of the installed ssapy_data package, or None.
-
-    ssapy_data exposes data_path()/read_text() built on importlib.resources.
-    data_path() is a context manager because a zipped wheel may need to
-    extract to a temporary location; for a normal (unzipped) install the
-    directory is stable, which is what the searches below need.
-    """
-    try:
-        import importlib.resources as _res
-        import ssapy_data  # noqa: F401  (presence check)
-        root = _res.files("ssapy_data") / "data"
-        from pathlib import Path as _P
-        p = _P(str(root))
-        return p if p.is_dir() else None
-    except Exception:
-        return None
+    """First installed data-package directory, or None (backward compatible)."""
+    dirs = _ssapy_data_package_dirs()
+    return dirs[0] if dirs else None
 
 
 def ssapy_data_dirs():
@@ -599,19 +601,13 @@ def ssapy_data_dirs():
     if env:
         dirs.append(_Path(env))
 
-    # Sibling checkouts. Both the repo name and a lowercase variant are tried:
-    # the data repository may be checked out under a project-specific name, but
-    # case-insensitive filesystems and hand-made directories commonly give
-    # the package directory name can vary by platform.
+    # Sibling checkouts of the core data repository, raw or in packaged layout.
     for parent in (repo_parent, repo_root):
         for name in ("ssatk-data-core", "data-core"):
             dirs.append(parent / name)
-            # the packaged layout, if someone points at a raw checkout
-            dirs.append(parent / name / "src" / "ssapy_data" / "data")
+            dirs.append(parent / name / "src" / "ssapy_data_core" / "data")
 
-    pkg = _ssapy_data_package_dir()
-    if pkg is not None:
-        dirs.append(pkg)
+    dirs.extend(_ssapy_data_package_dirs())
 
     dirs.append(plots_dir)
 

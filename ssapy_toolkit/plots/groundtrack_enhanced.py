@@ -11,7 +11,7 @@ This version actively uses your real ssapy / ssapy-toolkit modules wherever
 they're available, instead of reimplementing them:
 
   - Continents: the REAL Earth texture your own `globe_plot.py` already
-    uses (`from ssapy.utils import find_file; find_file("earth", ext=".png")`)
+    uses (`ssapy_toolkit.plots._textures.earth_texture_path()`)
     is tried first. Falls back to `cartopy` coastlines (if installed), then
     to a bundled low-res coastline outline, so it still renders *something*
     real in an environment that has neither — but in your actual conda env
@@ -104,12 +104,6 @@ try:
         )
 except ImportError:
     _HAS_SSAPY = False
-
-try:
-    from ssapy.utils import find_file as _ssapy_find_file
-    _HAS_SSAPY_ASSETS = True
-except ImportError:
-    _HAS_SSAPY_ASSETS = False
 
 # ── gcrf_to_itrf — uses your real frames.py if available, else astropy ───
 def gcrf_to_itrf(r_eci_km: np.ndarray, t: Time) -> np.ndarray:
@@ -238,11 +232,10 @@ def _load_earth_texture():
     global _earth_texture_cache
     if _earth_texture_cache is not None:
         return _earth_texture_cache
-    if not _HAS_SSAPY_ASSETS:
-        return None
     try:
         from PIL import Image as _PILImage
-        img = _PILImage.open(_ssapy_find_file("earth", ext=".png")).convert("RGB")
+        from ._textures import earth_texture_path
+        img = _PILImage.open(earth_texture_path()).convert("RGB")
         _earth_texture_cache = np.asarray(img)
         return _earth_texture_cache
     except Exception as ex:
