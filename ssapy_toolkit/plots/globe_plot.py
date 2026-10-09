@@ -4,7 +4,7 @@ from PIL import Image as PILImage
 import numpy as np
 
 
-from ssapy.utils import find_file
+from ._textures import earth_texture_path
 from .plotutils import (
     make_black,
     make_white,
@@ -14,7 +14,7 @@ from .plotutils import (
     _raise_unrecognized_kwargs,
 )
 from ..constants import RGEO, EARTH_RADIUS
-from .scene_primitives import earth_rotation_deg_from_time
+from .scene_primitives import earth_rotation_deg_from_time, gps_seconds_at
 
 
 def _earth_lon0_from_time(t):
@@ -106,8 +106,8 @@ def globe_plot(
         Rotation of the globe texture about the z-axis in degrees. Positive
         values rotate longitudes eastward.
     globe_time : astropy.time.Time or float, optional
-        If provided, overrides lon0 by computing the Earth-rotation angle
-        from this time using gst94 (same as drawEarth) [1].  If omitted and
+        If provided, overrides lon0 and orients the globe with the full
+        GCRF<-ITRF rotation at this time (the chain SSAPy's groundTrack uses).  If omitted and
         a time series is supplied, the final sample time is used so the Earth
         texture is accurate at the highlighted reference point.
     reference_index : int
@@ -140,8 +140,17 @@ def globe_plot(
     if globe_time is None and t_list and len(t_list[0]):
         ref_idx = int(reference_index) % len(t_list[0])
         globe_time = t_list[0][ref_idx]
+    # With a time, orient the textured Earth with the full GCRF<-ITRF rotation
+    # (precession-nutation, GAST at UT1, polar motion; the chain SSAPy's
+    # groundTrack uses), not a z-rotation: a z-rotation by GAST alone put the
+    # globe 1242 arcsec (38.4 km at the equator) off SSAPy's ground tracks on
+    # 2026-10-09, and no z-rotation carries the 0.15 deg tilt of the true pole.
+    earth_to_scene = None
     if globe_time is not None:
-        lon0 = _earth_lon0_from_time(globe_time)
+        from ..coordinates.frames import eci_to_ecf_matrix
+
+        earth_to_scene = eci_to_ecf_matrix(gps_seconds_at(globe_time, default=0.0)).T
+        lon0 = 0.0
 
     # ---------- Theme ----------
     if c in ("black", "b"):
@@ -155,7 +164,7 @@ def globe_plot(
     scale = 1.0 if (not np.isfinite(scale) or scale <= 0) else float(scale)
     tex_w = int(round(5400 / scale))
     tex_h = int(round(2700 / scale))
-    earth_png = PILImage.open(find_file("earth", ext=".png")).resize(
+    earth_png = PILImage.open(earth_texture_path()).resize(
         (tex_w, tex_h), resample=PILImage.BILINEAR
     )
     bm = np.asarray(earth_png, dtype=float) / 255.0  # (H, W, C)
@@ -173,6 +182,9 @@ def globe_plot(
     mesh_x = np.cos(lat_grid) * np.cos(lon_grid) * scale_fac
     mesh_y = np.cos(lat_grid) * np.sin(lon_grid) * scale_fac
     mesh_z = np.sin(lat_grid) * scale_fac
+    if earth_to_scene is not None:
+        scene_xyz = np.stack([mesh_x, mesh_y, mesh_z], axis=-1) @ earth_to_scene.T
+        mesh_x, mesh_y, mesh_z = scene_xyz[..., 0], scene_xyz[..., 1], scene_xyz[..., 2]
 
     # ---------- Figure and axes ----------
     if ax is None:
@@ -290,6 +302,9 @@ def globe_plot(
     ax.set_xlim(*xlim)
     ax.set_ylim(*ylim)
     ax.set_zlim(*zlim)
+    # Matplotlib's default 3-D box aspect is 4:4:3, which drew the globe 25%
+    # flattened along z. Scale the box to the data spans instead.
+    ax.set_box_aspect((abs(xlim[1] - xlim[0]), abs(ylim[1] - ylim[0]), abs(zlim[1] - zlim[0])))
 
     # ---------- Ticks/labels ----------
     # For symmetric cubes use integer ticks around center; for general limits, keep it simple

@@ -4,7 +4,8 @@ import matplotlib.cm as cm
 from PIL import Image as PILImage
 
 from ssapy import groundTrack
-from ssapy.utils import find_file, norm
+from ssapy.utils import norm
+from ._textures import earth_texture_path
 from ..constants import RGEO, EARTH_RADIUS
 from .plotutils import figsave, make_black, valid_orbits, _pop_save_path_aliases, _raise_unrecognized_kwargs
 
@@ -76,7 +77,7 @@ def tracking_plot(
         # Figure & Earth texture
         fig = plt.figure(dpi=100, figsize=figsize)
         fig.patch.set_facecolor('black')
-        earth_png = PILImage.open(find_file("earth", ext=".png"))
+        earth_png = PILImage.open(earth_texture_path())
         earth_png = earth_png.resize((5400 // max(1, int(scale)), 2700 // max(1, int(scale))))
 
         # 1) Long/Lat world map

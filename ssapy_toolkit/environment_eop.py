@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 from astropy.time import Time
 
-from .data import data_path
+from .data import data_path, resource_package
 
 __all__ = [
     "EarthOrientationRecord",
@@ -108,6 +108,16 @@ class EarthOrientationTable:
         fraction = (gps - left_record.gps_seconds) / (
             right_record.gps_seconds - left_record.gps_seconds
         )
+        # UT1 is continuous but UT1 - UTC steps by an integer number of seconds
+        # at a leap second, which falls at the end of the left UTC day (just
+        # before the right node). Interpolating across that step spread a 1 s
+        # jump over the whole preceding day (999 ms error at 23:59 UTC on
+        # 2016-12-31). Remove the step from the right node; every query inside
+        # the interval is still on the left day's side of the leap second.
+        right_ut1_minus_utc = right_record.ut1_minus_utc_s
+        step_s = right_ut1_minus_utc - left_record.ut1_minus_utc_s
+        if abs(step_s) > 0.5:
+            right_ut1_minus_utc -= round(step_s)
         return EarthOrientationRecord(
             mjd_utc=float(_lerp(left_record.mjd_utc, right_record.mjd_utc, fraction)),
             gps_seconds=gps,
@@ -118,7 +128,7 @@ class EarthOrientationTable:
                 _lerp(left_record.polar_motion_y_arcsec, right_record.polar_motion_y_arcsec, fraction)
             ),
             ut1_minus_utc_s=float(
-                _lerp(left_record.ut1_minus_utc_s, right_record.ut1_minus_utc_s, fraction)
+                _lerp(left_record.ut1_minus_utc_s, right_ut1_minus_utc, fraction)
             ),
             polar_motion_flag=_combined_flag(
                 left_record.polar_motion_flag, right_record.polar_motion_flag
@@ -161,7 +171,7 @@ def load_packaged_eop() -> EarthOrientationTable:
 
     with data_path("environment/eop/finals2000A.all") as path:
         table = read_eop(path)
-    return EarthOrientationTable(table.records, source="ssapy_data:environment/eop/finals2000A.all")
+    return EarthOrientationTable(table.records, source=resource_package("environment/eop/finals2000A.all") + ":environment/eop/finals2000A.all")
 
 
 def _parse_eop_lines(lines) -> EarthOrientationTable:

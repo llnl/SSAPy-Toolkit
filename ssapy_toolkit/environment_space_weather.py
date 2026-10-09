@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 from astropy.time import Time
 
-from .data import data_path
+from .data import data_path, resource_package
 
 __all__ = [
     "SpaceWeatherRecord",
@@ -140,7 +140,7 @@ def load_packaged_space_weather() -> SpaceWeatherTable:
         table = read_space_weather(path)
     return SpaceWeatherTable(
         table.records,
-        source="ssapy_data:environment/space_weather/SW-All.csv",
+        source=resource_package("environment/space_weather/SW-All.csv") + ":environment/space_weather/SW-All.csv",
     )
 
 

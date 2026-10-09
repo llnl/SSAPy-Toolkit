@@ -16,6 +16,7 @@ from PIL import Image as PILImage
 
 # --- Local modules ---
 from ssapy.utils import find_file
+from ._textures import earth_texture_path
 from ..constants import EARTH_RADIUS, MOON_RADIUS
 from ..vectors import rotation_matrix_from_vectors
 
@@ -569,7 +570,7 @@ def valid_orbits(r, t, drop_empty=True, warn=True):
 
 
 def load_earth_file():
-    earth = PILImage.open(find_file("earth", ext=".png"))
+    earth = PILImage.open(earth_texture_path())
     earth = earth.resize((5400 // 5, 2700 // 5))
     return earth
 
@@ -618,8 +619,8 @@ def drawEarth(time, ngrid=100, R=EARTH_RADIUS, rfactor=1):
     if isinstance(time, Real):
         time = np.array([time])
 
-    from .scene_primitives import _gst94_rad
-    gst = _gst94_rad(time)
+    from .scene_primitives import _greenwich_azimuth_rad
+    gst = np.atleast_1d(_greenwich_azimuth_rad(time))
 
     u = u - (gst / (2 * np.pi))[:, None, None]
     v = np.broadcast_to(v, u.shape)

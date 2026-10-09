@@ -25,7 +25,7 @@ from ssapy.propagator import KeplerianPropagator, SciPyPropagator
 from ssapy.accel import AccelKepler, AccelSolRad, AccelDrag, AccelEarthRad
 from ssapy.gravity import AccelHarmonic, AccelThirdBody
 from ssapy.body import get_body
-from ssapy.utils import find_file
+from ssapy_toolkit.plots._textures import earth_texture_path
 import ssapy.compute as compute
 
 from ssapy_toolkit.constants import EARTH_MU, EARTH_RADIUS, RGEO
@@ -219,7 +219,7 @@ def main(make_figures=None, fast=None, output_dir=None):
         )
 
         try:
-            earth_png = PILImage.open(find_file("earth", ext=".png"))
+            earth_png = PILImage.open(earth_texture_path())
             scale = 2
             earth_png = earth_png.resize((5400 // scale, 2700 // scale))
             bm = np.array(earth_png.resize([int(d) for d in earth_png.size])) / 256.0
