@@ -46,7 +46,7 @@ DEFAULT_DATA_PACKAGES = (
 """Split data import packages, searched in this order when ``package`` is None."""
 
 LEGACY_DATA_PACKAGE = "ssapy_data"
-"""Import package of the retired single-wheel ``llnl-ssapy-data`` archive."""
+"""Resource access across the split ``ssatk-data-*`` distributions."""
 
 DEFAULT_DATA_PACKAGE = DEFAULT_DATA_PACKAGES[0]
 """Kept for backward compatibility; prefer ``package=None`` (search all)."""

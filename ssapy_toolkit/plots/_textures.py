@@ -2,7 +2,7 @@
 
 Historically every plot asked SSAPy for ``earth.png`` (5400 x 2700 Blue
 Marble, longitude -180..180 left to right, north up). That file lived in
-SSAPy's Git LFS tree and in the retired ``llnl-ssapy-data`` archive, but none
+SSAPy's Git LFS tree and legacy installations, but none
 of the split ``ssatk-data-*`` 0.0.1 wheels ships it. ``ssatk-data-core`` does
 ship ``earth_day_2048.jpg`` (2048 x 1024) in the same projection and
 orientation (normalized cross-correlation 0.866 at zero longitude shift
