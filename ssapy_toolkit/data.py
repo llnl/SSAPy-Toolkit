@@ -4,16 +4,12 @@ SSAPy Toolkit keeps source code separate from bulky datasets and generated
 media. Datasets ship in the split ``ssatk-data-*`` distributions, each of which
 installs its own import package with files below ``<package>/data``:
 
-==============================  ==========================  =========================
-Distribution               Import package              Toolkit install
-==============================  ==========================  =========================
-``ssatk-data-core``        ``ssapy_data_core``         required
-``ssatk-data-gravity``     ``ssapy_data_gravity``      required
-``ssatk-data-lunar``       ``ssapy_data_lunar``        required
-``ssatk-data-lunar-gravity``  ``ssapy_data_lunar_gravity`` required
-``ssatk-data-propulsion``  ``ssapy_data_propulsion``   ``[propulsion]`` extra
-``ssatk-data-benchmarks``  ``ssapy_data_benchmarks``   ``[benchmarks]`` extra
-==============================  ==========================  =========================
+* ``ssatk-data-core`` → ``ssapy_data_core`` (required)
+* ``ssatk-data-gravity`` → ``ssapy_data_gravity`` (required)
+* ``ssatk-data-lunar`` → ``ssapy_data_lunar`` (required)
+* ``ssatk-data-lunar-gravity`` → ``ssapy_data_lunar_gravity`` (required)
+* ``ssatk-data-propulsion`` → ``ssapy_data_propulsion`` (``[propulsion]`` extra)
+* ``ssatk-data-benchmarks`` → ``ssapy_data_benchmarks`` (``[benchmarks]`` extra)
 
 When no ``package`` is given, the helpers below search these packages in order
 (then any user-supplied legacy package, if present)
