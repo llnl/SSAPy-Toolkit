@@ -302,6 +302,9 @@ def globe_plot(
     ax.set_xlim(*xlim)
     ax.set_ylim(*ylim)
     ax.set_zlim(*zlim)
+    # Matplotlib's default 3-D box aspect is 4:4:3, which drew the globe 25%
+    # flattened along z. Scale the box to the data spans instead.
+    ax.set_box_aspect((abs(xlim[1] - xlim[0]), abs(ylim[1] - ylim[0]), abs(zlim[1] - zlim[0])))
 
     # ---------- Ticks/labels ----------
     # For symmetric cubes use integer ticks around center; for general limits, keep it simple

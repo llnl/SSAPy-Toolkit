@@ -30,3 +30,6 @@ def set_axes_equal(ax):
     ax.set_xlim3d([x_middle - plot_radius, x_middle + plot_radius])
     ax.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
     ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
+    # Equal limits are not enough on Matplotlib >= 3.3: the default 3-D box
+    # aspect is 4:4:3, which still drew spheres 25% flattened along z.
+    ax.set_box_aspect((1, 1, 1))

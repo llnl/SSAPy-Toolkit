@@ -251,6 +251,7 @@ class BasePlot3D:
         self._ax.set_xlim(-r_max, r_max)
         self._ax.set_ylim(-r_max, r_max)
         self._ax.set_zlim(-r_max, r_max)
+        self._ax.set_box_aspect((1, 1, 1))   # Matplotlib's default is 4:4:3
         return line
 
     # ── full render ───────────────────────────────────────────────────────────
@@ -278,6 +279,7 @@ class BasePlot3D:
         ax.set_xlim(-r_max, r_max)
         ax.set_ylim(-r_max, r_max)
         ax.set_zlim(-r_max, r_max)
+        ax.set_box_aspect((1, 1, 1))   # Matplotlib's default is 4:4:3
 
         # ── draw layers (back to front) ───────────────────────────────────
         layer_order = [
