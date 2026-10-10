@@ -163,10 +163,28 @@ def _precession_matrix(when) -> np.ndarray:
 
 
 def _apply_frame(ra_hours, dec_deg, pmra_mas, pmdec_mas, when, frame):
-    """Catalogue RA/Dec -> unit vectors in the requested frame."""
+    """Catalogue RA/Dec -> unit vectors in the requested frame.
+
+    The catalogue is ICRS at epoch J2000.0, so its directions are already GCRF
+    (frame bias 0.02 arcsec). Frames:
+
+    ``"j2000"``  catalogue directions, no proper motion.
+    ``"gcrf"``   proper motion to ``when``; no precession.
+    ``"teme"``   GCRF rotated by ``ssapy.utils.gcrf_to_teme`` (the frame the
+                 satellite viewer, SGP4 and its GMST-rotated Earth use).
+    ``"mod"``    IAU 1976 precession to the mean equator and equinox of date.
+    ``"ecef"``   GCRF rotated to ITRF with
+                 :func:`ssapy_toolkit.coordinates.frames.eci_to_ecf_matrix`.
+
+    ``"gcrf"`` used to apply precession, i.e. it returned mean-of-date
+    directions: 1142 arcsec median (1345 max) from GCRF for the 50 stars
+    brighter than mag 2 on 2026-10-09.
+    """
     ra = np.radians(np.asarray(ra_hours, float) * 15.0)
     dec = np.radians(np.asarray(dec_deg, float))
     frame = (frame or "j2000").lower()
+    if frame not in ("j2000", "gcrf", "teme", "mod", "ecef"):
+        raise ValueError(f"unknown star frame {frame!r}; use j2000, gcrf, teme, mod or ecef")
 
     if frame != "j2000" and when is not None:
         yrs = (_julian_date(when) - 2451545.0) / 365.25
@@ -175,14 +193,22 @@ def _apply_frame(ra_hours, dec_deg, pmra_mas, pmdec_mas, when, frame):
         dec = dec + np.radians(np.asarray(pmdec_mas, float)/3.6e6) * yrs
 
     v = np.stack([np.cos(dec)*np.cos(ra), np.cos(dec)*np.sin(ra), np.sin(dec)], axis=1)
+    if when is None or frame in ("j2000", "gcrf"):
+        return v
 
-    if frame in ("gcrf", "ecef") and when is not None:
-        v = v @ _precession_matrix(when).T
-    if frame == "ecef" and when is not None:
-        g = _gmst_rad(when)
-        c, s = np.cos(g), np.sin(g)
-        v = v @ np.array([[c, s, 0.0], [-s, c, 0.0], [0.0, 0.0, 1.0]]).T
-    return v
+    if frame == "mod":
+        return v @ _precession_matrix(when).T
+
+    from astropy.time import Time
+
+    t = Time(when if isinstance(when, datetime) else _to_datetime(when), scale="utc")
+    if frame == "teme":
+        from ssapy.utils import gcrf_to_teme
+
+        return v @ np.asarray(gcrf_to_teme(t), dtype=float).reshape(3, 3).T
+    from ssapy_toolkit.coordinates.frames import eci_to_ecf_matrix
+
+    return v @ eci_to_ecf_matrix(float(t.gps)).T
 
 
 def _stars_to_ecef(ra_hours, dec_deg, pmra_mas, pmdec_mas, date,

@@ -139,6 +139,25 @@ def _greenwich_azimuth_rad(gps_seconds):
     return greenwich_azimuth_rad(gps_seconds)
 
 
+def sun_direction_gcrf(gps_seconds):
+    """Unit vector(s) from Earth toward the Sun in GCRF at GPS seconds.
+
+    Uses :func:`ssapy.utils.sunPos` (GCRF, within 37 arcsec of astropy's
+    ``get_sun`` over 2000-2040). Returns shape ``(3,)`` for a scalar time and
+    ``(N, 3)`` for an array. Plot code should take the Sun from here rather
+    than carry its own solar formula.
+    """
+    from ssapy.utils import sunPos
+
+    t = np.asarray(gps_seconds, dtype=float)
+    r = np.asarray(sunPos(t), dtype=float)
+    if t.ndim == 0:
+        r = r.reshape(3)
+        return r / np.linalg.norm(r)
+    r = r.reshape(3, -1).T
+    return r / np.linalg.norm(r, axis=1, keepdims=True)
+
+
 def _gst94_rad(gps_seconds):
     """Greenwich apparent sidereal angle (rad) at GPS seconds, evaluated at UT1.
 

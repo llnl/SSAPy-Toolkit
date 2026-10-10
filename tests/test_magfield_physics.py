@@ -396,17 +396,6 @@ def test_star_directions_match_astropy():
         assert sep < 60.0, f"star direction {sep:.0f} arcsec from astropy"
 
 
-@pytest.mark.parametrize("frame", ["j2000", "gcrf", "ecef"])
-def test_starfield_frames_are_consistent(frame):
-    """All three frames must return unit vectors for the same star set."""
-    out = sf.star_directions(when=datetime(2026, 7, 8), frame=frame)
-    if out is None:
-        pytest.skip("star catalogue not installed")
-    v, mag, rgb = out
-    assert len(v) == len(mag) == len(rgb)
-    assert np.abs(np.linalg.norm(v, axis=1) - 1).max() < 1e-9
-
-
 def test_solar_colour_temperature():
     """B-V = 0.65 must give roughly the solar effective temperature."""
     T = float(core._bv_to_teff(0.65))

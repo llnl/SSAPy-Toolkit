@@ -17,7 +17,6 @@ import plotly.graph_objects as go
 from ssapy_toolkit.constants import (
     AU_KM,
     EARTH_MU_KM3_S2,
-    EARTH_OBLIQUITY_J2000_RAD,
     EARTH_RADIUS_KM,
     SUN_NOMINAL_RADIUS_KM,
 )
@@ -84,24 +83,7 @@ def propagate_eci(a_km, e, inc_deg, raan_deg, argp_deg, nu0_deg,
     return t_s, np.stack([x, y, z], axis=1), T_s
 
 
-def sun_direction_eci(t_s, epoch_jd=2_460_500.0):
-    """Low-precision unit vector from Earth toward the Sun in ECI/GCRF axes.
-
-    The solar longitude approximation is ecliptic; rotate by the J2000 mean
-    obliquity so callers using equatorial ``ECI`` coordinates do not silently
-    get a zero-declination Sun except near the equinoxes.
-    """
-    jd = epoch_jd + np.asarray(t_s, dtype=float) / 86400.0
-    n_days = jd - 2_451_545.0
-    L = np.radians((280.460 + 0.9856474*n_days) % 360)
-    g = np.radians((357.528 + 0.9856003*n_days) % 360)
-    lam = L + np.radians(1.915*np.sin(g) + 0.020*np.sin(2*g))
-    eps = EARTH_OBLIQUITY_J2000_RAD
-    return np.stack([
-        np.cos(lam),
-        np.cos(eps) * np.sin(lam),
-        np.sin(eps) * np.sin(lam),
-    ], axis=-1)
+from .eclipse_brightness_plot import sun_direction_eci  # noqa: E402  (one GCRF Sun for all plots)
 
 
 _earth_texture_cache = None

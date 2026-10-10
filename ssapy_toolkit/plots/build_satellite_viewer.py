@@ -117,7 +117,8 @@ def load_star_catalog(mag_limit=6.5, when=None):
     when = when or datetime.now(timezone.utc)
     if when.tzinfo is not None:
         when = when.astimezone(timezone.utc).replace(tzinfo=None)
-    stars = star_directions(mag_limit=mag_limit, when=when, frame="gcrf")
+    # The viewer scene is TEME (SGP4 output, Earth turned by GMST).
+    stars = star_directions(mag_limit=mag_limit, when=when, frame="teme")
     if stars is None:
         raise FileNotFoundError(
             "Accurate satellite-viewer stars require bright_stars.csv from "

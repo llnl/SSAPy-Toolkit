@@ -24,7 +24,6 @@ import numpy as np
 from ssapy_toolkit.constants import (
     AU_KM,
     EARTH_MU_KM3_S2,
-    EARTH_OBLIQUITY_J2000_RAD,
     EARTH_RADIUS_KM,
     SUN_NOMINAL_RADIUS_KM,
 )
@@ -71,20 +70,25 @@ def propagate_eci(a_km, e, inc_deg, raan_deg, argp_deg, nu0_deg,
 
 
 def sun_direction_eci(t_s, epoch_jd=2_460_500.0):
-    """Low-precision (~0.01 deg) solar ecliptic-longitude approximation,
-    rotated into ECI/GCRF equatorial axes. This is good enough for finding
-    demo eclipse geometry, not a JPL-ephemeris replacement."""
-    jd = epoch_jd + np.asarray(t_s, dtype=float) / 86400.0
-    n_days = jd - 2_451_545.0
-    L = np.radians((280.460 + 0.9856474*n_days) % 360)
-    g = np.radians((357.528 + 0.9856003*n_days) % 360)
-    lam = L + np.radians(1.915*np.sin(g) + 0.020*np.sin(2*g))
-    eps = EARTH_OBLIQUITY_J2000_RAD
-    return np.stack([
-        np.cos(lam),
-        np.cos(eps) * np.sin(lam),
-        np.sin(eps) * np.sin(lam),
-    ], axis=-1)
+    """Unit vectors from Earth toward the Sun in GCRF, ``(N, 3)``.
+
+    ``t_s`` is seconds after ``epoch_jd`` (a UTC Julian date; the default,
+    2024-07-04 12:00 UTC, is kept only for backward compatibility, so pass the
+    real epoch). Delegates to
+    :func:`ssapy_toolkit.plots.scene_primitives.sun_direction_gcrf`.
+
+    This used a mean-longitude solar formula. Its longitude is referred to
+    the mean equinox of date, not GCRF, so in GCRF scenes the Sun was off by
+    1236 arcsec on 2024-04-08, 1333 arcsec on 2026-10-09 and 2048 arcsec in
+    2040 against astropy ``get_sun``.
+    """
+    from astropy.time import Time
+
+    from .scene_primitives import sun_direction_gcrf
+
+    gps0 = float(Time(float(epoch_jd), format="jd", scale="utc").gps)
+    t = np.atleast_1d(np.asarray(t_s, dtype=float))
+    return sun_direction_gcrf(gps0 + t).reshape(t.size, 3)
 
 
 def _circle_overlap_fraction(r1, r2, d):
