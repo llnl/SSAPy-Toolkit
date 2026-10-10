@@ -183,14 +183,18 @@ class BasePlot3D:
             try:
                 import warnings
                 from astropy.utils import iers
-                from astropy.utils.iers import conf as iers_conf
                 self._fidelity = "loading"
                 if self._on_fidelity_change:
                     self._on_fidelity_change("loading")
+                # Pre-load the bundled IERS-B table without touching astropy's
+                # process-wide IERS configuration. This used to set
+                # conf.auto_download = False and conf.auto_max_age = None for
+                # the whole process; on astropy < 8 (the only versions for
+                # Python 3.10) IERS_Auto then serves IERS-B, which ends weeks
+                # before today, so every later UT1 conversion anywhere in the
+                # process raised IERSRangeError.
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
-                    iers_conf.auto_download = False
-                    iers_conf.auto_max_age  = None
                     iers.IERS_B.open()
                 self._fidelity = "high"
                 if self._on_fidelity_change:
@@ -481,14 +485,18 @@ class PlotlyScene:
             try:
                 import warnings
                 from astropy.utils import iers
-                from astropy.utils.iers import conf as iers_conf
                 self._fidelity = "loading"
                 if self._on_fidelity_change:
                     self._on_fidelity_change("loading")
+                # Pre-load the bundled IERS-B table without touching astropy's
+                # process-wide IERS configuration. This used to set
+                # conf.auto_download = False and conf.auto_max_age = None for
+                # the whole process; on astropy < 8 (the only versions for
+                # Python 3.10) IERS_Auto then serves IERS-B, which ends weeks
+                # before today, so every later UT1 conversion anywhere in the
+                # process raised IERSRangeError.
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
-                    iers_conf.auto_download = False
-                    iers_conf.auto_max_age  = None
                     iers.IERS_B.open()
                 self._fidelity = "high"
                 if self._on_fidelity_change:
