@@ -30,5 +30,5 @@ keywords:
 license: "BSD-3-Clause"
 repository-code: "https://github.com/llnl/SSAPy-Toolkit"
 url: "https://github.com/llnl/SSAPy-Toolkit"
-version: "1.0.6"
+version: "1.0.7"
 date-released: "2026-10-09"
