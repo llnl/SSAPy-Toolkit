@@ -42,7 +42,7 @@ DEFAULT_DATA_PACKAGES = (
 """Split data import packages, searched in this order when ``package`` is None."""
 
 LEGACY_DATA_PACKAGE = "ssapy_data"
-"""Resource access across the split ``ssatk-data-*`` distributions."""
+"""Import name of the pre-split single data package, searched last if installed."""
 
 DEFAULT_DATA_PACKAGE = DEFAULT_DATA_PACKAGES[0]
 """Kept for backward compatibility; prefer ``package=None`` (search all)."""
