@@ -2,7 +2,7 @@
 
 Both tests load the snapshot through the default data-package search, so they
 also fail if the toolkit stops finding ``environment/eop/finals2000A.all`` in
-the split ``ssatk-data-*`` distributions (the 1.0.6 regression, where the
+the split ``ssatk-data-*`` distributions (the 1.0.7 regression coverage, where the
 toolkit still looked for the retired ``ssapy_data`` package).
 """
 

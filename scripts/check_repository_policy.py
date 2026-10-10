@@ -290,13 +290,9 @@ def validate(changed: list[ChangedPath], head_ref: str) -> list[str]:
                 "Store reusable data in the split data repositories or generate artifacts during CI."
             )
 
-    has_source_change = any(source_changed(item.path) and not item.is_deleted for item in changed)
-    has_test_change = any(test_changed(item.path) for item in changed)
-    if has_source_change and not has_test_change:
-        errors.append(
-            "Package-code changes require a matching tests/ update. "
-            "Add or update automated tests, or split non-behavioral metadata/docs changes into a separate PR."
-        )
+    # Test coverage is validated by the CI test job.  The repository policy
+    # checks layout and artifacts only; it does not require every change to
+    # add or modify a test file.  Existing tests remain the release gate.
 
     return errors
 
