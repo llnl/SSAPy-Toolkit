@@ -9,13 +9,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ssapy-toolkit"
-version = "1.1.0"
+version = "1.1.1"
 description = "Renamed to ssatk (Space Situational Awareness Toolkit); this package installs ssatk plus the ssapy_toolkit import alias"
 authors = [{ name = "Travis R. Yeager", email = "yeagerastro@gmail.com" }]
 readme = "README.md"
 license = "BSD-3-Clause"
 requires-python = ">=3.10"
-dependencies = ["ssatk==1.1.0"]
+dependencies = ["ssatk==1.1.1"]
 
 [project.urls]
 Homepage = "https://github.com/LLNL/ssatk"
